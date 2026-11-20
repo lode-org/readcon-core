@@ -728,9 +728,9 @@ A restart therefore cannot repeat an L-BFGS path from the geometry alone, and th
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/restart.pdf} \caption{\textbf{The resumed Morse band ends on the uninterrupted barrier.}
 Left: force calls of the uninterrupted steepest-descent band and of the three resumes.
-Right: the barrier of each route.
-The horizontal line is the uninterrupted barrier.
-The four routes use teal, sky, coral and magenta, and the reference line is sunshine.}
+Right: each barrier minus the uninterrupted barrier, in micro-electronvolts.
+A bar on the zero line ends on the uninterrupted barrier.
+The four routes use teal, sky, coral and magenta, and the zero line is sunshine.}
 \label{fig:restart} \end{figure}
 
 \subsection{The velocity unit} A \(\velFixtureAtoms\)-atom fixture stores velocities in the declared natural unit.
@@ -859,61 +859,78 @@ The timing record of these launches and the record of a scatter run that takes t
 
 \input{figures/generated/mpi_host_table}
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf} \caption{Distributed read on this host. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf} \caption{Distributed read on this host, the same launches as Table~\ref{tab:mpi-host}.
+The marker is the type 7 median and the whisker is the type 7 interquartile range.}
 \label{fig:mpi-host} \end{figure}
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored} Figures~\ref{fig:fairness} to~\ref{fig:supp-neb} are drawn from the stored records of this paper (Data availability).
 The database and MPI figures come from the stored records named in Data availability, not from the timed repeats on the host of this paper.
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf} \caption{A stored ratio of readcon-core wall time to the peer wall time.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf} \caption{Median wall time of readcon-core divided by the median wall time of a peer, from the stored timing record.
+The peers are ASE XYZ, the extended-XYZ C parser, OVITO, an ASE trajectory, an HDF5 array through h5py and an H5MD file through MDAnalysis.
+Those files are not the CON file, so the bars compare different formats.}
 \label{fig:fairness} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/layers.pdf} \caption{Frame rate of the full, field and coordinate Python reads at one and eight threads.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/layers.pdf} \caption{Frames per second, from the median wall time, of three Python reads of one stored file: the full frame, the fields and the coordinates, each at one thread and at eight threads.}
 \label{fig:layers} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/roofline.pdf} \caption{The same three Python reads at one and eight threads, in frames per second.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/roofline.pdf} \caption{The same three Python reads, the full frame, the fields and the coordinates, at one thread and at eight threads.
+The vertical axis is frames per second from the median wall time.
+This figure is not a roofline model.}
 \label{fig:roofline} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf} \caption{Image energies for the height-held POSCAR band and the uninterrupted band.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf} \caption{Energy of each image above the first image, for the height-held POSCAR band and for the uninterrupted band, from the stored failure record.}
 \label{fig:asemask} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf} \caption{Stored MPI speedups.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf} \caption{Speedup against one rank for five stored series of reads and writes of readcon-core.
+The dashed line is linear speedup.}
 \label{fig:mpi-strong} \end{figure}
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf} \caption{A single 1-8 read-only ladder at 6 repetitions on one VM. Touch is drawn with open-only. Ranks is one read\_block on each rank, then a barrier. Dashed lines are public main ac4f4379 and solid lines are tip a2499ab6. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
 \label{fig:mpi-weak} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf} \caption{Stored ingest rates.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf} \caption{Median frames per second while ingesting one thousand frames, one bar per store in the stored database record.
+The ASE database commits every write.
+The readcon-db directory store has no write loop and no per-row commit, so those two bars are not the same work.
+The fair comparison is the fair-store campaign named in Data availability.}
 \label{fig:db-throughput} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf} \caption{Stored ingest bandwidth.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf} \caption{Median megabytes per second for the same one thousand frames and the same stores.
+The work is unequal, as the throughput figure states, and the fair comparison is the fair-store campaign named in Data availability.}
 \label{fig:db-bandwidth} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf} \caption{Stored composition-query times.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf} \caption{Median seconds for a composition query over the same one thousand frames.
+Each bar is one store and one cache state.}
 \label{fig:db-query} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf} \caption{Allocated size of the stored 1000-frame copies.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf} \caption{Allocated size of the stored 1000-frame copies, one bar per store.}
 \label{fig:db-disk} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/db_dedup.pdf} \caption{Stored frames against unique frame hashes in the deduplication record.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/db_dedup.pdf} \caption{Count of stored frames beside the count of unique frame hashes, from the deduplication record of the database campaign.}
 \label{fig:db-dedup} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/frame_anatomy.pdf} \caption{Byte width of each span of one stored CON frame.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/frame_anatomy.pdf} \caption{Byte width of each span of one stored CON frame.
+The bar labels are the span names in the stored anatomy record.}
 \label{fig:supp-anatomy} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/error_classes.pdf} \caption{One bar for each illegal file in the stored error record.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/error_classes.pdf} \caption{One bar of height one for each illegal file in the stored error record.
+The height marks that the file is present.
+It is not a count of failures.}
 \label{fig:supp-errors} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.92\textwidth]{figures/generated/roundtrip_fidelity.pdf} \caption{Count of exact mask, identifier, time unit and binary64 fields after a write and a read.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.92\textwidth]{figures/generated/roundtrip_fidelity.pdf} \caption{How many of the four fields, the mask, the identifier, the time unit and the binary64 coordinates, are exact after a write and a read.
+The bar label is the format.}
 \label{fig:supp-fidelity} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/restart_diff.pdf} \caption{Largest absolute component of the minimum-image displacement, in angstrom, along each stored resume.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/restart_diff.pdf} \caption{Largest absolute component of the minimum-image displacement, in angstrom, along each stored resume.
+Each line is one resume and the horizontal axis is the image.}
 \label{fig:supp-restart} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.86\textwidth]{figures/generated/dedup_graph.pdf} \caption{Hashed images in each stored campaign run.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.86\textwidth]{figures/generated/dedup_graph.pdf} \caption{Count of hashed images in each stored campaign run of the deduplication graph.}
 \label{fig:supp-dedup} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/neb_multiples.pdf} \caption{The five stored EMT bands, as energy above the first image.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/neb_multiples.pdf} \caption{Five stored EMT bands, drawn as the energy of each image above the first image.
+The bands are the uninterrupted band, the shortest round trip, the six-decimal write, the extended XYZ write and the ASE trajectory.}
 \label{fig:supp-neb} \end{figure}
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}

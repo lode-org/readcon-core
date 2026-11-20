@@ -44,10 +44,13 @@ def main() -> None:
     axes[0].bar(range(4), calls, color=colors, edgecolor=BLACK, linewidth=0.4)
     axes[0].set_xticks(range(4), labels, rotation=60, ha="right")
     axes[0].set_ylabel("force calls")
-    axes[1].bar(range(4), barriers, color=colors, edgecolor=BLACK, linewidth=0.4)
-    axes[1].axhline(barriers[0], color=SUNSHINE, linewidth=1.2)
+    # The four barriers agree to about a micro-electronvolt, so a
+    # shared axis from zero hides the gap. Plot the difference.
+    delta_uev = [(value - barriers[0]) * 1e6 for value in barriers]
+    axes[1].bar(range(4), delta_uev, color=colors, edgecolor=BLACK, linewidth=0.4)
+    axes[1].axhline(0.0, color=SUNSHINE, linewidth=1.2)
     axes[1].set_xticks(range(4), labels, rotation=60, ha="right")
-    axes[1].set_ylabel("barrier (eV)")
+    axes[1].set_ylabel("barrier minus uninterrupted (µeV)")
     for ax in axes:
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)

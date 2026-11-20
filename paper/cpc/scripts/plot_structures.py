@@ -205,6 +205,29 @@ def pin_creation_date(pdf: Path) -> None:
     pdf.write_bytes(raw[: match.start(4)] + padded + raw[match.end(4) :])
 
 
+def _fontconfig() -> None:
+    """Point cairo at the bundled Latin Modern, so the titles are not Noto."""
+    import os
+
+    directory = LATIN.parent
+    config = WORK / "fonts.conf"
+    config.write_text(
+        "<?xml version='1.0'?>\n"
+        "<!DOCTYPE fontconfig SYSTEM 'fonts.dtd'>\n"
+        "<fontconfig>\n"
+        f"  <dir>{directory}</dir>\n"
+        "  <alias><family>Latin Modern Roman</family>"
+        "<prefer><family>LM Roman 10</family></prefer></alias>\n"
+        "  <alias><family>serif</family>"
+        "<prefer><family>LM Roman 10</family></prefer></alias>\n"
+        "  <alias><family>sans-serif</family>"
+        "<prefer><family>LM Roman 10</family></prefer></alias>\n"
+        "</fontconfig>\n",
+        encoding="utf-8",
+    )
+    os.environ["FONTCONFIG_FILE"] = str(config)
+
+
 def main() -> None:
     import cairosvg
 
@@ -225,6 +248,7 @@ def main() -> None:
         page = WORK / "structures.svg"
         page.write_text(svg, encoding="utf-8")
         out_pdf = OUT / "structures.pdf"
+        _fontconfig()
         cairosvg.svg2pdf(url=str(page), write_to=str(out_pdf))
         pin_creation_date(out_pdf)
         cairosvg.svg2png(

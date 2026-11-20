@@ -114,15 +114,51 @@ def toc() -> None:
     """Schematic graphical abstract. The words are readcon and competitors. No digits."""
     from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
-    fig, ax = plt.subplots(figsize=(5, 3.2))
+    fig, ax = plt.subplots(figsize=(5.6, 3.2))
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
-    for origin, label in ((0.06, "readcon"), (0.56, "competitors")):
+    fields = ("mask", "identifier", "time unit", "coordinates")
+    for index, label in enumerate(fields):
+        y = 0.78 - index * 0.22
+        ax.add_patch(
+            FancyBboxPatch(
+                (0.02, y),
+                0.26,
+                0.16,
+                boxstyle="round,pad=0.01,rounding_size=0.02",
+                facecolor="white",
+                edgecolor=BLACK,
+                linewidth=0.6,
+            )
+        )
+        ax.text(
+            0.15,
+            y + 0.08,
+            label,
+            ha="center",
+            va="center",
+            color=BLACK,
+            fontsize=7,
+        )
+        ax.add_patch(
+            FancyArrowPatch(
+                (0.29, y + 0.08),
+                (0.36, 0.50),
+                arrowstyle="-|>",
+                mutation_scale=8,
+                color=BLACK,
+                linewidth=0.5,
+            )
+        )
+    for origin, label, width in (
+        (0.38, "readcon", 0.24),
+        (0.72, "competitors", 0.26),
+    ):
         ax.add_patch(
             FancyBboxPatch(
                 (origin, 0.28),
-                0.38,
+                width,
                 0.44,
                 boxstyle="round,pad=0.02,rounding_size=0.04",
                 facecolor=TEAL if label == "readcon" else CORAL,
@@ -131,18 +167,18 @@ def toc() -> None:
             )
         )
         ax.text(
-            origin + 0.19,
+            origin + width / 2,
             0.50,
             label,
             ha="center",
             va="center",
             color="white",
-            fontsize=12,
+            fontsize=11,
         )
     ax.add_patch(
         FancyArrowPatch(
-            (0.46, 0.50),
-            (0.54, 0.50),
+            (0.64, 0.50),
+            (0.70, 0.50),
             arrowstyle="-|>",
             mutation_scale=14,
             color=BLACK,

@@ -163,6 +163,14 @@ def main() -> int:
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib import font_manager as fm
+
+    font = ROOT / "fonts" / "latin-modern" / "lmroman10-regular.otf"
+    fm.fontManager.addfont(str(font))
+    family = fm.FontProperties(fname=str(font)).get_name()
+    plt.rcParams.update(
+        {"font.family": family, "font.size": 8, "pdf.fonttype": 42, "ps.fonttype": 42}
+    )
 
     fig, ax = plt.subplots(figsize=(6.4, 3.2))
     for mode, color, marker in (
