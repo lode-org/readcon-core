@@ -41,7 +41,7 @@ task.
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Count frames (skip walk)                                            | ``iterators::count_frames``                    | ``readcon.count_frames``                                                    | n/a                                                                | ``count_frames``                                                 | ``rkr_count_frames``                                              | ``count_frames``                           |
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
-    | Coordinates on a loaded frame                                       | SoA on ``ConFrame``                            | ``frame.xyz`` (zero-copy on parsed frames); ``coords_array()`` ndarray      | via frame fields                                                   | ``frame%xyz_ptr`` (zero-copy)                                    | ``rkr_frame_xyz_f64`` (zero-copy)                                 | ``xyz_f64()`` (zero-copy)                  |
+    | Coordinates on a loaded frame                                       | SoA on ``ConFrame``                            | ``frame.xyz`` (zero-copy slab view); ``coords_array()`` owned copy           | via frame fields                                                   | ``frame%xyz_ptr`` (zero-copy)                                    | ``rkr_frame_xyz_f64`` (zero-copy)                                 | ``xyz_f64()`` (zero-copy)                  |
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Coordinate column                                                   | ``read_positions_with_threads``                | ``read_positions`` / ``read_coords``                                        | n/a                                                                | ``read_positions``                                               | ``rkr_read_positions`` / ``rkr_free_position_block``              | ``read_positions``                         |
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
@@ -223,6 +223,8 @@ Version and spec queries
 
     print(readcon.__version__)       # e.g. "0.5.0"
     print(readcon.CON_SPEC_VERSION)  # 3
+    print(readcon.default_thread_count())      # auto workers for n_threads=None
+    print(readcon.uses_mimalloc_allocator())   # allocator in this build
 
 Usage
 ~~~~~
@@ -326,6 +328,8 @@ Types
     velocities\_array() (v0.10.0+), forces\_array() (v0.10.0+),
     energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+),
     atomic\_numbers(), fixed\_mask\_array().
+    ``frame.xyz`` is the zero-copy NumPy view path from ``read_con``.
+    ``coords_array()`` is an owned copy.
     ``atoms_materialized`` is false until ``.atoms`` is built.
     ``atoms_fill_count`` counts that build. The array getters above do
     not increment it. For a frame from a read, ``vel``, ``frc``,
@@ -413,6 +417,18 @@ optional ``cuda``, ``kDLCUDA`` / ``RKR_DL_CUDA`` allocates real device memory an
 frame/FFI export uses H2D for CPU-resident SoA (not host pointers labeled as
 CUDA). Legacy
 ``\*_dlpack`` exports 64-bit ``kDLFloat`` on CPU. ``rkr_frame_copy_*`` still fills ``double*``.
+
+Free-threading contract (same rule as NumPy's thread-safety docs): if a
+caller mutates a NumPy array while ``readcon`` reads or writes it, that
+concurrent mutation is the caller's data race (undefined behavior).
+``readcon`` copies those doubles through aligned relaxed atomic loads into
+private storage. The NumPy borrow guard coordinates Rust-side borrows only;
+it does not stop another Python thread from storing into the array, and the
+language does not promise an untorn binary64 value.
+
+C and C++ binding numeric parsing is locale-independent and requires full
+token consumption after lexical validation. The C/C++ paths and the Rust
+reader use the same numeric acceptance/rejection conformance vectors.
 
 .. code:: python
 

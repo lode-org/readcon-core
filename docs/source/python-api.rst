@@ -27,6 +27,12 @@ file of 64 KiB or more stays mapped. ``.gz`` and ``.zst`` are chosen from the
 extension and from the magic bytes. A pipe, including ``/dev/stdin``, is read
 through the same open and is not mapped.
 
+``readcon.default_thread_count()`` returns the worker count used for
+``n_threads=None``. In a ``parallel`` build this follows Rayon (including
+``RAYON_NUM_THREADS``); otherwise it is 1.
+``readcon.uses_mimalloc_allocator()`` reports whether this extension
+installed mimalloc as the process allocator in this build.
+
 ``read_all_frames`` is the same function.
 
 ``read_positions`` and ``read_coords``
@@ -45,6 +51,13 @@ remains the path that returns frames, metadata, and optional sections.
 ``(frames, atoms, 3)``. The parser allocates that buffer once. The
 returned array views it: ``base`` is the buffer and ``OWNDATA`` is false,
 so the doubles are not copied again on the way into NumPy.
+Free-threading contract (same rule as NumPy's thread-safety docs): if
+another thread mutates that array while ``readcon`` reads or writes it,
+the caller has created a data race (undefined behavior). ``readcon``
+copies shared doubles through aligned relaxed atomic loads into private
+storage before formatting. The NumPy borrow guard coordinates Rust-side
+borrows only; it does not stop another Python thread from storing into the
+array, and the language does not promise an untorn binary64 value.
 ``n_threads`` is ``None``, ``0``, or ``1`` for the
 calling thread, and ``n >= 2`` for a Rayon pool of that size when the
 build has ``parallel``. ``read_coords`` returns a dict. ``positions`` has
@@ -97,6 +110,10 @@ otherwise. ``atom_ids`` and ``atomic_numbers`` are ``(frames, atoms)``
 string, repeated by its count. ``n_frames`` and ``n_atoms`` are the two
 sizes. ``read_con_string`` returns this same list, so ``columns()`` on
 text the caller already holds carries those keys.
+
+``frame.xyz`` is the zero-copy NumPy view path for coordinates (the row in the
+shared slab). ``frame.coords_array()`` is the owned-copy path that reflects
+in-place ``frame.atoms`` edits.
 
 Indexing ``frames[i]`` takes that frame out of the stored list.
 ``columns()`` then raises ``OSError``. Call ``columns()`` before any index.

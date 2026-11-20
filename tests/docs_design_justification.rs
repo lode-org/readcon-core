@@ -353,6 +353,10 @@ fn one_good_tutorial_is_learning_oriented() {
 #[test]
 fn tutorial_runners_exist_in_repo() {
     let root = repo_root();
+    if !root.join("scripts").is_dir() {
+        eprintln!("scripts/ is not packaged in this source layout; skipping");
+        return;
+    }
     assert!(
         root.join("scripts/run-tutorial-core.sh").is_file(),
         "missing Org Babel tutorial script"
@@ -620,5 +624,56 @@ fn docs_nav_uses_compact_nav_logos() {
         rst.lines()
             .any(|l| l.contains("rc-hero-conline") && l.contains("</pre>")),
         "hero CON line must be one raw-html line so Sphinx cannot leak </pre>"
+    );
+}
+
+#[test]
+fn free_threading_contract_is_documented_as_caller_race() {
+    let python_api = read_repo("docs/source/python-api.rst");
+    assert!(
+        python_api.contains("same rule as NumPy's thread-safety docs"),
+        "python-api must anchor the free-threading rule to NumPy docs"
+    );
+    assert!(
+        python_api.contains("caller has created a data race"),
+        "python-api must state that concurrent mutation is the caller's race"
+    );
+    assert!(
+        python_api.contains("relaxed atomic loads")
+            && python_api.contains("does not stop another Python thread")
+            && python_api.contains("does not promise an untorn binary64 value"),
+        "python-api must qualify the atomic NumPy copy contract"
+    );
+    assert!(
+        !python_api.contains("no single value is torn"),
+        "python-api must not promise language-level atomicity with NumPy stores"
+    );
+    assert!(
+        !python_api.contains("race-free"),
+        "python-api must not claim race-free concurrent mutation"
+    );
+
+    let bindings = read("bindings.org");
+    assert!(
+        bindings.contains("same rule as NumPy's thread-safety docs"),
+        "bindings docs must anchor the free-threading rule to NumPy docs"
+    );
+    assert!(
+        bindings.contains("caller's data race"),
+        "bindings docs must assign concurrent mutation race responsibility to callers"
+    );
+    assert!(
+        bindings.contains("relaxed atomic loads")
+            && bindings.contains("does not stop another Python thread")
+            && bindings.contains("does not promise an untorn binary64 value"),
+        "bindings docs must qualify the atomic NumPy copy contract"
+    );
+    assert!(
+        !bindings.contains("no single value is torn"),
+        "bindings docs must not promise language-level atomicity with NumPy stores"
+    );
+    assert!(
+        !bindings.contains("race-free"),
+        "bindings docs must not claim race-free concurrent mutation"
     );
 }
