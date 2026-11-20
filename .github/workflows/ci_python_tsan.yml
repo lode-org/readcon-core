@@ -1,0 +1,74 @@
+name: Python free-threaded TSan
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "23 2 * * 2"
+  workflow_dispatch:
+
+concurrency:
+  group: python-tsan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tsan-free-threaded:
+    name: tsan free-threaded (${{ matrix.name }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "3.13 @ cf31c2454b81"
+            cpython-ref: "cf31c2454b81145ba25a15b19e739424dd0869c2"
+          - name: "3.14 @ 7ede29ac5015"
+            cpython-ref: "7ede29ac501505d3785742ed41acede64880c307"
+    env:
+      CC: "clang"
+      CXX: "clang++"
+      CFLAGS: "-O1 -g -fno-omit-frame-pointer -fsanitize=thread"
+      CXXFLAGS: "-O1 -g -fno-omit-frame-pointer -fsanitize=thread"
+      LDFLAGS: "-fsanitize=thread -Wl,-rpath,\\$ORIGIN/../lib"
+      PYTHON_GIL: "0"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
+        with:
+          toolchain: nightly-2026-11-16
+          components: rust-src
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang llvm llvm-18 llvm-18-tools libclang-rt-18-dev lld build-essential pkg-config libffi-dev zlib1g-dev \
+            libbz2-dev libreadline-dev libsqlite3-dev libssl-dev liblzma-dev \
+            tk-dev uuid-dev wget
+
+      - name: Build free-threaded TSan CPython
+        run: |
+          set -euo pipefail
+          WORK="${RUNNER_TEMP}/cpython-${{ matrix.cpython-ref }}"
+          PREFIX="${RUNNER_TEMP}/cpython-tsan-${{ matrix.cpython-ref }}"
+          rm -rf "${WORK}" "${PREFIX}"
+          git clone --depth 1 https://github.com/python/cpython.git "${WORK}"
+          cd "${WORK}"
+          git fetch --depth 1 origin "${{ matrix.cpython-ref }}"
+          git checkout --detach "${{ matrix.cpython-ref }}"
+          ./configure \
+            --prefix="${PREFIX}" \
+            --disable-gil \
+            --enable-shared \
+            --with-thread-sanitizer \
+            --with-ensurepip=upgrade
+          make -j"$(nproc)"
+          make install
+          "${PREFIX}/bin/python3" -V
+
+      - name: Build extension with Rust TSan and run stress suites
+        env:
+          RUSTUP_TOOLCHAIN: nightly-2026-11-16
+        run: |
+          scripts/run_tsan_python_stress.sh \
+            "${{ runner.temp }}/cpython-tsan-${{ matrix.cpython-ref }}/bin/python3"

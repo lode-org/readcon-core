@@ -1,0 +1,35 @@
+name: Miri Strict Provenance
+
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: miri-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  strict-provenance:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust nightly-2026-11-16 with Miri
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
+        with:
+          toolchain: nightly-2026-11-16
+          components: miri,rust-src
+
+      - name: Run strict-provenance Miri gate
+        env:
+          RUSTUP_TOOLCHAIN: nightly-2026-11-16
+        run: |
+          scripts/run_miri_strict_provenance.sh

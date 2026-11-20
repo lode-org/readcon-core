@@ -1,0 +1,26 @@
+name: Loom Model Checks
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: loom-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  loom:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc
+        with:
+          toolchain: nightly-2026-11-16
+
+      - name: Run loom-scoped library tests
+        env:
+          RUSTFLAGS: --cfg loom
+        run: |
+          cargo +nightly-2026-11-16 test --locked --lib per_process_loom:: -- --nocapture
