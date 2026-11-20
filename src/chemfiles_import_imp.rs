@@ -1535,7 +1535,7 @@ mod tests {
     fn build_script_recorded_a_known_string_abi() {
         let abi = env!("READCON_CHEMFILES_STRING_ABI");
         assert!(
-            abi == "cow" || abi == "cxx11",
+            abi == "cow" || abi == "cxx11" || abi == "foreign",
             "linked chemfiles string ABI was {abi}"
         );
     }
