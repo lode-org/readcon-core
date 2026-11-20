@@ -202,7 +202,7 @@ def table(record: dict) -> str:
     ]
     lines += [
         rf"\path{{{f['file']}}} & {outcome(f['expected'])}; {f['basis']} & {latex(f['clause'])} & "
-        rf"{prose(reasons[f['file']])}\\"
+        rf"{prose(reasons[f['file']].replace(' as missing', ' as absent'))}\\"
         for f in record["files"]
         if f["basis"] != "explicit"
     ]

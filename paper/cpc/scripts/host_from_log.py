@@ -180,33 +180,35 @@ def arm_mib(found: dict[str, dict[str, str]], name: str) -> float:
 
 
 def main() -> int:
+    if sys.argv[1:] == ["--self-check"]:
+        return self_check()
     text = LOG.read_text(encoding="utf-8")
     found = rows(text)
     tip = arm_s(found, "readcon_tip")
     base = arm_s(found, "readcon_v0173")
+    main_s = arm_s(found, "readcon_base")
     h5 = arm_s(found, "h5py")
     conbin = arm_s(found, "conbin")
     ase = arm_s(found, "ase_eon")
     eon = arm_s(found, "eon_py")
     db = arm_s(found, "readcon_db")
     GEN.mkdir(parents=True, exist_ok=True)
+    # Medians of the host log only. A quotient is omitted: the log rows do not
+    # name matching work, threads and input, and the harness refuses that division.
     macros = "\n".join(
         [
             "% Written by paper/cpc/scripts/host_from_log.py.",
             f"\\newcommand{{\\rcHostCommit}}{{{rev_short(text)}}}",
             f"\\newcommand{{\\rcTipMedian}}{{{tip:.4g}}}",
             f"\\newcommand{{\\rcReleaseMedian}}{{{base:.4g}}}",
-            f"\\newcommand{{\\rcTipOverRelease}}{{{base / tip:.3g}}}",
+            f"\\newcommand{{\\rcBaseMedian}}{{{main_s:.4g}}}",
             f"\\newcommand{{\\rcHdfMedian}}{{{h5:.4g}}}",
             f"\\newcommand{{\\rcConbinMedian}}{{{conbin:.4g}}}",
             f"\\newcommand{{\\rcTipMib}}{{{arm_mib(found, 'readcon_tip'):.4g}}}",
             f"\\newcommand{{\\rcAseMedian}}{{{ase:.4g}}}",
-            f"\\newcommand{{\\rcTipOverAse}}{{{ase / tip:.3g}}}",
             f"\\newcommand{{\\rcEonMedian}}{{{eon:.4g}}}",
-            f"\\newcommand{{\\rcTipOverEon}}{{{eon / tip:.3g}}}",
             f"\\newcommand{{\\rcApiMedian}}{{{arm_s(found, 'readcon_eon_api'):.4g}}}",
             f"\\newcommand{{\\rcDbMedian}}{{{db:.4g}}}",
-            f"\\newcommand{{\\rcTipOverDb}}{{{db / tip:.3g}}}",
             f"\\newcommand{{\\rcAseMib}}{{{arm_mib(found, 'ase_eon'):.4g}}}",
             f"\\newcommand{{\\rcChemMib}}{{{arm_mib(found, 'chemfiles'):.4g}}}",
             f"\\newcommand{{\\rcOvitoMib}}{{{arm_mib(found, 'ovito'):.4g}}}",
@@ -222,9 +224,17 @@ def main() -> int:
         + table(
             found,
             CON_ORDER,
-            "All-frame coordinate reads of 100000 frames, six fresh processes, type 7 median. "
-            "The last two rows are first-frame reads of the same file. "
-            "The eOn C++ row is readcon through that API.",
+            "Synthetic CON file of 100000 frames of 32 copper atoms. "
+            "The coordinates are a modulo pattern, not a recorded trajectory. "
+            "Six fresh processes, type 7 median. "
+            "readcon, tip returns only coordinates and uses Rayon on all 8 cores. "
+            "readcon-core at the release and readcon, main each build a full frame on one thread. "
+            "ASE builds an Atoms object per frame on one thread. "
+            "eOn loadcons builds a frame per frame on one thread. "
+            "The eOn C++ row builds full frames on one thread and then a Matter for each frame. "
+            "readcon-db returns coordinates from the store; the ingest is outside the clock. "
+            "The last two rows are first-frame reads of the same file: "
+            "readcon returns the first frame, and eOn builds a Matter from it.",
             "tab:host",
         )
         + "\n",

@@ -17,12 +17,12 @@ defines a macro a second time, the release metadata disagrees with commit.tex, r
 filled-in text carries TeX, an absolute path or a TODO, TBD, FIXME or XXX.
 
 The form's ``Packet state`` field is ``final`` when release.tex gives the commit's role as a release commit or a
-release candidate commit.  A commit that is only a candidate commit refuses, unless ``--draft`` is given; the
+release candidate commit.  A commit whose role is a measured commit refuses, unless ``--draft`` is given; the
 form is then written with every other check in place and ``Packet state: draft``, and only a run on release
 metadata makes it final.
 
     python3 paper/cpc/packet/make_packet.py            # after build_tex.sh
-    python3 paper/cpc/packet/make_packet.py --draft    # a form for a candidate commit
+    python3 paper/cpc/packet/make_packet.py --draft    # a form for a measured commit
     python3 paper/cpc/packet/make_packet.py --check    # exit 1 unless CPC-FORM.md is what a run writes
 """
 
@@ -78,7 +78,7 @@ RELEASE = {
     "readconpublished": r"\d+\.\d+\.\d+",
     "readconpublishedcommit": r"[0-9a-f]{7,40}",
 }
-DRAFT_ROLE = "candidate commit"
+DRAFT_ROLE = "measured commit"
 DOI_URL = re.compile(r"https://doi\.org/(10\.\d{4,}/\S+)")
 
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -223,7 +223,7 @@ def preamble_macros(main: str) -> dict[str, str]:
 def release(draft: bool = False) -> dict[str, str]:
     """The commit of commit.tex, and the version, the commit's role, tag and library digest, and the main-branch
     commit and pull request it descends from and the published release before them, as release.tex gives them.
-    With ``draft``, a role of candidate commit is accepted as well."""
+    With ``draft``, a role of measured commit is accepted as well."""
     values: dict[str, str] = {}
     for name in ("commit.tex", "release.tex"):
         values.update(NEWCOMMAND.findall((SRC / name).read_text()))
