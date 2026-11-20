@@ -45,7 +45,7 @@ jobs:
         with:
           version: '1.10'
       - name: Build libreadcon_core
-        run: cargo build --release --features chemfiles-from-sources
+        run: cargo build --release --features capi,chemfiles-from-sources
       - name: Julia tests
         env:
           READCON_CORE_LIB: ${{ github.workspace }}/target/release/libreadcon_core.so

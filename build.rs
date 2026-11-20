@@ -147,6 +147,13 @@ fn main() {
 
     #[cfg(feature = "chemfiles")]
     compile_chemfiles_atom_view();
+
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        // Keep symbols from statically linked C/C++ archives (such as
+        // libreadcon_chemfiles_atom_view.a and libchemfiles.a) out of the
+        // cdylib dynamic export table.
+        println!("cargo:rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL");
+    }
 }
 
 #[cfg(feature = "chemfiles")]
@@ -162,6 +169,8 @@ fn compile_chemfiles_atom_view() {
         .include(&generated)
         .include(&headers)
         .flag_if_supported("-std=c++17")
+        .flag_if_supported("-fvisibility=hidden")
+        .flag_if_supported("-fvisibility-inlines-hidden")
         .warnings(false);
     build.compile("readcon_chemfiles_atom_view");
 }

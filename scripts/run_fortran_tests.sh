@@ -2,7 +2,10 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export READCON_CORE_ROOT="$ROOT"
-FEATURES="${READCON_FORTRAN_FEATURES:-chemfiles}"
+FEATURES="${READCON_FORTRAN_FEATURES:-capi,chemfiles}"
+if [[ ",${FEATURES}," != *,capi,* ]]; then
+  FEATURES="capi,${FEATURES}"
+fi
 # shellcheck disable=SC2086
 for attempt in 1 2 3; do
   if cargo build --release --features ${FEATURES}; then
