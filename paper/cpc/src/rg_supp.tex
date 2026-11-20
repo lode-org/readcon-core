@@ -460,6 +460,14 @@ Nor does it list the clause-coverage record, which is read from the specificatio
 
 \input{figures/generated/version_map}
 
+The generated table rows the records whose printed numbers the tracer ties to a build.
+Five printed results come from records that table does not row.
+The like-for-like tables are written from \path{bench-like-for-like/results/summary.csv}.
+The host-log medians are written from \path{logs/reader-exchange.log}.
+The DLPack exchange is written from \path{paper/cpc/data/dlpack_cost.txt}.
+The MPI host table and its figure are written from \path{logs/mpi.log}.
+The cross-format table is written from the campaign directory named in Section~\ref{sec:h2h}.
+
 The git bundle readcon-core.bundle of the supplementary material carries commit \texttt{\readconcommitshort} with its whole history, and the archive paper-cpc.tar.gz contains the paper directory with the scripts, the records and the TeX sources of both documents.
 That commit has no paper directory.
 Listing~\ref{lst:repro} clones that commit from the bundle without a network, unpacks the paper directory into the checkout, installs the Python environment that ran the scripts, and rebuilds both documents.

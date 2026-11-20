@@ -43,7 +43,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 | Competing interests | Statement plus the Elsevier declarations tool `.docx` uploaded at Attach Files | GFA | Section "Declaration of competing interest" declares none; the `.docx` comes from the declarations tool during submission. |
 | Funding | Guide asks for disclosure | GFA | Section "Funding" carries the guide's sentence for research without specific funding. |
 | Generative AI in writing | Declare in a section before the references if used in writing | GFA | Section "Declaration of generative AI and AI-assisted technologies in the manuscript preparation process", the last section before the references, in Elsevier's form. |
-| Data availability | Option C: deposit, cite and link data, plus a data statement at submission | GFA | Section "Data availability" names readcon-core 0.17.3, its measured commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, the digest `b49c0be7352a` of its library and the git bundle `readcon-core.bundle` of the supplementary material, and links https://github.com/lode-org/readcon-core, https://doi.org/10.5281/zenodo.18753567, https://github.com/lode-org/readcon-db. |
+| Data availability | Option C: deposit, cite and link data, plus a data statement at submission | GFA | Section "Data availability" names readcon-core 0.17.3, its measured commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, the digest `b49c0be7352a` of that commit's library, and says the records name the libraries they ran. The version map names each of those libraries. The git bundle is `readcon-core.bundle`. Links: https://github.com/lode-org/readcon-core, https://doi.org/10.5281/zenodo.18753567, https://github.com/lode-org/readcon-db. |
 | References | Numbered, elsarticle-num, software cited with identifier | GFA | elsarticle-num; 91 references in the manuscript and 55 in the supplement; no undefined reference or citation in either pdfTeX log. |
 | Tables | Editable, no vertical rules | GFA | 13 tables; no tabular has a vertical rule. |
 | Preprint | Sharing a preprint anywhere at any time is allowed, and a preprint is not prior publication | GFA, SHARE | The preprint is on arXiv. |
@@ -54,7 +54,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 |---|---|
 | `DIR/em-flat/` from `python3 paper/cpc/scripts/make_em_flat.py --out DIR` (TeX Live 2025) | `rg_main.tex` first, then `rg_main.bbl`, then every other file of the set, then the figure PDFs |
 | `paper/cpc/highlights.txt` | Highlights |
-| `paper/cpc/src/rg_supp.pdf` (66 pages, sha256 `af50625faae6c52ec325043dac1d140c1d915f788b82f016538cc201b03aaa21`) | Supplementary material |
+| `paper/cpc/src/rg_supp.pdf` (66 pages, sha256 `188483eec0eecf41762c822f5112285bfd1c5efc130e30743c15f5642112e255`) | Supplementary material |
 | `paper-cpc.tar.gz`, the directory `paper/cpc` (`paper/cpc/REPRO-ARCHIVE.md`) | Supplementary material |
 | `readcon-core.bundle` and `patches/` | Program files |
 | The author's cover letter | Cover letter |
@@ -65,7 +65,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 Data availability names readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, which
 `readcon-core.bundle` holds with its whole history, and links the concept record https://doi.org/10.5281/zenodo.18753567
 of readcon-core. This commit is not a release tag.
-`rg_main.pdf` has 66 pages, sha256 `70592c9e68bdb8d0e8d326e1ff5478f2870ddf56126f25e287b5d6ed8117d3cb`.
+`rg_main.pdf` has 66 pages, sha256 `a1a1a6c80ff61885f19becf5be03f9424ac1d70376969d6719bdd9c86063371e`.
 
 ## Form answers
 
@@ -108,7 +108,7 @@ Upload the `.docx` the tool produces.
 
 **Generative AI declaration question:** AI tools were used, as Section "Declaration of generative AI and AI-assisted technologies in the manuscript preparation process" states: "During the preparation of this work the author used Cursor, routing between Claude Opus 5.5, GPT-5.6 Sol and Grok 4.7, to refine certain turns of phrase and to speed through some implementation details. After using this tool, the author reviewed and edited the content as needed and takes full responsibility for the content of the publication."
 
-**Data statement:** "The software is readcon-core 0.17.3, measured commit 5e1430ddf6da5d2b0d4652f47dce889e7895598f, which the git bundle readcon-core.bundle of the supplementary material holds with its whole history. This commit is not a release tag. Every record of the paper names the library of that commit by its digest, b49c0be7352a. The concept record of readcon-core is https://doi.org/10.5281/zenodo.18753567. The scripts, records and sources of the paper are the directory paper/cpc of the supplementary material." Links: https://github.com/lode-org/readcon-core, https://doi.org/10.5281/zenodo.18753567, https://github.com/lode-org/readcon-db
+**Data statement:** "The software is readcon-core 0.17.3, measured commit 5e1430ddf6da5d2b0d4652f47dce889e7895598f, which the git bundle readcon-core.bundle of the supplementary material holds with its whole history. This commit is not a release tag. The library of that commit has digest b49c0be7352a. A record names the library it ran, and that digest is not b49c0be7352a for every record. The version map in the supplement names the library of each record. The concept record of readcon-core is https://doi.org/10.5281/zenodo.18753567. The scripts, records and sources of the paper are the directory paper/cpc of the supplementary material." Links: https://github.com/lode-org/readcon-core, https://doi.org/10.5281/zenodo.18753567, https://github.com/lode-org/readcon-db
 
 **Preprint:** the arXiv identifier of the preprint. Decline the SSRN option, since the preprint is on arXiv.
 
