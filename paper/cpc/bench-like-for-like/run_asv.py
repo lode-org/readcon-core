@@ -47,8 +47,6 @@ def invoke(args: list[str], env: dict, log_name: str) -> None:
 
 
 def main() -> int:
-    if os.environ.get("LJOS_SEAT") != "benchbot":
-        raise SystemExit("LJOS_SEAT must be benchbot")
     arms.ensure_inputs()
     eon_root = arms.fetch_eon(WORK / "eon-src")
     prefix = WORK / "prefix-tip-a"
@@ -67,7 +65,6 @@ def main() -> int:
     user_site = site.getusersitepackages()
     base = os.environ.copy()
     base["HOME"] = str(home)
-    base["LJOS_SEAT"] = "benchbot"
     base["PYTHONPATH"] = os.pathsep.join((str(prefix), str(eon_root), user_site))
     base["OMP_NUM_THREADS"] = "1"
     base["MKL_NUM_THREADS"] = "1"

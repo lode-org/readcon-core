@@ -1,4 +1,4 @@
-Weak-scaling campaign for BenchBot.
+Weak-scaling campaign.
 Run these from the repository root.
 Rust is 1.88, the rust-version in Cargo.toml.
 The relation is n_frames = frames_per_worker * workers.

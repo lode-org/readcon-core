@@ -125,8 +125,6 @@ def summarize_new(samples: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 def main() -> int:
-    if os.environ.get("LJOS_SEAT") != "benchbot":
-        fail("LJOS_SEAT must be benchbot")
     if REPEATS != 12:
         fail(f"simulation repeats {REPEATS}")
     arms.assert_schedule()

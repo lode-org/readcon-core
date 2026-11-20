@@ -34,7 +34,7 @@ Rows record arm, work, threads, input name, synthetic or real, sha256, n, median
 
 ## Run
 
-From this directory, with `LJOS_SEAT=benchbot`:
+From this directory:
 
 ```
 snakemake -c1

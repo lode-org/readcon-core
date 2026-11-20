@@ -84,7 +84,6 @@ def build_tip(label: str) -> tuple[Path, str]:
     env["CARGO_TARGET_DIR"] = str(target)
     env["CARGO_BUILD_JOBS"] = "2"
     env["RUSTUP_TOOLCHAIN"] = "1.88.0"
-    env["LJOS_SEAT"] = "benchbot"
     command = [
         sys.executable,
         "-m",
@@ -152,7 +151,6 @@ def one(
     env = os.environ.copy()
     env.update(BLAS)
     env["RAYON_NUM_THREADS"] = str(threads)
-    env["LJOS_SEAT"] = "benchbot"
     env.pop("PYTHONPATH", None)
     prefix = prefixes.get(arm, "")
     if prefix:
@@ -222,8 +220,6 @@ def write_csv(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
 
 
 def main() -> int:
-    if os.environ.get("LJOS_SEAT") != "benchbot":
-        fail("LJOS_SEAT must be benchbot")
     arms.assert_schedule()
     revision = require_clean()
     machine = arms.machine_hash()

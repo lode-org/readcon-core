@@ -23,7 +23,7 @@ OUT = GEN / "like_section.tex"
 
 # Preferred row order. Any other input in the file follows, in sorted order.
 INPUTS = ("al_eam_md", "synthetic", "cuh2_band")
-# Former Python reader. The second name is BenchBot's r3 rename of the first.
+# Former Python reader. The second name is the r3 rename of the first.
 PYTHON_ARMS = ("eon_legacy_python", "eon")
 SVN_ARM = "eon_svn_cxx"
 
