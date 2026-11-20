@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "project": "readcon-like-for-like",
+  "project_url": "https://github.com/lode-org/readcon-core",
+  "repo": ".",
+  "branches": ["HEAD"],
+  "environment_type": "existing",
+  "pythons": ["same"],
+  "benchmark_dir": "benchmarks",
+  "env_dir": "work/asv-env",
+  "results_dir": "work/asv-results",
+  "html_dir": "work/asv-html"
+}
