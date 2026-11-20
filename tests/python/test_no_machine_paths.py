@@ -233,6 +233,18 @@ def allowlist() -> dict[str, list[tuple[str, str]]]:
             ('self.assertNotIn("' + system_temp + '", text)', rejects),
             ('self.assertNotIn("' + agent + '", text)', rejects),
         ],
+        "paper/cpc/scripts/check_names.py": [
+            (
+                "'for token in (\""
+                + agent
+                + '", "'
+                + system_temp
+                + '", "'
+                + home
+                + '", "/cursor", "~/", "_home_")\',',
+                "names the path-drop line, which is not a destination",
+            ),
+        ],
         "paper/cpc/scripts/logged_cmd.py": [
             (
                 'for token in ("'

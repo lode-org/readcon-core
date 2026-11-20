@@ -1,0 +1,31 @@
+# Like-for-like reader benchmark. Run from this directory:
+#   LJOS_SEAT=benchbot snakemake -c1
+
+rule all:
+    input:
+        "results/rows.csv",
+        "results/summary.csv",
+        "results/samples.csv",
+        "work/asv.stamp",
+
+rule like_for_like:
+    output:
+        "results/rows.csv",
+        "results/summary.csv",
+        "results/samples.csv",
+    shell:
+        "LJOS_SEAT=benchbot python3 run_bench.py"
+
+rule asv_like:
+    input:
+        "results/rows.csv",
+    output:
+        "work/asv.stamp",
+    shell:
+        "LJOS_SEAT=benchbot python3 run_asv.py && touch work/asv.stamp"
+
+rule al_md:
+    output:
+        "work/al_md.stamp",
+    shell:
+        "LJOS_SEAT=benchbot python3 run_al.py && touch work/al_md.stamp"

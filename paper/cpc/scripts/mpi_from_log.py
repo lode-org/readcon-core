@@ -118,7 +118,7 @@ def main() -> int:
         f"The scatter-mode interquartile range at eight ranks is {fmt(scatter_iqr)}~s"
     )
     lines = [
-        "% Generated from paper/cpc/logs/mpi.log by scripts/mpi_from_log.py.",
+        "% Written by paper/cpc/scripts/mpi_from_log.py.",
         f"\\newcommand{{\\mpiRepeats}}{{{repeats}}}",
         f"\\newcommand{{\\mpiSharedLine}}{{{shared_line}}}",
         f"\\newcommand{{\\mpiScatterLine}}{{{scatter_line}}}",
@@ -142,7 +142,7 @@ def main() -> int:
             )
     table = "\n".join(
         [
-            "% Generated from paper/cpc/logs/mpi.log by scripts/mpi_from_log.py.",
+            "% Written by paper/cpc/scripts/mpi_from_log.py.",
             "\\begin{table}[tbp]",
             "\\centering",
             "\\footnotesize",
@@ -170,9 +170,21 @@ def main() -> int:
         ("scatter", "#FF655D", "s"),
     ):
         medians = [stats[(mode, ranks)][0] for ranks in RANKS]
-        iqrs = [stats[(mode, ranks)][1] for ranks in RANKS]
+        quartiles = [
+            np.percentile(found[(mode, ranks)], [25, 75], method="linear")
+            for ranks in RANKS
+        ]
         ax.errorbar(
-            RANKS, medians, yerr=iqrs, marker=marker, color=color, label=mode, capsize=3
+            RANKS,
+            medians,
+            yerr=[
+                [m - low for m, (low, _) in zip(medians, quartiles)],
+                [high - m for m, (_, high) in zip(medians, quartiles)],
+            ],
+            marker=marker,
+            color=color,
+            label=mode,
+            capsize=3,
         )
     ax.set_xlabel("ranks")
     ax.set_ylabel("median wall time (s)")

@@ -449,6 +449,10 @@ def main() -> int:
             f"requested={requested} matched={matched} failed={requested - matched} exit=0"
         )
     lines.append("exit_code 0")
+    # The campaign log this function writes when LOG has not been redirected.
+    record = "logs/reader-exchange.log"
+    if Path(LOG).name != Path(record).name:
+        raise SystemExit(f"{LOG} is not {record}")
     LOG.parent.mkdir(parents=True, exist_ok=True)
     LOG.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(

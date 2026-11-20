@@ -14,8 +14,6 @@ TEXTS = (CPC / "src" / "rg_main.tex", CPC / "src" / "rg_supp.tex")
 GRAPHIC = re.compile(
     r"\\includegraphics(?:\[[^\]]*\])?\{figures/generated/([^}]+)\.pdf\}"
 )
-# The eOn band is not in git. plot_figures keeps the committed restart.pdf.
-KEPT = {"restart"}
 
 
 def _stems() -> list[str]:
@@ -63,6 +61,7 @@ def test_plotters_write_included_figures(tmp_path: Path | None = None) -> None:
     perf = _load("plot_perf")
     structures = _load("plot_structures")
     restart = _load("plot_restart_formats")
+    ruhi = _load("plot_restart_ruhi")
     supp = _load("plot_supp")
     generated = _load("gen_figures")
     mpi = _load("mpi_from_log")
@@ -72,29 +71,39 @@ def test_plotters_write_included_figures(tmp_path: Path | None = None) -> None:
         (figures, "OUT"),
         (perf, "OUT"),
         (structures, "OUT"),
+        (ruhi, "OUT"),
         (generated, "OUT"),
         (mpi, "GEN"),
     ):
         setattr(module, attr, tmp_path)
-    restored.main()
-    extra.main()
-    perf.main()
-    structures.main()
-    restart.main()
-    supp.main()
-    generated.main()
-    mpi.main()
-    figures.main()
+    refused = []
+    for name, step in (
+        ("plot_restored", restored.main),
+        ("plot_union_extra", extra.main),
+        ("plot_perf", perf.main),
+        ("plot_structures", structures.main),
+        ("plot_restart_ruhi", ruhi.main),
+        ("plot_restart_formats", restart.main),
+        ("plot_supp", supp.main),
+        ("gen_figures", generated.main),
+        ("mpi_from_log", mpi.main),
+        ("plot_figures", figures.main),
+    ):
+        try:
+            step()
+        except SystemExit as exc:
+            refused.append(f"{name}: {exc}")
     missing = []
     for stem in _stems():
         pdf = tmp_path / f"{stem}.pdf"
-        if stem in KEPT and not pdf.is_file():
-            committed = CPC / "src" / "figures" / "generated" / f"{stem}.pdf"
-            if committed.is_file() and committed.read_bytes().startswith(b"%PDF"):
-                continue
         if not pdf.is_file() or not pdf.read_bytes().startswith(b"%PDF"):
             missing.append(stem + ".pdf")
-    assert not missing, "plotter did not write:\n" + "\n".join(missing)
+    assert not missing and not refused, (
+        "plotter did not write:\n"
+        + "\n".join(missing)
+        + "\nplotters that refused:\n"
+        + "\n".join(refused)
+    )
 
 
 if __name__ == "__main__":
