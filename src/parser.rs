@@ -220,7 +220,7 @@ impl<T> ForkOnce<T> {
     /// give that copy up without dropping it. `take` hands the value back
     /// so the caller can forget it, and leaves this slot empty so `Drop`
     /// does not free it a second time. Only that Python path calls this.
-    #[cfg(feature = "python")]
+    #[cfg(feature = "python-bindings")]
     #[allow(dead_code)]
     pub(crate) fn take(&mut self) -> Option<T> {
         // `&mut self` is exclusive. A thread does not
@@ -1715,8 +1715,7 @@ pub(crate) fn parallel_coord_rows(
                         fixed,
                         atom_id,
                     );
-                    (*(atoms_ptr as *mut std::mem::MaybeUninit<crate::types::AtomDatum>).add(row))
-                        .write(atom);
+                    (*atoms_ptr.add(row)).write(atom);
                 }
             }
             pos = next;

@@ -107,7 +107,7 @@ pub mod rpc;
 #[cfg(feature = "rpc")]
 pub use rpc::read_con_capnp as ReadCon_capnp;
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 pub mod python;
 
 /// CON/convel format spec version implemented by this build.

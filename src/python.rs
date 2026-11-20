@@ -7963,7 +7963,7 @@ fn read_conbin_columns(py: Python<'_>, path: &str, n_threads: usize) -> PyResult
     let n_frames = mapped.header.n_frames as usize;
     let n_atoms = mapped.header.n_atoms as usize;
     let width = n_atoms * 3;
-    let ptr = |slice: &[f64]| slice.as_ptr() as usize;
+    let ptr = |slice: &[f64]| slice.as_ptr();
     let pos = mapped
         .positions_f64()
         .map_err(|e| PyIOError::new_err(e.to_string()))?;
@@ -7988,11 +7988,11 @@ fn read_conbin_columns(py: Python<'_>, path: &str, n_threads: usize) -> PyResult
     let id_ptr = mapped
         .atom_ids()
         .map_err(|e| PyIOError::new_err(e.to_string()))?
-        .map(|ids| (ids.as_ptr() as usize, ids.len()));
+        .map(|ids| (ids.as_ptr(), ids.len()));
     let mask_ptr = mapped
         .fixed_masks()
         .map_err(|e| PyIOError::new_err(e.to_string()))?
-        .map(|masks| (masks.as_ptr() as usize, masks.len()));
+        .map(|masks| (masks.as_ptr(), masks.len()));
     let owner = Py::new(py, ConBinMapping { map: mapped.map })?;
     let base = owner.bind(py).clone();
     let dict = PyDict::new(py);
@@ -8042,34 +8042,34 @@ fn read_conbin_columns(py: Python<'_>, path: &str, n_threads: usize) -> PyResult
 fn view_f64_ptr<'py>(
     _py: Python<'py>,
     base: Bound<'py, PyAny>,
-    ptr: usize,
+    ptr: *const f64,
     len: usize,
     shape: (usize, usize),
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     if shape.0.saturating_mul(shape.1) != len {
         return Err(PyValueError::new_err("CON-bin view shape"));
     }
-    let view = unsafe { ArrayView2::from_shape_ptr(shape, ptr as *const f64) };
+    let view = unsafe { ArrayView2::from_shape_ptr(shape, ptr) };
     Ok(unsafe { PyArray2::borrow_from_array(&view, base) })
 }
 
 fn view_u64_ptr<'py>(
     _py: Python<'py>,
     base: Bound<'py, PyAny>,
-    ptr: usize,
+    ptr: *const u64,
     n: usize,
 ) -> PyResult<Bound<'py, PyArray1<u64>>> {
-    let view = unsafe { ArrayView1::from_shape_ptr(n, ptr as *const u64) };
+    let view = unsafe { ArrayView1::from_shape_ptr(n, ptr) };
     Ok(unsafe { PyArray1::borrow_from_array(&view, base) })
 }
 
 fn view_u8_ptr<'py>(
     _py: Python<'py>,
     base: Bound<'py, PyAny>,
-    ptr: usize,
+    ptr: *const u8,
     n: usize,
 ) -> PyResult<Bound<'py, PyArray1<u8>>> {
-    let view = unsafe { ArrayView1::from_shape_ptr(n, ptr as *const u8) };
+    let view = unsafe { ArrayView1::from_shape_ptr(n, ptr) };
     Ok(unsafe { PyArray1::borrow_from_array(&view, base) })
 }
 

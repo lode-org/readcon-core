@@ -86,7 +86,8 @@ borrow-path-counts = []
 # those tests load the maturin extension, which is not built as a test.
 race-hooks = ["python"]
 test-hooks = []
-python = ["dep:pyo3", "dep:numpy", "parallel", "mimalloc-allocator"]
+python-bindings = ["dep:pyo3", "dep:numpy", "parallel", "mimalloc-allocator"]
+python = ["python-bindings", "pyo3/extension-module"]
 zstd = ["dep:zstd"]
 # Distributed I/O over a caller-supplied communicator (rsmpi). Needs an
 # MPI implementation and libclang at build time. See src/distrib.rs.
@@ -153,7 +154,7 @@ tokio = { version = "1", features = [
 ], optional = true }
 tokio-util = { version = "0.7", features = ["compat"], optional = true }
 futures = { version = "0.3", optional = true }
-pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
+pyo3 = { version = "0.28", optional = true }
 numpy = { version = "0.28", optional = true }
 metatensor = { version = "0.3.0-rc2", optional = true }
 zstd = { version = "0.13", optional = true }

@@ -2105,7 +2105,7 @@ fn write_header_page(
 }
 
 /// Store `values` in file order.
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 fn write_le<T: StoreLe>(file: &mut File, values: &[T]) -> Result<(), ParseError> {
     #[cfg(target_endian = "little")]
     let bytes = view_bytes(values);
@@ -2115,7 +2115,7 @@ fn write_le<T: StoreLe>(file: &mut File, values: &[T]) -> Result<(), ParseError>
         .map_err(|err| ParseError::ValidationError(err.to_string()))
 }
 
-#[cfg(all(feature = "python", not(all(unix, target_endian = "little"))))]
+#[cfg(all(feature = "python-bindings", not(all(unix, target_endian = "little"))))]
 pub(crate) fn write_f64_le(file: &mut File, values: &[f64]) -> Result<(), ParseError> {
     write_le(file, values)
 }
@@ -2129,7 +2129,7 @@ pub(crate) fn write_f64_le(file: &mut File, values: &[f64]) -> Result<(), ParseE
 /// # Safety
 ///
 /// `ptr` must stay valid for `len` doubles until this returns.
-#[cfg(all(feature = "python", unix, target_endian = "little"))]
+#[cfg(all(feature = "python-bindings", unix, target_endian = "little"))]
 pub(crate) unsafe fn write_f64_raw(
     file: &File,
     ptr: *const f64,
@@ -2166,7 +2166,7 @@ pub(crate) unsafe fn write_f64_raw(
 /// `run` values at a time, so the caller decides how memory it does not
 /// own reaches the file. The file matches [`write_f64_columns`] of the
 /// same values.
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn write_f64_columns_staged(
     path: &Path,

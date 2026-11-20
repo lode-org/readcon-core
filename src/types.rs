@@ -1463,7 +1463,7 @@ fn stash_atom_spare(buf: Vec<std::mem::MaybeUninit<AtomDatum>>) {
     });
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 fn take_snapshot_atom_spare(n: usize) -> Vec<std::mem::MaybeUninit<AtomDatum>> {
     SNAPSHOT_ATOM_SPARES.with(|cell| {
         let mut pool = cell.borrow_mut();
@@ -1475,7 +1475,7 @@ fn take_snapshot_atom_spare(n: usize) -> Vec<std::mem::MaybeUninit<AtomDatum>> {
     })
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 fn stash_snapshot_atom_spare(buf: Vec<std::mem::MaybeUninit<AtomDatum>>) {
     const CAP_BYTES: usize = 64 * 1024 * 1024;
     SNAPSHOT_ATOM_SPARES.with(|cell| {
@@ -1533,7 +1533,7 @@ impl Drop for ConFrame {
     }
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 impl ConFrame {
     /// This frame with a private copy of atom `i`'s coordinates.
     ///
@@ -1655,7 +1655,7 @@ impl ConFrame {
     }
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 fn recycle_snapshot_atoms(atoms: &mut Vec<AtomDatum>) {
     let mut atoms = std::mem::take(atoms);
     let capacity = atoms.capacity();
@@ -1674,10 +1674,10 @@ fn recycle_snapshot_atoms(atoms: &mut Vec<AtomDatum>) {
     stash_snapshot_atom_spare(spare);
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 struct SnapshotAtomGuard(Vec<AtomDatum>);
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 impl Drop for SnapshotAtomGuard {
     fn drop(&mut self) {
         // The shells were copied bit-for-bit from a live source. On unwind,
@@ -1695,7 +1695,7 @@ impl Drop for SnapshotAtomGuard {
 /// two would overrun the priced range. These views read the values once,
 /// when the snapshot is taken, and share everything else with the source
 /// frames, which the borrow keeps alive and unchanged.
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 pub(crate) struct CoordSnapshot<'a> {
     frames: Vec<Option<ConFrame>>,
     /// Per view: its metadata map belongs to the source frame.
@@ -1710,13 +1710,13 @@ pub(crate) struct CoordSnapshot<'a> {
     _sources: std::marker::PhantomData<&'a ConFrame>,
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 struct SnapshotViewGuard {
     frames: Vec<Option<ConFrame>>,
     shared_maps: Vec<bool>,
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 impl SnapshotViewGuard {
     fn dismantle(&mut self) {
         for (slot, shared) in self.frames.iter_mut().zip(&self.shared_maps) {
@@ -1742,7 +1742,7 @@ impl SnapshotViewGuard {
     }
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 impl Drop for SnapshotViewGuard {
     fn drop(&mut self) {
         // `copy_of` can unwind after earlier views were built. Dismantling
@@ -1752,7 +1752,7 @@ impl Drop for SnapshotViewGuard {
     }
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 impl<'a> CoordSnapshot<'a> {
     pub(crate) fn copy_of(frames: &[Option<&'a ConFrame>]) -> Self {
         Self::copy_reading(frames, std::ptr::null())
@@ -1898,7 +1898,7 @@ impl<'a> CoordSnapshot<'a> {
 
 /// Whether the doubles at `priced` hold the coordinates of `frame` bit
 /// for bit.
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 fn coords_match(frame: &ConFrame, priced: *const f64, from: *const f64) -> bool {
     let n = frame.atom_data.len() * 3;
     if n == 0 {
@@ -1921,7 +1921,7 @@ fn coords_match(frame: &ConFrame, priced: *const f64, from: *const f64) -> bool 
     })
 }
 
-#[cfg(any(feature = "python", test))]
+#[cfg(any(feature = "python-bindings", test))]
 pub(crate) fn assert_atomic_f64_alignment(ptr: *const f64) {
     assert!(
         ptr.cast::<std::sync::atomic::AtomicU64>().is_aligned(),
@@ -1935,7 +1935,7 @@ pub(crate) fn assert_atomic_f64_alignment(ptr: *const f64) {
 /// cross-element atomicity. Each returned element is nevertheless one complete
 /// value observed by a relaxed 64-bit atomic load. Callers must keep the
 /// allocation alive and check [`assert_atomic_f64_alignment`] first.
-#[cfg(any(feature = "python", test))]
+#[cfg(any(feature = "python-bindings", test))]
 #[inline(always)]
 pub(crate) unsafe fn atomic_load_f64(ptr: *const f64) -> f64 {
     f64::from_bits(unsafe { atomic_load_bits(ptr) })
@@ -1945,7 +1945,7 @@ pub(crate) unsafe fn atomic_load_f64(ptr: *const f64) -> f64 {
 ///
 /// The write is one relaxed 64-bit atomic store. Callers must keep the
 /// allocation alive and check [`assert_atomic_f64_alignment`] first.
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 #[inline(always)]
 pub(crate) unsafe fn atomic_store_f64(ptr: *mut f64, value: f64) {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -1953,7 +1953,7 @@ pub(crate) unsafe fn atomic_store_f64(ptr: *mut f64, value: f64) {
     atomic.store(value.to_bits(), Ordering::Relaxed);
 }
 
-#[cfg(any(feature = "python", test))]
+#[cfg(any(feature = "python-bindings", test))]
 #[inline(always)]
 unsafe fn atomic_load_bits(ptr: *const f64) -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -1967,13 +1967,13 @@ unsafe fn atomic_load_bits(ptr: *const f64) -> u64 {
 ///
 /// The loop is explicitly unrolled so release builds issue independent plain
 /// loads on x86-64 and AArch64. The destination must not overlap the source.
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 #[inline]
 pub(crate) unsafe fn atomic_copy_f64(src: *const f64, dst: *mut f64, len: usize) {
     unsafe { atomic_copy_f64_serial(src, dst, len) };
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 #[inline(always)]
 unsafe fn atomic_copy_f64_serial(src: *const f64, dst: *mut f64, len: usize) {
     let mut index = 0;
@@ -2005,7 +2005,7 @@ unsafe fn atomic_copy_f64_serial(src: *const f64, dst: *mut f64, len: usize) {
     }
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 impl Drop for CoordSnapshot<'_> {
     fn drop(&mut self) {
         crate::writer::invalidate_packed_lengths_if_any(
@@ -2965,7 +2965,7 @@ impl ConFrame {
     }
 
     /// Coordinates of atom `index`. Same row as [`Self::xyz_at`].
-    #[cfg_attr(not(feature = "python"), allow(dead_code))]
+    #[cfg_attr(not(feature = "python-bindings"), allow(dead_code))]
     #[inline]
     pub(crate) fn load_coords(&self, index: usize) -> [f64; 3] {
         self.xyz_at(index)
@@ -5948,7 +5948,7 @@ mod tests {
         assert!(!bytes.is_empty());
     }
 
-    #[cfg(feature = "python")]
+    #[cfg(feature = "python-bindings")]
     #[test]
     fn coordinate_snapshot_unwind_does_not_drop_source_fields() {
         let mut first = crate::iterators::ConFrameIterator::new(&uniform_frame_text(1))
@@ -7431,7 +7431,7 @@ mod tests {
         assert_slots_on_columns(&out);
     }
 
-    #[cfg(feature = "python")]
+    #[cfg(feature = "python-bindings")]
     #[test]
     fn a_snapshot_view_counts_its_motion_columns_and_releases_them() {
         let mut frame = vel_forces_frame();

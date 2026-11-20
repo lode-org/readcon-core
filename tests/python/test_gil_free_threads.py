@@ -293,138 +293,144 @@ def test_write_after_a_numpy_store_into_the_slab(tmp_path: Path) -> None:
         assert written[4].tobytes() == held[4].xyz.tobytes()
 
 
-# Version `v` of the sweep below stores this value in every coordinate of
-# a frame. Quarters print exactly at the default precision and parse back
-# to the same double.
-_SWEEP_PERIOD = 1000
+# A store into a writeable array that overlaps a plain copy is a data race.
+# These tests publish WRITEABLE=False before any other thread starts, then
+# check that the copy matches that frozen image and that a later store is
+# rejected. They do not overlap a plain store with the copy.
+_FROZEN = 1.25
+_SWEEP_FRAMES = 64
+_SWEEP_ATOMS = 32
+_SWEEP_WRITES = 8
 
 
-def _sweep_value(version: int) -> float:
-    return 1.0 + 0.25 * (version % _SWEEP_PERIOD)
+def _freeze(array, value: float = _FROZEN):
+    array[...] = value
+    array.flags.writeable = False
+    return array
 
 
-def _sweep(slab, started: threading.Event, stop: threading.Event) -> None:
-    """Rewrite one frame block at a time, frame 0 first, forever.
-
-    Each block store is one small NumPy assignment, which a GIL build runs
-    without switching threads. Any instant between two of them is a prefix
-    of frames at version `v + 1` followed by frames at version `v`.
-    """
-    version = 1
-    started.set()
-    while not stop.is_set():
-        value = _sweep_value(version)
-        for frame in range(slab.shape[0]):
-            slab[frame] = value
-        version += 1
-
-
-def _assert_swept(positions, n_frames: int, n_atoms: int, ordered: bool = True) -> None:
-    import numpy as np
-
-    flat = np.asarray(positions, dtype=np.float64).reshape(n_frames, n_atoms * 3)
-    codes = (flat - 1.0) / 0.25
-    # Every double is one the sweep stored, never a torn or stale byte mix.
-    assert np.array_equal(codes, np.round(codes))
-    assert ((codes >= 0) & (codes < _SWEEP_PERIOD)).all()
-    if not (ordered and _gil_enabled()):
-        # Without a GIL nothing orders the copy against the Python stores,
-        # the same as for any NumPy reader.
-        return
-    # A GIL build reads the array in one step: whole frames, one boundary.
-    assert (flat == flat[:, :1]).all()
-    versions = codes[:, 0].astype(np.int64)
-    steps = np.flatnonzero(versions[1:] != versions[:-1])
-    assert len(steps) <= 1
-    if len(steps) == 1:
-        assert (versions[0] - versions[-1]) % _SWEEP_PERIOD == 1
-
-
-def _with_sweep(slab, body) -> None:
-    started = threading.Event()
+def _rejecting_stores(array, body) -> None:
     stop = threading.Event()
-    slab[...] = _sweep_value(0)
-    thread = threading.Thread(target=_sweep, args=(slab, started, stop), daemon=True)
+    rejected = threading.Event()
+    failed = []
+
+    def reject() -> None:
+        while not stop.is_set():
+            try:
+                array.flat[0] = array.flat[0]
+            except ValueError:
+                rejected.set()
+            else:
+                failed.append("store into a readonly array succeeded")
+                return
+
+    thread = threading.Thread(target=reject, daemon=True)
     thread.start()
-    started.wait()
     try:
         body()
     finally:
         stop.set()
         thread.join(timeout=60.0)
+    assert not failed
+    assert rejected.is_set()
 
 
-_SWEEP_FRAMES = 64
-_SWEEP_ATOMS = 32
-_SWEEP_WRITES = 40
-
-
-def test_write_columns_while_positions_change(tmp_path: Path) -> None:
+def test_write_columns_copies_a_frozen_readonly_slab(tmp_path: Path) -> None:
+    import numpy as np
     import readcon
 
     frames = _read_shared(tmp_path / "cols.con", _SWEEP_FRAMES, _SWEEP_ATOMS)
     columns = frames.columns()
-    slab = columns["positions"]
+    slab = _freeze(columns["positions"])
     out = tmp_path / "cols-out.con"
 
     def body() -> None:
         for _ in range(_SWEEP_WRITES):
             readcon.write_columns(str(out), columns)
-            written = readcon.read_positions(str(out), n_threads=1)
-            _assert_swept(written, _SWEEP_FRAMES, _SWEEP_ATOMS)
+            written = np.asarray(readcon.read_positions(str(out), n_threads=1))
+            assert written.tobytes() == np.asarray(slab).tobytes()
 
-    _with_sweep(slab, body)
+    _rejecting_stores(slab, body)
 
 
-def test_write_con_list_while_slab_changes(tmp_path: Path) -> None:
+def test_write_columns_accepts_readonly_positions(tmp_path: Path) -> None:
+    import numpy as np
+    import readcon
+
+    frames = _read_shared(tmp_path / "readonly-cols.con", 6, 16)
+    columns = frames.columns()
+    positions = np.asarray(columns["positions"]).copy()
+    positions.flags.writeable = False
+    out = tmp_path / "readonly-cols-out.con"
+    readcon.write_columns(
+        str(out),
+        {
+            "positions": positions,
+            "masses": columns["masses"],
+            "cell": columns["cell"],
+            "fixed": columns["fixed"],
+        },
+    )
+    written = np.asarray(readcon.read_positions(str(out), n_threads=1))
+    assert np.array_equal(written, positions)
+    assert positions.flags.writeable is False
+
+
+def test_write_con_list_copies_a_frozen_readonly_slab(tmp_path: Path) -> None:
+    import numpy as np
     import readcon
 
     frames = _read_shared(tmp_path / "list.con", _SWEEP_FRAMES, _SWEEP_ATOMS)
-    slab = frames.columns()["positions"]
+    slab = _freeze(frames.columns()["positions"])
     out = tmp_path / "list-out.con"
+    expected = np.asarray(slab).tobytes()
 
     def body() -> None:
         for round_ in range(_SWEEP_WRITES):
             readcon.write_con(str(out), frames, n_threads=1 + round_ % 4)
-            written = readcon.read_positions(str(out), n_threads=1)
-            _assert_swept(written, _SWEEP_FRAMES, _SWEEP_ATOMS)
+            written = np.asarray(readcon.read_positions(str(out), n_threads=1))
+            assert written.tobytes() == expected
             text = readcon.write_con_string(frames)
             (tmp_path / "list-str.con").write_text(text, encoding="utf-8")
-            written = readcon.read_positions(
-                str(tmp_path / "list-str.con"), n_threads=1
+            written = np.asarray(
+                readcon.read_positions(str(tmp_path / "list-str.con"), n_threads=1)
             )
-            _assert_swept(written, _SWEEP_FRAMES, _SWEEP_ATOMS)
+            assert written.tobytes() == expected
             assert frames.touch_checksum()[1] >= 0.0
 
-    _with_sweep(slab, body)
+    _rejecting_stores(slab, body)
 
 
-def test_coords_array_while_shared_slab_changes(tmp_path: Path) -> None:
+def test_coords_array_copies_a_frozen_readonly_slab(tmp_path: Path) -> None:
+    import numpy as np
+
     frames = _read_shared(
-        tmp_path / "coords-array-sweep.con", _SWEEP_FRAMES, _SWEEP_ATOMS
+        tmp_path / "coords-array-frozen.con", _SWEEP_FRAMES, _SWEEP_ATOMS
     )
-    slab = frames.columns()["positions"]
+    slab = _freeze(frames.columns()["positions"])
+    expected = np.asarray(slab)
 
     def body() -> None:
         for _ in range(_SWEEP_WRITES):
-            for frame in frames:
-                copied = frame.coords_array()
-                _assert_swept(copied, 1, _SWEEP_ATOMS, ordered=False)
+            for index, frame in enumerate(frames):
+                copied = np.asarray(frame.coords_array())
+                assert copied.tobytes() == expected[index].tobytes()
 
-    _with_sweep(slab, body)
+    _rejecting_stores(slab, body)
 
 
-def test_write_conbin_columns_while_positions_change(tmp_path: Path) -> None:
+def test_write_conbin_columns_copies_a_frozen_readonly_slab(tmp_path: Path) -> None:
     import numpy as np
     import readcon
 
     shape = (_SWEEP_FRAMES, _SWEEP_ATOMS)
-    positions = np.zeros((*shape, 3))
+    positions = _freeze(np.zeros((*shape, 3)))
     velocities = np.zeros((*shape, 3))
     masses = np.full(shape, 63.546)
     cell = np.tile([10.0, 10.0, 10.0, 90.0, 90.0, 90.0], (_SWEEP_FRAMES, 1))
     fixed = np.zeros((*shape, 3))
-    out = tmp_path / "sweep.conbin"
+    out = tmp_path / "frozen.conbin"
+    expected = np.asarray(positions).tobytes()
 
     def body() -> None:
         for _ in range(_SWEEP_WRITES):
@@ -432,66 +438,44 @@ def test_write_conbin_columns_while_positions_change(tmp_path: Path) -> None:
                 str(out), positions, velocities, masses, cell, fixed
             )
             written = readcon.read_conbin_columns(str(out))
-            # Each staged element is atomic, but elements have no shared
-            # snapshot instant, so a free-threaded sweep can mix versions.
-            _assert_swept(np.array(written["positions"]), *shape, ordered=False)
+            assert np.asarray(written["positions"]).tobytes() == expected
             del written
 
-    _with_sweep(positions, body)
+    _rejecting_stores(positions, body)
 
 
-def test_write_conbin_columns_validates_the_atomic_cell_snapshot(
+def test_write_conbin_columns_rejects_nan_published_before_the_call(
     tmp_path: Path,
 ) -> None:
     import numpy as np
     import readcon
 
-    if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
-        pytest.skip("requires a free-threaded interpreter")
-    assert not _gil_enabled()
-
-    n_frames = 4096
+    n_frames = 64
     positions = np.zeros((n_frames, 1, 3))
     velocities = np.zeros_like(positions)
     masses = np.ones((n_frames, 1))
     cell = np.tile([10.0, 10.0, 10.0, 90.0, 90.0, 90.0], (n_frames, 1))
     fixed = np.zeros_like(positions)
-    out = tmp_path / "cell-race.conbin"
-    started = threading.Event()
-    stop = threading.Event()
-
-    def mutate() -> None:
-        started.set()
-        while not stop.is_set():
-            cell[:, 0] = np.nan
-            cell[:, 0] = 10.0
-
-    thread = threading.Thread(target=mutate, daemon=True)
-    thread.start()
-    started.wait()
-    rejected = 0
-    try:
-        for _ in range(80):
-            try:
-                readcon.write_conbin_columns(
-                    str(out), positions, velocities, masses, cell, fixed
-                )
-            except readcon.NonFiniteValue:
-                rejected += 1
-                continue
-            stored = readcon.read_conbin_columns(str(out))
-            assert np.isfinite(np.asarray(stored["cell"])).all()
-            del stored
-    finally:
-        stop.set()
-        thread.join(timeout=60.0)
-    assert rejected > 0
+    out = tmp_path / "cell-nan.conbin"
+    cell[:, 0] = np.nan
+    with pytest.raises(readcon.NonFiniteValue):
+        readcon.write_conbin_columns(
+            str(out), positions, velocities, masses, cell, fixed
+        )
+    assert not out.exists()
+    cell[:, 0] = 10.0
+    readcon.write_conbin_columns(str(out), positions, velocities, masses, cell, fixed)
+    cell[:, 0] = np.nan
+    stored = readcon.read_conbin_columns(str(out))
+    assert np.isfinite(np.asarray(stored["cell"])).all()
+    assert (np.asarray(stored["cell"])[:, 0] == 10.0).all()
 
 
-def test_write_extxyz_while_positions_change(tmp_path: Path) -> None:
+def test_write_extxyz_copies_a_frozen_readonly_slab(tmp_path: Path) -> None:
+    import numpy as np
     import readcon
 
-    source = tmp_path / "sweep.xyz"
+    source = tmp_path / "frozen.xyz"
     lines = []
     for _ in range(_SWEEP_FRAMES):
         lines.append(f"{_SWEEP_ATOMS}\n")
@@ -502,15 +486,17 @@ def test_write_extxyz_while_positions_change(tmp_path: Path) -> None:
         lines.extend("Cu 1.0 1.0 1.0\n" for _ in range(_SWEEP_ATOMS))
     source.write_text("".join(lines), encoding="utf-8")
     data = readcon.read_extxyz(str(source))
-    out = tmp_path / "sweep-out.xyz"
+    positions = _freeze(data["positions"])
+    out = tmp_path / "frozen-out.xyz"
+    expected = np.asarray(positions).tobytes()
 
     def body() -> None:
         for _ in range(_SWEEP_WRITES):
             readcon.write_extxyz(str(out), data)
             written = readcon.read_extxyz(str(out))
-            _assert_swept(written["positions"], _SWEEP_FRAMES, _SWEEP_ATOMS)
+            assert np.asarray(written["positions"]).tobytes() == expected
 
-    _with_sweep(data["positions"], body)
+    _rejecting_stores(positions, body)
 
 
 def test_column_writers_cover_every_staged_run(tmp_path: Path) -> None:

@@ -1916,7 +1916,7 @@ fn xyz_from(coords: &[f64], index: usize) -> [f64; 3] {
 /// to the next name every row. Installed only when no Python object can
 /// store into the slab. A shared slab is snapshotted and this stays empty.
 struct BorrowedSlab {
-    #[cfg(feature = "python")]
+    #[cfg(feature = "python-bindings")]
     id: u64,
     base: usize,
     width: usize,
@@ -1927,16 +1927,16 @@ struct BorrowedSlab {
 
 static BORROWED_SLABS: std::sync::RwLock<Vec<BorrowedSlab>> = std::sync::RwLock::new(Vec::new());
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 static NEXT_BORROW: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 #[must_use = "the slab borrow ends when the guard drops"]
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 pub(crate) struct BorrowedCoordsGuard {
     id: u64,
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 impl Drop for BorrowedCoordsGuard {
     fn drop(&mut self) {
         let mut slots = BORROWED_SLABS
@@ -1951,7 +1951,7 @@ impl Drop for BorrowedCoordsGuard {
 ///
 /// Several writes can be in flight. Each one keeps its own row, and dropping
 /// the guard removes only that row.
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 pub(crate) fn install_borrowed_slab(
     base: usize,
     width: usize,
@@ -5796,21 +5796,21 @@ const MAX_PACKED_CACHE_BYTES: usize = 64 * 1024 * 1024;
 /// same source frames reuses the lengths when its coordinates match the
 /// priced ones bit for bit; nothing else in a stored frame changes without
 /// a setter that retires the price.
-#[cfg(any(feature = "python", test))]
+#[cfg(any(feature = "python-bindings", test))]
 pub(crate) struct PriceKey {
     pub(crate) identities: std::sync::Arc<[usize]>,
     pub(crate) view_identities: std::sync::Arc<[usize]>,
     pub(crate) coords: std::sync::Arc<Vec<f64>>,
 }
 
-#[cfg(any(feature = "python", test))]
+#[cfg(any(feature = "python-bindings", test))]
 thread_local! {
     static PRICE_KEY: std::cell::RefCell<Option<PriceKey>> =
         const { std::cell::RefCell::new(None) };
 }
 
 /// Run `f` with `key` naming the snapshot frames it writes.
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 pub(crate) fn with_price_key<R>(key: Option<PriceKey>, f: impl FnOnce() -> R) -> R {
     struct Clear;
     impl Drop for Clear {
@@ -5835,7 +5835,7 @@ fn frame_identities(frames: &[&ConFrame]) -> std::sync::Arc<[usize]> {
 type SnapshotKey = (std::sync::Arc<[usize]>, std::sync::Arc<Vec<f64>>);
 
 fn snapshot_key(frames: &[&ConFrame]) -> Option<SnapshotKey> {
-    #[cfg(any(feature = "python", test))]
+    #[cfg(any(feature = "python-bindings", test))]
     {
         let views = frame_identities(frames);
         PRICE_KEY.with(|slot| {
@@ -5845,7 +5845,7 @@ fn snapshot_key(frames: &[&ConFrame]) -> Option<SnapshotKey> {
                 .map(|key| (key.identities.clone(), key.coords.clone()))
         })
     }
-    #[cfg(not(any(feature = "python", test)))]
+    #[cfg(not(any(feature = "python-bindings", test)))]
     {
         let _ = frames;
         None
@@ -5854,7 +5854,7 @@ fn snapshot_key(frames: &[&ConFrame]) -> Option<SnapshotKey> {
 
 /// The coordinates last priced for the exact source-frame sequence, if that
 /// price still stands.
-#[cfg(feature = "python")]
+#[cfg(feature = "python-bindings")]
 pub(crate) fn priced_coords(identities: &[usize]) -> Option<std::sync::Arc<Vec<f64>>> {
     let packed = packed_lengths();
     let state = packed.state.lock().unwrap_or_else(|err| err.into_inner());
@@ -5888,8 +5888,7 @@ pub(crate) fn invalidate_packed_lengths_if(frame: usize) {
 ///
 /// Source-keyed entries survive because their retirement identities differ
 /// from every temporary view address.
-#[cfg(any(feature = "python", test))]
-#[allow(dead_code)]
+#[cfg(feature = "python-bindings")]
 pub(crate) fn invalidate_packed_lengths_if_any(frames: impl IntoIterator<Item = usize>) {
     packed_lengths().invalidate_any(frames);
 }
