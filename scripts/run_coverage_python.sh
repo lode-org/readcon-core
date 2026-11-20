@@ -28,7 +28,8 @@ if [[ -z "${CC:-}" ]] && command -v clang >/dev/null 2>&1; then
   export CC=clang CXX="${CXX:-clang++}"
 fi
 if [[ -z "${PYO3_PYTHON:-}" ]] && command -v python3 >/dev/null 2>&1; then
-  export PYO3_PYTHON="$(command -v python3)"
+  PYO3_PYTHON="$(command -v python3)"
+  export PYO3_PYTHON
 fi
 
 echo "==> python binding coverage (features=${FEATURES})"
