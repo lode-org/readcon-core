@@ -9,6 +9,16 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Breaking
 
+- **Rust API:** `array::Array::as_dlpack` on `Arc<RwLock<ArrayD<T>>>`
+  returns a read-only tensor over the array's buffer instead of a copy, and
+  holds a read lock until the tensor is deleted. Meanwhile `try_write`
+  fails and `write` blocks; `write` on a thread that still holds a live
+  tensor blocks forever. While a writer waits, std's `RwLock` admits no new
+  reader, so a new export returns an error until the writer is done.
+  Exporting while a writer holds the lock is an error, as before. Delete
+  each tensor once: its deleter frees the tensor, so a second call is a
+  use-after-free.
+
 - **Python:** for a frame from a read, `vel`, `frc` and `mass_column` are
   read-only NumPy views of the parsed columns instead of fresh writeable
   copies. Until `frame.atoms` is first used, `velocities_array()`,

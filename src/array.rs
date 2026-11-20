@@ -25,7 +25,7 @@
 //!
 //! See `docs/orgmode/spec.org` §17 for the public contract.
 
-use std::sync::{Arc, RwLock, TryLockError};
+use std::sync::{Arc, RwLock, RwLockReadGuard, TryLockError};
 
 use dlpk::sys::{DLDataType, DLDevice, DLPackVersion};
 use dlpk::{DLPackPointerCast, DLPackTensor, GetDLPackDataType};
@@ -75,10 +75,49 @@ pub trait Array: std::any::Any + Send + Sync {
     fn copy(&self) -> Box<dyn Array>;
 }
 
+/// Manager context of a DLPack tensor over an `Arc<RwLock<ArrayD<T>>>`:
+/// the buffer stays read-locked, so no writer can change or move it, until
+/// the tensor is deleted.
+struct ReadLockedArray<T: 'static> {
+    // Declared before `_array` so it unlocks before the Arc that owns the
+    // lock is released.
+    _guard: RwLockReadGuard<'static, ArrayD<T>>,
+    _array: Arc<RwLock<ArrayD<T>>>,
+    shape: Vec<i64>,
+    strides: Vec<i64>,
+}
+
+unsafe extern "C" fn read_locked_deleter<T: 'static>(
+    managed: *mut dlpk::sys::DLManagedTensorVersioned,
+) {
+    if managed.is_null() {
+        return;
+    }
+    // `DLPackTensor::from_raw` frees `managed` itself; only the context is ours.
+    unsafe {
+        let ctx = (*managed).manager_ctx;
+        if !ctx.is_null() {
+            drop(Box::from_raw(ctx.cast::<ReadLockedArray<T>>()));
+            (*managed).manager_ctx = std::ptr::null_mut();
+        }
+    }
+}
+
 /// Default Rust backing for the Array trait: shared, lockable,
 /// dynamic-rank ndarray. Matches metatensor v2's
 /// `Arc<RwLock<ArrayD<T>>>` choice and inherits its DLPack +
 /// concurrency semantics.
+///
+/// `as_dlpack` shares the buffer and holds a read lock until the tensor is
+/// deleted: other exports and reads proceed, `try_write` fails and `write`
+/// blocks meanwhile. A `write` on a thread that still holds a live tensor
+/// therefore never returns. Once a writer is waiting, std's `RwLock` lets no
+/// new reader in, so `as_dlpack` returns an error until that writer is done.
+/// Delete each tensor exactly once: the deleter frees the tensor, so a second
+/// call is a use-after-free. Like dlpk's own lock-holding tensors, a tensor
+/// handed through C must be deleted on a thread where releasing a std
+/// `RwLock` read lock is allowed; std's futex and queue locks allow any
+/// thread.
 impl<T> Array for Arc<RwLock<ArrayD<T>>>
 where
     T: 'static + Send + Sync + Clone + Default + GetDLPackDataType + DLPackPointerCast,
@@ -118,11 +157,8 @@ where
                 "Arc<RwLock<ArrayD>> is CPU-only; requested device {device:?} unsupported"
             )));
         }
-        // Borrow the inner ArrayD<T> read-only and convert to DLPack
-        // through dlpk's ndarray feature. The resulting DLPackTensor
-        // owns a clone of the Arc, so the lifetime is decoupled from
-        // the borrow above.
-        let lock = match self.try_read() {
+        let array = Arc::clone(self);
+        let guard = match array.try_read() {
             Ok(lock) => lock,
             Err(TryLockError::Poisoned(_)) => {
                 return Err(ParseError::ValidationError(
@@ -135,15 +171,36 @@ where
                 ));
             }
         };
-        // Clone the ArrayD<T> contents into an owned ndarray, then
-        // hand it to dlpk's TryFrom<ArrayD<T>> -> DLPackTensor (this
-        // takes ownership, so the resulting DLPackTensor has its own
-        // backing storage independent of the Arc<RwLock<...>>; future
-        // optimisation: build a custom Array impl that exposes the
-        // Arc-shared storage directly via dlpk's manager_ctx).
-        let owned: ArrayD<T> = lock.to_owned();
-        DLPackTensor::try_from(owned)
-            .map_err(|e| ParseError::ValidationError(format!("dlpk ArrayD conversion failed: {e}")))
+        // SAFETY: the guard borrows the RwLock inside the Arc allocation,
+        // which `_array` keeps alive and in place; `ReadLockedArray` drops
+        // the guard before `_array`.
+        let guard: RwLockReadGuard<'static, ArrayD<T>> = unsafe { std::mem::transmute(guard) };
+        let data = guard.as_ptr() as *mut std::ffi::c_void;
+        let mut ctx = Box::new(ReadLockedArray {
+            shape: guard.shape().iter().map(|&d| d as i64).collect(),
+            strides: guard.strides().iter().map(|&s| s as i64).collect(),
+            _guard: guard,
+            _array: array,
+        });
+        let dl_tensor = dlpk::sys::DLTensor {
+            data,
+            device: DLDevice::cpu(),
+            ndim: ctx.shape.len() as i32,
+            dtype: T::get_dlpack_data_type(),
+            shape: ctx.shape.as_mut_ptr(),
+            strides: ctx.strides.as_mut_ptr(),
+            byte_offset: 0,
+        };
+        let managed = dlpk::sys::DLManagedTensorVersioned {
+            version: DLPackVersion::current(),
+            manager_ctx: Box::into_raw(ctx).cast(),
+            deleter: Some(read_locked_deleter::<T>),
+            flags: dlpk::sys::DLPACK_FLAG_BITMASK_READ_ONLY,
+            dl_tensor,
+        };
+        // SAFETY: `managed` points at a live buffer and shape/stride arrays
+        // owned by its context, which the deleter frees.
+        Ok(unsafe { DLPackTensor::from_raw(managed) })
     }
 
     fn copy(&self) -> Box<dyn Array> {
@@ -387,6 +444,135 @@ mod tests {
             .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
             .expect("DLPack export should succeed for CPU array");
         assert_eq!(tensor.shape(), &[4, 3]);
+    }
+
+    fn shared_f64(values: Vec<f64>, shape: &[usize]) -> Arc<RwLock<ArrayD<f64>>> {
+        Arc::new(RwLock::new(
+            ArrayD::from_shape_vec(ndarray::IxDyn(shape), values).unwrap(),
+        ))
+    }
+
+    #[test]
+    fn locked_array_exports_point_at_its_buffer() {
+        let array = shared_f64((0..6).map(f64::from).collect(), &[2, 3]);
+        let buffer = array.read().unwrap().as_ptr();
+        let first = array
+            .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
+            .unwrap();
+        let second = array
+            .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
+            .unwrap();
+        for tensor in [&first, &second] {
+            assert_eq!(tensor.data_ptr::<f64>().unwrap(), buffer);
+            assert_eq!(tensor.shape(), &[2, 3]);
+            assert_eq!(tensor.strides(), Some(&[3, 1][..]));
+            assert_ne!(tensor.flags() & dlpk::sys::DLPACK_FLAG_BITMASK_READ_ONLY, 0);
+        }
+        assert_eq!(array.shape(), vec![2, 3]);
+    }
+
+    #[test]
+    fn a_live_export_keeps_writers_out_until_it_is_deleted() {
+        let array = shared_f64(vec![1.0, 2.0, 3.0], &[3]);
+        let tensor = array
+            .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
+            .unwrap();
+        assert!(matches!(array.try_write(), Err(TryLockError::WouldBlock)));
+        drop(array.try_read().expect("readers still get in"));
+        drop(tensor);
+        array
+            .try_write()
+            .expect("writers get in after the export is deleted")[0] = 9.0;
+        let again = array
+            .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
+            .unwrap();
+        assert_eq!(unsafe { *again.data_ptr::<f64>().unwrap() }, 9.0);
+    }
+
+    #[test]
+    fn an_export_outlives_the_last_array_handle() {
+        let array = shared_f64(vec![4.0, 5.0], &[2]);
+        let tensor = array
+            .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
+            .unwrap();
+        drop(array);
+        let values = unsafe { std::slice::from_raw_parts(tensor.data_ptr::<f64>().unwrap(), 2) };
+        assert_eq!(values, &[4.0, 5.0]);
+    }
+
+    #[test]
+    fn exporting_a_write_locked_array_is_an_error() {
+        let array = shared_f64(vec![1.0], &[1]);
+        let _writer = array.write().unwrap();
+        assert!(
+            array
+                .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
+                .is_err()
+        );
+    }
+
+    // std's futex RwLock turns new readers away once a writer is waiting.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn exports_fail_while_a_writer_waits_on_a_live_export() {
+        let array = shared_f64(vec![1.0], &[1]);
+        let held = array
+            .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
+            .unwrap();
+        std::thread::scope(|scope| {
+            let writer = scope.spawn(|| array.write().unwrap()[0] = 2.0);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            while array
+                .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
+                .is_ok()
+            {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "exports kept succeeding while a writer waited"
+                );
+                std::thread::yield_now();
+            }
+            assert!(!writer.is_finished());
+            drop(held);
+            writer.join().unwrap();
+        });
+        assert_eq!(array.read().unwrap()[0], 2.0);
+    }
+
+    // The deleter frees the tensor it is given, so calling it again reads
+    // freed memory. The double call runs in a child process, which
+    // AddressSanitizer must stop with a use-after-free report.
+    #[cfg(asan_run)]
+    #[test]
+    fn a_second_deleter_call_is_a_use_after_free() {
+        const CHILD: &str = "READCON_DOUBLE_DELETE_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let array = shared_f64(vec![1.0], &[1]);
+            let tensor = array
+                .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
+                .unwrap()
+                .into_raw()
+                .as_ptr();
+            unsafe {
+                let deleter = (*tensor).deleter.unwrap();
+                deleter(tensor);
+                deleter(tensor);
+            }
+            return;
+        }
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "array::tests::a_second_deleter_call_is_a_use_after_free",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{stderr}");
+        assert!(stderr.contains("heap-use-after-free"), "{stderr}");
     }
 
     /// Without `--features cuda`, non-CPU allocate must fail with a clear error
