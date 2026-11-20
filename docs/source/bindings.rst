@@ -308,6 +308,10 @@ Types
     build\_atom\_id\_index() (v0.10.0+), coords\_array() (v0.10.0+),
     velocities\_array() (v0.10.0+), forces\_array() (v0.10.0+),
     energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+).
+    For a frame from a read, ``vel``, ``frc``, ``mass_column`` and, until
+    ``.atoms`` is used, the ``\*_array()`` methods other than ``coords_array()``
+    are read-only views of the parsed columns: no copy, and ``.copy()`` gives
+    a writeable array.
     The constructor and ``from_ase()`` raise ``readcon.NonFiniteValue`` (a
     ``ValueError``) for a cell length or angle that is NaN or infinite, and
     for a ``lattice_vectors`` metadata matrix that holds one. The message names
