@@ -10,7 +10,8 @@ use serde_json::Value;
 use std::collections::HashSet;
 use std::iter::Peekable;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(not(miri))]
+use std::sync::atomic::Ordering;
 
 /// Line source with peek for section detection (blank-line separators).
 ///
@@ -45,6 +46,41 @@ pub(crate) fn set_wide_workers(n: usize) {
 
 std::thread_local! {
     static WIDE_WORKERS: std::cell::Cell<usize> = const { std::cell::Cell::new(1) };
+}
+
+/// A raw pointer that workers may share.
+///
+/// The address is never stored as an integer. `wrapping_byte_add` keeps
+/// the allocation's provenance when a worker offsets into its own rows.
+#[cfg(feature = "parallel")]
+struct SendMut<T>(*mut T);
+
+#[cfg(feature = "parallel")]
+impl<T> Copy for SendMut<T> {}
+#[cfg(feature = "parallel")]
+impl<T> Clone for SendMut<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+// Each index is written by one worker, and the allocation outlives the join.
+#[cfg(feature = "parallel")]
+unsafe impl<T> Send for SendMut<T> {}
+#[cfg(feature = "parallel")]
+unsafe impl<T> Sync for SendMut<T> {}
+
+#[cfg(feature = "parallel")]
+impl<T> SendMut<T> {
+    fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Offset `index` elements. The provenance stays with `self`.
+    unsafe fn add(self, index: usize) -> *mut T {
+        let bytes = index.wrapping_mul(std::mem::size_of::<T>());
+        self.0.wrapping_byte_add(bytes)
+    }
 }
 
 /// Output columns for a parallel coordinate fill.
@@ -88,9 +124,9 @@ pub(crate) fn fill_rows_from_breaks(
     }
     let chunk = n.div_ceil(workers.max(1)).max(1);
     let groups = n.div_ceil(chunk);
-    let xyz_ptr = xyz as usize;
-    let ids_ptr = ids as usize;
-    let flags_ptr = flags as usize;
+    let xyz_ptr = SendMut(xyz);
+    let ids_ptr = SendMut(ids);
+    let flags_ptr = SendMut(flags);
     let fill = || {
         use rayon::prelude::*;
         (0..groups).into_par_iter().try_for_each(|group| {
@@ -110,19 +146,15 @@ pub(crate) fn fill_rows_from_breaks(
                 let ((row, fixed, atom_id), _next) =
                     parse_coord_row_at(&bytes[start..end], 0, spec_version, default_id)?;
                 unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        row.as_ptr(),
-                        (xyz_ptr as *mut f64).add(row_index * 3),
-                        3,
-                    );
-                    if ids_ptr != 0 {
-                        *((ids_ptr as *mut u64).add(row_index)) = atom_id;
+                    std::ptr::copy_nonoverlapping(row.as_ptr(), xyz_ptr.add(row_index * 3), 3);
+                    if !ids_ptr.is_null() {
+                        *ids_ptr.add(row_index) = atom_id;
                     }
-                    if flags_ptr != 0 {
+                    if !flags_ptr.is_null() {
                         let mask = u8::from(fixed[0])
                             | (u8::from(fixed[1]) << 1)
                             | (u8::from(fixed[2]) << 2);
-                        *((flags_ptr as *mut u8).add(row_index)) = mask;
+                        *flags_ptr.add(row_index) = mask;
                     }
                 }
             }
@@ -132,6 +164,926 @@ pub(crate) fn fill_rows_from_breaks(
     on_pool(workers, fill)
 }
 
+/// A value published once, without a lock a forked child can inherit.
+///
+/// `OnceLock` waits on an internal mutex. A fork while that mutex is held
+/// leaves the child blocked on it forever. This slot publishes with one
+/// atomic exchange. A child that does not see a value builds its own, and
+/// two racers both build; the loser drops its copy.
+pub(crate) struct ForkOnce<T> {
+    slot: std::sync::atomic::AtomicPtr<T>,
+    _marker: std::marker::PhantomData<T>,
+}
+
+impl<T> ForkOnce<T> {
+    pub(crate) const fn new() -> Self {
+        Self {
+            slot: std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()),
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    pub(crate) fn get(&self) -> Option<&T> {
+        // Acquire. This load synchronizes with the Release
+        // store that published the pointer, so the pointee's initialization
+        // happens-before the caller uses it.
+        let ptr = self.slot.load(std::sync::atomic::Ordering::Acquire);
+        unsafe { ptr.as_ref() }
+    }
+
+    // The metadata cell is a `OnceLock`. This stays for a slot the
+    // owner holds exclusively.
+    #[allow(dead_code)]
+    pub(crate) fn get_mut(&mut self) -> Option<&mut T> {
+        unsafe { self.slot.get_mut().as_mut() }
+    }
+
+    pub(crate) fn set(&self, value: T) -> Result<(), T> {
+        let fresh = Box::into_raw(Box::new(value));
+        // Release publishes the boxed value, which is sequenced-before
+        // this exchange. Failure is Relaxed: this path does not read the
+        // pointer that won.
+        match self.slot.compare_exchange(
+            std::ptr::null_mut(),
+            fresh,
+            std::sync::atomic::Ordering::Release,
+            std::sync::atomic::Ordering::Relaxed,
+        ) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(unsafe { *Box::from_raw(fresh) }),
+        }
+    }
+
+    /// Removes the value, leaving the slot empty.
+    ///
+    /// A snapshot view copies a metadata map bit for bit and then has to
+    /// give that copy up without dropping it. `take` hands the value back
+    /// so the caller can forget it, and leaves this slot empty so `Drop`
+    /// does not free it a second time. Only that Python path calls this.
+    #[cfg(feature = "python")]
+    #[allow(dead_code)]
+    pub(crate) fn take(&mut self) -> Option<T> {
+        // `&mut self` is exclusive. A thread does not
+        // need a synchronizing exchange on a cell no other thread can
+        // access. A plain load of the cell is enough.
+        let ptr = std::mem::replace(self.slot.get_mut(), std::ptr::null_mut());
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { *Box::from_raw(ptr) })
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_or_init(&self, init: impl FnOnce() -> T) -> &T {
+        if let Some(value) = self.get() {
+            return value;
+        }
+        let fresh = Box::into_raw(Box::new(init()));
+        // Release on success. The store publishes the
+        // initialized pointee. Acquire on failure. The
+        // loser reads the winner's pointer and must see that
+        // initialization. The failure load stays Acquire for that reason.
+        match self.slot.compare_exchange(
+            std::ptr::null_mut(),
+            fresh,
+            std::sync::atomic::Ordering::Release,
+            std::sync::atomic::Ordering::Acquire,
+        ) {
+            Ok(_) => unsafe { &*fresh },
+            Err(winner) => {
+                drop(unsafe { Box::from_raw(fresh) });
+                unsafe { &*winner }
+            }
+        }
+    }
+}
+
+impl<T: Clone> Clone for ForkOnce<T> {
+    fn clone(&self) -> Self {
+        let next = Self::new();
+        if let Some(value) = self.get() {
+            let _ = next.set(value.clone());
+        }
+        next
+    }
+}
+
+impl<T: std::fmt::Debug> std::fmt::Debug for ForkOnce<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ForkOnce")
+            .field("value", &self.get())
+            .finish()
+    }
+}
+
+impl<T> Drop for ForkOnce<T> {
+    fn drop(&mut self) {
+        let ptr = *self.slot.get_mut();
+        if !ptr.is_null() {
+            drop(unsafe { Box::from_raw(ptr) });
+        }
+    }
+}
+
+/// Counts `fork` calls. The child handler runs before `fork` returns, so a
+/// slot the parent published still carries the previous count.
+///
+/// A coordinate setter does not call `getpid`. It loads this counter and
+/// the pid cached for the process. The load is relaxed: the counter needs
+/// atomicity, and the child handler's release store is what publishes it.
+#[cfg(all(unix, not(miri), not(loom)))]
+static FORK_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Packed hook word. The low two bits are the state. The high half is the
+/// pid that published that state.
+///
+/// `0` unset, `1` busy in `pid`, `2` ready in `pid`. Moving to busy is one
+/// compare-exchange, so a sibling never observes a busy word whose pid is
+/// still zero. Recovery swaps that exact word for this process's busy word.
+/// It does not compare-exchange a bare `1` back to `0`, which would clear a
+/// claim this process already published.
+#[cfg(all(unix, not(miri), not(loom)))]
+static FORK_HOOK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+// Same words as the production static variables. Loom atomics are not `const`,
+// and each model execution needs a fresh pair, so they live in
+// `lazy_static`. `on_fork_child` publishes through `ClaimWord` and
+// `ClaimEpoch` on whichever pair this build uses.
+#[cfg(all(unix, not(miri), loom))]
+loom::lazy_static! {
+    static ref FORK_EPOCH: loom::sync::atomic::AtomicU64 =
+        loom::sync::atomic::AtomicU64::new(0);
+    static ref FORK_HOOK: loom::sync::atomic::AtomicU64 =
+        loom::sync::atomic::AtomicU64::new(0);
+}
+
+#[cfg(all(unix, not(miri), not(loom)))]
+fn fork_hook() -> &'static std::sync::atomic::AtomicU64 {
+    &FORK_HOOK
+}
+
+#[cfg(all(unix, not(miri), not(loom)))]
+fn fork_epoch_word() -> &'static std::sync::atomic::AtomicU64 {
+    &FORK_EPOCH
+}
+
+#[cfg(all(unix, not(miri), loom))]
+fn fork_hook() -> &'static loom::sync::atomic::AtomicU64 {
+    &*FORK_HOOK
+}
+
+#[cfg(all(unix, not(miri), loom))]
+fn fork_epoch_word() -> &'static loom::sync::atomic::AtomicU64 {
+    &*FORK_EPOCH
+}
+
+/// Packed claim word. Miri never builds the hook, so this stays out of
+/// that configuration. Loom and the real registrar both use it.
+#[cfg(any(loom, all(unix, not(miri))))]
+mod fork_claim {
+    pub(super) const HOOK_UNSET: u64 = 0;
+    pub(super) const HOOK_BUSY: u64 = 1;
+    pub(super) const HOOK_READY: u64 = 2;
+    pub(super) const HOOK_STATE_MASK: u64 = 0b11;
+
+    pub(super) fn hook_pack(state: u64, pid: u32) -> u64 {
+        state | ((pid as u64) << 32)
+    }
+
+    pub(super) fn hook_state(word: u64) -> u64 {
+        word & HOOK_STATE_MASK
+    }
+
+    pub(super) fn hook_pid(word: u64) -> u32 {
+        (word >> 32) as u32
+    }
+
+    /// A word this function can claim. `std` and `loom` atomics both speak
+    /// [`std::sync::atomic::Ordering`], so the loom tests call this function.
+    pub(super) trait ClaimWord {
+        fn load_word(&self, order: std::sync::atomic::Ordering) -> u64;
+        fn store_word(&self, value: u64, order: std::sync::atomic::Ordering);
+        fn cas_word(
+            &self,
+            current: u64,
+            new: u64,
+            success: std::sync::atomic::Ordering,
+            failure: std::sync::atomic::Ordering,
+        ) -> Result<u64, u64>;
+    }
+
+    pub(super) trait ClaimEpoch {
+        fn bump_epoch(&self);
+    }
+
+    impl ClaimWord for std::sync::atomic::AtomicU64 {
+        fn load_word(&self, order: std::sync::atomic::Ordering) -> u64 {
+            self.load(order)
+        }
+        fn store_word(&self, value: u64, order: std::sync::atomic::Ordering) {
+            self.store(value, order);
+        }
+        fn cas_word(
+            &self,
+            current: u64,
+            new: u64,
+            success: std::sync::atomic::Ordering,
+            failure: std::sync::atomic::Ordering,
+        ) -> Result<u64, u64> {
+            self.compare_exchange(current, new, success, failure)
+        }
+    }
+
+    impl ClaimEpoch for std::sync::atomic::AtomicU64 {
+        fn bump_epoch(&self) {
+            // Relaxed. a pure counter needs atomicity and
+            // nothing else. The caller sequences this bump before the
+            // Release store that publishes it.
+            self.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    #[cfg(loom)]
+    impl ClaimWord for loom::sync::atomic::AtomicU64 {
+        fn load_word(&self, order: std::sync::atomic::Ordering) -> u64 {
+            self.load(order)
+        }
+        fn store_word(&self, value: u64, order: std::sync::atomic::Ordering) {
+            self.store(value, order);
+        }
+        fn cas_word(
+            &self,
+            current: u64,
+            new: u64,
+            success: std::sync::atomic::Ordering,
+            failure: std::sync::atomic::Ordering,
+        ) -> Result<u64, u64> {
+            self.compare_exchange(current, new, success, failure)
+        }
+    }
+
+    #[cfg(loom)]
+    impl ClaimEpoch for loom::sync::atomic::AtomicU64 {
+        fn bump_epoch(&self) {
+            // Relaxed. a pure counter needs atomicity and
+            // nothing else. The caller sequences this bump before the
+            // Release store that publishes it.
+            self.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+}
+
+#[cfg(any(loom, all(unix, not(miri))))]
+use fork_claim::{
+    ClaimEpoch, ClaimWord, HOOK_BUSY, HOOK_READY, HOOK_UNSET, hook_pack, hook_pid, hook_state,
+};
+
+/// Publish `READY(pid)` from the child handler.
+///
+/// `pthread_atfork` has already returned in the parent by the time this
+/// runs. The hook word the child inherited may still be `BUSY`, because
+/// the parent publishes `READY` only after `pthread_atfork` returns. This
+/// store happens before that handler returns. `fork` does not return in
+/// the child until then, and the child has no other thread, so no later
+/// load of the word can observe the inherited `BUSY`.
+///
+/// The epoch bump is `Relaxed`. That ordering guarantees atomicity of
+/// this counter and nothing else, which is what a pure counter needs. The
+/// bump is sequenced-before the `Release` store. A `Release` store
+/// synchronizes with an `Acquire` load that reads the stored value, and
+/// everything sequenced-before the `Release` happens-before that load.
+/// `claim_fork_hook` loads the word with `Acquire`, so a claim that sees
+/// `READY` also sees the bump. In this same thread the store is visible
+/// to any later load anyway: a thread sees its own stores through
+/// sequenced-before, independent of the ordering tag.
+#[cfg(any(loom, all(unix, not(miri))))]
+fn publish_ready_after_fork<W: ClaimWord, E: ClaimEpoch>(word: &W, epoch: &E, pid: u32) {
+    use std::sync::atomic::Ordering;
+    epoch.bump_epoch();
+    word.store_word(hook_pack(HOOK_READY, pid), Ordering::Release);
+}
+
+#[cfg(all(unix, not(miri), not(loom)))]
+static CACHED_PID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+#[cfg(all(unix, not(miri), loom))]
+loom::lazy_static! {
+    static ref CACHED_PID: loom::sync::atomic::AtomicU32 = loom::sync::atomic::AtomicU32::new(0);
+}
+
+#[cfg(all(unix, not(miri), not(loom)))]
+fn cached_pid_word() -> &'static std::sync::atomic::AtomicU32 {
+    &CACHED_PID
+}
+
+#[cfg(all(unix, not(miri), loom))]
+fn cached_pid_word() -> &'static loom::sync::atomic::AtomicU32 {
+    &*CACHED_PID
+}
+
+#[cfg(all(test, not(miri)))]
+std::thread_local! {
+    static GETPID_CALLS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times this thread has called `getpid`.
+#[cfg(all(test, not(loom), not(miri)))]
+pub(crate) fn getpid_syscall_count() -> u64 {
+    GETPID_CALLS.with(|calls| calls.get())
+}
+
+#[cfg(all(unix, not(miri), not(loom)))]
+fn read_getpid() -> u32 {
+    let pid = unsafe { libc::getpid() as u32 };
+    #[cfg(test)]
+    GETPID_CALLS.with(|calls| calls.set(calls.get() + 1));
+    pid
+}
+
+#[cfg(all(unix, not(miri), loom))]
+fn read_getpid() -> u32 {
+    1
+}
+
+#[cfg(all(unix, not(miri)))]
+unsafe extern "C" fn on_fork_child() {
+    // The child inherited the parent's cached pid. Read the new one here,
+    // before any setter runs, and publish it with the epoch bump.
+    let pid = read_getpid();
+    cached_pid_word().store(pid, Ordering::Relaxed);
+    publish_ready_after_fork(fork_hook(), fork_epoch_word(), pid);
+}
+
+fn caller_pid() -> u32 {
+    #[cfg(all(unix, not(miri)))]
+    {
+        let cached = cached_pid_word().load(Ordering::Relaxed);
+        if cached != 0 {
+            let word = fork_hook().load(Ordering::Acquire);
+            // The cached pid is current only while the hook still names it.
+            // A child whose handler has not run yet falls through to getpid.
+            if hook_state(word) == HOOK_READY && hook_pid(word) == cached {
+                return cached;
+            }
+        }
+        let pid = read_getpid();
+        if pid != 0 {
+            cached_pid_word().store(pid, Ordering::Relaxed);
+        }
+        pid
+    }
+    #[cfg(any(not(unix), miri))]
+    {
+        0
+    }
+}
+
+/// Install the child handler once.
+///
+/// The claim compare-exchange succeeds with `Acquire` and fails with
+/// `Relaxed`. `Acquire` synchronizes with the `Release`
+/// that published the word it read, so the claim observes that state.
+/// A failed exchange's result is discarded. The loop
+/// loads again with `Acquire`, so the failure needs only atomicity.
+/// The word's own value is published by coherence of this atomic. The
+/// `Release` that publishes `install` is the exchange in `finish_claim`.
+///
+/// A busy word names its owner pid. A caller whose pid differs takes that
+/// exact word, bumps [`FORK_EPOCH`], and then installs. That path is the
+/// fork that landed before `pthread_atfork` ran, so no child handler
+/// exists yet. A fork that lands after `pthread_atfork` returns does not
+/// stay `BUSY`: [`on_fork_child`] publishes `READY` with the child pid
+/// before it returns, and this function must not register a second
+/// handler. A caller that sees its own pid busy does not wait: the thread
+/// inside `pthread_atfork` is gone in a child of a fork that landed there,
+/// and a waiter would block forever. A ready word from another pid is
+/// adopted and `install` is not called again.
+#[cfg(all(unix, not(miri)))]
+fn claim_fork_hook<W: ClaimWord, E: ClaimEpoch>(
+    word: &W,
+    epoch: &E,
+    pid: u32,
+    install: impl FnOnce() -> bool,
+) -> bool {
+    use std::sync::atomic::Ordering;
+    let my_busy = hook_pack(HOOK_BUSY, pid);
+    let my_ready = hook_pack(HOOK_READY, pid);
+    let mut install = Some(install);
+    loop {
+        let observed = word.load_word(Ordering::Acquire);
+        match hook_state(observed) {
+            HOOK_READY if hook_pid(observed) == pid => return true,
+            HOOK_READY => {
+                // Success is Acquire, so it synchronizes with the Release that
+                // published the word. Failure is Relaxed: the result is
+                // discarded and the loop reloads with Acquire.
+                if word
+                    .cas_word(observed, my_ready, Ordering::Acquire, Ordering::Relaxed)
+                    .is_ok()
+                {
+                    return true;
+                }
+                let now = word.load_word(Ordering::Acquire);
+                return hook_state(now) == HOOK_READY && hook_pid(now) == pid;
+            }
+            HOOK_BUSY if hook_pid(observed) == pid => return false,
+            HOOK_BUSY => {
+                // Success is Acquire, so it synchronizes with the Release that
+                // published the word. Failure is Relaxed: the result is
+                // discarded and the loop reloads with Acquire.
+                if word
+                    .cas_word(observed, my_busy, Ordering::Acquire, Ordering::Relaxed)
+                    .is_ok()
+                {
+                    epoch.bump_epoch();
+                    return finish_claim(word, my_busy, my_ready, install.take().unwrap());
+                }
+            }
+            _ => {
+                // Success is Acquire, so it synchronizes with the Release that
+                // published the word. Failure is Relaxed: the result is
+                // discarded and the loop reloads with Acquire.
+                if word
+                    .cas_word(observed, my_busy, Ordering::Acquire, Ordering::Relaxed)
+                    .is_ok()
+                {
+                    return finish_claim(word, my_busy, my_ready, install.take().unwrap());
+                }
+            }
+        }
+    }
+}
+
+/// Test handshake. The registrar thread sets [`STALL_THIS_CLAIM`] before
+/// calling [`claim_fork_hook`]. After `install` returns, that thread
+/// publishes [`STALL_REACHED`] and spins until the test clears
+/// [`STALL_HOLD`]. Other threads leave the cell false and do not spin.
+///
+/// `Release` on `STALL_REACHED` synchronizes with the test's `Acquire`
+/// load, so a test that observes the flag also observes that `install`
+/// has returned. `STALL_HOLD` is `Relaxed`: the flag carries no other
+/// data. The registrar only needs to observe the boolean.
+#[cfg(all(test, unix, not(miri), not(loom)))]
+fn stall_after_install_returns() {
+    use std::sync::atomic::Ordering;
+    if !STALL_THIS_CLAIM.with(std::cell::Cell::get) {
+        return;
+    }
+    STALL_REACHED.store(true, Ordering::Release);
+    // Relaxed. this flag carries no other data.
+    while STALL_HOLD.load(Ordering::Relaxed) {
+        std::thread::yield_now();
+    }
+}
+
+#[cfg(all(test, unix, not(miri), not(loom)))]
+thread_local! {
+    static STALL_THIS_CLAIM: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(all(test, unix, not(miri), not(loom)))]
+static STALL_HOLD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(all(test, unix, not(miri), not(loom)))]
+static STALL_REACHED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(all(test, unix, not(miri), not(loom)))]
+static STALL_WORD: std::sync::atomic::AtomicPtr<std::sync::atomic::AtomicU64> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+
+#[cfg(all(test, unix, not(miri), not(loom)))]
+static STALL_EPOCH: std::sync::atomic::AtomicPtr<std::sync::atomic::AtomicU64> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+
+#[cfg(all(test, unix, not(miri), not(loom)))]
+static STALL_HANDLER_HITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[cfg(all(test, unix, not(miri), not(loom)))]
+unsafe extern "C" fn stall_window_child_handler() {
+    use std::sync::atomic::Ordering;
+    // Release on the test's store, Acquire here: the pointer the test
+    // published is visible to this load.
+    let word = STALL_WORD.load(Ordering::Acquire);
+    // Same pair as `STALL_WORD`.
+    let epoch = STALL_EPOCH.load(Ordering::Acquire);
+    if word.is_null() || epoch.is_null() {
+        return;
+    }
+    // Test counter only. `Relaxed` is enough: the grandchild that reads it
+    // is this same thread, later in program order.
+    STALL_HANDLER_HITS.fetch_add(1, Ordering::Relaxed);
+    publish_ready_after_fork(unsafe { &*word }, unsafe { &*epoch }, caller_pid());
+}
+
+#[cfg(all(unix, not(miri)))]
+fn finish_claim<W: ClaimWord>(
+    word: &W,
+    my_busy: u64,
+    my_ready: u64,
+    install: impl FnOnce() -> bool,
+) -> bool {
+    use std::sync::atomic::Ordering;
+    if install() {
+        // `install` returned, so `pthread_atfork` has registered the
+        // handler. A fork that lands before the compare-exchange below
+        // runs that handler, and the handler publishes `READY` itself.
+        // This compare-exchange is the parent's publication for the case
+        // where no such fork happens. `Release` on success publishes
+        // `install`, which is sequenced-before this exchange. Failure is
+        // `Relaxed`: the caller reloads with `Acquire` and does not use
+        // the failed exchange's result.
+        #[cfg(all(test, unix, not(miri), not(loom)))]
+        stall_after_install_returns();
+        let _ = word.cas_word(my_busy, my_ready, Ordering::Release, Ordering::Relaxed);
+        let now = word.load_word(Ordering::Acquire);
+        hook_state(now) == HOOK_READY && hook_pid(now) == hook_pid(my_ready)
+    } else {
+        // The word itself is the only data this exchange publishes.
+        // Relaxed on both sides: that is atomicity of the word. A later
+        // claim loads it with Acquire.
+        let _ = word.cas_word(
+            my_busy,
+            hook_pack(HOOK_UNSET, 0),
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        );
+        false
+    }
+}
+
+#[cfg(all(unix, not(miri)))]
+#[cfg(not(loom))]
+fn ensure_fork_hook() -> bool {
+    claim_fork_hook(fork_hook(), fork_epoch_word(), caller_pid(), || unsafe {
+        libc::pthread_atfork(None, None, Some(on_fork_child)) == 0
+    })
+}
+
+#[cfg(all(unix, not(miri), not(loom)))]
+#[used]
+#[cfg_attr(
+    target_vendor = "apple",
+    unsafe(link_section = "__DATA,__mod_init_func")
+)]
+#[cfg_attr(not(target_vendor = "apple"), unsafe(link_section = ".init_array"))]
+static REGISTER_FORK_EPOCH: unsafe extern "C" fn() = {
+    unsafe extern "C" fn register() {
+        let _ = ensure_fork_hook();
+    }
+    register
+};
+
+/// Fork while `install` is still inside the claim.
+///
+/// The closure has not returned, so `pthread_atfork` has not registered a
+/// handler and the word stays `BUSY`. That is the state before
+/// registration. The stall after a successful `pthread_atfork`, with
+/// `READY` not published yet, is
+/// [`a_fork_after_atfork_before_ready_does_not_register_again`].
+#[cfg(all(test, unix, not(miri)))]
+fn fork_while_busy(
+    child_main: impl FnOnce(&std::sync::atomic::AtomicU64, &std::sync::atomic::AtomicU64, u32) -> i32,
+) {
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    let word = AtomicU64::new(0);
+    let epoch = AtomicU64::new(0);
+    let installs = AtomicU64::new(0);
+    let hold = AtomicBool::new(true);
+    let parent_pid = caller_pid();
+    let mut child = -1;
+    let parent_ok = std::thread::scope(|scope| {
+        let registrar = scope.spawn(|| {
+            claim_fork_hook(&word, &epoch, parent_pid, || {
+                installs.fetch_add(1, Ordering::Relaxed);
+                let mut spins = 0u32;
+                while hold.load(Ordering::Acquire) {
+                    spins = spins.saturating_add(1);
+                    if spins > 50_000_000 {
+                        return false;
+                    }
+                    std::thread::yield_now();
+                }
+                true
+            })
+        });
+        let mut spins = 0u32;
+        while hook_state(word.load(Ordering::Acquire)) != HOOK_BUSY
+            || hook_pid(word.load(Ordering::Acquire)) != parent_pid
+        {
+            spins = spins.saturating_add(1);
+            assert!(spins < 50_000_000, "registration never became busy");
+            std::thread::yield_now();
+        }
+        child = unsafe { libc::fork() };
+        assert!(child >= 0, "fork");
+        if child == 0 {
+            hold.store(false, Ordering::Release);
+            let code = child_main(&word, &epoch, parent_pid);
+            unsafe { libc::_exit(code) };
+        }
+        hold.store(false, Ordering::Release);
+        registrar.join().expect("registrar")
+    });
+    let mut status = 0;
+    let waited = unsafe { libc::waitpid(child, &mut status, 0) };
+    assert_eq!(waited, child);
+    assert!(parent_ok, "parent registration failed");
+    assert_eq!(hook_state(word.load(Ordering::Acquire)), HOOK_READY);
+    assert_eq!(hook_pid(word.load(Ordering::Acquire)), parent_pid);
+    assert_eq!(installs.load(Ordering::Relaxed), 1);
+    assert_eq!(epoch.load(Ordering::Relaxed), 0);
+    assert!(
+        libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+        "child status {status}"
+    );
+}
+
+/// Re-exec `test_name` when this process is the suite, and report
+/// whether the caller should return without running the body.
+///
+/// The hook word, the epoch, and the stall pointers are process-global.
+/// One lib-test process runs many tests on many threads. A test that
+/// stores those static variables must not share that process with a test that
+/// reads them, and a test that calls `fork` must not do it while other
+/// tests are threads in the same process. The child is this binary
+/// again, filtered to the one test, with a single test thread.
+#[cfg(all(test, unix, not(miri)))]
+pub(crate) fn reexec_fork_test(test_name: &str) -> bool {
+    if std::env::var("READCON_FORK_TEST_CHILD").ok().as_deref() == Some(test_name) {
+        return false;
+    }
+    let exe = std::env::current_exe().expect("current test executable");
+    let output = std::process::Command::new(&exe)
+        .args([test_name, "--exact", "--test-threads=1"])
+        .env("READCON_FORK_TEST_CHILD", test_name)
+        .output()
+        .unwrap_or_else(|err| panic!("re-exec {test_name}: {err}"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed;"),
+        "{test_name} failed in its own process: {}\n{stdout}\n{stderr}",
+        output.status
+    );
+    true
+}
+
+#[cfg(all(test, unix, not(miri)))]
+#[test]
+fn a_child_forked_during_registration_installs_once() {
+    if reexec_fork_test("parser::a_child_forked_during_registration_installs_once") {
+        return;
+    }
+    use std::sync::atomic::Ordering;
+    fork_while_busy(|word, epoch, _parent_pid| {
+        let ok = claim_fork_hook(word, epoch, caller_pid(), || true);
+        let now = word.load_word(Ordering::Acquire);
+        if ok && hook_state(now) == HOOK_READY && hook_pid(now) == caller_pid() {
+            0
+        } else {
+            2
+        }
+    });
+}
+
+#[cfg(all(test, unix, not(miri)))]
+#[test]
+fn a_child_forked_while_busy_does_not_reuse_the_parent_slot() {
+    if reexec_fork_test("parser::a_child_forked_while_busy_does_not_reuse_the_parent_slot") {
+        return;
+    }
+    use std::sync::atomic::Ordering;
+    let parent = ProcessSlot {
+        epoch: 0,
+        pid: caller_pid(),
+        value: 11u64,
+        _parent: None,
+    };
+    fork_while_busy(move |word, epoch, parent_pid| {
+        let ok = claim_fork_hook(word, epoch, caller_pid(), || true);
+        let child_epoch = epoch.load(Ordering::Relaxed);
+        let child_pid = caller_pid();
+        let reused = parent.is_current(child_epoch, child_pid);
+        let fresh = if reused { parent.value } else { 22 };
+        if ok && !reused && fresh == 22 && child_epoch == 1 && child_pid != parent_pid {
+            0
+        } else {
+            2
+        }
+    });
+}
+
+/// `pthread_atfork` has returned and the word is still `BUSY`.
+///
+/// The child handler publishes `READY` with the child pid. A later claim
+/// in the child must not register again, and one later `fork` must run
+/// that handler once.
+#[cfg(all(test, unix, not(miri), not(loom)))]
+#[test]
+fn a_fork_after_atfork_before_ready_does_not_register_again() {
+    if reexec_fork_test("parser::a_fork_after_atfork_before_ready_does_not_register_again") {
+        return;
+    }
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let mut word = AtomicU64::new(0);
+    let mut epoch = AtomicU64::new(0);
+    let installs = AtomicU64::new(0);
+    // Relaxed: the hold flag carries no other data.
+    STALL_HOLD.store(true, Ordering::Relaxed);
+    // Release publishes the address. The handler's Acquire load
+    // synchronizes with this store.
+    STALL_WORD.store(&mut word, Ordering::Release);
+    // Same pair as `STALL_WORD`.
+    STALL_EPOCH.store(&mut epoch, Ordering::Release);
+    let parent_pid = caller_pid();
+    let mut child = -1;
+    let parent_ok = std::thread::scope(|scope| {
+        struct ReleaseStall;
+        impl Drop for ReleaseStall {
+            fn drop(&mut self) {
+                use std::sync::atomic::Ordering;
+                // Relaxed: the hold flag carries no other data.
+                STALL_HOLD.store(false, Ordering::Relaxed);
+            }
+        }
+        let _release = ReleaseStall;
+        let installs = &installs;
+        let word = &word;
+        let epoch = &epoch;
+        let registrar = scope.spawn(|| {
+            STALL_THIS_CLAIM.with(|cell| cell.set(true));
+            claim_fork_hook(word, epoch, parent_pid, || {
+                installs.fetch_add(1, Ordering::Relaxed);
+                unsafe { libc::pthread_atfork(None, None, Some(stall_window_child_handler)) == 0 }
+            })
+        });
+        let mut spins = 0u32;
+        while !STALL_REACHED.load(Ordering::Acquire) {
+            spins = spins.saturating_add(1);
+            assert!(spins < 50_000_000, "install never returned");
+            std::thread::yield_now();
+        }
+        child = unsafe { libc::fork() };
+        assert!(child >= 0, "fork");
+        if child == 0 {
+            // This thread did not arm the stall. Clearing the copied hold
+            // keeps a second registration, if the claim still does one,
+            // from spinning in the child.
+            // Relaxed: the hold flag carries no other data.
+            STALL_HOLD.store(false, Ordering::Relaxed);
+            let hits = STALL_HANDLER_HITS.load(Ordering::Relaxed);
+            let epoch_now = epoch.load(Ordering::Relaxed);
+            let installed = installs.load(Ordering::Relaxed);
+            let claimed = claim_fork_hook(word, epoch, caller_pid(), || {
+                installs.fetch_add(1, Ordering::Relaxed);
+                false
+            });
+            let word_now = word.load(Ordering::Acquire);
+            let claim_ok = claimed
+                && installed == 1
+                && installs.load(Ordering::Relaxed) == 1
+                && hits == 1
+                && epoch_now == 1
+                && hook_state(word_now) == HOOK_READY
+                && hook_pid(word_now) == caller_pid();
+            if !claim_ok {
+                unsafe { libc::_exit(2) };
+            }
+            let grandchild = unsafe { libc::fork() };
+            if grandchild == 0 {
+                let one_more_hit = STALL_HANDLER_HITS.load(Ordering::Relaxed) == hits + 1;
+                let one_more_epoch = epoch.load(Ordering::Relaxed) == epoch_now + 1;
+                unsafe { libc::_exit(if one_more_hit && one_more_epoch { 0 } else { 3 }) };
+            }
+            let mut grandchild_status = 0;
+            let waited = unsafe { libc::waitpid(grandchild, &mut grandchild_status, 0) };
+            let grandchild_ok = waited == grandchild
+                && libc::WIFEXITED(grandchild_status)
+                && libc::WEXITSTATUS(grandchild_status) == 0;
+            unsafe { libc::_exit(if grandchild_ok { 0 } else { 4 }) };
+        }
+        // Relaxed: the hold flag carries no other data.
+        STALL_HOLD.store(false, Ordering::Relaxed);
+        registrar.join().expect("registrar")
+    });
+    let mut status = 0;
+    let waited = unsafe { libc::waitpid(child, &mut status, 0) };
+    assert_eq!(waited, child);
+    assert!(parent_ok, "parent registration failed");
+    assert_eq!(hook_state(word.load(Ordering::Acquire)), HOOK_READY);
+    assert_eq!(hook_pid(word.load(Ordering::Acquire)), parent_pid);
+    assert_eq!(installs.load(Ordering::Relaxed), 1);
+    assert_eq!(epoch.load(Ordering::Relaxed), 0);
+    assert_eq!(STALL_HANDLER_HITS.load(Ordering::Relaxed), 0);
+    assert!(
+        libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+        "child status {status}"
+    );
+}
+
+/// The real [`on_fork_child`] is registered, and the word is still `BUSY`
+/// with the parent pid.
+///
+/// A grandchild `fork` runs that handler. [`ensure_fork_hook`] in the
+/// grandchild must not register again, and one later `fork` must move
+/// [`FORK_EPOCH`] by one.
+#[cfg(all(test, unix, not(miri), not(loom)))]
+#[test]
+fn a_registered_handler_bumps_the_epoch_once_per_fork() {
+    if reexec_fork_test("parser::a_registered_handler_bumps_the_epoch_once_per_fork") {
+        return;
+    }
+    use std::sync::atomic::Ordering;
+    assert!(ensure_fork_hook(), "real handler did not register");
+    let parent_pid = caller_pid();
+    let child = unsafe { libc::fork() };
+    assert!(child >= 0, "fork");
+    if child == 0 {
+        // The handler already ran for this fork and stored READY. Put the
+        // word back to the state a child inherits when the parent has
+        // registered the handler and has not published READY yet.
+        // Relaxed: this store is sequenced-before `fork` in this thread.
+        FORK_HOOK.store(hook_pack(HOOK_BUSY, parent_pid), Ordering::Relaxed);
+        let window = FORK_EPOCH.load(Ordering::Relaxed);
+        let grandchild = unsafe { libc::fork() };
+        if grandchild == 0 {
+            let after_handler = FORK_EPOCH.load(Ordering::Relaxed);
+            if after_handler != window + 1 {
+                unsafe { libc::_exit(2) };
+            }
+            let word = FORK_HOOK.load(Ordering::Acquire);
+            if hook_state(word) != HOOK_READY || hook_pid(word) != caller_pid() {
+                unsafe { libc::_exit(3) };
+            }
+            let before_ensure = FORK_EPOCH.load(Ordering::Relaxed);
+            if !ensure_fork_hook() || FORK_EPOCH.load(Ordering::Relaxed) != before_ensure {
+                unsafe { libc::_exit(4) };
+            }
+            let great = unsafe { libc::fork() };
+            if great == 0 {
+                let now = FORK_EPOCH.load(Ordering::Relaxed);
+                unsafe { libc::_exit(if now == before_ensure + 1 { 0 } else { 5 }) };
+            }
+            let mut great_status = 0;
+            let waited = unsafe { libc::waitpid(great, &mut great_status, 0) };
+            let code = if waited == great && libc::WIFEXITED(great_status) {
+                libc::WEXITSTATUS(great_status)
+            } else {
+                6
+            };
+            unsafe { libc::_exit(code) };
+        }
+        let mut grandchild_status = 0;
+        let waited = unsafe { libc::waitpid(grandchild, &mut grandchild_status, 0) };
+        let code = if waited == grandchild && libc::WIFEXITED(grandchild_status) {
+            libc::WEXITSTATUS(grandchild_status)
+        } else {
+            7
+        };
+        unsafe { libc::_exit(code) };
+    }
+    let mut status = 0;
+    let waited = unsafe { libc::waitpid(child, &mut status, 0) };
+    assert_eq!(waited, child);
+    assert!(
+        libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+        "child status {status}"
+    );
+}
+
+#[cfg(all(test, unix, not(miri), not(loom)))]
+#[test]
+fn ten_thousand_set_x_at_calls_issue_no_getpid() {
+    let mut builder =
+        crate::types::ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+    builder.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 1, 63.546);
+    let mut frame = builder.build().unwrap();
+    frame.set_x_at(0, 1.0);
+    let before = getpid_syscall_count();
+    for i in 0..10_000 {
+        frame.set_x_at(0, i as f64);
+    }
+    let calls = getpid_syscall_count() - before;
+    assert_eq!(calls, 0, "{calls} getpid calls across 10000 set_x_at");
+}
+
+fn fork_epoch() -> u64 {
+    #[cfg(all(unix, not(miri), not(loom)))]
+    {
+        let _ = ensure_fork_hook();
+        FORK_EPOCH.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    // The loom words are only touched inside a model. Registering the
+    // real `pthread_atfork` handler there would call the runtime outside
+    // that model.
+    #[cfg(all(unix, not(miri), loom))]
+    {
+        FORK_EPOCH.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    #[cfg(any(not(unix), miri))]
+    {
+        0
+    }
+}
+
 /// A value built once per process, and built again in a forked child.
 ///
 /// A child of `fork` keeps the parent's memory but only the thread that
@@ -139,14 +1091,104 @@ pub(crate) fn fill_rows_from_breaks(
 /// a job queued on it never runs. A lock that another parent thread held
 /// at the fork also stays held. The child therefore never uses or drops
 /// the parent's value. It stays reachable from the child's own value.
+///
+/// The slot is current when its epoch matches [`fork_epoch`] and its pid
+/// matches `getpid`. A child that copies a slot misses on the pid even
+/// when the epoch was not bumped. A reused pid still misses on the epoch.
 pub(crate) struct PerProcess<T: 'static> {
     current: std::sync::atomic::AtomicPtr<ProcessSlot<T>>,
 }
 
 struct ProcessSlot<T: 'static> {
+    epoch: u64,
     pid: u32,
     value: T,
     _parent: Option<&'static ProcessSlot<T>>,
+}
+
+impl<T> ProcessSlot<T> {
+    fn is_current(&self, epoch: u64, pid: u32) -> bool {
+        self.epoch == epoch && self.pid == pid
+    }
+}
+
+trait SlotPtr<T: 'static> {
+    fn load_slot(&self, order: std::sync::atomic::Ordering) -> *mut ProcessSlot<T>;
+    fn cas_slot(
+        &self,
+        current: *mut ProcessSlot<T>,
+        new: *mut ProcessSlot<T>,
+        success: std::sync::atomic::Ordering,
+        failure: std::sync::atomic::Ordering,
+    ) -> Result<*mut ProcessSlot<T>, *mut ProcessSlot<T>>;
+}
+
+impl<T: 'static> SlotPtr<T> for std::sync::atomic::AtomicPtr<ProcessSlot<T>> {
+    fn load_slot(&self, order: std::sync::atomic::Ordering) -> *mut ProcessSlot<T> {
+        self.load(order)
+    }
+    fn cas_slot(
+        &self,
+        current: *mut ProcessSlot<T>,
+        new: *mut ProcessSlot<T>,
+        success: std::sync::atomic::Ordering,
+        failure: std::sync::atomic::Ordering,
+    ) -> Result<*mut ProcessSlot<T>, *mut ProcessSlot<T>> {
+        self.compare_exchange(current, new, success, failure)
+    }
+}
+
+#[cfg(loom)]
+impl<T: 'static> SlotPtr<T> for loom::sync::atomic::AtomicPtr<ProcessSlot<T>> {
+    fn load_slot(&self, order: std::sync::atomic::Ordering) -> *mut ProcessSlot<T> {
+        self.load(order)
+    }
+    fn cas_slot(
+        &self,
+        current: *mut ProcessSlot<T>,
+        new: *mut ProcessSlot<T>,
+        success: std::sync::atomic::Ordering,
+        failure: std::sync::atomic::Ordering,
+    ) -> Result<*mut ProcessSlot<T>, *mut ProcessSlot<T>> {
+        self.compare_exchange(current, new, success, failure)
+    }
+}
+
+/// Publish one slot for `epoch` and `pid`.
+///
+/// [`PerProcess::get_or_init`] and the loom tests both call this.
+fn publish_slot<T: 'static, P: SlotPtr<T>>(
+    current: &P,
+    epoch: u64,
+    pid: u32,
+    init: impl Fn() -> T,
+) -> &'static T {
+    use std::sync::atomic::Ordering;
+    loop {
+        // Acquire pairs with the Release that published the slot, so the
+        // slot's fields happen-before the load that sees the pointer.
+        let ptr = current.load_slot(Ordering::Acquire);
+        let parent = unsafe { ptr.as_ref() };
+        if let Some(slot) = parent
+            && slot.is_current(epoch, pid)
+        {
+            return &slot.value;
+        }
+        let fresh = Box::into_raw(Box::new(ProcessSlot {
+            epoch,
+            pid,
+            value: init(),
+            _parent: parent,
+        }));
+        // Release publishes the slot written above. Those writes are
+        // sequenced-before this successful exchange.
+        // Failure is Relaxed: the returned pointer is
+        // not read here. The next iteration's Acquire load synchronizes.
+        match current.cas_slot(ptr, fresh, Ordering::Release, Ordering::Relaxed) {
+            Ok(_) => return unsafe { &(*fresh).value },
+            Err(_) => drop(unsafe { Box::from_raw(fresh) }),
+        }
+    }
 }
 
 impl<T: Send + Sync + 'static> PerProcess<T> {
@@ -157,36 +1199,379 @@ impl<T: Send + Sync + 'static> PerProcess<T> {
     }
 
     /// The value of the calling process, built with `init` on first use.
+    #[inline]
     pub(crate) fn get_or_init(&'static self, init: impl Fn() -> T) -> &'static T {
-        use std::sync::atomic::Ordering;
-        let pid = std::process::id();
-        loop {
-            // Acquire pairs with the publishing exchange, so a slot's
-            // fields are visible before its pointer is.
-            let current = self.current.load(Ordering::Acquire);
-            let parent = unsafe { current.as_ref() };
-            if let Some(slot) = parent
-                && slot.pid == pid
-            {
-                return &slot.value;
-            }
-            let fresh = Box::into_raw(Box::new(ProcessSlot {
-                pid,
-                value: init(),
-                _parent: parent,
-            }));
-            match self
-                .current
-                .compare_exchange(current, fresh, Ordering::AcqRel, Ordering::Relaxed)
-            {
-                Ok(_) => return unsafe { &(*fresh).value },
-                // Another thread published first. Failure does not publish
-                // `fresh`, and this iteration never dereferences the returned
-                // pointer. The next loop's Acquire load performs the required
-                // synchronization, so the failure ordering can be Relaxed.
-                Err(_) => drop(unsafe { Box::from_raw(fresh) }),
-            }
+        publish_slot(&self.current, fork_epoch(), caller_pid(), init)
+    }
+}
+
+#[cfg(all(test, loom))]
+mod per_process_loom {
+    use loom::sync::atomic::{AtomicPtr, AtomicU64, AtomicUsize, Ordering};
+    use loom::sync::{Arc, Mutex};
+    use loom::thread;
+
+    struct PublishedBox {
+        payload: AtomicUsize,
+    }
+
+    fn publish_box(
+        current: &AtomicPtr<PublishedBox>,
+        payload: usize,
+        success: Ordering,
+        failure: Ordering,
+    ) {
+        let fresh = Box::into_raw(Box::new(PublishedBox {
+            payload: AtomicUsize::new(0),
+        }));
+        // Model the pointer publication path this module uses for `ProcessSlot`.
+        unsafe { (*fresh).payload.store(payload, Ordering::Relaxed) };
+        match current.compare_exchange(std::ptr::null_mut(), fresh, success, failure) {
+            Ok(_) => {}
+            Err(_) => drop(unsafe { Box::from_raw(fresh) }),
         }
+    }
+
+    #[test]
+    fn published_box_release_acquire_keeps_payload() {
+        loom::model(|| {
+            let current = Arc::new(AtomicPtr::new(std::ptr::null_mut()));
+            let writer_current = Arc::clone(&current);
+            let writer = thread::spawn(move || {
+                publish_box(&writer_current, 1, Ordering::Release, Ordering::Relaxed);
+            });
+            let reader = thread::spawn(move || {
+                loop {
+                    let ptr = current.load(Ordering::Acquire);
+                    if !ptr.is_null() {
+                        let observed = unsafe { (*ptr).payload.load(Ordering::Relaxed) };
+                        assert_eq!(observed, 1);
+                        break;
+                    }
+                    thread::yield_now();
+                }
+            });
+            writer.join().unwrap();
+            reader.join().unwrap();
+            unsafe { drop(Box::from_raw(current.load(Ordering::Acquire))) };
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "relaxed publish served stale payload")]
+    fn mutation_relaxed_publish_serves_stale_payload() {
+        loom::model(|| {
+            let current = Arc::new(AtomicPtr::new(std::ptr::null_mut()));
+            let writer_current = Arc::clone(&current);
+            let writer = thread::spawn(move || {
+                publish_box(&writer_current, 1, Ordering::Relaxed, Ordering::Relaxed);
+            });
+            let reader = thread::spawn(move || {
+                loop {
+                    let ptr = current.load(Ordering::Relaxed);
+                    if !ptr.is_null() {
+                        let observed = unsafe { (*ptr).payload.load(Ordering::Relaxed) };
+                        assert_eq!(observed, 1, "relaxed publish served stale payload");
+                        break;
+                    }
+                    thread::yield_now();
+                }
+            });
+            writer.join().unwrap();
+            reader.join().unwrap();
+            unsafe { drop(Box::from_raw(current.load(Ordering::Acquire))) };
+        });
+    }
+
+    #[test]
+    fn one_publisher_wins_a_shared_epoch() {
+        loom::model(|| {
+            let current: Arc<AtomicPtr<super::ProcessSlot<u64>>> =
+                Arc::new(AtomicPtr::new(std::ptr::null_mut()));
+            let left = Arc::clone(&current);
+            let right = Arc::clone(&current);
+            let first = thread::spawn(move || *super::publish_slot(&*left, 0, 0, || 1u64));
+            let second = thread::spawn(move || *super::publish_slot(&*right, 0, 0, || 2u64));
+            let left = first.join().unwrap();
+            let right = second.join().unwrap();
+            let winner = unsafe { (*current.load(Ordering::Acquire)).value };
+            assert!(winner == 1 || winner == 2);
+            assert_eq!(left, winner);
+            assert_eq!(right, winner);
+            unsafe { drop(Box::from_raw(current.load(Ordering::Acquire))) };
+        });
+    }
+
+    #[test]
+    fn a_bumped_fork_counter_does_not_reuse_the_parent_slot() {
+        loom::model(|| {
+            let parent = Box::into_raw(Box::new(super::ProcessSlot {
+                epoch: 0,
+                pid: 10,
+                value: 7u64,
+                _parent: None,
+            }));
+            let current = AtomicPtr::new(parent);
+            let epoch = AtomicU64::new(0);
+            // Relaxed. this counter needs atomicity only.
+            let child = epoch.fetch_add(1, Ordering::Relaxed) + 1;
+            assert_eq!(*super::publish_slot(&current, child, 10, || 9u64), 9);
+            let published = current.load(Ordering::Acquire);
+            assert_eq!(unsafe { (*published).epoch }, child);
+            assert_ne!(published, parent);
+            unsafe {
+                drop(Box::from_raw(parent));
+                drop(Box::from_raw(published));
+            }
+        });
+    }
+
+    #[test]
+    fn a_failed_registration_leaves_the_hook_unset() {
+        loom::model(|| {
+            let word = AtomicU64::new(0);
+            let epoch = AtomicU64::new(0);
+            assert!(!super::claim_fork_hook(&word, &epoch, 10, || false));
+            assert_eq!(word.load(Ordering::Acquire), 0);
+            assert_eq!(epoch.load(Ordering::Acquire), 0);
+        });
+    }
+
+    #[test]
+    fn one_registration_wins_and_a_failure_can_be_retried() {
+        loom::model(|| {
+            let word = Arc::new(AtomicU64::new(0));
+            let epoch = Arc::new(AtomicU64::new(0));
+            let installs = Arc::new(AtomicU64::new(0));
+            let fail = Arc::new(AtomicU64::new(1));
+            let spawn = |word: Arc<AtomicU64>,
+                         epoch: Arc<AtomicU64>,
+                         installs: Arc<AtomicU64>,
+                         fail: Arc<AtomicU64>| {
+                thread::spawn(move || {
+                    super::claim_fork_hook(&*word, &*epoch, 10, || {
+                        installs.fetch_add(1, Ordering::Relaxed);
+                        fail.swap(0, Ordering::AcqRel) == 0
+                    })
+                })
+            };
+            let left = spawn(
+                Arc::clone(&word),
+                Arc::clone(&epoch),
+                Arc::clone(&installs),
+                Arc::clone(&fail),
+            );
+            let right = spawn(word.clone(), epoch.clone(), installs.clone(), fail);
+            let _ = left.join().unwrap();
+            let _ = right.join().unwrap();
+            if super::hook_state(word.load(Ordering::Acquire)) != super::HOOK_READY {
+                assert!(super::claim_fork_hook(&*word, &*epoch, 10, || {
+                    installs.fetch_add(1, Ordering::Relaxed);
+                    true
+                }));
+            }
+            assert_eq!(
+                super::hook_state(word.load(Ordering::Acquire)),
+                super::HOOK_READY
+            );
+            assert!(installs.load(Ordering::Relaxed) >= 1);
+            assert_eq!(epoch.load(Ordering::Acquire), 0);
+        });
+    }
+
+    #[test]
+    fn concurrent_siblings_install_the_hook_once() {
+        loom::model(|| {
+            let word = Arc::new(AtomicU64::new(0));
+            let epoch = Arc::new(AtomicU64::new(0));
+            let installs = Arc::new(AtomicU64::new(0));
+            let spawn = || {
+                let word = Arc::clone(&word);
+                let epoch = Arc::clone(&epoch);
+                let installs = Arc::clone(&installs);
+                thread::spawn(move || {
+                    super::claim_fork_hook(&*word, &*epoch, 10, || {
+                        installs.fetch_add(1, Ordering::Relaxed);
+                        true
+                    })
+                })
+            };
+            let left = spawn();
+            let right = spawn();
+            let left = left.join().unwrap();
+            let right = right.join().unwrap();
+            assert!(left || right);
+            assert_eq!(installs.load(Ordering::Relaxed), 1);
+            assert_eq!(
+                super::hook_state(word.load(Ordering::Acquire)),
+                super::HOOK_READY
+            );
+            assert_eq!(super::hook_pid(word.load(Ordering::Acquire)), 10);
+            assert_eq!(epoch.load(Ordering::Acquire), 0);
+        });
+    }
+
+    #[test]
+    fn concurrent_children_of_a_busy_hook_install_once() {
+        // `BUSY` before `pthread_atfork`. The handler does not exist, so
+        // the child installs once.
+        loom::model(|| {
+            let word = Arc::new(AtomicU64::new(super::hook_pack(super::HOOK_BUSY, 10)));
+            let epoch = Arc::new(AtomicU64::new(4));
+            let installs = Arc::new(AtomicU64::new(0));
+            let spawn = || {
+                let word = Arc::clone(&word);
+                let epoch = Arc::clone(&epoch);
+                let installs = Arc::clone(&installs);
+                thread::spawn(move || {
+                    super::claim_fork_hook(&*word, &*epoch, 99, || {
+                        installs.fetch_add(1, Ordering::Relaxed);
+                        true
+                    })
+                })
+            };
+            let left = spawn();
+            let right = spawn();
+            let left = left.join().unwrap();
+            let right = right.join().unwrap();
+            assert!(left || right);
+            assert_eq!(installs.load(Ordering::Relaxed), 1);
+            assert_eq!(epoch.load(Ordering::Acquire), 5);
+            assert_eq!(
+                super::hook_state(word.load(Ordering::Acquire)),
+                super::HOOK_READY
+            );
+            assert_eq!(super::hook_pid(word.load(Ordering::Acquire)), 99);
+        });
+    }
+
+    /// `BUSY` after `pthread_atfork` returned. The real child handler
+    /// publishes `READY` before it returns. Two later claims must not
+    /// register again, and one later handler call moves the epoch by one.
+    #[test]
+    fn installed_not_published_window() {
+        use std::sync::atomic::Ordering as StdOrdering;
+        loom::model(|| {
+            let child = super::caller_pid();
+            let parent = child.wrapping_add(1);
+            // Relaxed. this store is sequenced-before
+            // `on_fork_child` in this thread. The handler's Release store
+            // is what the claims synchronize with.
+            super::FORK_HOOK.store(
+                super::hook_pack(super::HOOK_BUSY, parent),
+                StdOrdering::Relaxed,
+            );
+            super::FORK_EPOCH.store(4, StdOrdering::Relaxed);
+            unsafe { super::on_fork_child() };
+            let installs = Arc::new(AtomicU64::new(0));
+            let spawn = || {
+                let installs = Arc::clone(&installs);
+                thread::spawn(move || {
+                    super::claim_fork_hook(
+                        super::fork_hook(),
+                        super::fork_epoch_word(),
+                        child,
+                        || {
+                            installs.fetch_add(1, Ordering::Relaxed);
+                            true
+                        },
+                    )
+                })
+            };
+            let left = spawn();
+            let right = spawn();
+            let left = left.join().unwrap();
+            let right = right.join().unwrap();
+            assert!(left || right);
+            assert_eq!(
+                installs.load(Ordering::Relaxed),
+                0,
+                "child registered again"
+            );
+            assert_eq!(super::FORK_EPOCH.load(StdOrdering::Acquire), 5);
+            assert_eq!(
+                super::hook_state(super::FORK_HOOK.load(StdOrdering::Acquire)),
+                super::HOOK_READY
+            );
+            assert_eq!(
+                super::hook_pid(super::FORK_HOOK.load(StdOrdering::Acquire)),
+                child
+            );
+            let before = super::FORK_EPOCH.load(StdOrdering::Acquire);
+            unsafe { super::on_fork_child() };
+            assert_eq!(
+                super::FORK_EPOCH.load(StdOrdering::Acquire),
+                before + 1,
+                "later fork bumped once"
+            );
+        });
+    }
+
+    #[test]
+    fn a_slot_from_another_pid_is_not_reused() {
+        loom::model(|| {
+            let parent = Box::into_raw(Box::new(super::ProcessSlot {
+                epoch: 0,
+                pid: 10,
+                value: 7u64,
+                _parent: None,
+            }));
+            let current = AtomicPtr::new(parent);
+            assert_eq!(*super::publish_slot(&current, 0, 99, || 9u64), 9);
+            let published = current.load(Ordering::Acquire);
+            assert_ne!(published, parent);
+            assert_eq!(unsafe { (*published).pid }, 99);
+            assert_eq!(unsafe { (*published).value }, 9);
+            unsafe {
+                drop(Box::from_raw(parent));
+                drop(Box::from_raw(published));
+            }
+        });
+    }
+
+    /// A coordinate setter stores the new value, then bumps the generation,
+    /// and does not take the cache lock. A price tagged with the generation
+    /// after that bump observed the new value.
+    #[test]
+    fn a_generation_bump_without_the_lock_hides_the_old_price() {
+        loom::model(|| {
+            let generation = Arc::new(AtomicU64::new(1));
+            let coord = Arc::new(AtomicU64::new(0));
+            let slot = Arc::new(Mutex::new(None::<(u64, u64)>));
+
+            let set_generation = Arc::clone(&generation);
+            let set_coord = Arc::clone(&coord);
+            let setter = thread::spawn(move || {
+                set_coord.store(1, Ordering::Relaxed);
+                set_generation.fetch_add(1, Ordering::Release);
+            });
+
+            let price_generation = Arc::clone(&generation);
+            let price_coord = Arc::clone(&coord);
+            let price_slot = Arc::clone(&slot);
+            let pricing = thread::spawn(move || {
+                let before = price_generation.load(Ordering::Acquire);
+                let observed = price_coord.load(Ordering::Relaxed);
+                thread::yield_now();
+                let after = price_generation.load(Ordering::Acquire);
+                if before == after {
+                    *price_slot.lock().unwrap() = Some((after, observed));
+                }
+            });
+
+            setter.join().unwrap();
+            pricing.join().unwrap();
+            let current = generation.load(Ordering::Acquire);
+            if let Some((stored, value)) = *slot.lock().unwrap()
+                && stored == current
+                && current == 2
+            {
+                assert_eq!(
+                    value, 1,
+                    "the post-bump generation served the old coordinate"
+                );
+            }
+        });
     }
 }
 
@@ -300,10 +1685,10 @@ pub(crate) fn parallel_coord_rows(
         atoms_raw = Vec::with_capacity(n);
         unsafe { atoms_raw.set_len(n) };
     }
-    let xyz_ptr = xyz.as_mut_ptr() as usize;
-    let ids_ptr = ids.as_mut_ptr() as usize;
-    let flags_ptr = flags.as_mut_ptr() as usize;
-    let atoms_ptr = atoms_raw.as_mut_ptr() as usize;
+    let xyz_ptr = SendMut(xyz.as_mut_ptr());
+    let ids_ptr = SendMut(ids.as_mut_ptr());
+    let flags_ptr = SendMut(flags.as_mut_ptr());
+    let atoms_ptr = SendMut(atoms_raw.as_mut_ptr());
     let mut row0 = Vec::with_capacity(chunks.len());
     let mut acc = 0usize;
     for (_, nrows) in &chunks {
@@ -319,9 +1704,9 @@ pub(crate) fn parallel_coord_rows(
             let ((xyz, fixed, atom_id), next) =
                 parse_coord_row_at(bytes, pos, spec_version, start_id + row as u64)?;
             unsafe {
-                std::ptr::copy_nonoverlapping(xyz.as_ptr(), (xyz_ptr as *mut f64).add(row * 3), 3);
-                *((ids_ptr as *mut u64).add(row)) = atom_id;
-                *((flags_ptr as *mut [bool; 3]).add(row)) = fixed;
+                std::ptr::copy_nonoverlapping(xyz.as_ptr(), xyz_ptr.add(row * 3), 3);
+                *ids_ptr.add(row) = atom_id;
+                *flags_ptr.add(row) = fixed;
                 if let Some(shares) = shares.as_mut() {
                     let atom = crate::types::AtomDatum::coords(
                         shares.take(),
@@ -526,13 +1911,13 @@ fn count_newline_chunks(bytes: &[u8], cuts: &[usize]) -> Vec<usize> {
     if nchunks == 0 {
         return Vec::new();
     }
-    let ptr = tallies.as_mut_ptr() as usize;
+    let ptr = SendMut(tallies.as_mut_ptr());
     let count = || {
         use rayon::prelude::*;
         (0..nchunks).into_par_iter().for_each(|index| {
             let n = memchr::memchr_iter(b'\n', &bytes[cuts[index]..cuts[index + 1]]).count();
             unsafe {
-                (*(ptr as *mut ChunkTally).add(index)).n = n;
+                (*ptr.add(index)).n = n;
             }
         });
     };
@@ -649,9 +2034,9 @@ pub(crate) fn fill_rows_from_chunks(
         row0.push(acc);
         acc += *nrows;
     }
-    let xyz_ptr = xyz as usize;
-    let ids_ptr = ids as usize;
-    let flags_ptr = flags as usize;
+    let xyz_ptr = SendMut(xyz);
+    let ids_ptr = SendMut(ids);
+    let flags_ptr = SendMut(flags);
     let fill = || {
         use rayon::prelude::*;
         chunks
@@ -663,19 +2048,15 @@ pub(crate) fn fill_rows_from_chunks(
                     let ((xyz, fixed, atom_id), next) =
                         parse_coord_row_at(bytes, pos, spec_version, start_id + row as u64)?;
                     unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            xyz.as_ptr(),
-                            (xyz_ptr as *mut f64).add(row * 3),
-                            3,
-                        );
-                        if ids_ptr != 0 {
-                            *((ids_ptr as *mut u64).add(row)) = atom_id;
+                        std::ptr::copy_nonoverlapping(xyz.as_ptr(), xyz_ptr.add(row * 3), 3);
+                        if !ids_ptr.is_null() {
+                            *ids_ptr.add(row) = atom_id;
                         }
-                        if flags_ptr != 0 {
+                        if !flags_ptr.is_null() {
                             let mask = u8::from(fixed[0])
                                 | (u8::from(fixed[1]) << 1)
                                 | (u8::from(fixed[2]) << 2);
-                            *((flags_ptr as *mut u8).add(row)) = mask;
+                            *flags_ptr.add(row) = mask;
                         }
                     }
                     pos = next;
@@ -693,14 +2074,14 @@ pub(crate) fn fill_rows_from_chunks(
                     parse_coord_row_at(bytes, pos, spec_version, start_id + row_at as u64)?;
                 unsafe {
                     std::ptr::copy_nonoverlapping(row_xyz.as_ptr(), xyz.add(row_at * 3), 3);
-                    if ids_ptr != 0 {
-                        *((ids_ptr as *mut u64).add(row_at)) = atom_id;
+                    if !ids_ptr.is_null() {
+                        *ids_ptr.add(row_at) = atom_id;
                     }
-                    if flags_ptr != 0 {
+                    if !flags_ptr.is_null() {
                         let mask = u8::from(fixed[0])
                             | (u8::from(fixed[1]) << 1)
                             | (u8::from(fixed[2]) << 2);
-                        *((flags_ptr as *mut u8).add(row_at)) = mask;
+                        *flags_ptr.add(row_at) = mask;
                     }
                 }
                 pos = next;
@@ -727,7 +2108,7 @@ fn newline_index_exact(cuts: &[usize], bytes: &[u8], base: usize) -> Vec<usize> 
         total += counts[index];
     }
     let mut out = Vec::<usize>::with_capacity(total);
-    let ptr = out.as_mut_ptr() as usize;
+    let ptr = SendMut(out.as_mut_ptr());
     let store = || {
         use rayon::prelude::*;
         (0..nchunks).into_par_iter().for_each(|index| {
@@ -735,7 +2116,7 @@ fn newline_index_exact(cuts: &[usize], bytes: &[u8], base: usize) -> Vec<usize> 
             let mut at = slots[index];
             for rel in memchr::memchr_iter(b'\n', &bytes[from..cuts[index + 1]]) {
                 unsafe {
-                    *((ptr as *mut usize).add(at)) = base + from + rel;
+                    *ptr.add(at) = base + from + rel;
                 }
                 at += 1;
             }
@@ -3862,28 +5243,15 @@ fn symbol_shares(symbol: &Arc<str>, n: usize) -> SymbolShares {
         };
     }
     let data = Arc::as_ptr(symbol);
-    let offset = arc_str_header(symbol.as_ref());
-    // SAFETY: `Arc::as_ptr` points at the `str` inside the allocation, and
-    // the two atomic counts sit in front of it. This is the same subtraction
-    // `Arc::increment_strong_count` performs, done once for `n` clones.
-    let bytes = data as *const u8;
-    let strong = unsafe { bytes.sub(offset) as *const AtomicUsize };
-    unsafe { (*strong).fetch_add(n, Ordering::Relaxed) };
+    // The `Arc` header layout is private. Each extra count is the public
+    // increment; `take` and `Drop` pair them with `Arc::from_raw`.
+    for _ in 0..n {
+        unsafe { Arc::increment_strong_count(data) };
+    }
     SymbolShares {
-        data: bytes,
+        data: data as *const u8,
         len: symbol.len(),
         left: n,
-    }
-}
-
-fn arc_str_header(text: &str) -> usize {
-    let header = 2 * std::mem::size_of::<usize>();
-    let align = std::mem::align_of_val(text);
-    let rem = header % align;
-    if rem == 0 {
-        header
-    } else {
-        header + (align - rem)
     }
 }
 
@@ -4748,39 +6116,6 @@ pub fn parse_spread_section<'a>(
 mod tests {
     use super::*;
     use crate::iterators::ConFrameIterator;
-
-    #[cfg(all(unix, not(miri)))]
-    #[test]
-    fn per_process_replaces_a_mutex_held_across_fork() {
-        static CACHE: PerProcess<std::sync::Mutex<()>> = PerProcess::new();
-        let mutex = CACHE.get_or_init(|| std::sync::Mutex::new(()));
-        let (held_tx, held_rx) = std::sync::mpsc::channel();
-        let (release_tx, release_rx) = std::sync::mpsc::channel();
-        let holder = std::thread::spawn(move || {
-            let _guard = mutex.lock().expect("parent cache lock");
-            held_tx.send(()).expect("announce held lock");
-            release_rx.recv().expect("release parent lock");
-        });
-        held_rx.recv().expect("wait for held lock");
-
-        let pid = unsafe { libc::fork() };
-        assert!(pid >= 0, "fork failed");
-        if pid == 0 {
-            unsafe { libc::alarm(5) };
-            let child_mutex = CACHE.get_or_init(|| std::sync::Mutex::new(()));
-            let ok = child_mutex.lock().is_ok();
-            unsafe { libc::_exit(if ok { 0 } else { 1 }) };
-        }
-
-        release_tx.send(()).expect("release holder");
-        holder.join().expect("holder thread");
-        let mut status = 0;
-        assert_eq!(unsafe { libc::waitpid(pid, &mut status, 0) }, pid);
-        assert!(
-            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
-            "forked child reused the held parent mutex, status {status:#x}"
-        );
-    }
 
     #[test]
     fn test_parse_line_of_n_success() {
