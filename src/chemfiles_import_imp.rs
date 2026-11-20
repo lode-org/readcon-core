@@ -641,6 +641,7 @@ unsafe extern "C" {
         nprops: *mut u64,
     ) -> i32;
     fn rc_chemfiles_last_error() -> *const std::os::raw::c_char;
+    // Called from the unit tests. A normal library build does not reference them.
     #[allow(dead_code)]
     fn rc_chemfiles_probe_exception() -> i32;
     #[allow(dead_code)]
@@ -1505,6 +1506,39 @@ mod tests {
     use super::*;
     use chemfiles::{Atom, Frame, Property, UnitCell};
     use std::io::Write;
+
+    #[test]
+    fn scan_exception_maps_to_invalid_frame() {
+        let status = unsafe { rc_chemfiles_probe_exception() };
+        assert_eq!(status, 2);
+        match chemfiles_scan_failure(2, "chemfiles frame scan") {
+            ChemfilesImportError::InvalidFrame(msg) => {
+                assert!(msg.contains("chemfiles scan probe"), "{msg}");
+            }
+            other => panic!("expected InvalidFrame, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn null_exception_text_uses_the_static_fallback() {
+        let status = unsafe { rc_chemfiles_probe_null_what() };
+        assert_eq!(status, 2);
+        match chemfiles_scan_failure(2, "chemfiles frame scan") {
+            ChemfilesImportError::InvalidFrame(msg) => {
+                assert!(msg.contains("chemfiles scan exception"), "{msg}");
+            }
+            other => panic!("expected InvalidFrame, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_script_recorded_a_known_string_abi() {
+        let abi = env!("READCON_CHEMFILES_STRING_ABI");
+        assert!(
+            abi == "cow" || abi == "cxx11",
+            "linked chemfiles string ABI was {abi}"
+        );
+    }
 
     fn make_water_frame() -> Frame {
         let mut frame = Frame::new();

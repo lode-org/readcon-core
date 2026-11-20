@@ -1,0 +1,44 @@
+#!/bin/bash
+# Force chemfiles-sys to compile the bundled sources.
+#
+# Without the chemfiles-from-sources feature, chemfiles-sys still builds
+# from the bundled tree when the prebuilt download is not requested. This
+# wrapper drops those two CMake defines so the download is skipped. Other
+# cmake invocations are passed through.
+set -euo pipefail
+self=$(readlink -f "$0")
+real=""
+IFS=':' read -ra dirs <<< "$PATH"
+for dir in "${dirs[@]}"; do
+  cand="${dir}/cmake"
+  if [[ -x "$cand" ]]; then
+    resolved=$(readlink -f "$cand")
+    if [[ "$resolved" != "$self" ]]; then
+      real=$cand
+      break
+    fi
+  fi
+done
+if [[ -z "$real" ]]; then
+  echo "cmake wrapper: real cmake not found on PATH" >&2
+  exit 127
+fi
+args=()
+skip_next=0
+for arg in "$@"; do
+  if [[ $skip_next -eq 1 ]]; then
+    skip_next=0
+    continue
+  fi
+  case "$arg" in
+    -DCHFL_RUST_PREBUILT_TARGET | -DCHFL_RUST_PREBUILT_SHA256)
+      skip_next=1
+      ;;
+    -DCHFL_RUST_PREBUILT_TARGET=* | -DCHFL_RUST_PREBUILT_SHA256=*)
+      ;;
+    *)
+      args+=("$arg")
+      ;;
+  esac
+done
+exec "$real" "${args[@]}"

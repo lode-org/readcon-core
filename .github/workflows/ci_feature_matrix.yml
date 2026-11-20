@@ -39,3 +39,43 @@ jobs:
       - name: Parallel library tests
         if: matrix.features == 'parallel'
         run: cargo test --lib --features parallel
+
+  # COW is the official Linux prebuilt. cxx11 is either
+  # chemfiles-from-sources or the bundled sources with the prebuilt
+  # download suppressed (the offline fallback chemfiles-sys takes when
+  # that download fails). Both must run the atom scan.
+  chemfiles-string-abi:
+    name: chemfiles scan (${{ matrix.name }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: prebuilt-cow
+            features: chemfiles
+            strip_prebuilt: "0"
+          - name: bundled-source-cxx11
+            features: chemfiles
+            strip_prebuilt: "1"
+          - name: from-sources-cxx11
+            features: chemfiles-from-sources
+            strip_prebuilt: "0"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: XYZ scan on this string ABI
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=bfd
+        run: |
+          set -euo pipefail
+          if [[ "${{ matrix.strip_prebuilt }}" == "1" ]]; then
+            wrap="${RUNNER_TEMP}/cmake-wrap"
+            mkdir -p "$wrap"
+            cp scripts/cmake-no-chemfiles-prebuilt "$wrap/cmake"
+            chmod +x "$wrap/cmake"
+            export PATH="$wrap:${PATH}"
+          fi
+          cargo test --features ${{ matrix.features }} --test chemfiles_scan --test chemfiles_link
+          cargo test --features ${{ matrix.features }} --lib scan_exception_maps_to_invalid_frame
+          cargo test --features ${{ matrix.features }} --lib null_exception_text_uses_the_static_fallback
+          cargo test --features ${{ matrix.features }} --lib build_script_recorded_a_known_string_abi
