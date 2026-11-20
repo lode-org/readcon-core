@@ -44,7 +44,7 @@ The Snakemake file runs `run_bench.py` and then `run_asv.py`. `asv run` uses `be
 
 ## Results
 
-Measured at revision `ec3108430b3c25323545080639e7fff6b8e05618`. Machine hash `9eb296774121518feb1b187b0f6a109a42de7a5dd39e62ccd37d6e7d329604b8`, `nproc` 8. Every arm on an input agreed on frame count, atom count, and the position checksum (`synthetic` `e0961fc8f22fa99a124453d179521d210e50232ffa936cc3882b96060a87cd54`, `cuh2_band` `0cf5f99ad74425f793c0209c6d1c3a39787efa78a375c889470821c467dda9b9`). `n` is 6. `ratio_over_tip` is the full-frame median divided by `readcon_tip_a` on the same input. `aa_ratio` is `readcon_tip_b` divided by `readcon_tip_a`. Coordinate-only rows have no ratio.
+`synthetic` and `cuh2_band` were measured at revision `ec3108430b3c25323545080639e7fff6b8e05618` with `n` 6. `al_eam_md` was measured at revision `c14771fc142a18c3163d881e9f25e8f461890f72` with `n` 12, on the same tip wheels. Machine hash `9eb296774121518feb1b187b0f6a109a42de7a5dd39e62ccd37d6e7d329604b8`, `nproc` 8. Every arm on an input agreed on frame count, atom count, and the position checksum (`synthetic` `e0961fc8f22fa99a124453d179521d210e50232ffa936cc3882b96060a87cd54`, `cuh2_band` `0cf5f99ad74425f793c0209c6d1c3a39787efa78a375c889470821c467dda9b9`, `al_eam_md` `c34013811a9a444b8441dddd244aa22e97685ad058c5a8b08a2c545f89c1f50a`). `ratio_over_tip` is the full-frame median divided by `readcon_tip_a` on the same input. `aa_ratio` is `readcon_tip_b` divided by `readcon_tip_a`. Coordinate-only rows have no ratio.
 
 | arm | work | threads | input | median_s | iqr_s | ratio_over_tip | aa_ratio |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
@@ -62,5 +62,12 @@ Measured at revision `ec3108430b3c25323545080639e7fff6b8e05618`. Machine hash `9
 | eon | full-frame | 1 | cuh2_band | 0.001672 | 0.000067 | 1.435391 | 1.008908 |
 | readcon_positions_1 | coords-only | 1 | cuh2_band | 0.000675 | 0.000026 |  |  |
 | readcon_positions_all | coords-only | 8 | cuh2_band | 0.001920 | 0.000244 |  |  |
+| readcon_tip_a | full-frame | 1 | al_eam_md | 0.514845 | 0.020334 | 1 | 1.001047 |
+| readcon_tip_b | full-frame | 1 | al_eam_md | 0.515384 | 0.019761 | 1.001047 | 1.001047 |
+| readcon_release | full-frame | 1 | al_eam_md | 0.494274 | 0.014398 | 0.960045 | 1.001047 |
+| ase | full-frame | 1 | al_eam_md | 0.792692 | 0.014445 | 1.539671 | 1.001047 |
+| eon | full-frame | 1 | al_eam_md | 0.740669 | 0.023000 | 1.438626 | 1.001047 |
+| readcon_positions_1 | coords-only | 1 | al_eam_md | 0.034284 | 0.002768 |  |  |
+| readcon_positions_all | coords-only | 8 | al_eam_md | 0.021012 | 0.002637 |  |  |
 
 Full values are in `results/summary.csv`. Per-repeat times are in `results/samples.csv`.
