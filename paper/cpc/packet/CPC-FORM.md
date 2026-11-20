@@ -65,7 +65,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 Data availability names readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, which
 `readcon-core.bundle` holds with its whole history, and links the concept record https://doi.org/10.5281/zenodo.18753567
 of readcon-core. This commit is not a release tag.
-`rg_main.pdf` has 66 pages, sha256 `f71000b930fe122020b78edb3109aa0917ab1ca967542141424de96ec281beba`.
+`rg_main.pdf` has 66 pages, sha256 `70592c9e68bdb8d0e8d326e1ff5478f2870ddf56126f25e287b5d6ed8117d3cb`.
 
 ## Form answers
 
