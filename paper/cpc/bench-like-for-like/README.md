@@ -149,3 +149,30 @@ On synthetic the release median (4.700546 s) lies between the two tip medians (4
 The SVN clock on `cuh2_band` is not the four-frame parse. After the campaign, twelve repeats on cpu 0 with the thread variables at 1 timed the pieces of `_full_eon_svn`. The pin-check median is 0.014059 s. Starting the binary with no path, which exits before parsing, is 0.001178 s. The binary on `cuh2_band` is 0.001749 s, and the Python rebuild of that output is 0.000231 s. The whole call, pin check included, is 0.015942 s, next to the campaign arm median of 0.015214 s. The pin check is most of the 12.82 ratio. On `synthetic` the same pin check is inside a 2.597 s whole call (binary 1.734 s, Python rebuild 0.833 s), next to the campaign arm median of 2.661 s, which is 0.544 times the tip. There the time is the parse and the rebuild.
 
 Full values are in `results/r4-summary.csv`, `results/r4-compare.csv`, and `results/r4-overhead.csv`. Per-repeat times are in `results/r4-samples.csv`.
+
+## r5
+
+The source-hash pin runs once, before any timed repeat. `results/r5-session.csv` records it: result ok, 0.014174 s, 7 pinned files, SVN revision 1213. The timed end-to-end arm spawns that binary and rebuilds the frames in Python. `eon_svn_binary` clocks the binary only. Both ran with `readcon_tip_a` and `readcon_tip_b` on `synthetic`, `cuh2_band`, and `al_eam_md`, twelve repeats, ABBA rotation, the same files, tip wheels, SVN revision, and machine. The r2, r3, and r4 result files were left as they were. Checksums match those earlier rows. The end-to-end ratio is full-frame median over `readcon_tip_a` for the same work, thread count, and input. The binary clock stops before the Python rebuild, and the checksum is still the parsed positions. Its `ratio_over_tip` cell stays empty, because binary over full-frame is unequal work.
+
+| arm | work | threads | input | median_s | iqr_s | ratio_over_tip | aa_ratio |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| readcon_tip_a | full-frame | 1 | synthetic | 4.901454 | 0.227641 | 1 | 0.976835 |
+| readcon_tip_b | full-frame | 1 | synthetic | 4.787911 | 0.163262 | 0.976835 | 0.976835 |
+| eon_svn_cxx | full-frame | 1 | synthetic | 2.647061 | 0.044325 | 0.540056 | 0.976835 |
+| eon_svn_binary | binary | 1 | synthetic | 1.796377 | 0.015614 |  | 0.976835 |
+| readcon_tip_a | full-frame | 1 | cuh2_band | 0.001204 | 0.000022 | 1 | 1.014290 |
+| readcon_tip_b | full-frame | 1 | cuh2_band | 0.001222 | 0.000061 | 1.014290 | 1.014290 |
+| eon_svn_cxx | full-frame | 1 | cuh2_band | 0.001868 | 0.000251 | 1.550813 | 1.014290 |
+| eon_svn_binary | binary | 1 | cuh2_band | 0.001616 | 0.000085 |  | 1.014290 |
+| readcon_tip_a | full-frame | 1 | al_eam_md | 0.519944 | 0.007576 | 1 | 0.984967 |
+| readcon_tip_b | full-frame | 1 | al_eam_md | 0.512128 | 0.016792 | 0.984967 | 0.984967 |
+| eon_svn_cxx | full-frame | 1 | al_eam_md | 0.367027 | 0.009157 | 0.705897 | 0.984967 |
+| eon_svn_binary | binary | 1 | al_eam_md | 0.321986 | 0.003766 |  | 0.984967 |
+
+The three A/A ratios (0.976835, 1.014290, 0.984967) sit within 5% of 1, so they are not claims. On `cuh2_band` the end-to-end ratio is 1.550813. The r4 ratio of 12.82 on that file included the pin check inside every call.
+
+`readcon_tip` full-frame on `synthetic` has campaign median 4.901454 s. The coordinate-only read in the profile process, one thread on cpu 0, was 0.251996 s. Copies span 69.95% to 73.4% of the full-frame call across all four recorded walks. The three rows of `results/r5-profile.csv` and the walk in `results/profile-r5.txt` are that recorded set, produced by `profile_r5.py`. `python_build_s` inside `read_con` is the NumPy slab wrap. It is under 0.03 ms on each recorded call. Per-frame Python objects are built when the harness first indexes the frame.
+
+cProfile on the same function counted 0.722 s inside `read_con` and 6.836 s in the Python body, out of 8.714 s accounted. The profiler stretched that wall time to 9.088 s. py-spy native samples of one uninstrumented call, kept to stacks inside `_full_readcon` (1244 of 1534), put copies at 67.3%, object construction at 22.8%, the Rust parse at 9.1%, and the slab pack at 0.8%. Sampling slowed that call. perf recorded 2568 `cpu-clock` user samples on cpu 0. The retained r10 logs contain neither the exact hardware-counter refusal nor the `perf_event_paranoid` value, so this record reports neither. The flat samples land on the Python evaluator, NumPy index and pack, the pyo3 field getters, and `parse_coord_row_at` / `ingest_coord_rows_f64`.
+
+Full values are in `results/r5-summary.csv`, `results/r5-session.csv`, `results/r5-profile.csv`, and `results/profile-r5.txt`. Per-repeat times are in `results/r5-samples.csv`.

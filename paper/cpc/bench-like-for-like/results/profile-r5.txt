@@ -1,0 +1,63 @@
+readcon_file paper/cpc/bench-like-for-like/work/prefix-tip-a/readcon/__init__.py
+readcon_version 0.24.0
+harness_s 9.087953 frames 100000 atoms 32 checksum e0961fc8f22fa99a124453d179521d210e50232ffa936cc3882b96060a87cd54
+cprofile_read_con_cum_s 0.000000
+cprofile_read_con_pct 0.00
+cprofile_after_read_s 9.087953
+cprofile_after_read_pct 100.00
+         4500408 function calls (4500397 primitive calls) in 8.714 seconds
+
+   Ordered by: cumulative time
+   List reduced from 58 to 30 due to restriction <30>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    6.836    6.836    8.714    8.714 paper/cpc/bench-like-for-like/arms.py:348(_full_readcon)
+        1    0.721    0.721    0.722    0.722 {built-in method readcon.readcon.read_con}
+  3300067    0.486    0.000    0.486    0.000 {method 'append' of 'list' objects}
+   100000    0.136    0.000    0.336    0.000 paper/cpc/bench-like-for-like/arms.py:269(_frame_record)
+   500000    0.296    0.000    0.296    0.000 {built-in method numpy.array}
+   300000    0.202    0.000    0.202    0.000 {built-in method numpy.empty}
+300056/300051    0.038    0.000    0.038    0.000 {built-in method builtins.len}
+        1    0.000    0.000    0.001    0.001 site-packages/numpy/lib/_version.py:53(__init__)
+        2    0.000    0.000    0.000    0.000 python3.12/re/__init__.py:280(_compile)
+        1    0.000    0.000    0.000    0.000 python3.12/re/__init__.py:164(match)
+        2    0.000    0.000    0.000    0.000 python3.12/re/_compiler.py:740(compile)
+        2    0.000    0.000    0.000    0.000 python3.12/re/_parser.py:969(parse)
+        2    0.000    0.000    0.000    0.000 python3.12/re/_parser.py:452(_parse_sub)
+        2    0.000    0.000    0.000    0.000 python3.12/re/_compiler.py:573(_code)
+        2    0.000    0.000    0.000    0.000 python3.12/re/_parser.py:512(_parse)
+      5/2    0.000    0.000    0.000    0.000 python3.12/re/_compiler.py:37(_compile)
+        4    0.000    0.000    0.000    0.000 python3.12/enum.py:1562(__and__)
+        1    0.000    0.000    0.000    0.000 python3.12/re/__init__.py:174(search)
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+       12    0.000    0.000    0.000    0.000 python3.12/enum.py:1544(_get_value)
+        2    0.000    0.000    0.000    0.000 python3.12/re/_compiler.py:511(_compile_info)
+       30    0.000    0.000    0.000    0.000 python3.12/re/_parser.py:168(__getitem__)
+      5/2    0.000    0.000    0.000    0.000 python3.12/re/_parser.py:178(getwidth)
+        3    0.000    0.000    0.000    0.000 python3.12/re/_compiler.py:243(_optimize_charset)
+       62    0.000    0.000    0.000    0.000 {built-in method builtins.isinstance}
+       12    0.000    0.000    0.000    0.000 python3.12/re/_parser.py:261(get)
+        5    0.000    0.000    0.000    0.000 python3.12/re/_parser.py:372(_escape)
+        4    0.000    0.000    0.000    0.000 python3.12/enum.py:726(__call__)
+       14    0.000    0.000    0.000    0.000 python3.12/re/_parser.py:240(__next)
+        5    0.000    0.000    0.000    0.000 python3.12/re/_parser.py:293(tell)
+
+
+
+section_read_con_s 1.105024
+section_construct_s 0.529609
+section_copy_s 3.805062
+section_total_s 5.439695
+section_read_pct 20.31
+section_construct_pct 9.74
+section_copy_pct 69.95
+phase scan_s 0.000000 pct_of_read 0.00 pct_of_walk 0.00
+phase worker_parse_s 1.028339 pct_of_read 93.06 pct_of_walk 18.90
+phase parse_s 1.028339 pct_of_read 93.06 pct_of_walk 18.90
+phase slab_s 0.033405 pct_of_read 3.02 pct_of_walk 0.61
+phase release_s 0.008849 pct_of_read 0.80 pct_of_walk 0.16
+phase python_build_s 0.000028 pct_of_read 0.00 pct_of_walk 0.00
+phase return_s 0.000004 pct_of_read 0.00 pct_of_walk 0.00
+phase list_rest_s 0.034302 pct_of_read 3.10 pct_of_walk 0.63
+phase open_mmap_s 0.000000 pct_of_read 0.00 pct_of_walk 0.00
+coords_only_s 0.322844 shape (100000, 32, 3)
