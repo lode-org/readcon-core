@@ -4,6 +4,7 @@
 //! `from_path_append`, a flush that leaves a parseable file, and
 //! `write_frames_to_string`.
 
+#[cfg(feature = "capi")]
 use readcon_core::ffi::{
     RKRConFrame, RKRStatus, create_writer_from_path_append_c, create_writer_from_path_c,
     free_rkr_writer, rkr_free_string, rkr_last_error_message, rkr_write_frames_to_string,
@@ -12,15 +13,20 @@ use readcon_core::ffi::{
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::types::{ConFrame, ConFrameBuilder};
 use readcon_core::writer::{ConFrameWriter, write_frames_to_string, write_frames_to_vec};
+#[cfg(feature = "capi")]
 use std::ffi::{CStr, CString};
 use std::fs;
 use std::path::Path;
+#[cfg(feature = "capi")]
 use std::process::Command;
 
+#[cfg(feature = "capi")]
 include!("metatensor_link.rs");
 
+#[cfg(feature = "capi")]
 #[path = "common/plain_library.rs"]
 mod plain_library;
+#[cfg(feature = "capi")]
 use plain_library::library_dirs;
 
 fn frame(id: u64, x: f64) -> ConFrame {
@@ -150,6 +156,7 @@ fn string_matches_file_bytes() {
     assert!(ConFrameIterator::new(&text).all(|frame| frame.is_ok()));
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn c_append_flush_and_string_match_the_file() {
     let dir = tempfile::tempdir().unwrap();
@@ -198,6 +205,7 @@ fn c_append_flush_and_string_match_the_file() {
     }
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn cpp_append_flush_and_string_match_the_file() {
     let dirs = library_dirs();

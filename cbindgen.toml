@@ -92,6 +92,9 @@ line_endings = "LF"
 "feature = zstd" = "READCON_CORE_HAS_ZSTD"
 "feature = metatensor" = "READCON_CORE_HAS_METATENSOR"
 "feature = parallel" = "READCON_CORE_HAS_PARALLEL"
+# `capi` gates `pub mod ffi;` in Rust so pure-Rust rlib consumers do not
+# export unmangled `rkr_*` symbols. It is intentionally omitted from
+# `[defines]` so the generated C header declares the C ABI unconditionally.
 # Chemfiles selection symbols are always declared (stubbed in Rust when the
 # `chemfiles` feature is off) so C++ wrappers compile without -DREADCON_CORE_HAS_CHEMFILES.
 

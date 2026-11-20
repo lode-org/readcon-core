@@ -622,7 +622,7 @@ fn array_arc_rwlock_dlpack_and_device_error() {
     let _ = tagged.copy();
 }
 
-#[cfg(feature = "chemfiles")]
+#[cfg(all(feature = "chemfiles", feature = "capi"))]
 #[test]
 fn ffi_chemfiles_memory_import() {
     use readcon_core::ffi::{free_rkr_frame_array, rkr_read_chemfiles_memory};
