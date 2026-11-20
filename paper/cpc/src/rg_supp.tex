@@ -74,8 +74,10 @@ Elsevier%
 \input{figures/generated/si_macros}
 \input{figures/generated/dlpack_macros}
 \input{figures/generated/format_h2h_macros}
-\input{figures/generated/readcon_db_macros}
 \input{figures/generated/host_macros}
+\input{figures/generated/db_macros}
+\input{figures/generated/readcon_db_macros}
+\input{figures/generated/mpi_macros}
 % Import labels from the main text without its \\bibcite entries (same keys in both aux files).
 % Captions in the main text contain generated macros, so those macros are defined first.
 \makeatletter
@@ -614,8 +616,6 @@ The fourth campaign asks for shuffle-zstd on every read, so it measures what the
 On the membrane-protein trajectory the shuffled cache stores its frames in \num{\rdbMembraneFrameShare} of the raw bytes and the whole corpus in \num{\rdbMembraneCorpusShare} of them.
 On one thread the median warm full read of the shuffled cache takes \num{\rdbMembraneRatio} of the median raw time, and the paired interval of the shuffled over the raw time runs from \num{\rdbMembraneColdLo} to \num{\rdbMembraneColdHi} for a cold full read and from \num{\rdbMembraneWarmLo} to \num{\rdbMembraneWarmHi} for a warm full read, each from \rdbMembranePairs{} pairs (\rdbMembraneCIMethod).
 The codec saves storage and cold read time and costs warm decode time.
-
-\input{figures/generated/mpi_macros}
 
 We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, \mpiRepeats{} launches at each count.
 \mpiSharedLine.
