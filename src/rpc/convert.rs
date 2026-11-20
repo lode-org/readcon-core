@@ -525,4 +525,79 @@ mod tests {
             assert!(written.contains(&needle), "{written}");
         }
     }
+
+    #[test]
+    fn capnp_rejects_duplicate_con_spec_minor() {
+        let frame = load_fixture("tiny_cuh2.con");
+        let mut message = Builder::new_default();
+        {
+            let mut root = message.init_root::<con_frame_data::Builder>();
+            fill_frame_builder(root.reborrow(), &frame).unwrap();
+            root.set_metadata_json(
+                r#"{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"}}"#,
+            );
+        }
+        let reader = message
+            .get_root_as_reader::<con_frame_data::Reader>()
+            .unwrap();
+        let err = frame_from_reader(reader).unwrap_err();
+        assert!(
+            err.to_string().contains("duplicate con_spec_minor key"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn capnp_binary64_half_ulp_minor_matches_rust() {
+        let (plus_one, last_finite, overflow) = crate::parser::f64_max_minor_edge_digits();
+        for digits in [&plus_one, &last_finite] {
+            let text = format!(
+                "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{digits},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}},\"sections\":[\"velocities\"]}}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n\nH\nVelocities of Component 1\n0.1 0.0 0.0 0 0\n"
+            );
+            let frame = ConFrameIterator::new(&text).next().unwrap().unwrap();
+            assert_eq!(
+                frame.header.con_spec_minor_saturating(),
+                crate::types::SATURATED_SPEC_MINOR
+            );
+            assert_eq!(frame.header.con_spec_minor_str(), digits.as_str());
+
+            let mut message = Builder::new_default();
+            {
+                let root = message.init_root::<con_frame_data::Builder>();
+                fill_frame_builder(root, &frame).unwrap();
+            }
+            let reader = message
+                .get_root_as_reader::<con_frame_data::Reader>()
+                .unwrap();
+            let back = frame_from_reader(reader).unwrap();
+            assert_eq!(
+                back.header.con_spec_minor_saturating(),
+                crate::types::SATURATED_SPEC_MINOR
+            );
+            assert_eq!(back.header.con_spec_minor_str(), digits.as_str());
+            let mut out = Vec::new();
+            crate::writer::ConFrameWriter::new(&mut out)
+                .write_frame(&back)
+                .unwrap();
+            let written = String::from_utf8(out).unwrap();
+            assert!(written.contains(&format!("\"con_spec_minor\":{digits}")));
+            assert!(written.contains("\"time\":\"fs\""));
+            assert!(!written.contains("(amu*angstrom^2/eV)^0.5"));
+        }
+
+        let frame = load_fixture("tiny_cuh2.con");
+        let mut message = Builder::new_default();
+        {
+            let mut root = message.init_root::<con_frame_data::Builder>();
+            fill_frame_builder(root.reborrow(), &frame).unwrap();
+            root.set_metadata_json(format!(
+                "{{\"con_spec_version\":3,\"con_spec_minor\":{overflow},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}}}}"
+            ));
+        }
+        let reader = message
+            .get_root_as_reader::<con_frame_data::Reader>()
+            .unwrap();
+        let err = frame_from_reader(reader).unwrap_err();
+        assert!(err.to_string().contains("number out of range"), "{err}");
+    }
 }

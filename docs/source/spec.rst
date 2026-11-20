@@ -196,6 +196,9 @@ CON-line2.12 \:\: MUST
 CON-line2.13 \:\: MUST
     Reserved keys MUST use the types in this document.
 
+CON-line2.14 \:\: MUST NOT
+    A line 2 object MUST NOT repeat the ``con_spec_minor`` key.
+
 .. _cell:
 
 Cell
