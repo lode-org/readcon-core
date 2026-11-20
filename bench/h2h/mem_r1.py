@@ -106,7 +106,7 @@ def build_rust() -> None:
             "build",
             "--release",
             "--features",
-            "parallel,benchmark",
+            "capi,parallel,benchmark",
             "--example",
             "serial_probe",
             "--example",

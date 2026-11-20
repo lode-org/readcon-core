@@ -124,7 +124,13 @@ def lib_path():
 
 
 def lib():
-    L = ctypes.CDLL(str(lib_path()))
+    path = lib_path()
+    L = ctypes.CDLL(str(path))
+    if not hasattr(L, "rkr_read_all_frames"):
+        raise SystemExit(
+            f"{path} lacks rkr_read_all_frames; "
+            "rebuild with cargo build --release --features capi,benchmark"
+        )
     L.rkr_read_all_frames.restype = ctypes.c_void_p
     L.rkr_read_all_frames.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_size_t)]
     return L

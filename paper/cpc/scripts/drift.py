@@ -364,6 +364,11 @@ def _lib():
     for cand in [str(_lib_path())]:
         if cand and Path(cand).exists():
             lib = ctypes.CDLL(cand)
+            if not hasattr(lib, "rkr_read_all_frames"):
+                raise SystemExit(
+                    f"{cand} lacks rkr_read_all_frames; "
+                    "rebuild with cargo build --release --features capi,benchmark"
+                )
             lib.rkr_read_all_frames.restype = ctypes.POINTER(ctypes.c_void_p)
             lib.rkr_read_all_frames.argtypes = [
                 ctypes.c_char_p,

@@ -423,7 +423,7 @@ def cpp() -> None:
             "build",
             "--release",
             "--features",
-            "parallel,benchmark",
+            "capi,parallel,benchmark",
             "--lib",
         ],
         cwd=SRC,
@@ -498,7 +498,7 @@ def cpp() -> None:
             "rustc": rustc,
             "cargo_profile_release": profile,
             "readcon_library": str(library),
-            "cargo_features": ["parallel", "benchmark"],
+            "cargo_features": ["capi", "parallel", "benchmark"],
             "inputs": {
                 "con_coordinates": str(paths[campaign]["con"]),
                 "con_bytes": paths[campaign]["con"].stat().st_size,
