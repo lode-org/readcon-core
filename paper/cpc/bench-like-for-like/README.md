@@ -28,7 +28,7 @@ Before the timed repeats, one equal-work pass compares frame count, atom count, 
 
 ## Protocol
 
-Six repeats per arm per input. The arm/input list is rotated and reversed in ABBA order (forward, reversed, reversed, forward). The clock starts after the import, in a fresh process. No repeat is discarded. The median and IQR are type-7 linear percentiles. Ratios are full-frame median over `readcon_tip_a` for the same work, thread count, and input, reported next to the A/A ratio. `paper/cpc/scripts/host_from_log.py` refuses a ratio when those fields are missing or different.
+Six repeats per arm per input. The arm/input list is rotated and reversed in ABBA order (forward, reversed, reversed, forward). The clock starts after the import, in a fresh process. No repeat is discarded. The median and IQR are type-7 linear percentiles. Ratios are full-frame median over `readcon_tip_a` for the same work, thread count, and input, reported next to the A/A ratio. `paper/cpc/scripts/host_from_log.py` refuses a ratio when those fields are absent or unequal.
 
 Rows record arm, work, threads, input name, synthetic or real, sha256, n, median, IQR, revision or version, and the sha256 of `/etc/machine-id`.
 
