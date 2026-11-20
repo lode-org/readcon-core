@@ -86,6 +86,7 @@ Elsevier%
 % A value from a macro printed to a fixed number of significant figures.
 \newcommand{\sigfig}[2]{\num[round-mode=figures,round-precision=#1]{#2}}
 \newcommand{\DOIPENDING}{The version DOI for this commit is not minted.}
+\newcommand{\todo}[1]{#1}
 \newcommand{\rcAITool}{Cursor, routing between Claude Opus 5.5, GPT-5.6 Sol and Grok 4.7}
 % Import labels from the supplement without its \\bibcite entries (same keys in both aux files).
 % The supplement's captions contain generated macros, so those macros are defined first.
@@ -748,10 +749,11 @@ The bar is the type 7 median.
 The repeats ran on the host of Section~\ref{sec:host}, with readcon-core at the commit named in Data availability.}
 \label{fig:timing} \end{figure*}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{Time of each full-frame, one-thread CON reader divided by the time of release readcon-core, six repeats.
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{Time of the main-branch full-frame read and of ASE, each divided by the time of release readcon-core, six repeats.
+Both build a full frame on one thread.
 The horizontal line is 1.
 A point above the line means that the release read is that many times as fast.
-The coordinate read on 8 cores is not in this figure.}
+eOn is not in this figure, and the coordinate read on 8 cores is not in it either.}
 \label{fig:ratios} \end{figure}
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/memory.pdf} \caption{MiB added to the high-water mark by the read, after the import, six repeats.}
@@ -793,9 +795,9 @@ The like-for-like record is \path{paper/cpc/bench-like-for-like/results/summary.
 One machine and one thread pinned to cpu 0.
 Every arm on an input matched the frame count, the atom count and the position checksum.
 The authors maintain both eOn and readcon, so this is an in-house comparison.
-The eOn comparison will be against the original SVN-era eOn C++ CON reader when that arm is in the record.
-Until then, the row labelled Former is eOn's former Python reader, \path{eon/fileio.py}, the last version before eOn delegated CON parsing to readcon.
+Former is eOn's former Python reader, \path{eon/fileio.py}, on a full frame, the last version before eOn delegated CON parsing to readcon.
 Current eOn reads CON files through readcon.
+A column for the original SVN-era eOn C++ CON reader is written only when that arm is in the record.
 
 \input{figures/generated/like_section}
 
