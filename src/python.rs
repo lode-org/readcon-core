@@ -413,6 +413,192 @@ fn py_atoms_to_list(py: Python<'_>, atoms: Vec<PyAtomDatum>) -> PyResult<Py<PyLi
     Ok(list.unbind())
 }
 
+#[cfg(any(test, feature = "borrow-path-counts"))]
+static BINDING_COPIES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Note one per-atom buffer the binding had to copy instead of sharing.
+fn count_binding_copy() {
+    #[cfg(any(test, feature = "borrow-path-counts"))]
+    BINDING_COPIES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// How many per-atom buffers the binding copied instead of sharing.
+///
+/// A parsed frame shares its parse buffers with the arrays it returns. The
+/// count grows only when a buffer cannot be shared, such as a column stored
+/// as float32. Tests read it before and after a call.
+#[cfg(any(test, feature = "borrow-path-counts"))]
+#[pyfunction]
+fn binding_copy_count() -> u64 {
+    BINDING_COPIES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// A NumPy array over memory that `owner` keeps alive. Its base is `owner`.
+///
+/// # Safety
+///
+/// `data` must address the elements of `dims`, aligned for `T`, and they
+/// must stay valid while `owner` is alive. A writeable array must address
+/// memory that no Rust reference covers: Rust reads it only through
+/// [`crate::types::CoordSnapshot`]'s atomic copies.
+unsafe fn owned_view<'py, T: numpy::Element, D: ndarray::Dimension>(
+    owner: &Bound<'py, PyAny>,
+    data: *const T,
+    dims: D,
+    writeable: bool,
+) -> PyResult<Bound<'py, numpy::PyArray<T, D>>> {
+    use numpy::PyArrayDescrMethods;
+    use numpy::npyffi::{NPY_ARRAY_WRITEABLE, NpyTypes, PY_ARRAY_API, PyArrayObject, npy_intp};
+    let py = owner.py();
+    let shape: Vec<npy_intp> = dims.slice().iter().map(|&d| d as npy_intp).collect();
+    let flags = if writeable { NPY_ARRAY_WRITEABLE } else { 0 };
+    unsafe {
+        let ptr = PY_ARRAY_API.PyArray_NewFromDescr(
+            py,
+            PY_ARRAY_API.get_type_object(py, NpyTypes::PyArray_Type),
+            T::get_dtype(py).into_dtype_ptr(),
+            shape.len() as std::os::raw::c_int,
+            shape.as_ptr() as *mut npy_intp,
+            std::ptr::null_mut(),
+            data as *mut std::os::raw::c_void,
+            flags,
+            std::ptr::null_mut(),
+        );
+        if ptr.is_null() {
+            return Err(PyErr::fetch(py));
+        }
+        // Steals the reference, also on failure.
+        if PY_ARRAY_API.PyArray_SetBaseObject(
+            py,
+            ptr as *mut PyArrayObject,
+            owner.clone().into_ptr(),
+        ) < 0
+        {
+            pyo3::ffi::Py_DECREF(ptr);
+            return Err(PyErr::fetch(py));
+        }
+        Ok(Bound::from_owned_ptr(py, ptr).cast_into_unchecked())
+    }
+}
+
+/// One frame's coordinate allocation, released as the `Vec` it came from.
+struct RawF64Buffer {
+    ptr: *mut f64,
+    len: usize,
+    cap: usize,
+}
+
+// The doubles are written by Python through `xyz` and read by Rust only
+// through atomic copies.
+unsafe impl Send for RawF64Buffer {}
+unsafe impl Sync for RawF64Buffer {}
+
+impl RawF64Buffer {
+    fn from_vec(values: Vec<f64>) -> Self {
+        let mut values = std::mem::ManuallyDrop::new(values);
+        Self {
+            ptr: values.as_mut_ptr(),
+            len: values.len(),
+            cap: values.capacity(),
+        }
+    }
+}
+
+impl Drop for RawF64Buffer {
+    fn drop(&mut self) {
+        unsafe { drop(Vec::from_raw_parts(self.ptr, self.len, self.cap)) }
+    }
+}
+
+/// The coordinate buffers of one read, one per frame.
+///
+/// Each buffer is the frame's parse allocation, moved here without a copy,
+/// so the atom slots that address it stay valid. `ConFrame.xyz` is a
+/// writeable NumPy view of one buffer whose base is this object, so every
+/// frame of a read shares one owner and any view keeps the buffers alive.
+#[pyclass(module = "readcon", name = "_PositionStore", frozen)]
+struct PositionStore {
+    buffers: Vec<RawF64Buffer>,
+}
+
+impl PositionStore {
+    /// Move each frame's coordinates here and leave its column empty.
+    fn take_from(frames: &mut [ConFrame]) -> Self {
+        let buffers = frames
+            .iter_mut()
+            .map(|frame| RawF64Buffer::from_vec(take_position_buffer(frame)))
+            .collect();
+        Self { buffers }
+    }
+
+    fn atoms(&self, index: usize) -> usize {
+        self.buffers.get(index).map_or(0, |buffer| buffer.len / 3)
+    }
+
+    fn view<'py>(slf: &Bound<'py, Self>, index: usize) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        let buffer = slf
+            .get()
+            .buffers
+            .get(index)
+            .ok_or_else(|| PyValueError::new_err("no coordinate buffer for this frame"))?;
+        py_numpy(slf.py())?;
+        unsafe {
+            owned_view(
+                slf.as_any(),
+                buffer.ptr.cast_const(),
+                ndarray::Ix2(buffer.len / 3, 3),
+                true,
+            )
+        }
+    }
+}
+
+/// `ImportError` instead of a panic in the NumPy C API when NumPy is absent.
+fn py_numpy(py: Python<'_>) -> PyResult<()> {
+    py.import("numpy").map(drop)
+}
+
+/// The frame's coordinates as one `Vec`, with every atom slot reading it.
+///
+/// A packed float64 column is taken as it is. Any other column is copied
+/// once and counted.
+fn take_position_buffer(frame: &mut ConFrame) -> Vec<f64> {
+    let n_atoms = frame.atom_data.len();
+    let mut values = match frame.positions.take_contiguous_f64() {
+        Some(values) if values.len() == n_atoms * 3 => values,
+        _ => {
+            count_binding_copy();
+            let mut values = Vec::with_capacity(n_atoms.saturating_mul(3));
+            if frame.positions.nrows() == n_atoms {
+                if let Some(src) = frame.positions.f64_slice() {
+                    values.extend_from_slice(src);
+                } else {
+                    for i in 0..n_atoms {
+                        values.extend_from_slice(&frame.positions.as_f64_row(i));
+                    }
+                }
+            } else {
+                for atom in &frame.atom_data {
+                    values.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
+                }
+            }
+            values
+        }
+    };
+    if n_atoms > 0 {
+        let base = values.as_mut_ptr();
+        let already = frame
+            .atom_data
+            .first()
+            .is_some_and(|atom| atom.coord_ptr() == base.cast_const());
+        if !already {
+            retarget_frames_to_slab(std::slice::from_mut(frame), base, n_atoms);
+        }
+    }
+    frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+    values
+}
+
 /// Python-visible simulation frame.
 #[pyclass(name = "ConFrame")]
 pub struct PyConFrame {
@@ -434,12 +620,15 @@ pub struct PyConFrame {
     pub spec_version: u32,
     metadata: Py<PyDict>,
     /// Rust SoA when this frame came from the parser. The positions
-    /// column is empty: coordinates live in `xyz_owned` or in `slab`.
+    /// column is empty: coordinates live in `xyz_owned`, `slab` or `store`.
     inner: Option<ConFrame>,
     n_atoms: usize,
     /// One `[frames, N, 3]` array shared by every frame of a read.
     slab: Option<Py<PyArray3<f64>>>,
+    /// Row of `slab`, or buffer of `store`.
     slab_index: usize,
+    /// The parse buffers of the read this frame came from.
+    store: Option<Py<PositionStore>>,
     /// Coordinates of a frame that was not part of a shared read.
     xyz_owned: Option<Py<PyArray2<f64>>>,
 }
@@ -482,6 +671,7 @@ impl PyConFrame {
             slab: None,
             slab_index: 0,
             xyz_owned: None,
+            store: None,
         })
     }
 
@@ -567,11 +757,17 @@ impl PyConFrame {
 
     /// Coordinates as a numpy `[N, 3] float64` view.
     ///
-    /// A frame from `read_con` views one row of the trajectory slab.
-    /// A later read of `xyz` returns that same view. `coords_array()`
-    /// still walks `.atoms` so in-place Atom edits show up.
+    /// A frame from `read_con` views its own parse buffer. Every frame of
+    /// one read shares the same base object, which owns those buffers, so
+    /// a view stays valid after the list and the frame are gone. A later
+    /// read of `xyz` views the same memory. The view is writeable and a
+    /// store into it is what a later write of the frame sees.
+    /// `coords_array()` still walks `.atoms` so in-place Atom edits show up.
     #[getter]
     fn xyz<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        if let Some(store) = &self.store {
+            return PositionStore::view(store.bind(py), self.slab_index);
+        }
         if let Some(slab) = &self.slab {
             let item = slab.bind(py).get_item(self.slab_index)?;
             return Ok(item.cast::<PyArray2<f64>>()?.clone());
@@ -1173,7 +1369,7 @@ impl PyConFrame {
     /// `inner`'s coordinate slots address a NumPy array that `xyz`
     /// returns to Python, writable.
     fn coords_shared(&self) -> bool {
-        self.slab.is_some() || self.xyz_owned.is_some()
+        self.slab.is_some() || self.xyz_owned.is_some() || self.store.is_some()
     }
 
     fn atom_count(&self, py: Python<'_>) -> usize {
@@ -1189,10 +1385,6 @@ impl PyConFrame {
             .unwrap_or(0)
     }
 
-    fn from_con_frame(py: Python<'_>, frame: &ConFrame) -> PyResult<Self> {
-        Self::from_owned(py, frame.clone())
-    }
-
     fn from_owned(py: Python<'_>, mut frame: ConFrame) -> PyResult<Self> {
         let n_atoms = frame.positions.nrows();
         // The coordinate view is a NumPy array. Building it calls the
@@ -1203,6 +1395,7 @@ impl PyConFrame {
             let data = match frame.positions.take_contiguous_f64() {
                 Some(buf) => buf,
                 None => {
+                    count_binding_copy();
                     let mut data = Vec::with_capacity(n_atoms.saturating_mul(3));
                     if let Some(src) = frame.positions.f64_slice() {
                         data.extend_from_slice(src);
@@ -1270,6 +1463,7 @@ impl PyConFrame {
             slab: None,
             slab_index: 0,
             xyz_owned,
+            store: None,
         })
     }
 
@@ -1323,6 +1517,44 @@ impl PyConFrame {
             slab: Some(slab),
             slab_index: index,
             xyz_owned: None,
+            store: None,
+        })
+    }
+
+    /// A frame whose coordinates are buffer `index` of `store`. The atom
+    /// slots already read that buffer.
+    fn from_store(
+        py: Python<'_>,
+        frame: ConFrame,
+        store: Py<PositionStore>,
+        index: usize,
+    ) -> PyResult<Self> {
+        let n_atoms = store.get().atoms(index);
+        let prebox_header = [
+            frame.header.prebox_header.user.clone(),
+            frame.header.prebox_header.metadata_line().to_string(),
+        ];
+        let metadata = json_map_to_py_dict_with_minor(
+            py,
+            &frame.header.metadata.to_map(),
+            frame.header.metadata.huge_minor_raw(),
+        )?;
+        Ok(PyConFrame {
+            cell: frame.header.boxl,
+            angles: frame.header.angles,
+            prebox_header,
+            postbox_header: frame.header.postbox_header.clone(),
+            atoms: PyList::empty(py).unbind(),
+            atoms_ready: std::sync::atomic::AtomicBool::new(false),
+            atoms_init: std::sync::Mutex::new(()),
+            spec_version: frame.header.spec_version,
+            metadata,
+            inner: Some(frame),
+            n_atoms,
+            slab: None,
+            slab_index: index,
+            xyz_owned: None,
+            store: Some(store),
         })
     }
 
@@ -2256,9 +2488,10 @@ impl ReadCallPhases {
 
 /// Parsed frames. Indexing builds one [`PyConFrame`].
 ///
-/// `read_con` returns this. The coordinate slab is one array shared by
-/// every rectangular frame. A frame's Python object, including its
-/// metadata dict, is built the first time that frame is indexed.
+/// `read_con` returns this. Every frame's coordinates stay in the buffer
+/// the parse wrote, owned by one [`PositionStore`]. A frame's Python
+/// object, including its metadata dict, is built the first time that
+/// frame is indexed.
 #[pyclass(name = "ConFrameList")]
 struct ConFrameList {
     /// A write, a string, a checksum or an id check holds the read lock
@@ -2269,9 +2502,13 @@ struct ConFrameList {
     frames: std::sync::RwLock<Vec<Option<ConFrame>>>,
     /// Lock order is `cache`, then `frames`.
     cache: std::sync::Mutex<Vec<Option<Py<PyConFrame>>>>,
-    slab: Option<Py<PyArray3<f64>>>,
-    /// Python can reach the slab: `columns()` returned it, or an indexed
-    /// frame views one row of it. Set with `frames` write-locked, so a
+    /// One `[frames, N, 3]` array, built by the first `columns()` call and
+    /// set with `frames` write-locked. The stored frames then read it.
+    slab: pyo3::sync::PyOnceLock<Py<PyArray3<f64>>>,
+    /// The parse buffers, until `columns()` moves the coordinates to `slab`.
+    store: std::sync::Mutex<Option<Py<PositionStore>>>,
+    /// Python can reach stored coordinates: `columns()` returned them, or
+    /// an indexed frame views them. Set with `frames` write-locked, so a
     /// reader that saw `false` finishes before Python has the array.
     slab_shared: std::sync::atomic::AtomicBool,
     n_atoms: usize,
@@ -2382,15 +2619,18 @@ impl ConFrameList {
         }
         let frame = {
             let mut slots = self.slots_mut(py);
-            if self.slab.is_some() {
-                self.slab_shared
-                    .store(true, std::sync::atomic::Ordering::Release);
-            }
+            self.slab_shared
+                .store(true, std::sync::atomic::Ordering::Release);
             slots.get_mut(index).and_then(Option::take)
         }
         .ok_or_else(|| PyIOError::new_err(format!("frame {index} is already borrowed")))?;
-        let built = if let Some(slab) = &self.slab {
+        let store = lock_attached(py, &self.store)
+            .as_ref()
+            .map(|store| store.clone_ref(py));
+        let built = if let Some(slab) = self.slab.get(py) {
             PyConFrame::from_slab(py, frame, slab.clone_ref(py), index, self.n_atoms)?
+        } else if let Some(store) = store {
+            PyConFrame::from_store(py, frame, store, index)?
         } else {
             PyConFrame::from_owned(py, frame)?
         };
@@ -2447,28 +2687,51 @@ impl ConFrameList {
     /// symbol. The returned seconds are that walk. A second call walks
     /// again.
     fn touch_checksum(&self, py: Python<'_>) -> PyResult<(u64, f64)> {
-        let Some(slab) = &self.slab else {
-            return Err(PyIOError::new_err(
-                "touch_checksum needs the shared coordinate slab",
-            ));
+        let copied = if let Some(slab) = self.slab.get(py) {
+            let array = slab.bind(py);
+            let shape = array.shape();
+            let len = shape
+                .iter()
+                .try_fold(1usize, |acc, dim| acc.checked_mul(*dim))
+                .ok_or_else(|| PyIOError::new_err("touch_checksum slab size overflow"))?;
+            let mut copied = vec![0.0f64; len];
+            if len > 0 {
+                if !array.is_c_contiguous() {
+                    return Err(PyIOError::new_err("touch_checksum slab is not contiguous"));
+                }
+                let base = array.data().cast_const();
+                crate::types::assert_atomic_f64_alignment(base);
+                unsafe {
+                    crate::types::atomic_copy_f64(base, copied.as_mut_ptr(), len);
+                }
+            }
+            copied
+        } else {
+            let store = lock_attached(py, &self.store)
+                .as_ref()
+                .map(|store| store.clone_ref(py))
+                .ok_or_else(|| {
+                    PyIOError::new_err("touch_checksum needs the coordinates of the read")
+                })?;
+            let buffers = &store.get().buffers;
+            let len = buffers.iter().map(|buffer| buffer.len).sum();
+            let mut copied: Vec<f64> = Vec::with_capacity(len);
+            for buffer in buffers {
+                if buffer.len == 0 {
+                    continue;
+                }
+                crate::types::assert_atomic_f64_alignment(buffer.ptr);
+                unsafe {
+                    crate::types::atomic_copy_f64(
+                        buffer.ptr,
+                        copied.as_mut_ptr().add(copied.len()),
+                        buffer.len,
+                    );
+                    copied.set_len(copied.len() + buffer.len);
+                }
+            }
+            copied
         };
-        let array = slab.bind(py);
-        let shape = array.shape();
-        let len = shape
-            .iter()
-            .try_fold(1usize, |acc, dim| acc.checked_mul(*dim))
-            .ok_or_else(|| PyIOError::new_err("touch_checksum slab size overflow"))?;
-        let mut copied = vec![0.0f64; len];
-        if len > 0 {
-            if !array.is_c_contiguous() {
-                return Err(PyIOError::new_err("touch_checksum slab is not contiguous"));
-            }
-            let base = array.data().cast_const();
-            crate::types::assert_atomic_f64_alignment(base);
-            unsafe {
-                crate::types::atomic_copy_f64(base, copied.as_mut_ptr(), len);
-            }
-        }
         let workers = self.workers;
         let pool = lock_attached(py, &self.pool).clone();
         let slots = self.slots(py);
@@ -2509,41 +2772,72 @@ impl ConFrameList {
     /// before `frames[i]`. `write_columns` writes the dict back. Indexing
     /// a frame still builds Python atoms; this does not.
     fn columns(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
-        let pack_positions = self.slab.is_none();
-        let packed = {
-            // The write lock waits out any detached reader of the slab
-            // before Python is handed the array.
-            let frames = self.slots_mut(py);
-            if self.slab.is_some() {
-                self.slab_shared
-                    .store(true, std::sync::atomic::Ordering::Release);
-            }
+        let (packed, slab) = {
+            // The write lock waits out any detached reader of the stored
+            // coordinates before Python is handed the array.
+            let mut frames = self.slots_mut(py);
             if frames.iter().any(|slot| slot.is_none()) {
                 return Err(PyIOError::new_err(
                     "columns() needs every frame still stored; indexing a frame borrows it",
                 ));
             }
-            pack_frame_columns(
+            let mut store = lock_attached(py, &self.store);
+            // One frame's parse buffer already is the `[1, N, 3]` block.
+            let single = match (self.slab.get(py), store.as_ref()) {
+                (None, Some(held)) if frames.len() == 1 && held.get().buffers.len() == 1 => {
+                    Some(held.clone_ref(py))
+                }
+                _ => None,
+            };
+            let pack_positions = self.slab.get(py).is_none() && single.is_none();
+            let packed = pack_frame_columns(
                 frames.iter().map(|slot| slot.as_ref().unwrap()),
                 pack_positions,
-            )
-        };
-        let Some(packed) = packed else {
-            return Err(PyValueError::new_err(
-                "columns() needs the same atom count in every frame",
-            ));
+            );
+            let Some(mut packed) = packed else {
+                return Err(PyValueError::new_err(
+                    "columns() needs the same atom count in every frame",
+                ));
+            };
+            if self.slab.get(py).is_none() {
+                let slab = if let Some(held) = single {
+                    let bound = held.bind(py);
+                    let buffer = &held.get().buffers[0];
+                    unsafe {
+                        owned_view(
+                            bound.as_any(),
+                            buffer.ptr.cast_const(),
+                            ndarray::Ix3(1, buffer.len / 3, 3),
+                            true,
+                        )?
+                    }
+                    .unbind()
+                } else {
+                    // Frames in separate parse buffers are packed once.
+                    let values = std::mem::take(&mut packed.positions);
+                    let slab = slab_from_values(py, values, packed.n_frames, packed.n_atoms)?;
+                    let base = slab.bind(py).data();
+                    let stride = packed.n_atoms * 3;
+                    for (index, frame) in frames.iter_mut().flatten().enumerate() {
+                        let origin = unsafe { base.add(index * stride) };
+                        retarget_frames_to_slab(
+                            std::slice::from_mut(frame),
+                            origin,
+                            packed.n_atoms,
+                        );
+                    }
+                    *store = None;
+                    slab
+                };
+                let _ = self.slab.set(py, slab);
+            }
+            self.slab_shared
+                .store(true, std::sync::atomic::Ordering::Release);
+            let slab = self.slab.get(py).expect("slab").clone_ref(py);
+            (packed, slab)
         };
         let dict = PyDict::new(py);
-        if let Some(slab) = &self.slab {
-            dict.set_item("positions", slab.clone_ref(py))?;
-        } else {
-            let pos = ndarray::Array3::from_shape_vec(
-                (packed.n_frames, packed.n_atoms, 3),
-                packed.positions,
-            )
-            .map_err(|err| PyValueError::new_err(err.to_string()))?;
-            dict.set_item("positions", pos.into_pyarray(py))?;
-        }
+        dict.set_item("positions", slab)?;
         let masses =
             ndarray::Array2::from_shape_vec((packed.n_frames, packed.n_atoms), packed.masses)
                 .map_err(|err| PyValueError::new_err(err.to_string()))?;
@@ -2704,38 +2998,6 @@ fn retarget_frames_to_slab(frames: &mut [ConFrame], base: *mut f64, n_atoms: usi
     }
 }
 
-fn clear_packed_positions(frames: &mut [ConFrame], workers: usize) {
-    let clear = |frame: &mut ConFrame| {
-        frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
-    };
-    #[cfg(feature = "parallel")]
-    if workers >= 2 && frames.len() >= 2 {
-        // The read's pool is already installed by the caller. This does
-        // not build another one.
-        if rayon::current_thread_index().is_some() {
-            use rayon::prelude::*;
-            frames.par_iter_mut().for_each(clear);
-            return;
-        }
-        let chunk = frames.len().div_ceil(workers).max(1);
-        std::thread::scope(|scope| {
-            let mut rest = frames;
-            while !rest.is_empty() {
-                let take = chunk.min(rest.len());
-                let (head, tail) = rest.split_at_mut(take);
-                rest = tail;
-                scope.spawn(move || {
-                    for frame in head.iter_mut() {
-                        frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
-                    }
-                });
-            }
-        });
-        return;
-    }
-    frames.iter_mut().for_each(clear);
-}
-
 fn slab_from_values(
     py: Python<'_>,
     values: Vec<f64>,
@@ -2785,74 +3047,25 @@ fn con_frame_list(
     let workers = n_threads.filter(|n| *n >= 2).unwrap_or(1);
     let fault0 = crate::iterators::process_minflt();
     let t_slab = std::time::Instant::now();
-    // `into_pyarray` panics if the numpy module is not installed. The
-    // shared slab is the coordinate view; the frames still hold the
-    // parsed coordinates when that view cannot be built.
-    let numpy_ok = py.import("numpy").is_ok();
-    // One wide frame already parsed into a contiguous f64 block. Moving
-    // that block into the NumPy array skips the extra SoA memcpy and the
-    // pointer walk that followed it.
-    let adopted = if numpy_ok && n_frames == 1 {
-        frames[0].positions.take_contiguous_f64()
-    } else {
-        None
+    // Each frame keeps the buffer its parse wrote. Moving those buffers into
+    // the store copies no coordinate; the atom slots already address them.
+    let n_atoms = match frames.first() {
+        Some(first)
+            if frames
+                .iter()
+                .all(|frame| frame.atom_data.len() == first.atom_data.len()) =>
+        {
+            first.atom_data.len()
+        }
+        _ => 0,
     };
-    let adopted_ptr = adopted.as_ref().map(|values| values.as_ptr());
-    let packed = if adopted.is_some() {
-        None
-    } else if numpy_ok {
-        py.detach(|| match pool.as_ref() {
-            Some(pool) if workers >= 2 => {
-                pool.install(|| crate::iterators::pack_position_slab(&frames, workers))
-            }
-            _ => crate::iterators::pack_position_slab(&frames, 1),
-        })
-    } else {
-        None
-    };
+    let held = py.detach(|| PositionStore::take_from(&mut frames));
     let slab_s = t_slab.elapsed().as_secs_f64();
     let slab_minflt = crate::iterators::process_minflt().saturating_sub(fault0);
-    let n_atoms = if let Some(values) = adopted.as_ref() {
-        values.len() / 3
-    } else {
-        match packed.as_ref() {
-            Some(values) if n_frames > 0 => values.len() / n_frames / 3,
-            _ => 0,
-        }
-    };
     let t_build = std::time::Instant::now();
-    let slab = if let Some(values) = adopted {
-        Some(slab_from_values(py, values, 1, n_atoms)?)
-    } else {
-        match packed {
-            Some(values) => Some(slab_from_values(py, values, n_frames, n_atoms)?),
-            None => None,
-        }
-    };
+    let store = Py::new(py, held)?;
     let python_build_s = t_build.elapsed().as_secs_f64();
-    // The writer reads atom slots, not the empty position column. Those
-    // slots have to address the slab before the parse buffer is freed.
-    // An adopted buffer already has that address, so the walk is skipped.
-    if let Some(slab) = &slab {
-        let bound = slab.bind(py);
-        if !bound.is_c_contiguous() {
-            return Err(PyValueError::new_err("coordinate slab is not contiguous"));
-        }
-        let new_ptr = bound.data();
-        if adopted_ptr != Some(new_ptr as *const f64) {
-            retarget_frames_to_slab(&mut frames, new_ptr, n_atoms);
-        }
-    }
-    let t_release = std::time::Instant::now();
-    if slab.is_some() {
-        py.detach(|| match pool.as_ref() {
-            Some(pool) if workers >= 2 => {
-                pool.install(|| clear_packed_positions(&mut frames, workers))
-            }
-            _ => clear_packed_positions(&mut frames, 1),
-        });
-    }
-    let release_s = t_release.elapsed().as_secs_f64();
+    let release_s = 0.0;
     let mut record = ReadCallPhases::from_rust(phases, n_bytes, n_frames, build);
     record.slab_s = slab_s;
     record.slab_minflt = slab_minflt;
@@ -2878,7 +3091,8 @@ fn con_frame_list(
         ConFrameList {
             frames: std::sync::RwLock::new(stored),
             cache: std::sync::Mutex::new(cache),
-            slab,
+            slab: pyo3::sync::PyOnceLock::new(),
+            store: std::sync::Mutex::new(Some(store)),
             slab_shared: std::sync::atomic::AtomicBool::new(false),
             n_atoms,
             workers,
@@ -3166,40 +3380,12 @@ fn read_positions(
     Ok(PyArray3::from_owned_array(py, array).unbind())
 }
 
-fn frames_from_parsed(py: Python<'_>, frames: Vec<ConFrame>) -> PyResult<Vec<PyConFrame>> {
-    let n_atoms = frames
-        .first()
-        .map(|frame| frame.positions.nrows())
-        .unwrap_or(0);
-    let rectangular = !frames.is_empty()
-        && n_atoms > 0
-        && frames
-            .iter()
-            .all(|frame| frame.positions.nrows() == n_atoms);
-    if !rectangular || py.import("numpy").is_err() {
-        return frames
-            .into_iter()
-            .map(|frame| PyConFrame::from_owned(py, frame))
-            .collect();
-    }
-    let mut values = Vec::with_capacity(frames.len().saturating_mul(n_atoms).saturating_mul(3));
-    for frame in &frames {
-        if let Some(src) = frame.positions.f64_slice() {
-            values.extend_from_slice(src);
-        } else {
-            for row in 0..n_atoms {
-                values.extend_from_slice(&frame.positions.as_f64_row(row));
-            }
-        }
-    }
-    let slab = Array3::from_shape_vec((frames.len(), n_atoms, 3), values)
-        .map_err(|e| PyValueError::new_err(format!("positions shape error: {e}")))?
-        .into_pyarray(py)
-        .unbind();
+fn frames_from_parsed(py: Python<'_>, mut frames: Vec<ConFrame>) -> PyResult<Vec<PyConFrame>> {
+    let store = Py::new(py, PositionStore::take_from(&mut frames))?;
     frames
         .into_iter()
         .enumerate()
-        .map(|(index, frame)| PyConFrame::from_slab(py, frame, slab.clone_ref(py), index, n_atoms))
+        .map(|(index, frame)| PyConFrame::from_store(py, frame, store.clone_ref(py), index))
         .collect()
 }
 
@@ -3287,7 +3473,7 @@ fn read_first_frame(py: Python<'_>, path: &str) -> PyResult<PyConFrame> {
     let frame = py
         .detach(|| crate::iterators::read_first_frame_located(Path::new(&path_owned)))
         .map_err(load_err_to_py)?;
-    PyConFrame::from_con_frame(py, &frame)
+    PyConFrame::from_owned(py, frame)
 }
 
 /// Read frames from a string containing .con or .convel data.
@@ -3582,7 +3768,7 @@ fn read_nth_frame(py: Python<'_>, path: &str, index: usize) -> PyResult<PyConFra
     let frame = py
         .detach(|| crate::iterators::read_nth_frame_located(Path::new(&path_owned), index))
         .map_err(load_err_to_py)?;
-    PyConFrame::from_con_frame(py, &frame)
+    PyConFrame::from_owned(py, frame)
 }
 
 /// Random access to the frames of one file: ``len(t)``, ``t[i]``,
@@ -5383,6 +5569,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         slab: None,
         slab_index: 0,
         xyz_owned: None,
+        store: None,
     })
 }
 
@@ -6390,6 +6577,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyConTrajectoryIter>()?;
     m.add_class::<ConFrameList>()?;
     m.add_class::<ConFrameListIter>()?;
+    m.add_class::<PositionStore>()?;
     m.add_function(wrap_pyfunction!(read_con, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_phases, m)?)?;
     m.add_function(wrap_pyfunction!(scan_probe, m)?)?;
@@ -6412,6 +6600,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(write_con, m)?)?;
     #[cfg(any(test, feature = "borrow-path-counts"))]
     m.add_function(wrap_pyfunction!(borrow_path_counts, m)?)?;
+    #[cfg(any(test, feature = "borrow-path-counts"))]
+    m.add_function(wrap_pyfunction!(binding_copy_count, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(convert_to_con, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_as_ase, m)?)?;

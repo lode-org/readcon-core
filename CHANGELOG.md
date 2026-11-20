@@ -7,6 +7,26 @@ All notable changes to this project will be documented in this file. See [conven
 
 ## Unreleased
 
+### Features
+
+- **Python:** `read_con`, `read_con_string` and `read_all_frames` no longer
+  copy every frame's coordinates into one slab. Each frame keeps the buffer
+  its parse wrote, and those buffers move into one owner object per read
+  (`readcon._PositionStore`) without a copy. `frame.xyz` is a writeable
+  NumPy view of that buffer whose `base` is the owner, the same object for
+  every frame of the read, so a view stays valid after the list and the
+  frame are dropped. A store into `xyz` is still what a later write of the
+  frame sees. `ConFrameList.columns()` now builds its `positions` array on
+  the first call: a one-frame read returns the parse buffer as
+  `[1, N, 3]`, and a longer read packs the frames once and then serves
+  `xyz` from that array, as before. `read_first_frame` and
+  `read_nth_frame` move the parse buffer into `xyz` instead of copying a
+  clone of the frame. `read_con_phases()` keeps its keys; `slab_s` is now
+  the time to move the buffers into the owner and `release_s` is zero.
+  Builds with the `borrow-path-counts` feature export
+  `binding_copy_count()`, the number of per-atom buffers the binding had to
+  copy (for example a float32 column), for tests.
+
 ### Bugfixes
 
 - **Metadata / Python:** `con_spec_minor` integers above `u64::MAX` (within
