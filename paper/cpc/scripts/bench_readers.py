@@ -11,9 +11,11 @@ Matter.con2matter and read_first_frame are first-frame rows.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import platform
+import random
 import subprocess
 import sys
 import time
@@ -57,7 +59,6 @@ EON_VERSION = "3.6.0"
 REPEATS = 6
 N_FRAMES = int(os.environ.get("LARGE_FRAMES", "100000"))
 N_ATOMS = 32
-ATOL = 1e-5
 
 
 def hwm_kib() -> int:
@@ -81,10 +82,24 @@ def cpu_model() -> str:
 
 
 def reference(n_frames: int, n_atoms: int) -> np.ndarray:
-    frames = np.arange(n_frames, dtype=np.float64)[:, None, None]
-    atoms = np.arange(n_atoms, dtype=np.float64)[None, :, None]
-    axes = np.arange(3, dtype=np.float64)[None, None, :]
-    return np.round(((frames * 17.0 + atoms * 3.0 + axes) % 10000.0) / 1000.0, 8)
+    """Deterministic binary64 coordinates with full mantissa coverage.
+
+    This avoids low-entropy decimal fixtures (for example 0.1234) and makes the
+    benchmark's fidelity check a bitwise identity check on full-precision binary64
+    values.
+    """
+    frames = np.arange(n_frames, dtype=np.uint64)[:, None, None]
+    atoms = np.arange(n_atoms, dtype=np.uint64)[None, :, None]
+    axes = np.arange(3, dtype=np.uint64)[None, None, :]
+    # Mix frame/atom/axis indices into 52 mantissa bits.
+    mantissa = (
+        frames * np.uint64(0x9E3779B97F4A7C15)
+        ^ atoms * np.uint64(0xD6E8FEB86659FD93)
+        ^ axes * np.uint64(0xA0761D6478BD642F)
+    ) & np.uint64((1 << 52) - 1)
+    # Keep exponent fixed (2^-4) and sign positive; every coordinate is finite.
+    bits = (np.uint64(1019) << np.uint64(52)) | mantissa
+    return bits.view(np.float64)
 
 
 def write_files(frames: np.ndarray) -> None:
@@ -100,14 +115,14 @@ def write_files(frames: np.ndarray) -> None:
             handle.write("20.0 20.0 20.0\n90.0 90.0 90.0\n\n\n1\n")
             handle.write(f"{n_atoms}\n63.546\nCu\nCoordinates of Component 1\n")
             for i, (x, y, z) in enumerate(frame):
-                handle.write(f"{x:.8f} {y:.8f} {z:.8f} 0 {i}\n")
+                handle.write(f"{x:.17g} {y:.17g} {z:.17g} 0 {i}\n")
             handle.write("\n")
     xyz = WORK / "frames.xyz"
     with xyz.open("w", encoding="utf-8") as handle:
         for frame in frames:
             handle.write(f"{n_atoms}\nframe\n")
             for x, y, z in frame:
-                handle.write(f"Cu {x:.8f} {y:.8f} {z:.8f}\n")
+                handle.write(f"Cu {x:.17g} {y:.17g} {z:.17g}\n")
     import h5py
 
     h5_path = WORK / "frames.h5"
@@ -280,12 +295,22 @@ if arr is not None and arr.ndim == 3:
     frames = np.arange(got_n, dtype=np.float64)[:, None, None]
     atoms = np.arange(arr.shape[1], dtype=np.float64)[None, :, None]
     axes = np.arange(3, dtype=np.float64)[None, None, :]
-    ref = np.round(((frames * 17.0 + atoms * 3.0 + axes) % 10000.0) / 1000.0, 8)
+    mixed = (
+        (frames.astype(np.uint64) * np.uint64(0x9E3779B97F4A7C15))
+        ^ (atoms.astype(np.uint64) * np.uint64(0xD6E8FEB86659FD93))
+        ^ (axes.astype(np.uint64) * np.uint64(0xA0761D6478BD642F))
+    ) & np.uint64((1 << 52) - 1)
+    ref_bits = (np.uint64(1019) << np.uint64(52)) | mixed
+    ref = ref_bits.view(np.float64)
     if arr.shape[1:] == (n_atoms, 3) and ref.shape[0] >= 1:
         take = min(got_n, requested, ref.shape[0])
-        matched = int(np.sum(np.max(np.abs(arr[:take] - ref[:take]), axis=(1, 2)) <= 1e-5))
+        got_bits = arr[:take].view(np.uint64)
+        exp_bits = ref[:take].view(np.uint64)
+        matched = int(np.sum(np.all(got_bits == exp_bits, axis=(1, 2))))
 atoms_got = int(arr.shape[1]) if arr is not None and arr.ndim == 3 else 0
-if error == "" and (got_n != requested or atoms_got != n_atoms or matched != requested):
+if error == "" and (
+    got_n != requested or atoms_got != n_atoms or matched != requested
+):
     error = f"frames {got_n} atoms {atoms_got} matched {matched} wanted {requested}x{n_atoms}"
 print(json.dumps({"seconds": dt, "hwm_before": before, "hwm_after": after, "matched": matched, "got": got_n, "atoms": atoms_got, "requested": requested, "error": error}))
 """
@@ -339,6 +364,7 @@ def type7(values: list[float]) -> tuple[float, float]:
 
 
 def main() -> int:
+    argparse.ArgumentParser(description=__doc__).parse_args()
     head = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
@@ -366,6 +392,7 @@ def main() -> int:
         f"frames {N_FRAMES}",
         f"atoms {N_ATOMS}",
         f"repeats {REPEATS}",
+        "shuffle_seed 20261118",
         "schedule interleaved",
         "process fresh",
         "memory VmHWM_after_read_minus_VmHWM_after_import_MiB",
@@ -410,8 +437,10 @@ def main() -> int:
     samples: dict[str, list[dict]] = {name: [] for name, _ in arms}
     names = [name for name, _ in arms]
     paths = dict(arms)
+    shuffle_seed = 20261118
     for rep in range(REPEATS):
-        order = names if rep % 2 == 0 else list(reversed(names))
+        order = names[:]
+        random.Random(shuffle_seed + rep).shuffle(order)
         for name in order:
             doc = one(name, paths[name])
             samples[name].append(doc)
