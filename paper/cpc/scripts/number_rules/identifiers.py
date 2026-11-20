@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import re
+from functools import lru_cache
+from pathlib import Path
 
 from numbers_lib import Rule, const, grep, jget, row, rows, text
 
@@ -142,7 +144,38 @@ hcn = row(HCN, file="hcn_v31.con", frame="2", reader="readcon-core")["ids"].spli
 mpi_ranks = sorted({int(r) for r in re.findall(r" launch ranks (\d+) ", text(MPI_LOG))})
 manifest_rfc = grep(MANIFEST, r"RFC (\d+) section 9")
 
-RULES = [
+
+def ase_writer_decimals() -> str:
+    """The decimal width of ASE's extended XYZ float format, read from that file.
+
+    The clean-clone trace check refuses ``import ase``. The width is read from
+    the installed ``ase/io/extxyz.py`` on ``sys.path`` instead.
+    """
+    import sys
+
+    for entry in sys.path:
+        candidate = Path(entry) / "ase" / "io" / "extxyz.py"
+        if not candidate.is_file():
+            continue
+        found = re.search(r"%\d+\.(\d+)f", candidate.read_text(encoding="utf-8"))
+        if found is None:
+            raise SystemExit("ASE extxyz writer does not name a decimal width")
+        return found.group(1)
+    raise SystemExit("ASE extxyz writer does not name a decimal width")
+
+
+def tectonic_version() -> str:
+    """The Tectonic version named by the paper's typeset task."""
+    found = re.search(r"Tectonic (\d+\.\d+\.\d+)", text("pixi.toml"))
+    if found is None:
+        raise SystemExit("pixi.toml does not name a Tectonic version")
+    return found.group(1)
+
+
+_ASE = object()
+
+
+_RULES = [
     Rule("3.1", grammar_minor(), LIB, "CON_SPEC_VERSION.CON_SPEC_MINOR of the reader"),
     Rule(
         "3.0",
@@ -194,7 +227,7 @@ RULES = [
         f"{FORMATS}/provenance.json",
         "readcon_version of the cross-format campaign",
         lines(
-            rf"v{re.escape(formats_version)} cross-format campaign",
+            rf"v{re.escape(formats_version)}",
             (MAIN, f"{GEN}format_h2h.tex"),
         ),
     ),
@@ -224,7 +257,7 @@ RULES = [
         release("MDAnalysis", "2.11.0")["version"],
         RELEASES,
         "MDAnalysis GitHub release package-2.11.0",
-        lines(r"MDAnalysis 2\.11\.0|Release 2\.11\.0", (MAIN,)),
+        lines(r"MDAnalysis 2\.11\.0|Release 2\.11\.0", (MAIN, SUPP)),
     ),
     Rule(
         "0.1.2",
@@ -291,7 +324,7 @@ RULES = [
         (
             f"{GEN}host_table.tex",
             f"{MAIN}~The bar is the type 7 median\\.$",
-            f"{SUPP}~type 7 interquartile range next to",
+            f"{SUPP}~type 7 interquartile range",
         ),
     ),
     Rule(
@@ -309,7 +342,43 @@ RULES = [
         grep(READER_EXCHANGE, r"^nproc (\d+)$"),
         READER_EXCHANGE,
         "nproc of the host timing record",
-        lines(r"machine with 8 cores", (MAIN,)),
+        lines(r"8 cores", (MAIN, SUPP, f"{GEN}host_table.tex")),
+    ),
+    Rule(
+        "6",
+        str(jget("data/limiter-r15/provenance.json", "repeats")),
+        "data/limiter-r15/provenance.json",
+        "repeats of the limiter ladder",
+        lines(r"6 repetitions", (MAIN,)),
+    ),
+    Rule(
+        "1",
+        str(jget("data/limiter-r15/limiter-r15.json", "ladder.0")),
+        "data/limiter-r15/limiter-r15.json",
+        "first width of the limiter ladder",
+        lines(r"1-8 read-only ladder", (MAIN,)),
+    ),
+    Rule(
+        "8",
+        str(jget("data/limiter-r15/limiter-r15.json", "ladder.3")),
+        "data/limiter-r15/limiter-r15.json",
+        "last width of the limiter ladder",
+        lines(r"1-8 read-only ladder", (MAIN,)),
+    ),
+    Rule(
+        "5",
+        str(jget("data/failure/restart_formats.json", "parameters.movable_images")),
+        "data/failure/restart_formats.json",
+        "movable images of the restart band",
+        lines(r"movable images", (MAIN,)),
+    ),
+    _ASE,
+    Rule(
+        tectonic_version(),
+        tectonic_version(),
+        "pixi.toml",
+        "Tectonic version named by the typeset task",
+        lines(r"Tectonic", (SUPP,)),
     ),
     *(
         Rule(
@@ -400,3 +469,22 @@ RULES = [
         lines(r"velocity Verlet (?:step of|over) (?:\\\()?1"),
     ),
 ]
+
+
+@lru_cache(maxsize=1)
+def _rules() -> list[Rule]:
+    width = ase_writer_decimals()
+    ase = Rule(
+        width,
+        width,
+        "ase/io/extxyz.py",
+        "decimal width of the ASE extended XYZ writer",
+        lines(r"8 decimals", (SUPP,)),
+    )
+    return [ase if item is _ASE else item for item in _RULES]
+
+
+def __getattr__(name: str):
+    if name == "RULES":
+        return _rules()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
