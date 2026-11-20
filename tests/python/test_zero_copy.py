@@ -216,6 +216,18 @@ def test_iterators_and_single_reads_move_the_parse_buffer():
         assert _copies() == before
 
 
+def test_coords_array_is_one_fresh_numpy_buffer(tmp_path):
+    path = _big_con(tmp_path / "big.con")
+    frame = readcon.read_con(path)[0]
+    for _ in range(2):
+        first, second = frame.coords_array(), frame.coords_array()
+        assert first.flags.owndata and first.base is None
+        assert _pointer(first) != _pointer(second)
+        assert first.tobytes() == frame.xyz.tobytes()
+        assert N_BIG * 3 * 8 <= _peak_bytes(frame.coords_array) < N_BIG * 3 * 8 * 5 // 4
+        frame.atoms
+
+
 def test_concurrent_frame_reads_see_the_same_bits():
     path = os.path.join(ROOT, "test", "tiny_multi_cuh2.con")
     frames = readcon.read_con(path)
