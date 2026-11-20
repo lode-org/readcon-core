@@ -73,7 +73,7 @@ def velocity_quiver(theme, png_dir: Path | None) -> None:
             0.0, y - 0.12, value, ha="left", va="center", fontsize=12, color=color
         )
     pf._theme_axes([ax, side], theme)
-    pf._save(fig, "velocity_mislabel", png_dir, width_cm=pf.DOUBLE_CM)
+    pf._save(fig, "velocity_quiver", png_dir, width_cm=pf.DOUBLE_CM)
 
 
 def main(png_dir: Path | None = None) -> None:

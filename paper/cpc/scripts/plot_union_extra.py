@@ -8,11 +8,9 @@ committed CSVs. This script does not time anything.
 
 from __future__ import annotations
 
-import base64
 import csv
 import json
 import os
-import shutil
 from pathlib import Path
 
 import matplotlib
@@ -396,143 +394,6 @@ def matrix(theme) -> None:
     pf._save(fig, "matrix", None)
 
 
-def structures() -> None:
-    """xyzrender panels of the benchmark geometries, Ruhi axis colours."""
-    import re
-
-    import cairosvg
-    import xyzrender as xr
-
-    work = OUT / "work"
-    work.mkdir(parents=True, exist_ok=True)
-    sources = [
-        ("CuH2 survey", REPO / "resources" / "test" / "tiny_cuh2.con"),
-        ("CuH2 timing", REPO / "resources" / "test" / "cuh2.con"),
-        ("NEB band", REPO / "resources" / "examples" / "neb_band.con"),
-    ]
-
-    def con_atoms(src: Path) -> tuple[list[str], list[list[float]], list[float]]:
-        lines = src.read_text(encoding="utf-8").splitlines()
-        cell = [float(x) for x in lines[2].split()[:3]]
-        symbols: list[str] = []
-        positions: list[list[float]] = []
-        element = "X"
-        in_coord = False
-        for raw in lines:
-            text = raw.strip()
-            if text.startswith("Coordinates of"):
-                in_coord = True
-                continue
-            if text.startswith(("Forces", "Velocities", "Energy", "Charges")):
-                in_coord = False
-                continue
-            if not in_coord:
-                if (
-                    text
-                    and text[0].isalpha()
-                    and " " not in text
-                    and not text.startswith("{")
-                ):
-                    element = text
-                continue
-            parts = text.split()
-            if len(parts) < 3:
-                continue
-            try:
-                positions.append([float(parts[0]), float(parts[1]), float(parts[2])])
-            except ValueError:
-                in_coord = False
-                continue
-            symbols.append(element)
-        return symbols, positions, cell
-
-    def one(src: Path, dest: Path) -> None:
-        symbols, positions, cell = con_atoms(src)
-        xyz = work / (dest.stem + ".xyz")
-        lattice = f"{cell[0]} 0 0 0 {cell[1]} 0 0 0 {cell[2]}"
-        atoms = "\n".join(
-            f"{symbol} {x:.17g} {y:.17g} {z:.17g}"
-            for symbol, (x, y, z) in zip(symbols, positions, strict=True)
-        )
-        xyz.write_text(
-            f'{len(symbols)}\nLattice="{lattice}" '
-            'Properties=species:S:1:pos:R:3 pbc="T T T"\n'
-            f"{atoms}\n",
-            encoding="utf-8",
-        )
-        molecule = xr.load(str(xyz))
-        cfg = xr.build_config("default")
-        cfg.canvas_size = 480
-        cfg.background = "white"
-        cfg.axis_colors = (SKY, CORAL, TEAL)
-        cfg.cell_color = "#333333"
-        xr.render(molecule, config=cfg, output=str(dest))
-        svg = dest.read_text(encoding="utf-8")
-        svg = re.sub(r"<text\b[^>]*>.*?</text>", "", svg, flags=re.DOTALL)
-        dest.write_text(svg, encoding="utf-8")
-
-    def isolate(svg: str, prefix: str) -> tuple[str, str]:
-        view = re.search(r'viewBox="([^"]+)"', svg)
-        viewbox = view.group(1) if view else "0 0 480 480"
-        inner_match = re.search(r"<svg\b[^>]*>(.*)</svg>\s*$", svg, flags=re.DOTALL)
-        if inner_match is None:
-            raise SystemExit("xyzrender did not write an svg root")
-        inner = inner_match.group(1)
-        inner = re.sub(r'\bid="([^"]+)"', lambda m: f'id="{prefix}{m.group(1)}"', inner)
-        inner = re.sub(
-            r"url\(#([^)]+)\)", lambda m: f"url(#{prefix}{m.group(1)})", inner
-        )
-        return viewbox, inner
-
-    panels = []
-    try:
-        for label, src in sources:
-            dest = work / f"{src.stem}.svg"
-            one(src, dest)
-            panels.append((label, dest))
-        font_bytes = (
-            ROOT
-            / "fonts"
-            / "atkinson-hyperlegible"
-            / "AtkinsonHyperlegible-Regular.ttf"
-        ).read_bytes()
-        font = "data:font/otf;base64," + base64.b64encode(font_bytes).decode("ascii")
-        width, height = 1780, 700
-        slot = 540
-        gap = (width - 3 * slot) / 4
-        parts = [
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="17.8cm" '
-            f'height="{17.8 * height / width:.2f}cm" viewBox="0 0 {width} {height}">',
-            "<defs><style>",
-            "@font-face {",
-            '  font-family: "Atkinson Hyperlegible";',
-            f'  src: url("{font}");',
-            "}",
-            "</style></defs>",
-            '<rect width="100%" height="100%" fill="white"/>',
-        ]
-        for index, (label, path) in enumerate(panels):
-            viewbox, inner = isolate(path.read_text(encoding="utf-8"), f"p{index}")
-            x = gap + index * (slot + gap)
-            parts.append(
-                f'<text x="{x + slot / 2:.1f}" y="48" text-anchor="middle" '
-                f'font-family="Atkinson Hyperlegible" font-size="28" fill="#000000">{label}</text>'
-            )
-            inset = 6
-            parts.append(
-                f'<svg x="{x + inset:.1f}" y="{70 + inset}" width="{slot - 2 * inset}" '
-                f'height="{slot - 2 * inset}" viewBox="{viewbox}" '
-                f'preserveAspectRatio="xMidYMid meet">{inner}</svg>'
-            )
-        parts.append("</svg>")
-        page = work / "structures.svg"
-        page.write_text("\n".join(parts), encoding="utf-8")
-        cairosvg.svg2pdf(url=str(page), write_to=str(OUT / "structures.pdf"))
-    finally:
-        shutil.rmtree(work, ignore_errors=True)
-
-
 def reader_figures() -> None:
     """Timing, ratio and memory figures from reader-exchange.log."""
     OUT.mkdir(parents=True, exist_ok=True)
@@ -552,7 +413,6 @@ def main() -> None:
     timing(theme)
     memory(theme)
     matrix(theme)
-    structures()
     print("wrote extra figures under paper/cpc/src/figures/generated")
 
 
