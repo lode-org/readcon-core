@@ -23,3 +23,9 @@ rule asv_like:
         "work/asv.stamp",
     shell:
         "python3 run_asv.py && touch work/asv.stamp"
+
+rule al_md:
+    output:
+        "work/al_md.stamp",
+    shell:
+        "python3 run_al.py && touch work/al_md.stamp"
