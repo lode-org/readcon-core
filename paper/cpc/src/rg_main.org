@@ -853,7 +853,7 @@ The database and MPI figures come from earlier campaigns, not from the timed rep
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf} \caption{Earlier stored MPI speedups.}
 \label{fig:mpi-strong} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf} \caption{Earlier stored MPI ingest times.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf} \caption{A single 1-8 read-only ladder at 6 repetitions on one VM. Touch is drawn with open-only. Ranks is one read\_block on each rank, then a barrier. Dashed lines are public main ac4f4379 and solid lines are tip a2499ab6. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
 \label{fig:mpi-weak} \end{figure}
 
 \begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf} \caption{Earlier stored ingest rates.}
