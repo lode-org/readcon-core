@@ -77,6 +77,12 @@ jobs:
         env:
           MPICC: ${{ matrix.cc }}
         run: cargo test --features mpi --lib distrib
+      - name: MPI without capi exports zero C ABI symbols
+        env:
+          MPICC: ${{ matrix.cc }}
+          FEATURES: mpi
+          PROFILE: debug
+        run: bash scripts/check_feature_matrix.sh
       - name: Build Rust smoke test and C library
         env:
           MPICC: ${{ matrix.cc }}
