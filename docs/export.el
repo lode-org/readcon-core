@@ -12,6 +12,12 @@
 (require 'org-element)
 ;; ox-rst from MELPA calls Org 9.7 helpers. Gate the stand-ins on Org 9.6.
 (when (version< (org-version) "9.7")
+  ;; Org 9.6 added this as a macro. Ubuntu 22.04's Emacs loads ox-rst
+  ;; against an older Org, and the call is still a function call.
+  (unless (fboundp 'org-assert-version)
+    (defun org-assert-version ()
+      "Stand-in so ox-rst can load on Org older than 9.6."
+      nil))
   (unless (fboundp 'org-element-type-p)
     (defun org-element-type-p (node types)
       "Return non-nil when NODE's type is TYPES (symbol or list)."
@@ -41,7 +47,17 @@
     (when (symbolp types)
       (setq types (list types)))
     (apply orig datum types rest))
-  (advice-add 'org-element-lineage :around #'readcon-org96-lineage))
+  (advice-add 'org-element-lineage :around #'readcon-org96-lineage)
+  ;; ox-rst 20250428.534 passes INFO as a fourth argument. Org 9.3 on
+  ;; Ubuntu 22.04 takes three, so drop INFO for an Org that cannot accept it.
+  (require 'ox)
+  (let ((max-args (cdr (func-arity 'org-export-custom-protocol-maybe))))
+    (when (and (integerp max-args) (< max-args 4))
+      (advice-add 'org-export-custom-protocol-maybe :around
+                  (lambda (orig link desc backend &optional _info)
+                    (funcall orig link desc backend)))))
+  ;; Org 9.3 exports code blocks with tab indentation; docs/source uses spaces.
+  (setq-default indent-tabs-mode nil))
 
 (require 'ox-rst)
 (require 'ox-publish)
