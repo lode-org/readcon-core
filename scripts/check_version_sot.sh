@@ -225,6 +225,13 @@ if (root / clause_recount).is_file():
     allow_exact.add(clause_recount)
 else:
     print(f"PENDING: {clause_recount} has not been measured")
+# The like-for-like rows, samples and summary name the build they measured.
+# A later release must not rewrite those fields.
+allow_exact.update({
+    "paper/cpc/bench-like-for-like/results/rows.csv",
+    "paper/cpc/bench-like-for-like/results/samples.csv",
+    "paper/cpc/bench-like-for-like/results/summary.csv",
+})
 # Measured campaigns keep the package version they were timed with.
 # A later release must not rewrite that field to VERSION.
 recorded_results = {
