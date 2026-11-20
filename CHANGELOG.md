@@ -7,6 +7,26 @@ All notable changes to this project will be documented in this file. See [conven
 
 ## Unreleased
 
+### Breaking
+
+- **Python:** for a frame from a read, `vel`, `frc` and `mass_column` are
+  read-only NumPy views of the parsed columns instead of fresh writeable
+  copies. Until `frame.atoms` is first used, `velocities_array()`,
+  `forces_array()`, `displacements_array()`, `spreads_array()`,
+  `energies_array()` and `atom_ids_array()` return the same kind of view.
+  Each view's `base` is one `readcon._FrameColumns` object per frame that
+  shares the frame's columns, so no array is copied and no `Atom` object
+  is built; `has_velocities`, `has_forces`, `has_displacements` and
+  `has_spreads` likewise no longer build the atom list. A store into one of
+  these views raises `ValueError`; call `.copy()` for a writeable array.
+  Values and dtypes are unchanged. After `frame.atoms` has been built the
+  `*_array()` methods walk it and return writeable copies, as before, so
+  Atom edits still show up. `coords_array()` still returns a fresh copy.
+  DLPack: `np.from_dlpack(view)` and other DLPack 1.0 consumers import a
+  read-only view without a copy, but a consumer that calls `__dlpack__()`
+  without `max_version` gets NumPy's `BufferError` for a read-only array;
+  pass `view.copy()` to such a consumer.
+
 ### Features
 
 - **Python:** `read_con`, `read_con_string` and `read_all_frames` no longer

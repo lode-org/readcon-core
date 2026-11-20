@@ -326,6 +326,10 @@ symbol with different masses still construct, stay in insertion order,
 and fail at write with ``inconsistent masses``. ``==`` compares cell,
 angles, symbols, positions, velocities, forces, masses, and fixed flags.
 It ignores file text, metadata, atom ids, and other sections.
+    For a frame from a read, ``vel``, ``frc``, ``mass_column`` and, until
+    ``.atoms`` is used, the ``\*_array()`` methods other than ``coords_array()``
+    are read-only views of the parsed columns: no copy, and ``.copy()`` gives
+    a writeable array.
     The constructor and ``from_ase()`` raise ``readcon.NonFiniteValue`` (a
     ``ValueError``) for a cell length or angle that is NaN or infinite, and
     for a ``lattice_vectors`` metadata matrix that holds one. The message names

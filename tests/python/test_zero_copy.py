@@ -265,5 +265,174 @@ def test_concurrent_reads_of_one_file_while_indexing():
     assert errors == []
 
 
+# --- per-atom columns ---------------------------------------------------------
+
+ROW_VIEWS = ("velocities_array", "forces_array", "displacements_array", "spreads_array")
+COLUMN_VIEWS = ("energies_array", "atom_ids_array")
+FLAGS = ("has_velocities", "has_forces", "has_displacements", "has_spreads")
+
+
+def _sections_con(path, n_atoms):
+    atoms = [
+        readcon.Atom(
+            "Cu" if i < n_atoms // 2 else "H",
+            0.01 * i,
+            0.02 * i,
+            0.03 * i,
+            atom_id=i,
+            mass=63.546 if i < n_atoms // 2 else 1.00793,
+            vx=0.1 * i,
+            vy=-0.1 * i,
+            vz=0.5,
+            fx=1.0 + i,
+            fy=2.0,
+            fz=-3.0 * i,
+            energy=-0.25 * i,
+            dx=0.5 * i,
+            dy=0.25,
+            dz=-0.5,
+            sx=0.125,
+            sy=0.0625 * i,
+            sz=0.25,
+        )
+        for i in range(n_atoms)
+    ]
+    frame = readcon.ConFrame((40.0, 40.0, 40.0), (90.0, 90.0, 90.0), atoms)
+    readcon.write_con(str(path), [frame, frame])
+    return str(path)
+
+
+def _column_files(tmp_path):
+    yield from _readable_corpus()
+    yield _sections_con(tmp_path / "sections.con", 6)
+
+
+def _views(frame):
+    out = {name: getattr(frame, name)() for name in ROW_VIEWS + COLUMN_VIEWS}
+    out["vel"] = frame.vel
+    out["frc"] = frame.frc
+    out["mass_column"] = frame.mass_column
+    return out
+
+
+def test_column_views_share_the_parsed_columns(tmp_path):
+    path = _sections_con(tmp_path / "sections.con", 6)
+    before = _copies()
+    frame = readcon.read_con(path)[0]
+    first, second = _views(frame), _views(frame)
+    owners = set()
+    for name, view in first.items():
+        assert view is not None, name
+        assert not view.flags.owndata, name
+        assert not view.flags.writeable, name
+        assert _pointer(view) == _pointer(second[name]), name
+        if name != "frc" and name != "vel":
+            owners.add(id(view.base))
+    assert type(first["vel"].base).__name__ == "_FrameColumns"
+    assert first["vel"].base is first["frc"].base is first["mass_column"].base
+    assert len(owners | {id(first["vel"].base)}) == 1
+    if before is not None:
+        assert _copies() == before
+
+
+def test_column_views_are_read_only():
+    path = os.path.join(ROOT, "test", "tiny_cuh2_vel_forces.con")
+    frame = readcon.read_con(path)[0]
+    with pytest.raises(ValueError):
+        frame.vel[0, 0] = 1.0
+    with pytest.raises(ValueError):
+        frame.forces_array()[0, 0] = 1.0
+    writable = frame.vel.copy()
+    writable[0, 0] = 1.0
+
+
+def test_column_views_match_the_atom_walk_bit_for_bit(tmp_path):
+    before = _copies()
+    checked = 0
+    for path in _column_files(tmp_path):
+        fresh, walked = readcon.read_con(path), readcon.read_con(path)
+        for index in range(len(fresh)):
+            view_frame, walk_frame = fresh[index], walked[index]
+            walk_frame.atoms
+            for name in ROW_VIEWS + COLUMN_VIEWS:
+                view = getattr(view_frame, name)()
+                copy = getattr(walk_frame, name)()
+                assert (view is None) == (copy is None), (path, name)
+                if view is not None:
+                    assert view.dtype == copy.dtype, (path, name)
+                    assert view.tobytes() == copy.tobytes(), (path, name)
+                    checked += 1
+            for name in FLAGS:
+                assert getattr(view_frame, name) == getattr(walk_frame, name), (
+                    path,
+                    name,
+                )
+            for name in ("vel", "frc", "mass_column"):
+                view = getattr(view_frame, name)
+                again = getattr(walk_frame, name)
+                assert (view is None) == (again is None), (path, name)
+                if view is not None:
+                    assert view.tobytes() == again.tobytes(), (path, name)
+    assert checked >= 40
+    if before is not None:
+        assert _copies() == before
+
+
+def test_parsed_columns_build_no_atom_objects(tmp_path):
+    path = _sections_con(tmp_path / "sections.con", 6)
+    frame = readcon.read_con(path)[0]
+    for name in FLAGS:
+        assert getattr(frame, name)
+    _views(frame)
+    # `.atoms` still builds the list on first use; it was not built above.
+    assert len(frame.atoms) == 6
+    assert all(type(atom).__name__ == "Atom" for atom in frame.atoms)
+
+
+def test_column_access_allocates_nothing_per_atom(tmp_path):
+    n_atoms = 20000
+    path = _sections_con(tmp_path / "big.con", n_atoms)
+    frame = readcon.read_con(path)[0]
+    _views(frame)
+    for name in FLAGS:
+        getattr(frame, name)
+
+    def access():
+        for _ in range(5):
+            _views(frame)
+            for name in FLAGS:
+                getattr(frame, name)
+
+    assert _peak_bytes(access) < n_atoms * 8 // 4
+    copied = _peak_bytes(lambda: frame.vel.copy())
+    assert copied >= n_atoms * 3 * 8
+
+
+def test_column_view_outlives_the_frame(tmp_path):
+    path = _sections_con(tmp_path / "sections.con", 6)
+    frames = readcon.read_con(path)
+    frame = frames[0]
+    views = _views(frame)
+    expected = {name: view.copy() for name, view in views.items()}
+    del frame, frames
+    gc.collect()
+    for _ in range(3):
+        churn = readcon.read_con(path)
+        _views(churn[0])
+        del churn
+        gc.collect()
+    for name, view in views.items():
+        assert view.tobytes() == expected[name].tobytes(), name
+
+
+def test_column_views_export_through_dlpack(tmp_path):
+    path = _sections_con(tmp_path / "sections.con", 6)
+    frame = readcon.read_con(path)[0]
+    for name, view in list(_views(frame).items()) + [("xyz", frame.xyz)]:
+        imported = np.from_dlpack(view)
+        assert _pointer(imported) == _pointer(view), name
+        assert imported.flags.writeable == view.flags.writeable, name
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
