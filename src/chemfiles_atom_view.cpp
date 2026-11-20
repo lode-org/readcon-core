@@ -2,11 +2,61 @@
 // chfl_atom_from_frame locks a process-wide map once per atom. The scan
 // below reads the atoms already stored on the frame.
 
+#include <cstddef>
+#include <exception>
+#include <stdexcept>
+
 #include "chemfiles/Frame.hpp"
 
 namespace {
 
 constexpr uint64_t kNameCap = 16;
+
+// Fixed buffer so the catch path cannot throw std::bad_alloc or
+// std::logic_error (a null what() is not a valid std::string).
+thread_local char g_error[512];
+
+constexpr const char* kScanException = "chemfiles scan exception";
+constexpr const char* kNonstandard = "non-standard C++ exception in chemfiles scan";
+
+void set_error(const char* text) noexcept {
+    if (text == nullptr || text[0] == '\0') {
+        text = kScanException;
+    }
+    std::size_t i = 0;
+    for (; text[i] != '\0' && i + 1 < sizeof(g_error); ++i) {
+        g_error[i] = text[i];
+    }
+    g_error[i] = '\0';
+}
+
+// A chemfiles exception must not cross this extern "C" boundary. Rust
+// aborts the process on a foreign exception.
+template <class F>
+int guard(F&& body) noexcept {
+    g_error[0] = '\0';
+    try {
+        return static_cast<int>(body());
+    } catch (const std::exception& ex) {
+        set_error(ex.what());
+        return 2;
+    } catch (...) {
+        set_error(kNonstandard);
+        return 2;
+    }
+}
+
+struct NullWhat : std::exception {
+    const char* what() const noexcept override { return nullptr; }
+};
+
+extern "C" int rc_chemfiles_probe_exception() {
+    return guard([]() -> int { throw std::runtime_error("chemfiles scan probe"); });
+}
+
+extern "C" int rc_chemfiles_probe_null_what() {
+    return guard([]() -> int { throw NullWhat(); });
+}
 
 bool copy_fit(const std::string& src, char* dst) {
     if (src.size() >= kNameCap) {
@@ -15,6 +65,10 @@ bool copy_fit(const std::string& src, char* dst) {
     src.copy(dst, src.size());
     dst[src.size()] = '\0';
     return true;
+}
+
+extern "C" const char* rc_chemfiles_last_error() {
+    return g_error;
 }
 
 }  // namespace
@@ -29,6 +83,7 @@ extern "C" int rc_chemfiles_scan(
     uint32_t* any_extra,
     uint32_t* any_props
 ) {
+    return guard([&]() -> int {
     if (frame == nullptr || sym_of == nullptr || names == nullptr || masses == nullptr
         || n_kinds == nullptr || any_extra == nullptr || any_props == nullptr) {
         return 1;
@@ -72,6 +127,7 @@ extern "C" int rc_chemfiles_scan(
     }
     *n_kinds = kinds;
     return 0;
+    });
 }
 
 // One slice of a frame. `sym_of` is local to the slice (length end-begin).
@@ -88,6 +144,7 @@ extern "C" int rc_chemfiles_classify_range(
     uint32_t* any_extra,
     uint32_t* any_props
 ) {
+    return guard([&]() -> int {
     if (frame == nullptr || sym_of == nullptr || names == nullptr || masses == nullptr
         || n_kinds == nullptr || any_extra == nullptr || any_props == nullptr || begin > end
         || end > frame->size()) {
@@ -131,6 +188,7 @@ extern "C" int rc_chemfiles_classify_range(
     }
     *n_kinds = kinds;
     return 0;
+    });
 }
 
 // True when every atom in [begin, end) is `symbol`, with that mass, and no
@@ -143,6 +201,7 @@ extern "C" int rc_chemfiles_matches(
     double mass,
     uint32_t* bad
 ) {
+    return guard([&]() -> int {
     if (frame == nullptr || symbol == nullptr || bad == nullptr || begin > end
         || end > frame->size()) {
         return 1;
@@ -163,14 +222,17 @@ extern "C" int rc_chemfiles_matches(
     }
     *bad = 0;
     return 0;
+    });
 }
 
 extern "C" int rc_chemfiles_topology_empty(chemfiles::Frame* frame) {
+    return guard([&]() -> int {
     if (frame == nullptr) {
         return 0;
     }
     const chemfiles::Topology& topo = frame->topology();
     return topo.bonds().empty() && topo.residues().empty() ? 1 : 0;
+    });
 }
 
 extern "C" int rc_chemfiles_atom_view(
@@ -184,6 +246,7 @@ extern "C" int rc_chemfiles_atom_view(
     double* charge,
     uint64_t* nprops
 ) {
+    return guard([&]() -> int {
     if (frame == nullptr || name == nullptr || type_name == nullptr || mass == nullptr
         || charge == nullptr || nprops == nullptr || name_cap == 0 || type_cap == 0
         || index >= frame->size()) {
@@ -206,4 +269,5 @@ extern "C" int rc_chemfiles_atom_view(
     *charge = atom.charge();
     *nprops = atom.properties().size();
     return 0;
+    });
 }

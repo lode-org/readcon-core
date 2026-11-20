@@ -516,7 +516,11 @@ fn con_frame_from_chemfiles_at(
         geometry.ids,
     );
 
-    let topo_empty = unsafe { rc_chemfiles_topology_empty(frame_c_handle(frame)) } != 0;
+    let topo_status = unsafe { rc_chemfiles_topology_empty(frame_c_handle(frame)) };
+    if topo_status == 2 {
+        return Err(chemfiles_scan_failure(topo_status, "chemfiles topology"));
+    }
+    let topo_empty = topo_status != 0;
     let chfl_bonds = if topo_empty {
         Vec::new()
     } else {
@@ -636,6 +640,38 @@ unsafe extern "C" {
         charge: *mut f64,
         nprops: *mut u64,
     ) -> i32;
+    fn rc_chemfiles_last_error() -> *const std::os::raw::c_char;
+    #[allow(dead_code)]
+    fn rc_chemfiles_probe_exception() -> i32;
+    #[allow(dead_code)]
+    fn rc_chemfiles_probe_null_what() -> i32;
+}
+
+/// Status 2 is a C++ exception caught in the shim. Read it on the thread
+/// that made the call, before another shim call clears it.
+fn scan_exception_text() -> String {
+    unsafe {
+        let ptr = rc_chemfiles_last_error();
+        if ptr.is_null() {
+            String::new()
+        } else {
+            std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned()
+        }
+    }
+}
+
+fn chemfiles_scan_failure(status: i32, context: &str) -> ChemfilesImportError {
+    let detail = if status == 2 {
+        scan_exception_text()
+    } else {
+        String::new()
+    };
+    let msg = if detail.is_empty() {
+        format!("{context} failed (status {status})")
+    } else {
+        format!("{context}: {detail}")
+    };
+    ChemfilesImportError::InvalidFrame(msg)
 }
 
 fn c_view(
@@ -663,6 +699,12 @@ fn c_view(
                 &mut nprops,
             )
         };
+        if status == 2 {
+            return Err(chemfiles_scan_failure(
+                status,
+                &format!("chemfiles atom {index}"),
+            ));
+        }
         if status != 0 {
             return Err(ChemfilesImportError::InvalidFrame(format!(
                 "chemfiles atom {index} is missing"
@@ -734,12 +776,22 @@ fn parallel_uniform(
         .map(|count| count.get())
         .unwrap_or(1)
         .clamp(1, 8);
-    let mut flags = vec![0u32; threads];
+    struct SliceProbe {
+        bad: u32,
+        error: String,
+    }
+    let mut probes = Vec::with_capacity(threads);
+    for _ in 0..threads {
+        probes.push(SliceProbe {
+            bad: 0,
+            error: String::new(),
+        });
+    }
     let chunk = n.div_ceil(threads);
     let handle_bits = handle as usize;
     let symbol_bits = symbol_c.as_ptr() as usize;
     std::thread::scope(|scope| {
-        for (thread, flag) in flags.iter_mut().enumerate() {
+        for (thread, probe) in probes.iter_mut().enumerate() {
             let begin = thread * chunk;
             let end = (begin + chunk).min(n);
             if begin >= end {
@@ -753,16 +805,28 @@ fn parallel_uniform(
                         end as u64,
                         symbol_bits as *const std::os::raw::c_char,
                         stored_mass,
-                        flag,
+                        &mut probe.bad,
                     )
                 };
-                if status != 0 {
-                    *flag = 1;
+                if status == 2 {
+                    probe.error = scan_exception_text();
+                    probe.bad = 2;
+                } else if status != 0 {
+                    probe.bad = 1;
                 }
             });
         }
     });
-    if flags.iter().any(|flag| *flag != 0) {
+    if let Some(probe) = probes.iter().find(|probe| probe.bad == 2) {
+        return Err(ChemfilesImportError::InvalidFrame(
+            if probe.error.is_empty() {
+                "chemfiles frame scan failed (status 2)".into()
+            } else {
+                format!("chemfiles frame scan: {}", probe.error)
+            },
+        ));
+    }
+    if probes.iter().any(|probe| probe.bad != 0) {
         return Ok(None);
     }
     let text = std::str::from_utf8(symbol_bytes).unwrap_or("X");
@@ -833,6 +897,7 @@ struct RangeKinds {
     any_extra: u32,
     any_props: u32,
     status: i32,
+    error: String,
     begin: usize,
     end: usize,
 }
@@ -859,6 +924,7 @@ fn parallel_mixed(
             any_extra: 0,
             any_props: 0,
             status: 0,
+            error: String::new(),
             begin,
             end,
         });
@@ -886,9 +952,21 @@ fn parallel_mixed(
                     )
                 };
                 range.status = status;
+                if status == 2 {
+                    range.error = scan_exception_text();
+                }
             });
         }
     });
+    if let Some(range) = ranges.iter().find(|range| range.status == 2) {
+        return Err(ChemfilesImportError::InvalidFrame(
+            if range.error.is_empty() {
+                "chemfiles frame scan failed (status 2)".into()
+            } else {
+                format!("chemfiles frame scan: {}", range.error)
+            },
+        ));
+    }
     if ranges
         .iter()
         .any(|range| range.status == 3 || range.any_extra != 0 || range.any_props != 0)
@@ -1062,6 +1140,9 @@ fn scan_uniform(
             &mut any_props,
         )
     };
+    if status == 2 {
+        return Err(chemfiles_scan_failure(status, "chemfiles frame scan"));
+    }
     if status == 3 || any_extra != 0 || any_props != 0 {
         return Ok(None);
     }

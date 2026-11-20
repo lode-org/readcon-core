@@ -8,6 +8,11 @@ use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+
+#[cfg(feature = "chemfiles")]
+#[path = "support/chemfiles_link.rs"]
+mod chemfiles_link;
 
 #[cfg(feature = "metatensor")]
 extern crate metatensor_sys;
@@ -163,7 +168,122 @@ fn compile_chemfiles_atom_view() {
         .include(&headers)
         .flag_if_supported("-std=c++17")
         .warnings(false);
+    // Match the archive cargo will link. The prebuilt GCC 4.8 library is
+    // the COW string. A failed prebuilt download, `chemfiles-from-sources`,
+    // and a distro or conda library are often the cxx11 string. Forcing
+    // ABI 0 in every non-from-sources build walks off a cxx11 atom and
+    // SIGSEGVs. The macro is a no-op for libc++ and MSVC.
+    let abi = linked_chemfiles_string_abi();
+    let label = match abi {
+        chemfiles_link::StringAbi::Cow => {
+            build.define("_GLIBCXX_USE_CXX11_ABI", "0");
+            "cow"
+        }
+        chemfiles_link::StringAbi::Cxx11 => "cxx11",
+        chemfiles_link::StringAbi::Unknown => "unknown",
+    };
+    println!("cargo:rustc-env=READCON_CHEMFILES_STRING_ABI={label}");
     build.compile("readcon_chemfiles_atom_view");
+}
+
+#[cfg(feature = "chemfiles")]
+fn linked_chemfiles_string_abi() -> chemfiles_link::StringAbi {
+    println!("cargo:rerun-if-env-changed=DEP_CHEMFILES_LIBDIR");
+    println!("cargo:rerun-if-env-changed=DEP_CHEMFILES_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=DEP_CHEMFILES_ROOT");
+    let mut libraries = Vec::new();
+    for key in [
+        "DEP_CHEMFILES_LIBDIR",
+        "DEP_CHEMFILES_LIB_DIR",
+        "DEP_CHEMFILES_ROOT",
+    ] {
+        if let Ok(value) = env::var(key) {
+            let value = PathBuf::from(value);
+            push_chemfiles_libraries(&value, &mut libraries);
+            push_chemfiles_libraries(&value.join("lib"), &mut libraries);
+            push_chemfiles_libraries(&value.join("lib64"), &mut libraries);
+        }
+    }
+    let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+    for dir in chemfiles_build_dirs(&out) {
+        libraries.extend(chemfiles_sys_libraries(&dir));
+    }
+    for library in &libraries {
+        println!("cargo:rerun-if-changed={}", library.display());
+        match classify_chemfiles_library(library) {
+            chemfiles_link::StringAbi::Unknown => continue,
+            abi => return abi,
+        }
+    }
+    if libraries.is_empty() {
+        println!("cargo:warning=libchemfiles was not found; leaving the compiler string ABI");
+    } else {
+        println!(
+            "cargo:warning=libchemfiles has no COW or __cxx11 string symbols; leaving the compiler string ABI"
+        );
+    }
+    chemfiles_link::StringAbi::Unknown
+}
+
+#[cfg(feature = "chemfiles")]
+fn push_chemfiles_libraries(dir: &Path, out: &mut Vec<PathBuf>) {
+    for name in chemfiles_link::library_file_names() {
+        let path = dir.join(name);
+        if path.is_file() && !out.iter().any(|seen| seen == &path) {
+            out.push(path);
+        }
+    }
+}
+
+#[cfg(feature = "chemfiles")]
+fn chemfiles_sys_libraries(build_dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let Ok(entries) = fs::read_dir(build_dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name != "chemfiles-sys" && !name.starts_with("chemfiles-sys-") {
+            continue;
+        }
+        collect_installed_chemfiles_libs(&entry.path(), &mut out);
+        let Ok(children) = fs::read_dir(entry.path()) else {
+            continue;
+        };
+        for child in children.flatten() {
+            collect_installed_chemfiles_libs(&child.path(), &mut out);
+        }
+    }
+    out
+}
+
+#[cfg(feature = "chemfiles")]
+fn collect_installed_chemfiles_libs(pkg: &Path, out: &mut Vec<PathBuf>) {
+    push_chemfiles_libraries(&pkg.join("out/lib"), out);
+    push_chemfiles_libraries(&pkg.join("out/lib64"), out);
+}
+
+#[cfg(feature = "chemfiles")]
+fn classify_chemfiles_library(path: &Path) -> chemfiles_link::StringAbi {
+    let output = Command::new("nm").arg("--").arg(path).output();
+    let Ok(output) = output else {
+        println!(
+            "cargo:warning=nm failed to start; cannot read {}",
+            path.display()
+        );
+        return chemfiles_link::StringAbi::Unknown;
+    };
+    if !output.status.success() {
+        println!(
+            "cargo:warning=nm exited {} for {}",
+            output.status,
+            path.display()
+        );
+        return chemfiles_link::StringAbi::Unknown;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    chemfiles_link::classify_symbol_text(&text)
 }
 
 /// `chemfiles-sys` writes `exports.h` under its build-script output.
