@@ -302,7 +302,7 @@ No file, probe or test names CON-count.5, a SHOULD NOT on writing for a given co
 
 Table~\ref{tab:versionsafety} applies the version rule of Eq.~\eqref{eq:version} and the velocity rule of Section~\ref{sec:format} to seven headers of one velocity frame.
 The Python module and the C library follow the rule on each row.
-They reject a velocity block of version 3.1 without a time unit, an unknown major, a missing version and a mask of 9, keep an unknown key of a later minor, and read a CON 3.0 block labeled fs in the natural unit.
+They reject a velocity block of version 3.1 without a time unit, an unknown major, a header without \texttt{con\_spec\_version} and a mask of 9, keep an unknown key of a later minor, and read a CON 3.0 block labeled fs in the natural unit.
 The Python rewrite of that block stays at version 3.0 and keeps its fs label, so the next reader again applies the natural unit.
 
 \input{figures/generated/versionsafety_table}
