@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Redraw restart.pdf from the stored Morse record in the Ruhi palette."""
+"""Draw restart.pdf from the stored Morse record in the Ruhi palette."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from matplotlib import font_manager as fm
 ROOT = Path(__file__).resolve().parents[1]
 FONT = ROOT / "fonts" / "latin-modern" / "lmroman10-regular.otf"
 RECORD = ROOT / "evidence" / "results" / "e1_restart.json"
-OUT = ROOT / "src" / "figures" / "generated" / "restart.pdf"
+OUT = ROOT / "src" / "figures" / "generated"
 
 TEAL = "#004D40"
 SKY = "#1E88E5"
@@ -51,8 +51,9 @@ def main() -> None:
     for ax in axes:
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-    fig.savefig(OUT, bbox_inches="tight")
-    print("wrote", OUT.name)
+    OUT.mkdir(parents=True, exist_ok=True)
+    fig.savefig(OUT / "restart.pdf", bbox_inches="tight")
+    print("wrote", OUT / "restart.pdf")
 
 
 if __name__ == "__main__":
