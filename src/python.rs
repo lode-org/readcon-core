@@ -8731,6 +8731,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_con_as_ase, m)?)?;
     m.add_function(wrap_pyfunction!(has_chemfiles_support, m)?)?;
     m.add_function(wrap_pyfunction!(has_parallel_support, m)?)?;
+    m.add_function(wrap_pyfunction!(default_thread_count, m)?)?;
+    m.add_function(wrap_pyfunction!(uses_mimalloc_allocator, m)?)?;
     m.add_function(wrap_pyfunction!(has_mpi_support, m)?)?;
     m.add_function(wrap_pyfunction!(read_pdb, m)?)?;
     m.add_class::<SpeciesFrames>()?;
@@ -8773,6 +8775,39 @@ fn has_chemfiles_support() -> bool {
 #[pyfunction]
 fn has_parallel_support() -> bool {
     cfg!(feature = "parallel")
+}
+
+/// Default worker count for ``n_threads=None`` / auto mode.
+///
+/// With ``parallel`` this follows Rayon’s current pool width (after
+/// ``RAYON_NUM_THREADS`` if set). Without ``parallel`` it is 1.
+#[pyfunction]
+fn default_thread_count() -> usize {
+    #[cfg(feature = "parallel")]
+    {
+        rayon::current_num_threads().max(1)
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        1
+    }
+}
+
+/// True when this extension installs mimalloc as the process allocator.
+///
+/// Sanitizer and Miri builds, and ``static_system_alloc``, force the system
+/// allocator even when ``mimalloc-allocator`` is enabled.
+#[pyfunction]
+fn uses_mimalloc_allocator() -> bool {
+    cfg!(all(
+        feature = "mimalloc-allocator",
+        not(any(
+            feature = "static_system_alloc",
+            asan_run,
+            tsan_run,
+            miri
+        ))
+    ))
 }
 
 /// True when built with the `mpi` feature (`comm=` on read and write).

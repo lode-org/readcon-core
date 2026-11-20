@@ -6778,6 +6778,44 @@ pub extern "C" fn rkr_has_parallel_support() -> u8 {
         0
     }
 }
+
+/// Default worker count for `n_threads=None` / auto mode.
+///
+/// With `parallel`, this is Rayon’s current pool width (after
+/// `RAYON_NUM_THREADS` if set). Without `parallel`, this is 1.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_default_thread_count() -> u32 {
+    #[cfg(feature = "parallel")]
+    {
+        rayon::current_num_threads().max(1) as u32
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        1
+    }
+}
+
+/// Returns 1 when this build installs mimalloc as the global allocator.
+///
+/// AddressSanitizer, ThreadSanitizer, Miri, and `static_system_alloc` force the
+/// system allocator even when `mimalloc-allocator` is enabled.
+#[unsafe(no_mangle)]
+pub extern "C" fn rkr_uses_mimalloc_allocator() -> u8 {
+    #[cfg(all(
+        feature = "mimalloc-allocator",
+        not(any(feature = "static_system_alloc", asan_run, tsan_run, miri))
+    ))]
+    {
+        1
+    }
+    #[cfg(not(all(
+        feature = "mimalloc-allocator",
+        not(any(feature = "static_system_alloc", asan_run, tsan_run, miri))
+    )))]
+    {
+        0
+    }
+}
 /// Read the first frame from a chemfiles-supported path (XYZ, PDB, GRO, …).
 /// Returns NULL on error or without the `chemfiles` feature. Caller: `free_rkr_frame`.
 ///

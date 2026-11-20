@@ -1263,7 +1263,11 @@ enum RKRStatus rkr_frame_builder_set_atom_id(struct RKRConFrameBuilder *builder_
                                              uint64_t atom_id);
 
 /**
- * Removes velocity / force / energy data from an existing atom.
+ * Zero one atom's velocity, force, displacement, spread, or energy slot.
+ *
+ * The column stays allocated. The matching `*_data` pointer remains
+ * valid and is not NULL. A column with no rows is empty, and that
+ * pointer is NULL until a setter allocates the column again.
  * # Safety
  * builder_handle must be valid.
  */
@@ -1581,8 +1585,14 @@ enum RKRStatus rkr_frame_builder_atom_ids_dlpack_ex(const struct RKRConFrameBuil
 
 /**
  * Borrow the positions buffer as a raw `(N, 3) f64` row-major pointer.
- * Returns NULL on invalid handle. Pointer is valid until the builder
- * is dropped or `add_atom` reallocates.
+ *
+ * Returns NULL when `builder_handle` is NULL, the column has no rows,
+ * or the column is not one contiguous allocation. The `clear_atom_*`
+ * functions zero one atom's slot and leave the column allocated, so
+ * this pointer stays non-NULL across those calls. The pointer is valid
+ * until the builder is dropped or `add_atom` reallocates. The other
+ * `*_data` borrows use this contract, and they also return NULL when
+ * their section is absent.
  *
  * # Safety
  * builder_handle must be valid; the returned pointer must not be
@@ -2772,6 +2782,22 @@ uint8_t rkr_has_chemfiles_support(void);
  * Returns 1 when this library build includes Rayon multi-frame parse.
  */
 uint8_t rkr_has_parallel_support(void);
+
+/**
+ * Default worker count for n_threads=None / auto mode.
+ *
+ * With parallel support this is Rayon’s current pool width (after
+ * RAYON_NUM_THREADS if set). Without parallel support it is 1.
+ */
+uint32_t rkr_default_thread_count(void);
+
+/**
+ * Returns 1 when this build installs mimalloc as the global allocator.
+ *
+ * Sanitizer and Miri builds, and static_system_alloc, force the system allocator
+ * even when mimalloc-allocator is enabled.
+ */
+uint8_t rkr_uses_mimalloc_allocator(void);
 
 /**
  * Read the first frame from a chemfiles-supported path (XYZ, PDB, GRO, …).
