@@ -234,7 +234,6 @@ impl<T> ForkOnce<T> {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn get_or_init(&self, init: impl FnOnce() -> T) -> &T {
         if let Some(value) = self.get() {
             return value;
@@ -6116,6 +6115,51 @@ pub fn parse_spread_section<'a>(
 mod tests {
     use super::*;
     use crate::iterators::ConFrameIterator;
+
+    #[cfg(all(unix, not(miri)))]
+    fn child_replaces_held_lock(acquire: fn() -> Box<dyn std::any::Any>) {
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let holder = std::thread::spawn(move || {
+            let _guard = acquire();
+            held_tx.send(()).expect("announce held lock");
+            release_rx.recv().expect("release parent lock");
+        });
+        held_rx.recv().expect("wait for held lock");
+
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            unsafe { libc::alarm(5) };
+            let _guard = acquire();
+            unsafe { libc::_exit(0) };
+        }
+
+        release_tx.send(()).expect("release holder");
+        holder.join().expect("holder thread");
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(pid, &mut status, 0) }, pid);
+        assert!(
+            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+            "forked child reused a held parent mutex, status {status:#x}"
+        );
+    }
+
+    /// The production caches, not a mutex that exists only in this test.
+    #[cfg(all(unix, not(miri)))]
+    #[test]
+    fn per_process_replaces_a_mutex_held_across_fork() {
+        if super::reexec_fork_test("parser::tests::per_process_replaces_a_mutex_held_across_fork") {
+            return;
+        }
+        child_replaces_held_lock(crate::writer::acquire_format_bufs_lock);
+        child_replaces_held_lock(crate::writer::acquire_packed_lengths_lock);
+        #[cfg(feature = "parallel")]
+        {
+            child_replaces_held_lock(crate::iterators::acquire_slot_cache_lock);
+            child_replaces_held_lock(crate::iterators::acquire_start_cache_lock);
+        }
+    }
 
     #[test]
     fn test_parse_line_of_n_success() {

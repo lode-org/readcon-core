@@ -699,6 +699,28 @@ fn plain_sum(path: &Path) -> Result<f64, ParseError> {
     Ok(data.iter().copied().sum())
 }
 
+/// Mapping base shared with the sum workers. `wrapping_byte_add` keeps its provenance.
+#[cfg(target_os = "linux")]
+#[derive(Copy, Clone)]
+struct MapPtr(*mut u8);
+
+// The mapping outlives every worker that reads it.
+#[cfg(target_os = "linux")]
+unsafe impl Send for MapPtr {}
+#[cfg(target_os = "linux")]
+unsafe impl Sync for MapPtr {}
+
+#[cfg(target_os = "linux")]
+impl MapPtr {
+    fn at(self, off: usize) -> usize {
+        self.0.addr().wrapping_add(off)
+    }
+
+    unsafe fn byte(self, off: usize) -> *mut u8 {
+        self.0.wrapping_byte_add(off)
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn sequential_resident_sum(
     path: &Path,
@@ -708,7 +730,7 @@ fn sequential_resident_sum(
     let owned = open_map(path)?;
     let page = limits.page;
     let len = owned.len;
-    let base = owned.ptr as usize;
+    let base = MapPtr(owned.ptr.cast());
     let header =
         unsafe { std::slice::from_raw_parts(owned.ptr.cast::<u8>(), FIELD_BYTES.min(len)) };
     let payload = f64_payload(header, len)?;
@@ -728,7 +750,7 @@ fn sequential_resident_sum(
     let (tx, rx) = std::sync::mpsc::sync_channel::<usize>(depth);
     let (err_tx, err_rx) = std::sync::mpsc::channel::<String>();
     let rx = std::sync::Arc::new(std::sync::Mutex::new(rx));
-    let addr = owned.ptr as usize;
+    let addr = base;
     let found = std::thread::scope(|scope| {
         let queued = pieces.clone();
         scope.spawn(move || {
@@ -822,7 +844,7 @@ fn split_stream_sum(path: &Path, threads: usize, limits: &QueueLimits) -> Result
     let owned = open_map(path)?;
     let page = limits.page;
     let len = owned.len;
-    let base = owned.ptr as usize;
+    let base = MapPtr(owned.ptr.cast());
     let header =
         unsafe { std::slice::from_raw_parts(owned.ptr.cast::<u8>(), FIELD_BYTES.min(len)) };
     let payload = f64_payload(header, len)?;
@@ -880,7 +902,7 @@ fn split_stream_sum(path: &Path, threads: usize, limits: &QueueLimits) -> Result
 
 #[cfg(target_os = "linux")]
 struct SpanGeom {
-    base: usize,
+    base: MapPtr,
     span: usize,
     end: usize,
     page: usize,
@@ -924,7 +946,7 @@ fn stream_one_span(path: &Path, geom: SpanGeom) -> Result<f64, String> {
 
 #[cfg(target_os = "linux")]
 fn sum_pieces_in_order(
-    base: usize,
+    base: MapPtr,
     payload_off: usize,
     payload_end: usize,
     threads: usize,
@@ -990,29 +1012,29 @@ fn populate_followup(code: i32) -> Result<(), i32> {
 }
 
 #[cfg(target_os = "linux")]
-fn touch_pages(addr: usize, off: usize, len: usize, page: usize) {
+fn touch_pages(addr: MapPtr, off: usize, len: usize, page: usize) {
     let pages = len.div_ceil(page);
     for index in 0..pages {
         let at = index * page;
         if at >= len {
             break;
         }
-        let byte = (addr + off + at) as *const u8;
+        let byte = unsafe { addr.byte(off + at) };
         std::hint::black_box(unsafe { std::ptr::read_volatile(byte) });
     }
 }
 
 #[cfg(target_os = "linux")]
-fn wait_resident(addr: usize, off: usize, len: usize, page: usize) -> Result<(), String> {
+fn wait_resident(addr: MapPtr, off: usize, len: usize, page: usize) -> Result<(), String> {
     // One readahead has already been submitted. MADV_POPULATE_READ (Linux
     // 5.14) faults this range and waits. The address is checked before the
     // call, so EINVAL is the old-kernel miss and one byte of each page is
     // read. EAGAIN is a transient kernel resource (man 2 madvise) and is
     // retried once per page of the range. Any other errno is returned.
-    if page == 0 || !(addr + off).is_multiple_of(page) {
+    if page == 0 || !addr.at(off).is_multiple_of(page) {
         return Err("madvise address is not page-aligned".into());
     }
-    let start = (addr + off) as *mut libc::c_void;
+    let start = unsafe { addr.byte(off) }.cast::<libc::c_void>();
     let pages = len.div_ceil(page).max(1);
     let mut tried = 0usize;
     loop {
@@ -1087,13 +1109,21 @@ fn open_map(path: &Path) -> Result<OwnedMap, ParseError> {
 }
 
 #[cfg(target_os = "linux")]
-fn sum_range(base: usize, start: usize, end: usize, payload_off: usize, payload_end: usize) -> f64 {
+fn sum_range(
+    base: MapPtr,
+    start: usize,
+    end: usize,
+    payload_off: usize,
+    payload_end: usize,
+) -> f64 {
     let from = start.max(payload_off);
     let to = end.min(payload_end);
     if to <= from {
         return 0.0;
     }
-    let data = unsafe { std::slice::from_raw_parts((base + from) as *const f64, (to - from) / 8) };
+    let data = unsafe {
+        std::slice::from_raw_parts(base.byte(from).cast::<f64>().cast_const(), (to - from) / 8)
+    };
     let mut acc = 0.0f64;
     for &value in data {
         acc += value;
@@ -1243,6 +1273,7 @@ fn private_copy(file: &File) -> Result<memmap2::MmapMut, ParseError> {
     Ok(anon)
 }
 
+#[cfg(target_os = "linux")]
 fn touch_mapped_pages(map: &memmap2::MmapMut, page: usize) {
     let page = page.max(1);
     for chunk in map.chunks(page) {
@@ -1412,7 +1443,8 @@ fn piece_list(start: usize, end: usize, window: usize) -> Vec<(usize, usize)> {
 #[cfg(target_os = "linux")]
 fn populate_range(map: &memmap2::MmapMut, off: usize, len: usize) -> Result<(), ParseError> {
     let page = page_size()?;
-    wait_resident(map.as_ptr() as usize, off, len, page).map_err(ParseError::ValidationError)
+    wait_resident(MapPtr(map.as_ptr().cast_mut()), off, len, page)
+        .map_err(ParseError::ValidationError)
 }
 
 #[cfg(target_os = "linux")]
@@ -1618,9 +1650,9 @@ fn fill_owned_f64(
     #[cfg(not(unix))]
     {
         let _ = (path, positions, velocities, n, threads);
-        return Err(ParseError::ValidationError(
+        Err(ParseError::ValidationError(
             "CON-bin pread fill requires Unix".into(),
-        ));
+        ))
     }
     #[cfg(unix)]
     {
@@ -1725,9 +1757,9 @@ fn read_columns_into<T: StoreLe>(
     #[cfg(not(unix))]
     {
         let _ = (pos_bytes, pos_off, threads, page, velocities, header);
-        return Err(ParseError::ValidationError(
+        Err(ParseError::ValidationError(
             "CON-bin pread fill requires Unix".into(),
-        ));
+        ))
     }
     #[cfg(unix)]
     {
@@ -1893,6 +1925,7 @@ mod sealed_number {
 
 trait StoreLe: Copy + sealed_number::Sealed {
     fn store_le(self, out: &mut Vec<u8>);
+    #[cfg_attr(target_os = "windows", allow(dead_code))]
     fn load_le(self) -> Self;
 }
 
@@ -1954,6 +1987,7 @@ fn write_values<T: StoreLe>(file: &mut File, values: &[T]) -> Result<(), ParseEr
 
 /// `pread` left little-endian file bytes in `values`. A little-endian host
 /// already reads them as the numbers. A big-endian host swaps each one.
+#[cfg_attr(target_os = "windows", allow(dead_code))]
 fn decode_le<T: StoreLe>(values: &mut [T]) {
     if cfg!(target_endian = "little") {
         return;
@@ -3700,7 +3734,8 @@ mod tests {
             )
         };
         assert_ne!(ptr, libc::MAP_FAILED);
-        let err = wait_resident(ptr as usize + 1, 0, 1, page).unwrap_err();
+        let err =
+            wait_resident(MapPtr(ptr.cast::<u8>().wrapping_byte_add(1)), 0, 1, page).unwrap_err();
         assert!(err.contains("page-aligned"), "{err}");
         unsafe { libc::munmap(ptr, page) };
     }
@@ -3724,11 +3759,11 @@ mod tests {
                 )
             };
             assert_ne!(ptr, libc::MAP_FAILED);
-            let hole = unsafe { (ptr as *mut u8).add(page) as *mut libc::c_void };
+            let hole = unsafe { ptr.cast::<u8>().add(page).cast::<libc::c_void>() };
             unsafe { libc::munmap(hole, page) };
-            let result = wait_resident(hole as usize, 0, page, page);
+            let result = wait_resident(MapPtr(hole.cast()), 0, page, page);
             unsafe { libc::munmap(ptr, page) };
-            unsafe { libc::munmap((ptr as *mut u8).add(page * 2) as *mut libc::c_void, page) };
+            unsafe { libc::munmap(ptr.cast::<u8>().add(page * 2).cast::<libc::c_void>(), page) };
             if let Err(err) = result {
                 assert!(err.contains("os error"), "{err}");
                 return;

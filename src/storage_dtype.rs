@@ -282,8 +282,24 @@ impl From<Array2Storage> for Optional2 {
     }
 }
 
+/// First element of a packed allocation, or null when the array is not contiguous.
+///
+/// `as_ptr` copies the array's raw base. A pointer from `as_slice` is a
+/// slice tag, and the next write to the allocation retires it.
+fn allocation_base<A, S, D>(array: &ndarray::ArrayBase<S, D>) -> *const u8
+where
+    S: ndarray::RawData<Elem = A>,
+    D: ndarray::Dimension,
+{
+    if array.is_standard_layout() {
+        array.as_ptr().cast()
+    } else {
+        std::ptr::null()
+    }
+}
+
 fn empty_rows_static() -> &'static Array2Storage {
-    static EMPTY: std::sync::OnceLock<Array2Storage> = std::sync::OnceLock::new();
+    static EMPTY: crate::parser::ForkOnce<Array2Storage> = crate::parser::ForkOnce::new();
     EMPTY.get_or_init(|| Array2Storage::zeros(ElementKind::Float64, 0, 3))
 }
 
@@ -484,6 +500,20 @@ impl Array2Storage {
         }
     }
 
+    /// Address of the first element of the packed f64 allocation.
+    ///
+    /// The pointer is the array's raw base. It is not taken from a slice, so
+    /// a caller may export it and then run [`Self::set_f64_row`]. `None` when
+    /// the storage is empty or not a packed f64 block.
+    pub fn f64_base_ptr(&self) -> Option<*const f64> {
+        match self {
+            Self::F64(array) if array.is_standard_layout() && !array.is_empty() => {
+                Some(array.as_ptr())
+            }
+            _ => None,
+        }
+    }
+
     /// Take the contiguous f64 allocation, leaving an empty matrix.
     ///
     /// `None` when the storage is shared or not a packed f64 block. The
@@ -516,23 +546,25 @@ impl Array2Storage {
     }
 
     /// Pointer to the first element of the contiguous SoA block, or null.
+    ///
+    /// The address is the allocation's raw base. A slice pointer would be
+    /// retired by the next write to this storage.
     pub fn data_ptr(&self) -> *const u8 {
-        let p = match self {
-            Self::F64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::F32(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::F16(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::I8(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::I16(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::I32(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::I64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::U8(a) | Self::Bool(a) => a.as_slice_memory_order().map(|s| s.as_ptr()),
-            Self::U16(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::U32(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::U64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::C64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::C128(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-        };
-        p.unwrap_or(std::ptr::null())
+        match self {
+            Self::F64(a) => allocation_base(a),
+            Self::F32(a) => allocation_base(a),
+            Self::F16(a) => allocation_base(a),
+            Self::I8(a) => allocation_base(a),
+            Self::I16(a) => allocation_base(a),
+            Self::I32(a) => allocation_base(a),
+            Self::I64(a) => allocation_base(a),
+            Self::U8(a) | Self::Bool(a) => allocation_base(a),
+            Self::U16(a) => allocation_base(a),
+            Self::U32(a) => allocation_base(a),
+            Self::U64(a) => allocation_base(a),
+            Self::C64(a) => allocation_base(a),
+            Self::C128(a) => allocation_base(a),
+        }
     }
 
     /// Reallocate in `kind` and copy values via f64 real part (allocate-as-type).
@@ -740,7 +772,7 @@ impl From<Array1Storage> for Optional1 {
 }
 
 fn empty_col_static() -> &'static Array1Storage {
-    static EMPTY: std::sync::OnceLock<Array1Storage> = std::sync::OnceLock::new();
+    static EMPTY: crate::parser::ForkOnce<Array1Storage> = crate::parser::ForkOnce::new();
     EMPTY.get_or_init(|| Array1Storage::zeros(ElementKind::Float64, 0))
 }
 
@@ -835,23 +867,25 @@ impl Array1Storage {
     }
 
     /// Pointer to the first element of the contiguous SoA block, or null.
+    ///
+    /// The address is the allocation's raw base. A slice pointer would be
+    /// retired by the next write to this storage.
     pub fn data_ptr(&self) -> *const u8 {
-        let p = match self {
-            Self::F64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::F32(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::F16(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::I8(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::I16(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::I32(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::I64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::U8(a) | Self::Bool(a) => a.as_slice().map(|s| s.as_ptr()),
-            Self::U16(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::U32(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::U64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::C64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::C128(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-        };
-        p.unwrap_or(std::ptr::null())
+        match self {
+            Self::F64(a) => allocation_base(a),
+            Self::F32(a) => allocation_base(a),
+            Self::F16(a) => allocation_base(a),
+            Self::I8(a) => allocation_base(a),
+            Self::I16(a) => allocation_base(a),
+            Self::I32(a) => allocation_base(a),
+            Self::I64(a) => allocation_base(a),
+            Self::U8(a) | Self::Bool(a) => allocation_base(a),
+            Self::U16(a) => allocation_base(a),
+            Self::U32(a) => allocation_base(a),
+            Self::U64(a) => allocation_base(a),
+            Self::C64(a) => allocation_base(a),
+            Self::C128(a) => allocation_base(a),
+        }
     }
 
     pub fn project_to(&mut self, kind: ElementKind) {

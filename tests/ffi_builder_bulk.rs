@@ -493,14 +493,118 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
         {
             let mut tensor: *mut RKRDLManagedTensorVersioned = ptr::null_mut();
             let st = rkr_frame_positions_dlpack(frame, &mut tensor);
-            if st == RKRStatus::RKR_STATUS_SUCCESS && !tensor.is_null() {
-                let st2 = rkr_frame_positions_from_dlpack(frame, tensor);
-                assert!(
-                    st2 == RKRStatus::RKR_STATUS_SUCCESS
-                        || st2 == RKRStatus::RKR_STATUS_VALIDATION_ERROR
-                );
-                rkr_dlpack_delete(tensor);
+            assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+            assert!(!tensor.is_null());
+            assert_eq!(
+                rkr_frame_positions_from_dlpack(frame, tensor),
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            rkr_dlpack_delete(tensor);
+            {
+                let parsed = &mut *(frame as *mut readcon_core::types::ConFrame);
+                parsed.positions.set_f64_row(0, [1.25, 2.5, 3.75]);
+                assert_eq!(parsed.x_at(0), 1.25);
+                assert_eq!(parsed.y_at(0), 2.5);
+                assert_eq!(parsed.z_at(0), 3.75);
             }
+
+            fn reject(
+                frame: *mut RKRConFrame,
+                status: RKRStatus,
+                poke: impl FnOnce(*mut RKRDLManagedTensorVersioned),
+                restore: impl FnOnce(*mut RKRDLManagedTensorVersioned),
+            ) {
+                unsafe {
+                    let mut tensor: *mut RKRDLManagedTensorVersioned = ptr::null_mut();
+                    assert_eq!(
+                        rkr_frame_positions_dlpack(frame, &mut tensor),
+                        RKRStatus::RKR_STATUS_SUCCESS
+                    );
+                    poke(tensor);
+                    assert_eq!(rkr_frame_positions_from_dlpack(frame, tensor), status);
+                    // The deleter loads the managed tensor. An invalid dtype
+                    // or device discriminant must be put back first.
+                    restore(tensor);
+                    rkr_dlpack_delete(tensor);
+                }
+            }
+            reject(
+                frame,
+                RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+                |tensor| {
+                    std::ptr::addr_of_mut!((*tensor).dl_tensor.dtype.code)
+                        .cast::<u8>()
+                        .write(18);
+                },
+                |tensor| {
+                    std::ptr::addr_of_mut!((*tensor).dl_tensor.dtype.code)
+                        .cast::<u8>()
+                        .write(2);
+                },
+            );
+            reject(
+                frame,
+                RKRStatus::RKR_STATUS_FEATURE_DISABLED,
+                |tensor| {
+                    std::ptr::addr_of_mut!((*tensor).dl_tensor.device.device_type)
+                        .cast::<u32>()
+                        .write(99);
+                },
+                |tensor| {
+                    std::ptr::addr_of_mut!((*tensor).dl_tensor.device.device_type)
+                        .cast::<u32>()
+                        .write(1);
+                },
+            );
+            reject(
+                frame,
+                RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+                |tensor| {
+                    let shape = std::ptr::addr_of!((*tensor).dl_tensor.shape).read();
+                    let slot = shape.add(1);
+                    slot.write(4);
+                },
+                |tensor| {
+                    let shape = std::ptr::addr_of!((*tensor).dl_tensor.shape).read();
+                    shape.add(1).write(3);
+                },
+            );
+            for ndim in [0, 3, -1] {
+                reject(
+                    frame,
+                    RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+                    |tensor| {
+                        std::ptr::addr_of_mut!((*tensor).dl_tensor.ndim).write(ndim);
+                    },
+                    |tensor| {
+                        std::ptr::addr_of_mut!((*tensor).dl_tensor.ndim).write(2);
+                    },
+                );
+            }
+            reject(
+                frame,
+                RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+                |tensor| {
+                    let data = std::ptr::addr_of!((*tensor).dl_tensor.data).read();
+                    std::ptr::addr_of_mut!((*tensor).dl_tensor.data)
+                        .write(data.cast::<u8>().add(1).cast());
+                },
+                |tensor| {
+                    let data = std::ptr::addr_of!((*tensor).dl_tensor.data).read();
+                    std::ptr::addr_of_mut!((*tensor).dl_tensor.data)
+                        .write(data.cast::<u8>().sub(1).cast());
+                },
+            );
+            reject(
+                frame,
+                RKRStatus::RKR_STATUS_VALIDATION_ERROR,
+                |tensor| {
+                    std::ptr::addr_of_mut!((*tensor).version.major).write(2);
+                },
+                |tensor| {
+                    std::ptr::addr_of_mut!((*tensor).version.major).write(1);
+                },
+            );
         }
         for export in [
             rkr_frame_velocities_dlpack as unsafe extern "C" fn(_, _) -> _,

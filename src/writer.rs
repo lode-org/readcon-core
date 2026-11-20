@@ -1891,13 +1891,11 @@ fn format_bufs() -> &'static std::sync::Mutex<Vec<Vec<u8>>> {
 }
 
 #[cfg(all(test, unix, not(miri)))]
-#[allow(dead_code)]
 pub(crate) fn acquire_format_bufs_lock() -> Box<dyn std::any::Any> {
     Box::new(format_bufs().lock().unwrap_or_else(|err| err.into_inner()))
 }
 
 #[cfg(all(test, unix, not(miri)))]
-#[allow(dead_code)]
 pub(crate) fn acquire_packed_lengths_lock() -> Box<dyn std::any::Any> {
     Box::new(
         packed_lengths()

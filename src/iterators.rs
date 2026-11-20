@@ -129,7 +129,7 @@ impl<'a> MemchrLines<'a> {
     /// end of the buffer.
     pub(crate) fn unread_len(&self) -> usize {
         let start = match self.peeked {
-            Some(p) => p.as_ptr() as usize - self.bytes.as_ptr() as usize,
+            Some(p) => p.as_ptr().addr() - self.bytes.as_ptr().addr(),
             None => self.pos,
         };
         self.bytes.len() - start
@@ -139,7 +139,7 @@ impl<'a> MemchrLines<'a> {
     fn clear_peek(&mut self) {
         if let Some(p) = self.peeked.take() {
             // Rewind pos to the start of the peeked line.
-            let start = p.as_ptr() as usize - self.bytes.as_ptr() as usize;
+            let start = p.as_ptr().addr() - self.bytes.as_ptr().addr();
             self.pos = start;
             // A peek already counted this line. Rewinding must drop that
             // count so the next read names it once, and must put the
@@ -1022,17 +1022,17 @@ impl<'a> ConFrameIterator<'a> {
         &mut self,
         file_contents: &'a str,
     ) -> Option<Result<(types::ConFrame, &'a str), error::ParseError>> {
-        let base = file_contents.as_ptr() as usize;
+        let base = file_contents.as_ptr().addr();
         let start = {
             let line = self.lines.peek_line()?;
-            line.as_ptr() as usize - base
+            line.as_ptr().addr() - base
         };
         let frame = match self.next()? {
             Ok(f) => f,
             Err(e) => return Some(Err(e)),
         };
         let end = match self.lines.peek_line() {
-            Some(line) => line.as_ptr() as usize - base,
+            Some(line) => line.as_ptr().addr() - base,
             None => file_contents.len(),
         };
         debug_assert!(end >= start && end <= file_contents.len());
@@ -1048,7 +1048,7 @@ impl<'a> ConFrameIterator<'a> {
             Err(e) => return Some(Err(e)),
         };
         let end = match self.lines.peek_line() {
-            Some(line) => line.as_ptr() as usize - self.lines.bytes.as_ptr() as usize,
+            Some(line) => line.as_ptr().addr() - self.lines.bytes.as_ptr().addr(),
             None => self.lines.pos,
         };
         Some(Ok((frame, end)))
@@ -2824,6 +2824,11 @@ fn slot_cache() -> &'static SlotCache {
     CACHE.get_or_init(|| std::sync::Mutex::new(Vec::new()))
 }
 
+#[cfg(all(test, unix, not(miri), feature = "parallel"))]
+pub(crate) fn acquire_slot_cache_lock() -> Box<dyn std::any::Any> {
+    Box::new(slot_cache().lock().unwrap_or_else(|err| err.into_inner()))
+}
+
 #[cfg(feature = "parallel")]
 thread_local! {
     static OWNED_RANGES: std::cell::RefCell<Vec<(usize, usize, usize)>> =
@@ -2848,7 +2853,18 @@ pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
             if let Some(pool) = shared_pool(workers) {
                 let mut slots: Vec<Option<types::ConFrame>> =
                     frames.into_iter().map(Some).collect();
-                let ptr = slots.as_mut_ptr() as usize;
+                #[derive(Copy, Clone)]
+                struct SendSlot(*mut Option<types::ConFrame>);
+                // Each index is taken by the worker that allocated it.
+                unsafe impl Send for SendSlot {}
+                unsafe impl Sync for SendSlot {}
+                impl SendSlot {
+                    unsafe fn take_at(self, index: usize) -> Option<types::ConFrame> {
+                        let slot = self.0.wrapping_add(index);
+                        unsafe { (*slot).take() }
+                    }
+                }
+                let ptr = SendSlot(slots.as_mut_ptr());
                 let len = slots.len();
                 let generation = PARSE_GEN.load(std::sync::atomic::Ordering::Relaxed);
                 pool.broadcast(|_| {
@@ -2862,7 +2878,7 @@ pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
                         let start = start.min(end);
                         for index in start..end {
                             unsafe {
-                                drop((*((ptr as *mut Option<types::ConFrame>).add(index))).take());
+                                drop(ptr.take_at(index));
                             }
                         }
                     }
@@ -3184,6 +3200,11 @@ fn start_cache() -> &'static std::sync::Mutex<Vec<usize>> {
     static CACHE: crate::parser::PerProcess<std::sync::Mutex<Vec<usize>>> =
         crate::parser::PerProcess::new();
     CACHE.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+#[cfg(all(test, unix, not(miri), feature = "parallel"))]
+pub(crate) fn acquire_start_cache_lock() -> Box<dyn std::any::Any> {
+    Box::new(start_cache().lock().unwrap_or_else(|err| err.into_inner()))
 }
 
 #[cfg(feature = "parallel")]
@@ -4119,14 +4140,30 @@ fn piped_stock_frames(
     let mut flags = Vec::<[bool; 3]>::with_capacity(n);
     let mut atoms = crate::types::take_atom_spare(n);
     unsafe { atoms.set_len(n) };
+    struct SendPtr<T>(*mut T);
+    impl<T> Copy for SendPtr<T> {}
+    impl<T> Clone for SendPtr<T> {
+        fn clone(&self) -> Self {
+            *self
+        }
+    }
+    // The worker partition guarantees each thread writes a disjoint row span.
+    unsafe impl<T> Send for SendPtr<T> {}
+    unsafe impl<T> Sync for SendPtr<T> {}
+    impl<T> SendPtr<T> {
+        #[inline]
+        fn get(self) -> *mut T {
+            self.0
+        }
+    }
     let error: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
     let alloc_s = t_alloc.elapsed().as_secs_f64();
     let nworkers = threads.min(index.plain.len()).max(1);
     let t_scope = std::time::Instant::now();
-    let xyz_addr = xyz.as_mut_ptr() as usize;
-    let ids_addr = ids.as_mut_ptr() as usize;
-    let flags_addr = flags.as_mut_ptr() as usize;
-    let atoms_addr = atoms.as_mut_ptr() as usize;
+    let xyz_ptr = SendPtr(xyz.as_mut_ptr());
+    let ids_ptr = SendPtr(ids.as_mut_ptr());
+    let flags_ptr = SendPtr(flags.as_mut_ptr());
+    let atoms_ptr = SendPtr(atoms.as_mut_ptr());
     crate::parser::on_pool(nworkers, || {
         rayon::scope(|scope| {
             for worker in 0..nworkers {
@@ -4141,10 +4178,10 @@ fn piped_stock_frames(
                 let spec = &spec;
                 let row_origin = &row_origin;
                 scope.spawn(move |_| {
-                    let xyz_ptr = xyz_addr as *mut f64;
-                    let ids_ptr = ids_addr as *mut u64;
-                    let flags_ptr = flags_addr as *mut [bool; 3];
-                    let atoms_ptr = atoms_addr as *mut std::mem::MaybeUninit<types::AtomDatum>;
+                    let xyz_ptr = xyz_ptr.get();
+                    let ids_ptr = ids_ptr.get();
+                    let flags_ptr = flags_ptr.get();
+                    let atoms_ptr = atoms_ptr.get();
                     // One inflate buffer per pool thread, kept after the first file.
                     thread_local! {
                         static INFLATE_BUF: std::cell::RefCell<Vec<u8>> =

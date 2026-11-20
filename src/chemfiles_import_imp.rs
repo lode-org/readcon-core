@@ -705,6 +705,41 @@ fn parallel_uniform(
     handle: *mut chemfiles_sys::CHFL_FRAME,
     positions: &[[f64; 3]],
 ) -> Result<Option<ImportedGeometry>, ChemfilesImportError> {
+    struct SendPtr<T>(*mut T);
+    impl<T> Copy for SendPtr<T> {}
+    impl<T> Clone for SendPtr<T> {
+        fn clone(&self) -> Self {
+            *self
+        }
+    }
+    // SAFETY: the wrapper only transports the pointer value; callers keep the
+    // pointed-to allocation valid for every spawned task.
+    unsafe impl<T: Send> Send for SendPtr<T> {}
+    unsafe impl<T: Sync> Sync for SendPtr<T> {}
+    impl<T> SendPtr<T> {
+        #[inline]
+        fn get(self) -> *mut T {
+            self.0
+        }
+    }
+    struct SendConstPtr<T>(*const T);
+    impl<T> Copy for SendConstPtr<T> {}
+    impl<T> Clone for SendConstPtr<T> {
+        fn clone(&self) -> Self {
+            *self
+        }
+    }
+    // SAFETY: the wrapper only transports the pointer value; callers keep the
+    // pointed-to allocation valid for every spawned task.
+    unsafe impl<T: Sync> Send for SendConstPtr<T> {}
+    unsafe impl<T: Sync> Sync for SendConstPtr<T> {}
+    impl<T> SendConstPtr<T> {
+        #[inline]
+        fn get(self) -> *const T {
+            self.0
+        }
+    }
+
     let n = positions.len();
     let mut name_buf = vec![0u8; 32];
     let mut type_buf = vec![0u8; 32];
@@ -737,8 +772,8 @@ fn parallel_uniform(
         .clamp(1, 8);
     let mut flags = vec![0u32; threads];
     let chunk = n.div_ceil(threads);
-    let handle_bits = handle as usize;
-    let symbol_bits = symbol_c.as_ptr() as usize;
+    let handle_ptr = SendPtr(handle);
+    let symbol_ptr = SendConstPtr(symbol_c.as_ptr().cast::<std::os::raw::c_char>());
     std::thread::scope(|scope| {
         for (thread, flag) in flags.iter_mut().enumerate() {
             let begin = thread * chunk;
@@ -747,12 +782,14 @@ fn parallel_uniform(
                 continue;
             }
             scope.spawn(move || {
+                let handle_ptr = handle_ptr.get();
+                let symbol_ptr = symbol_ptr.get();
                 let status = unsafe {
                     rc_chemfiles_matches(
-                        handle_bits as *mut chemfiles_sys::CHFL_FRAME,
+                        handle_ptr,
                         begin as u64,
                         end as u64,
-                        symbol_bits as *const std::os::raw::c_char,
+                        symbol_ptr,
                         stored_mass,
                         flag,
                     )
@@ -776,8 +813,8 @@ fn parallel_uniform(
     let mut slots: Vec<std::mem::MaybeUninit<AtomDatum>> = Vec::with_capacity(n);
     // Every index is written before this buffer is read as `AtomDatum`.
     unsafe { slots.set_len(n) };
-    let slot_bits = slots.as_mut_ptr() as usize;
-    let xyz_bits = xyz as usize;
+    let slot_ptr = SendPtr(slots.as_mut_ptr());
+    let xyz_ptr = SendPtr(xyz);
     let symbol_ref = &symbol;
     std::thread::scope(|scope| {
         for thread in 0..threads {
@@ -787,11 +824,11 @@ fn parallel_uniform(
                 continue;
             }
             scope.spawn(move || {
-                let slot_ptr = slot_bits as *mut std::mem::MaybeUninit<AtomDatum>;
-                let xyz = xyz_bits as *mut f64;
+                let slot_ptr = slot_ptr.get();
+                let xyz_ptr = xyz_ptr.get();
                 for index in begin..end {
-                    let arc = crate::types::share_arc_str(symbol_ref);
-                    let coord = unsafe { xyz.add(index * 3) };
+                    let arc = unsafe { crate::types::share_arc_str(symbol_ref) };
+                    let coord = unsafe { xyz_ptr.add(index * 3) };
                     let x = unsafe { *coord };
                     let y = unsafe { *coord.add(1) };
                     let z = unsafe { *coord.add(2) };
@@ -809,7 +846,7 @@ fn parallel_uniform(
             });
         }
     });
-    let slot_ptr = slot_bits as *mut std::mem::MaybeUninit<AtomDatum>;
+    let slot_ptr = slot_ptr.get();
     let capacity = slots.capacity();
     let atoms = unsafe { Vec::from_raw_parts(slot_ptr.cast::<AtomDatum>(), n, capacity) };
     std::mem::forget(slots);
@@ -869,8 +906,30 @@ fn parallel_mixed(
             end,
         });
     }
-    let sym_bits = sym_of.as_mut_ptr() as usize;
-    let handle_bits = handle as usize;
+    struct SendMut<T>(*mut T);
+    impl<T> Copy for SendMut<T> {}
+    impl<T> Clone for SendMut<T> {
+        fn clone(&self) -> Self {
+            *self
+        }
+    }
+    // SAFETY: workers only write within disjoint `sym_of` spans, the frame
+    // handle is read-only, and thread::scope joins before either pointer can
+    // outlive the allocation it points to.
+    unsafe impl<T> Send for SendMut<T> {}
+    unsafe impl<T> Sync for SendMut<T> {}
+    impl<T> SendMut<T> {
+        #[inline]
+        fn get(self) -> *mut T {
+            self.0
+        }
+        unsafe fn add(self, index: usize) -> *mut T {
+            let bytes = index.wrapping_mul(std::mem::size_of::<T>());
+            self.0.wrapping_byte_add(bytes)
+        }
+    }
+    let sym_ptr = SendMut(sym_of.as_mut_ptr());
+    let handle_ptr = SendMut(handle);
     std::thread::scope(|scope| {
         for range in &mut ranges {
             if range.begin >= range.end {
@@ -879,10 +938,10 @@ fn parallel_mixed(
             scope.spawn(move || {
                 let status = unsafe {
                     rc_chemfiles_classify_range(
-                        handle_bits as *mut chemfiles_sys::CHFL_FRAME,
+                        handle_ptr.get(),
                         range.begin as u64,
                         range.end as u64,
-                        (sym_bits as *mut u32).add(range.begin),
+                        sym_ptr.add(range.begin),
                         range.names.as_mut_ptr(),
                         range.masses.as_mut_ptr(),
                         64,
@@ -982,7 +1041,7 @@ fn grouped_geometry(
     for (grouped, &chem) in chem_at.iter().enumerate() {
         let kind = sym_of[chem] as usize;
         let symbol = if velocities.is_none() {
-            crate::types::share_arc_str(&kinds[kind].symbol)
+            unsafe { crate::types::share_arc_str(&kinds[kind].symbol) }
         } else {
             Arc::clone(&kinds[kind].symbol)
         };
@@ -1100,7 +1159,7 @@ fn scan_uniform(
         for grouped in 0..n {
             let base = grouped * 3;
             atoms.push(AtomDatum::coords(
-                crate::types::share_arc_str(&symbol),
+                unsafe { crate::types::share_arc_str(&symbol) },
                 flat[base],
                 flat[base + 1],
                 flat[base + 2],

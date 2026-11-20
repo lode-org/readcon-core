@@ -3574,7 +3574,11 @@ fn export_owned_array1_u64_dlpack(
     arr: &ndarray::ArcArray1<u64>,
     out_tensor: *mut *mut RKRDLManagedTensorVersioned,
 ) -> RKRStatus {
-    finish_dlpack_tensor(dlpk::DLPackTensor::try_from(arr.clone()), out_tensor)
+    // A clone of the `ArcArray` shares the builder's allocation. `set_atom_id`
+    // then copy-on-writes, and the exported pointer stays on the old buffer.
+    // The bytes here belong to the tensor.
+    let flat = arr.to_vec();
+    finish_dlpack_tensor(dlpk::DLPackTensor::try_from(flat), out_tensor)
 }
 
 /// Atom ids: default uint64; or cast via f64 path when `opts.dtype` requests another host type.
@@ -3910,26 +3914,52 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_dlpack_ex(
 // ----- v0.11.1 in-process zero-copy raw-pointer FFI -------------------------
 //
 // The DLPack tier-3 export above clones field data into an owning tensor so
-// the consumer can outlive the builder; this is the right contract for
-// language-runtime / cross-process consumers (Python GC, Julia GC,
-// inter-process exchange). For *in-process* zero-copy on the hot path
-// (LAMMPS-style `lmp->atom->x` direct pointer access used by integrators,
-// dynamics drivers, eOn's Matter Eigen::Map<RowMajor> views), we expose
-// raw pointers into the builder's storage. The lifetime contract is
-// purely caller-managed: the pointer is valid while the builder is alive
-// and no add_atom call has grown the underlying ndarray. This mirrors
-// the LAMMPS / OpenMM / GROMACS C-side hot path and is what makes a
-// thin Matter wrapper over ConFrameBuilder fast.
+// the consumer can outlive the builder. These functions return the column
+// allocation's raw base, not a pointer taken from a slice. An in-place
+// setter (`set_*_from_flat`, `set_atom_*`, `set_last_*`) writes that
+// allocation and leaves the pointer valid. The pointer dies when the
+// builder is freed, when `add_atom` reallocates the column, or when
+// `clear_*_section` drops it. A setter that creates a missing section
+// allocates a new column; a pointer taken before that call is not the
+// new allocation. NULL means the handle is null, the section is absent,
+// or the column is empty or not contiguous.
 //
 // Cross-language ML consumers should use the DLPack tier above; raw
 // pointer access is for in-process hot paths only.
+
+fn arc2_base_mut(array: &mut ndarray::ArcArray2<f64>) -> *mut f64 {
+    if array.is_standard_layout() && !array.is_empty() {
+        array.as_mut_ptr()
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+fn arc1_base_mut<T: Clone>(array: &mut ndarray::ArcArray1<T>) -> *mut T {
+    if array.is_standard_layout() && !array.is_empty() {
+        array.as_mut_ptr()
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+fn arc1_base<T>(array: &ndarray::ArcArray1<T>) -> *const T {
+    if array.is_standard_layout() && !array.is_empty() {
+        array.as_ptr()
+    } else {
+        std::ptr::null()
+    }
+}
+
 /// Borrow the positions buffer as a raw `(N, 3) f64` row-major pointer.
-/// Returns NULL on invalid handle. Pointer is valid until the builder
-/// is dropped or `add_atom` reallocates.
+/// Returns NULL on an invalid handle or an empty column.
+///
+/// The pointer is the allocation base. `set_positions_from_flat` and
+/// `set_atom_position` leave it valid. `add_atom` may replace it.
 ///
 /// # Safety
-/// builder_handle must be valid; the returned pointer must not be
-/// dereferenced after a call to add_atom on the same builder.
+/// builder_handle must be valid. Do not dereference the pointer after
+/// the builder is freed or after `add_atom` reallocates this column.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_positions_data(
     builder_handle: *mut RKRConFrameBuilder,
@@ -3938,11 +3968,7 @@ pub unsafe extern "C" fn rkr_frame_builder_positions_data(
         return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
-    builder
-        .positions_view_mut()
-        .as_slice_memory_order_mut()
-        .map(|s| s.as_mut_ptr())
-        .unwrap_or(std::ptr::null_mut())
+    arc2_base_mut(builder.positions_2d_mut())
 }
 /// Borrow the velocities buffer as a raw `(N, 3) f64` row-major pointer.
 /// Returns NULL if the velocities section is absent or the handle is
@@ -3961,12 +3987,7 @@ pub unsafe extern "C" fn rkr_frame_builder_velocities_data(
     if !builder.has_velocities_section() {
         return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
-    let slice = builder.velocities_mut();
-    if slice.is_empty() {
-        std::ptr::null_mut()
-    } else {
-        slice.as_mut_ptr()
-    }
+    arc2_base_mut(builder.velocities_2d_mut())
 }
 /// Borrow the forces buffer as a raw `(N, 3) f64` row-major pointer.
 /// Returns NULL if the forces section is absent.
@@ -3984,12 +4005,7 @@ pub unsafe extern "C" fn rkr_frame_builder_forces_data(
     if !builder.has_forces_section() {
         return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
-    let slice = builder.forces_mut();
-    if slice.is_empty() {
-        std::ptr::null_mut()
-    } else {
-        slice.as_mut_ptr()
-    }
+    arc2_base_mut(builder.forces_2d_mut())
 }
 /// Borrow the displacements buffer as a raw `(N, 3) f64` row-major pointer.
 /// Returns NULL if the displacements section is absent.
@@ -4007,12 +4023,7 @@ pub unsafe extern "C" fn rkr_frame_builder_displacements_data(
     if !builder.has_displacements_section() {
         return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
-    let slice = builder.displacements_mut();
-    if slice.is_empty() {
-        std::ptr::null_mut()
-    } else {
-        slice.as_mut_ptr()
-    }
+    arc2_base_mut(builder.displacements_2d_mut())
 }
 /// Borrow the spreads buffer as a raw `(N, 3) f64` row-major pointer.
 /// Returns NULL if the spreads section is absent.
@@ -4030,12 +4041,7 @@ pub unsafe extern "C" fn rkr_frame_builder_spreads_data(
     if !builder.has_spreads_section() {
         return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
-    let slice = builder.spreads_mut();
-    if slice.is_empty() {
-        std::ptr::null_mut()
-    } else {
-        slice.as_mut_ptr()
-    }
+    arc2_base_mut(builder.spreads_2d_mut())
 }
 /// Borrow the per-atom energies buffer as a raw `(N,) f64` pointer.
 /// Returns NULL if the energies section is absent.
@@ -4053,12 +4059,7 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_energies_data(
     if !builder.has_energies_section() {
         return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
-    let slice = builder.atom_energies_mut();
-    if slice.is_empty() {
-        std::ptr::null_mut()
-    } else {
-        slice.as_mut_ptr()
-    }
+    arc1_base_mut(builder.atom_energies_1d_mut())
 }
 /// Borrow the per-atom masses buffer as a raw `(N,) f64` pointer.
 ///
@@ -4072,12 +4073,7 @@ pub unsafe extern "C" fn rkr_frame_builder_masses_data(
         return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
-    let slice = builder.masses_mut();
-    if slice.is_empty() {
-        std::ptr::null_mut()
-    } else {
-        slice.as_mut_ptr()
-    }
+    arc1_base_mut(builder.masses_1d_mut())
 }
 /// Borrow the per-atom atom_ids buffer as a raw `(N,) u64` pointer.
 ///
@@ -4091,12 +4087,7 @@ pub unsafe extern "C" fn rkr_frame_builder_atom_ids_data(
         return std::ptr::null();
     }
     let builder = unsafe { &*(builder_handle as *const ConFrameBuilder) };
-    let slice = builder.atom_ids();
-    if slice.is_empty() {
-        std::ptr::null()
-    } else {
-        slice.as_ptr()
-    }
+    arc1_base(builder.atom_ids_1d_ref())
 }
 // ----- end v0.11.0 in-place mutation FFI ------------------------------------
 /// Adds an atom with optional per-axis fixed mask, velocity, and force vectors.
@@ -5605,13 +5596,16 @@ pub unsafe extern "C" fn rkr_frame_atom_ids_view(
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
-    let slice = frame.atom_ids.as_slice_memory_order();
+    let ids = &frame.atom_ids;
+    let data = if ids.is_standard_layout() {
+        ids.as_ptr().cast::<std::ffi::c_void>()
+    } else {
+        std::ptr::null()
+    };
     unsafe {
         *out = RKRArrayView {
-            data: slice
-                .map(|s| s.as_ptr() as *const std::ffi::c_void)
-                .unwrap_or(std::ptr::null()),
-            n: frame.atom_ids.len(),
+            data,
+            n: ids.len(),
             cols: 1,
             dtype_code: 1, // kDLUInt
             dtype_bits: 64,
@@ -5634,7 +5628,15 @@ pub unsafe extern "C" fn rkr_frame_xyz_f64(
     frame_handle: *const RKRConFrame,
     n: *mut usize,
 ) -> *const f64 {
-    f64_col_ptr(frame_handle, n, |f| f.positions.f64_rows3())
+    f64_col_ptr(frame_handle, n, |f| {
+        (f.positions.ncols() == 3)
+            .then(|| {
+                f.positions
+                    .f64_base_ptr()
+                    .map(|ptr| (ptr, f.positions.nrows()))
+            })
+            .flatten()
+    })
 }
 
 /// Row-major f64 velocities pointer, or NULL if absent, not float64, or not
@@ -5654,7 +5656,15 @@ pub unsafe extern "C" fn rkr_frame_velocities_f64(
     frame_handle: *const RKRConFrame,
     n: *mut usize,
 ) -> *const f64 {
-    f64_col_ptr(frame_handle, n, |f| f.velocities.f64_rows3())
+    f64_col_ptr(frame_handle, n, |f| {
+        (f.velocities.ncols() == 3)
+            .then(|| {
+                f.velocities
+                    .f64_base_ptr()
+                    .map(|ptr| (ptr, f.velocities.nrows()))
+            })
+            .flatten()
+    })
 }
 
 /// Row-major f64 forces pointer, or NULL if absent, not float64, or not
@@ -5674,7 +5684,15 @@ pub unsafe extern "C" fn rkr_frame_forces_f64(
     frame_handle: *const RKRConFrame,
     n: *mut usize,
 ) -> *const f64 {
-    f64_col_ptr(frame_handle, n, |f| f.forces.f64_rows3())
+    f64_col_ptr(frame_handle, n, |f| {
+        (f.forces.ncols() == 3)
+            .then(|| {
+                f.forces
+                    .f64_base_ptr()
+                    .map(|ptr| (ptr, f.forces.nrows()))
+            })
+            .flatten()
+    })
 }
 
 /// Row-major f64 displacements pointer, or NULL if absent, not float64, or not
@@ -5694,7 +5712,15 @@ pub unsafe extern "C" fn rkr_frame_displacements_f64(
     frame_handle: *const RKRConFrame,
     n: *mut usize,
 ) -> *const f64 {
-    f64_col_ptr(frame_handle, n, |f| f.displacements.f64_rows3())
+    f64_col_ptr(frame_handle, n, |f| {
+        (f.displacements.ncols() == 3)
+            .then(|| {
+                f.displacements
+                    .f64_base_ptr()
+                    .map(|ptr| (ptr, f.displacements.nrows()))
+            })
+            .flatten()
+    })
 }
 
 /// Row-major f64 spreads pointer, or NULL if absent, not float64, or not
@@ -5714,7 +5740,15 @@ pub unsafe extern "C" fn rkr_frame_spreads_f64(
     frame_handle: *const RKRConFrame,
     n: *mut usize,
 ) -> *const f64 {
-    f64_col_ptr(frame_handle, n, |f| f.spreads.f64_rows3())
+    f64_col_ptr(frame_handle, n, |f| {
+        (f.spreads.ncols() == 3)
+            .then(|| {
+                f.spreads
+                    .f64_base_ptr()
+                    .map(|ptr| (ptr, f.spreads.nrows()))
+            })
+            .flatten()
+    })
 }
 
 fn fill_array2_view(
@@ -5762,7 +5796,7 @@ fn fill_array1_view(
 fn f64_col_ptr(
     frame_handle: *const RKRConFrame,
     n: *mut usize,
-    get: impl FnOnce(&ConFrame) -> Option<&[f64]>,
+    get: impl FnOnce(&ConFrame) -> Option<(*const f64, usize)>,
 ) -> *const f64 {
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         if !n.is_null() {
@@ -5770,14 +5804,16 @@ fn f64_col_ptr(
         }
         return std::ptr::null();
     };
+    // The allocation base, not a pointer from a slice. `set_f64_row` can
+    // write this column after the export returns.
     match get(frame) {
-        Some(s) if !s.is_empty() => {
+        Some((ptr, rows)) => {
             if !n.is_null() {
-                unsafe { *n = s.len() / 3 };
+                unsafe { *n = rows };
             }
-            s.as_ptr()
+            ptr
         }
-        _ => {
+        None => {
             if !n.is_null() {
                 unsafe { *n = 0 };
             }
@@ -6130,6 +6166,14 @@ pub unsafe extern "C" fn rkr_frame_positions_as_dlpack(
     }
 }
 
+/// Read one header field without forming a reference to the tensor.
+///
+/// `addr_of!` of a field does not require the dtype or device enums to be
+/// valid discriminants. A shared reference to the struct would.
+fn dl_field<T>(ptr: *const T) -> T {
+    unsafe { std::ptr::read_unaligned(ptr) }
+}
+
 /// Ingest positions from a DLManagedTensorVersioned (CPU float32/64, shape (N,3)
 /// or length 3N). Metatensor-style write path symmetry.
 /// `RKR_STATUS_VALIDATION_ERROR` when the frame's positions column is not
@@ -6146,64 +6190,92 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
         return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let frame = unsafe { &mut *(frame_handle as *mut ConFrame) };
-    let managed = unsafe { &*tensor };
-    if managed.version.major != 1 {
+    // Field addresses only. A reference to the managed tensor or its
+    // `DLTensor` would require the dtype and device enums to be valid
+    // discriminants, and an unknown code is not one.
+    let (major, minor, device_type, code, bits, lanes, ndim, shape, strides, byte_offset, data) = unsafe {
+        (
+            dl_field(std::ptr::addr_of!((*tensor).version.major)),
+            dl_field(std::ptr::addr_of!((*tensor).version.minor)),
+            dl_field(std::ptr::addr_of!((*tensor).dl_tensor.device.device_type).cast::<u32>()),
+            dl_field(std::ptr::addr_of!((*tensor).dl_tensor.dtype.code).cast::<u8>()),
+            dl_field(std::ptr::addr_of!((*tensor).dl_tensor.dtype.bits)),
+            dl_field(std::ptr::addr_of!((*tensor).dl_tensor.dtype.lanes)),
+            dl_field(std::ptr::addr_of!((*tensor).dl_tensor.ndim)),
+            dl_field(std::ptr::addr_of!((*tensor).dl_tensor.shape)),
+            dl_field(std::ptr::addr_of!((*tensor).dl_tensor.strides)),
+            dl_field(std::ptr::addr_of!((*tensor).dl_tensor.byte_offset)),
+            dl_field(std::ptr::addr_of!((*tensor).dl_tensor.data)),
+        )
+    };
+    if major != 1 {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
-    let dl = &managed.dl_tensor;
-    if dl.device.device_type != dlpk::sys::DLDeviceType::kDLCPU {
+    if device_type != rkr_dl_device_type::RKR_DL_CPU as u32 {
         return note(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
+    }
+    if code != rkr_dl_type_code::RKR_DL_FLOAT || (bits != 64 && bits != 32) || lanes != 1 {
+        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
     let n = frame.atom_data.len();
     let need = n.saturating_mul(3);
-    if dl.ndim != 1 && dl.ndim != 2 {
+    if ndim != 1 && ndim != 2 {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
-    let ndim = dl.ndim as usize;
-    let shape = if dl.shape.is_null() {
+    let ndim = ndim as usize;
+    if shape.is_null() {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
+    let shape0 = unsafe { std::ptr::read(shape) };
+    let shape1 = if ndim == 2 {
+        unsafe { std::ptr::read(shape.add(1)) }
     } else {
-        unsafe { std::slice::from_raw_parts(dl.shape, ndim) }
+        0
     };
-    let shape_ok = (ndim == 2 && shape[0] == n as i64 && shape[1] == 3)
-        || (ndim == 1 && shape[0] == need as i64);
+    let shape_ok =
+        (ndim == 2 && shape0 == n as i64 && shape1 == 3) || (ndim == 1 && shape0 == need as i64);
     if !shape_ok {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
-    if dl.strides.is_null() {
-        if managed.version.minor >= 2 {
+    if strides.is_null() {
+        if minor >= 2 {
             return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
         }
     } else {
-        let strides = unsafe { std::slice::from_raw_parts(dl.strides, ndim) };
-        let strides_ok = matches!(strides, [1] | [3, 1]);
+        let stride0 = unsafe { std::ptr::read(strides) };
+        let stride1 = if ndim == 2 {
+            unsafe { std::ptr::read(strides.add(1)) }
+        } else {
+            0
+        };
+        let strides_ok = (ndim == 1 && stride0 == 1) || (ndim == 2 && stride0 == 3 && stride1 == 1);
         if !strides_ok {
             return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
         }
     }
-    if dl.byte_offset != 0 || dl.dtype.lanes != 1 {
+    if byte_offset != 0 {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
-    let nelem = need;
-    let code = dl.dtype.code as u8;
-    let bits = dl.dtype.bits;
-    if dl.data.is_null() {
+    if data.is_null() {
         return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
-    let vals: Vec<f64> = if code == rkr_dl_type_code::RKR_DL_FLOAT && bits == 64 {
-        if !(dl.data as usize).is_multiple_of(std::mem::align_of::<f64>()) {
+    let nelem = need;
+    let vals: Vec<f64> = if bits == 64 {
+        if !data.addr().is_multiple_of(std::mem::align_of::<f64>()) {
             return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
         }
-        let s = unsafe { std::slice::from_raw_parts(dl.data as *const f64, nelem) };
-        s.to_vec()
-    } else if code == rkr_dl_type_code::RKR_DL_FLOAT && bits == 32 {
-        if !(dl.data as usize).is_multiple_of(std::mem::align_of::<f32>()) {
-            return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
-        }
-        let s = unsafe { std::slice::from_raw_parts(dl.data as *const f32, nelem) };
-        s.iter().map(|&x| x as f64).collect()
+        let src = data.cast::<f64>();
+        (0..nelem)
+            .map(|i| unsafe { std::ptr::read_unaligned(src.add(i)) })
+            .collect()
     } else {
-        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+        if !data.addr().is_multiple_of(std::mem::align_of::<f32>()) {
+            return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+        }
+        let src = data.cast::<f32>();
+        (0..nelem)
+            .map(|i| unsafe { std::ptr::read_unaligned(src.add(i)) } as f64)
+            .collect()
     };
     if frame.positions.nrows() != n || frame.positions.ncols() != 3 {
         return note_validation(&format!(
@@ -6875,11 +6947,9 @@ pub unsafe extern "C" fn rkr_dlpack_delete(tensor: *mut RKRDLManagedTensorVersio
     if tensor.is_null() {
         return;
     }
-    unsafe {
-        let t = &mut *tensor;
-        if let Some(del) = t.deleter {
-            del(tensor);
-        }
+    let deleter = unsafe { std::ptr::addr_of!((*tensor).deleter).read() };
+    if let Some(del) = deleter {
+        unsafe { del(tensor) };
     }
 }
 

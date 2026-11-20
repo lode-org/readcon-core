@@ -92,9 +92,9 @@ impl CudaF64Array {
     }
 
     pub fn device_ptr(&self) -> *mut std::ffi::c_void {
-        // CudaSlice implements DevicePtr; data pointer is on the GPU.
+        // The value is a device address, not a pointer into a Rust allocation.
         let p: u64 = *self.slice.device_ptr();
-        p as usize as *mut std::ffi::c_void
+        std::ptr::without_provenance_mut(p as usize)
     }
 
     pub fn dl_device(&self) -> DLDevice {

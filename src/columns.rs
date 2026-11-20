@@ -135,6 +135,41 @@ pub fn positions_parallel(
     }
 }
 
+/// A column pointer shared by workers. `wrapping_byte_add` keeps its provenance.
+#[cfg(feature = "parallel")]
+struct SendMut<T>(*mut T);
+
+#[cfg(feature = "parallel")]
+impl<T> Copy for SendMut<T> {}
+#[cfg(feature = "parallel")]
+impl<T> Clone for SendMut<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+// Workers write disjoint rows of one allocation that outlives the join.
+#[cfg(feature = "parallel")]
+unsafe impl<T> Send for SendMut<T> {}
+#[cfg(feature = "parallel")]
+unsafe impl<T> Sync for SendMut<T> {}
+
+#[cfg(feature = "parallel")]
+impl<T> SendMut<T> {
+    fn get(self) -> *mut T {
+        self.0
+    }
+
+    fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    unsafe fn add(self, index: usize) -> *mut T {
+        let bytes = index.wrapping_mul(std::mem::size_of::<T>());
+        self.0.wrapping_byte_add(bytes)
+    }
+}
+
 #[cfg(feature = "parallel")]
 fn positions_parallel_fast(
     bytes: &[u8],
@@ -197,9 +232,9 @@ fn positions_parallel_fast(
         ids = Vec::with_capacity(n_atoms);
         flags = Vec::with_capacity(n_atoms);
     }
-    let positions_ptr = positions.as_mut_ptr() as usize;
-    let ids_ptr = ids.as_mut_ptr() as usize;
-    let flags_ptr = flags.as_mut_ptr() as usize;
+    let positions_ptr = SendMut(positions.as_mut_ptr());
+    let ids_ptr = SendMut(ids.as_mut_ptr());
+    let flags_ptr = SendMut(flags.as_mut_ptr());
     if let Some((span, head0, spec, block_lines)) = direct {
         let count0 = out.counts[0];
         let nframes = out.n_frames;
@@ -267,9 +302,9 @@ fn positions_parallel_fast(
             workers,
             rich,
             crate::parser::CoordPtrs {
-                xyz: positions_ptr as *mut f64,
-                ids: ids_ptr as *mut u64,
-                flags: flags_ptr as *mut u8,
+                xyz: positions_ptr.get(),
+                ids: ids_ptr.get(),
+                flags: flags_ptr.get(),
             },
         )?;
     } else if !jobs.is_empty() {
@@ -323,18 +358,18 @@ fn positions_parallel_fast(
                     unsafe {
                         std::ptr::copy_nonoverlapping(
                             parsed.positions.as_ptr(),
-                            (positions_ptr as *mut f64).add(dest * 3),
+                            positions_ptr.add(dest * 3),
                             parsed.positions.len(),
                         );
                         if rich {
                             std::ptr::copy_nonoverlapping(
                                 parsed.ids.as_ptr(),
-                                (ids_ptr as *mut u64).add(dest),
+                                ids_ptr.add(dest),
                                 parsed.ids.len(),
                             );
                             std::ptr::copy_nonoverlapping(
                                 parsed.flags.as_ptr(),
-                                (flags_ptr as *mut u8).add(dest),
+                                flags_ptr.add(dest),
                                 parsed.flags.len(),
                             );
                         }
@@ -362,9 +397,9 @@ fn positions_parallel_fast(
                     frame_workers,
                     rich,
                     crate::parser::CoordPtrs {
-                        xyz: positions_ptr as *mut f64,
-                        ids: ids_ptr as *mut u64,
-                        flags: flags_ptr as *mut u8,
+                        xyz: positions_ptr.get(),
+                        ids: ids_ptr.get(),
+                        flags: flags_ptr.get(),
                     },
                 )?;
             }
@@ -641,14 +676,14 @@ fn parse_repeated_copies(
         ids = Vec::with_capacity(n_atoms);
         flags = Vec::with_capacity(n_atoms);
     }
-    let positions_ptr = positions.as_mut_ptr() as usize;
+    let positions_ptr = SendMut(positions.as_mut_ptr());
     let masses_ptr = if rich {
-        masses.as_mut_ptr() as usize
+        SendMut(masses.as_mut_ptr())
     } else {
-        0
+        SendMut(std::ptr::null_mut())
     };
-    let ids_ptr = ids.as_mut_ptr() as usize;
-    let flags_ptr = flags.as_mut_ptr() as usize;
+    let ids_ptr = SendMut(ids.as_mut_ptr());
+    let flags_ptr = SendMut(flags.as_mut_ptr());
     let saw_section = std::sync::atomic::AtomicBool::new(false);
     let lost_stock = std::sync::atomic::AtomicBool::new(false);
     let saw_section = &saw_section;
@@ -756,10 +791,10 @@ struct CopiedSpan {
 
 #[cfg(feature = "parallel")]
 struct CopiedCols {
-    positions: usize,
-    masses: usize,
-    ids: usize,
-    flags: usize,
+    positions: SendMut<f64>,
+    masses: SendMut<f64>,
+    ids: SendMut<u64>,
+    flags: SendMut<u8>,
 }
 
 /// Parse one copied frame straight into the shared column buffers.
@@ -793,17 +828,13 @@ fn fill_copied_frame(
     for row in 0..count {
         let ((row_xyz, fixed, atom_id), next) = parse_coord_row_at(bytes, pos, spec, row as u64)?;
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                row_xyz.as_ptr(),
-                (positions as *mut f64).add((dest + row) * 3),
-                3,
-            );
-            if masses != 0 {
-                *((masses as *mut f64).add(dest + row)) = mass;
+            std::ptr::copy_nonoverlapping(row_xyz.as_ptr(), positions.add((dest + row) * 3), 3);
+            if !masses.is_null() {
+                *masses.add(dest + row) = mass;
             }
             if rich {
-                *((ids as *mut u64).add(dest + row)) = atom_id;
-                *((flags as *mut u8).add(dest + row)) = flag_bits(fixed);
+                *ids.add(dest + row) = atom_id;
+                *flags.add(dest + row) = flag_bits(fixed);
             }
         }
         pos = next;
@@ -949,9 +980,9 @@ struct TiledPlan {
     spec: u32,
     block_lines: usize,
     rich: bool,
-    positions: usize,
-    ids: usize,
-    flags: usize,
+    positions: SendMut<f64>,
+    ids: SendMut<u64>,
+    flags: SendMut<u8>,
 }
 
 /// One worker owns a contiguous run of equal frames and writes each row
@@ -1023,12 +1054,12 @@ fn fill_one_tiled_frame(
         unsafe {
             std::ptr::copy_nonoverlapping(
                 row_xyz.as_ptr(),
-                (plan.positions as *mut f64).add((dest + row) * 3),
+                plan.positions.add((dest + row) * 3),
                 3,
             );
             if plan.rich {
-                *((plan.ids as *mut u64).add(dest + row)) = atom_id;
-                *((plan.flags as *mut u8).add(dest + row)) = flag_bits(fixed);
+                *plan.ids.add(dest + row) = atom_id;
+                *plan.flags.add(dest + row) = flag_bits(fixed);
             }
         }
         pos = next;
@@ -1613,7 +1644,7 @@ fn parse_one_frame(
                         acc += *nrows;
                     }
                     out.masses.reserve(acc - origin);
-                    let ptr = out.masses.as_mut_ptr() as usize;
+                    let ptr = SendMut(out.masses.as_mut_ptr());
                     let mass_value = *mass;
                     let nchunks = chunks.len();
                     if nchunks >= 2 {
@@ -1624,7 +1655,7 @@ fn parse_one_frame(
                                 let rows = chunks[index].1;
                                 for step in 0..rows {
                                     unsafe {
-                                        *((ptr as *mut f64).add(start + step)) = mass_value;
+                                        *ptr.add(start + step) = mass_value;
                                     }
                                 }
                             });

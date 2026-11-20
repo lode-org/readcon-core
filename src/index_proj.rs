@@ -408,7 +408,7 @@ pub fn frame_byte_spans(
     let mut out = Vec::new();
     while let Some(item) = it.next_with_raw_span(file_contents) {
         let (_frame, span) = item?;
-        let start = span.as_ptr() as usize - file_contents.as_ptr() as usize;
+        let start = span.as_ptr().addr() - file_contents.as_ptr().addr();
         let end = start + span.len();
         out.push(FrameByteSpan { start, end });
     }

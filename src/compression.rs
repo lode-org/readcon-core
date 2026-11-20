@@ -592,7 +592,7 @@ fn coord_member_rows(data: &[u8], parts: &[&[u8]]) -> Option<Vec<(u32, u32)>> {
 fn count_newlines(data: &[u8]) -> usize {
     #[cfg(target_arch = "x86_64")]
     {
-        static AVX2: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        static AVX2: crate::parser::ForkOnce<bool> = crate::parser::ForkOnce::new();
         if *AVX2.get_or_init(|| is_x86_feature_detected!("avx2")) {
             return unsafe { count_newlines_avx2(data) };
         }
@@ -1203,7 +1203,17 @@ fn inflate_sized(
     ends.extend_from_slice(&starts[1..]);
     ends.push(bytes.len());
     let error = std::sync::Mutex::new(None);
-    let base = out.as_mut_ptr() as usize;
+    #[derive(Copy, Clone)]
+    struct SendBytes(*mut u8);
+    // Workers write disjoint ranges of `out`, which outlives the join.
+    unsafe impl Send for SendBytes {}
+    unsafe impl Sync for SendBytes {}
+    impl SendBytes {
+        unsafe fn at(self, offset: usize) -> *mut u8 {
+            self.0.wrapping_byte_add(offset)
+        }
+    }
+    let base = SendBytes(out.as_mut_ptr());
     par_ranges(starts.len(), threads, |begin, end| {
         for index in begin..end {
             if ends[index] < starts[index] || ends[index] > bytes.len() {
@@ -1214,9 +1224,8 @@ fn inflate_sized(
                 return;
             }
             let src = &bytes[starts[index]..ends[index]];
-            let dst = unsafe {
-                std::slice::from_raw_parts_mut((base as *mut u8).add(offsets[index]), plain[index])
-            };
+            let dst =
+                unsafe { std::slice::from_raw_parts_mut(base.at(offsets[index]), plain[index]) };
             if let Err(err) = decode(src, dst) {
                 *error.lock().unwrap() = Some(err);
                 return;

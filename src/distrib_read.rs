@@ -879,13 +879,9 @@ mod tests {
     }
 
     fn shared_universe() -> &'static ::mpi::environment::Universe {
-        use std::sync::OnceLock;
-        static SLOT: OnceLock<usize> = OnceLock::new();
-        let ptr = *SLOT.get_or_init(|| {
-            let universe = ::mpi::initialize().expect("MPI_Init");
-            Box::into_raw(Box::new(universe)) as usize
-        });
-        unsafe { &*(ptr as *const ::mpi::environment::Universe) }
+        static SLOT: crate::parser::ForkOnce<::mpi::environment::Universe> =
+            crate::parser::ForkOnce::new();
+        SLOT.get_or_init(|| ::mpi::initialize().expect("MPI_Init"))
     }
 
     fn mpi_test_lock() -> std::sync::MutexGuard<'static, ()> {
@@ -1238,4 +1234,5 @@ mod atom_range_tests {
         assert_eq!(atoms[0].atom_id, 7);
         assert_eq!(atoms[1].atom_id, 8);
     }
+
 }

@@ -10,6 +10,32 @@ use std::path::Path;
 
 use crate::error::ConvertError;
 
+/// A pointer workers share. `wrapping_byte_add` keeps the allocation's provenance.
+struct SendMut<T>(*mut T);
+
+impl<T> Copy for SendMut<T> {}
+impl<T> Clone for SendMut<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+// Each worker writes a disjoint index, and the allocation outlives the join.
+unsafe impl<T> Send for SendMut<T> {}
+unsafe impl<T> Sync for SendMut<T> {}
+
+impl<T> SendMut<T> {
+    #[cfg(feature = "parallel")]
+    fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    unsafe fn add(self, index: usize) -> *mut T {
+        let bytes = index.wrapping_mul(std::mem::size_of::<T>());
+        self.0.wrapping_byte_add(bytes)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct XyzColumn {
     pub name: String,
@@ -410,7 +436,7 @@ pub fn tables_from_extxyz_bytes_reporting(
     }
     let fast_nfloat = species_pos_width(&specs);
     let mut cell = vec![0.0f64; n_frames * 6];
-    let cell_ptr = cell.as_mut_ptr() as usize;
+    let cell_ptr = SendMut(cell.as_mut_ptr());
     let mut columns: Vec<XyzColumn> = specs
         .iter()
         .map(|spec| {
@@ -454,12 +480,12 @@ pub fn tables_from_extxyz_bytes_reporting(
     // One fat frame has no frame axis to split. Splitting the atoms keeps
     // eight workers from doing the whole body on one thread after the
     // line index, which was slower than the serial scan.
-    let column_ptrs: Vec<(usize, usize, u8, usize)> = columns
+    let column_ptrs: Vec<(SendMut<String>, SendMut<f64>, u8, usize)> = columns
         .iter_mut()
         .map(|column| {
             (
-                column.text.as_mut_ptr() as usize,
-                column.real.as_mut_ptr() as usize,
+                SendMut(column.text.as_mut_ptr()),
+                SendMut(column.real.as_mut_ptr()),
                 column.kind,
                 column.width,
             )
@@ -500,7 +526,7 @@ pub fn tables_from_extxyz_bytes_reporting(
                             unsafe {
                                 std::ptr::copy_nonoverlapping(
                                     frame_cell.as_ptr(),
-                                    (cell_ptr as *mut f64).add(frame * 6),
+                                    cell_ptr.add(frame * 6),
                                     6,
                                 );
                             }
@@ -523,10 +549,7 @@ pub fn tables_from_extxyz_bytes_reporting(
                                     } else if kind == b'S' {
                                         let text = String::from_utf8_lossy(token).into_owned();
                                         unsafe {
-                                            std::ptr::write(
-                                                (text_ptr as *mut String).add(index),
-                                                text,
-                                            );
+                                            std::ptr::write(text_ptr.add(index), text);
                                         }
                                     } else {
                                         let value = if kind == b'L' {
@@ -535,7 +558,7 @@ pub fn tables_from_extxyz_bytes_reporting(
                                             parse_token_f64(token)?
                                         };
                                         unsafe {
-                                            *((real_ptr as *mut f64).add(index)) = value;
+                                            *real_ptr.add(index) = value;
                                         }
                                     }
                                 }
@@ -669,7 +692,7 @@ fn split_lines_indexed(bytes: &[u8], workers: usize) -> Vec<&[u8]> {
     }
     // The length stays 0 until every slot has a line. `&[u8]` has no
     // destructor, so a short write still drops the empty vector.
-    let ptr = lines.as_mut_ptr() as usize;
+    let ptr = SendMut(lines.as_mut_ptr());
     let newlines = &newlines;
     let chunk = n.div_ceil(workers.max(1)).max(1);
     std::thread::scope(|scope| {
@@ -691,7 +714,7 @@ fn split_lines_indexed(bytes: &[u8], workers: usize) -> Vec<&[u8]> {
                         end -= 1;
                     }
                     unsafe {
-                        *((ptr as *mut &[u8]).add(i)) = &bytes[start..end];
+                        *ptr.add(i) = &bytes[start..end];
                     }
                 }
             });
@@ -786,7 +809,7 @@ fn fill_species_pos_parallel(
     lines: &[&[u8]],
     starts: &[usize],
     mut cell: Vec<f64>,
-    columns: Vec<XyzColumn>,
+    mut columns: Vec<XyzColumn>,
     batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
 ) -> Result<XyzTables, ConvertError> {
     let XyzShape {
@@ -794,16 +817,19 @@ fn fill_species_pos_parallel(
         atoms: n_atoms,
         nfloat,
     } = shape;
-    let cell_ptr = cell.as_mut_ptr() as usize;
-    let pos_ptr = columns
-        .iter()
-        .find(|column| column.name == "pos")
-        .map(|column| column.real.as_ptr() as usize)
-        .ok_or("pos")?;
+    let cell_ptr = SendMut(cell.as_mut_ptr());
+    let pos_ptr = SendMut(
+        columns
+            .iter_mut()
+            .find(|column| column.name == "pos")
+            .ok_or("pos")?
+            .real
+            .as_mut_ptr(),
+    );
     let mass_ptr = columns
-        .iter()
+        .iter_mut()
         .find(|column| column.name == "masses" || column.name == "mass")
-        .map(|column| column.real.as_ptr() as usize);
+        .map(|column| SendMut(column.real.as_mut_ptr()));
     if n_frames == 1 && n_atoms >= 4096 && workers >= 2 {
         let comment = lines[starts[0] - 1];
         let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
@@ -829,15 +855,11 @@ fn fill_species_pos_parallel(
                         };
                         ids.push(intern_symbol(&mut pool, sym));
                         unsafe {
-                            std::ptr::copy_nonoverlapping(
-                                xyz.as_ptr(),
-                                (pos_ptr as *mut f64).add(atom * 3),
-                                3,
-                            );
+                            std::ptr::copy_nonoverlapping(xyz.as_ptr(), pos_ptr.add(atom * 3), 3);
                         }
                         if let (Some(mass), Some(dest)) = (mass, mass_ptr) {
                             unsafe {
-                                *((dest as *mut f64).add(atom)) = mass;
+                                *dest.add(atom) = mass;
                             }
                         }
                     }
@@ -915,7 +937,7 @@ fn fill_species_pos_parallel(
                     unsafe {
                         std::ptr::copy_nonoverlapping(
                             frame_cell.as_ptr(),
-                            (cell_ptr as *mut f64).add(frame * 6),
+                            cell_ptr.add(frame * 6),
                             6,
                         );
                     }
@@ -929,13 +951,13 @@ fn fill_species_pos_parallel(
                         unsafe {
                             std::ptr::copy_nonoverlapping(
                                 xyz.as_ptr(),
-                                (pos_ptr as *mut f64).add((base + atom) * 3),
+                                pos_ptr.add((base + atom) * 3),
                                 3,
                             );
                         }
                         if let (Some(mass), Some(dest)) = (mass, mass_ptr) {
                             unsafe {
-                                *((dest as *mut f64).add(base + atom)) = mass;
+                                *dest.add(base + atom) = mass;
                             }
                         }
                     }
@@ -1002,7 +1024,7 @@ fn fill_nan(n: usize) -> Vec<f64> {
     if n == 0 {
         return values;
     }
-    let ptr = values.as_mut_ptr() as usize;
+    let ptr = SendMut(values.as_mut_ptr());
     let threads = (n / 65_536).clamp(1, 8);
     std::thread::scope(|scope| {
         let chunk = n.div_ceil(threads);
@@ -1013,9 +1035,8 @@ fn fill_nan(n: usize) -> Vec<f64> {
             }
             let to = (from + chunk).min(n);
             scope.spawn(move || unsafe {
-                let dest = ptr as *mut f64;
                 for index in from..to {
-                    *dest.add(index) = f64::NAN;
+                    *ptr.add(index) = f64::NAN;
                 }
             });
         }
@@ -1243,21 +1264,21 @@ fn fill_stream_frames(
         Vec::new()
     };
     let mut cell = Vec::<f64>::with_capacity(n_frames.saturating_mul(6));
-    let pos_ptr = positions.as_mut_ptr() as usize;
-    let mass_ptr = masses.as_mut_ptr() as usize;
-    let cell_ptr = cell.as_mut_ptr() as usize;
-    let extra_ptrs: Vec<usize> = (0..specs.len())
+    let pos_ptr = SendMut(positions.as_mut_ptr());
+    let mass_ptr = SendMut(masses.as_mut_ptr());
+    let cell_ptr = SendMut(cell.as_mut_ptr());
+    let extra_ptrs: Vec<SendMut<f64>> = (0..specs.len())
         .map(|index| {
             extra_at[index]
-                .map(|extra| extras[extra].as_mut_ptr() as usize)
-                .unwrap_or(0)
+                .map(|extra| SendMut(extras[extra].as_mut_ptr()))
+                .unwrap_or(SendMut(std::ptr::null_mut()))
         })
         .collect();
     let frame_chunk = n_frames.div_ceil(workers.max(1)).max(1);
     let mut slots: Vec<Option<(Vec<String>, Vec<u32>)>> = Vec::new();
     let worker_count = n_frames.div_ceil(frame_chunk).min(workers.max(1));
     slots.resize_with(worker_count, || None);
-    let slots_ptr = slots.as_mut_ptr() as usize;
+    let slots_ptr = SendMut(slots.as_mut_ptr());
     let extra_ptrs = extra_ptrs.as_slice();
     crate::parser::on_pool(worker_count.max(1), || {
         use rayon::prelude::*;
@@ -1290,11 +1311,7 @@ fn fill_stream_frames(
                     return;
                 };
                 unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        frame_cell.as_ptr(),
-                        (cell_ptr as *mut f64).add(frame * 6),
-                        6,
-                    );
+                    std::ptr::copy_nonoverlapping(frame_cell.as_ptr(), cell_ptr.add(frame * 6), 6);
                 }
                 let mut pos = if frame * stride + 2 == 0 {
                     0
@@ -1320,8 +1337,7 @@ fn fill_stream_frames(
                 }
             }
             unsafe {
-                *(slots_ptr as *mut Option<(Vec<String>, Vec<u32>)>).add(worker) =
-                    Some((pool, ids));
+                *slots_ptr.add(worker) = Some((pool, ids));
             }
         });
     });
@@ -1427,7 +1443,7 @@ fn combine_species(
         vec![0u32; n_atoms]
     } else {
         let mut ids = Vec::<u32>::with_capacity(n_atoms);
-        let ptr = ids.as_mut_ptr() as usize;
+        let ptr = SendMut(ids.as_mut_ptr());
         let mut spans = Vec::with_capacity(locals.len());
         let mut at = 0usize;
         for local in &locals {
@@ -1442,7 +1458,7 @@ fn combine_species(
                 let start = spans[worker];
                 for (offset, id) in local.iter().enumerate() {
                     unsafe {
-                        *((ptr as *mut u32).add(start + offset)) = map[*id as usize];
+                        *ptr.add(start + offset) = map[*id as usize];
                     }
                 }
             });
@@ -1479,17 +1495,17 @@ fn fill_stream_chunks(
     } else {
         Vec::new()
     };
-    let pos_ptr = positions.as_mut_ptr() as usize;
-    let mass_ptr = masses.as_mut_ptr() as usize;
-    let extra_ptrs: Vec<usize> = (0..specs.len())
+    let pos_ptr = SendMut(positions.as_mut_ptr());
+    let mass_ptr = SendMut(masses.as_mut_ptr());
+    let extra_ptrs: Vec<SendMut<f64>> = (0..specs.len())
         .map(|index| {
             extra_at[index]
-                .map(|extra| extras[extra].as_mut_ptr() as usize)
-                .unwrap_or(0)
+                .map(|extra| SendMut(extras[extra].as_mut_ptr()))
+                .unwrap_or(SendMut(std::ptr::null_mut()))
         })
         .collect();
     let mut slots: Vec<Option<(Vec<String>, Vec<u32>)>> = (0..chunks.len()).map(|_| None).collect();
-    let slots_ptr = slots.as_mut_ptr() as usize;
+    let slots_ptr = SendMut(slots.as_mut_ptr());
     let extra_ptrs = extra_ptrs.as_slice();
     crate::parser::on_pool(chunks.len().max(1), || {
         use rayon::prelude::*;
@@ -1513,8 +1529,7 @@ fn fill_stream_chunks(
                 }
             }
             unsafe {
-                *(slots_ptr as *mut Option<(Vec<String>, Vec<u32>)>).add(worker) =
-                    Some((pool, ids));
+                *slots_ptr.add(worker) = Some((pool, ids));
             }
         });
     });
@@ -1566,7 +1581,7 @@ fn fill_stream_chunks(
         vec![0u32; n_atoms]
     } else {
         let mut ids = Vec::<u32>::with_capacity(n_atoms);
-        let ptr = ids.as_mut_ptr() as usize;
+        let ptr = SendMut(ids.as_mut_ptr());
         let mut spans = Vec::with_capacity(locals.len());
         let mut base = 0usize;
         for local in &locals {
@@ -1581,7 +1596,7 @@ fn fill_stream_chunks(
                 let start = spans[worker];
                 for (offset, id) in local.iter().enumerate() {
                     unsafe {
-                        *((ptr as *mut u32).add(start + offset)) = map[*id as usize];
+                        *ptr.add(start + offset) = map[*id as usize];
                     }
                 }
             });
@@ -1631,7 +1646,7 @@ fn start_atom(chunks: &[(usize, usize)], worker: usize) -> usize {
 #[cfg(feature = "parallel")]
 struct StreamSlot {
     width: usize,
-    base: usize,
+    base: SendMut<f64>,
     /// 0 position, 1 mass, 2 other real column.
     mode: u8,
 }
@@ -1639,9 +1654,9 @@ struct StreamSlot {
 #[cfg(feature = "parallel")]
 fn stream_slots(
     specs: &[ColumnSpec],
-    pos_ptr: usize,
-    mass_ptr: usize,
-    extra_ptrs: &[usize],
+    pos_ptr: SendMut<f64>,
+    mass_ptr: SendMut<f64>,
+    extra_ptrs: &[SendMut<f64>],
 ) -> Vec<StreamSlot> {
     let mut slots = Vec::with_capacity(specs.len());
     for (index, spec) in specs.iter().enumerate().skip(1) {
@@ -1660,7 +1675,10 @@ fn stream_slots(
         } else {
             slots.push(StreamSlot {
                 width: spec.width,
-                base: extra_ptrs.get(index).copied().unwrap_or(0),
+                base: extra_ptrs
+                    .get(index)
+                    .copied()
+                    .unwrap_or(SendMut(std::ptr::null_mut())),
                 mode: 2,
             });
         }
@@ -1722,7 +1740,7 @@ fn write_stream_line(
             let Some(value) = next_number(line, &mut index) else {
                 return false;
             };
-            if slot.base == 0 {
+            if slot.base.is_null() {
                 continue;
             }
             let at = match slot.mode {
@@ -1731,7 +1749,7 @@ fn write_stream_line(
                 _ => atom * slot.width + k,
             };
             unsafe {
-                *((slot.base as *mut f64).add(at)) = value;
+                *slot.base.add(at) = value;
             }
         }
     }
@@ -2528,7 +2546,16 @@ pub(crate) fn extxyz_append_with_threads(
         let start = out.len();
         out.reserve(total);
         if total > 0 {
-            let dest = unsafe { out.as_mut_ptr().add(start) } as usize;
+            #[derive(Copy, Clone)]
+            struct SendConst(*const u8);
+            unsafe impl Send for SendConst {}
+            unsafe impl Sync for SendConst {}
+            impl SendConst {
+                fn get(self) -> *const u8 {
+                    self.0
+                }
+            }
+            let dest = SendMut(unsafe { out.as_mut_ptr().add(start) });
             std::thread::scope(|scope| {
                 let mut at = 0usize;
                 for part in &parts {
@@ -2536,14 +2563,10 @@ pub(crate) fn extxyz_append_with_threads(
                     if n == 0 {
                         continue;
                     }
-                    let src = part.as_ptr() as usize;
+                    let src = SendConst(part.as_ptr());
                     let offset = at;
                     scope.spawn(move || unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            src as *const u8,
-                            (dest + offset) as *mut u8,
-                            n,
-                        );
+                        std::ptr::copy_nonoverlapping(src.get(), dest.add(offset), n);
                     });
                     at += n;
                 }

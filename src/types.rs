@@ -465,9 +465,10 @@ impl FrameMeta {
         // shared parses answer the repeat lookups.
         META_LINE_CACHE.with(|cell| {
             let mut cache = cell.borrow_mut();
-            if let Some(index) = cache.iter().position(|entry| {
-                std::sync::Arc::ptr_eq(&entry.raw, &self.raw) || *entry.raw == *self.raw
-            }) {
+            if let Some(index) = cache
+                .iter()
+                .position(|entry| entry.raw.as_ref() == self.raw.as_ref())
+            {
                 if index != 0 {
                     let entry = cache.remove(index);
                     cache.insert(0, entry);
@@ -481,7 +482,7 @@ impl FrameMeta {
             cache.insert(
                 0,
                 ParsedMetaLine {
-                    raw: std::sync::Arc::clone(&self.raw),
+                    raw: self.raw.as_ref().into(),
                     map: parsed,
                 },
             );
@@ -653,7 +654,7 @@ fn minor_from_line(line: &str) -> (u64, Option<Box<str>>) {
 }
 
 struct ParsedMetaLine {
-    raw: std::sync::Arc<str>,
+    raw: Box<str>,
     map: BTreeMap<String, serde_json::Value>,
 }
 
@@ -662,8 +663,7 @@ const META_LINE_CACHE_CAP: usize = 4;
 std::thread_local! {
     // Native builds keep the bounded cache alive until process exit.
     // Free-threaded CPython can tear worker TLS down while libc is still
-    // running other TLS destructors; dropping the cached Arcs there produces
-    // a TSan-visible libc TLS-dtor race. At most four parsed lines remain
+    // running other TLS destructors. At most four parsed lines remain
     // per exited thread. Miri does not run those destructors concurrently,
     // and it reports the retained lines as leaks, so under Miri the cache
     // is an ordinary thread-local and drops with the thread.
@@ -1380,7 +1380,7 @@ pub(crate) fn mark_uniform_symbol_drop(atoms: &[AtomDatum]) {
     let symbol = std::sync::Arc::as_ptr(&atoms[0].symbol) as *const u8;
     SYMBOL_DROP_HINT.with(|hint| {
         hint.set(SymbolDropHint {
-            atoms: atoms.as_ptr() as usize,
+            atoms: atoms.as_ptr().addr(),
             symbol,
             n: atoms.len(),
         });
@@ -1390,7 +1390,7 @@ pub(crate) fn mark_uniform_symbol_drop(atoms: &[AtomDatum]) {
 /// Drop this atom buffer atom by atom. Call before an atom takes a box.
 fn clear_uniform_symbol_drop(atoms: &[AtomDatum]) {
     SYMBOL_DROP_HINT.with(|hint| {
-        if hint.get().atoms == atoms.as_ptr() as usize {
+        if hint.get().atoms == atoms.as_ptr().addr() {
             hint.set(SymbolDropHint {
                 atoms: 0,
                 symbol: std::ptr::null(),
@@ -1406,7 +1406,7 @@ fn bulk_drop_uniform_symbols(atoms: &mut Vec<AtomDatum>) {
         return;
     }
     let hint = SYMBOL_DROP_HINT.with(|hint| hint.get());
-    if hint.n != n || hint.atoms != atoms.as_ptr() as usize {
+    if hint.n != n || hint.atoms != atoms.as_ptr().addr() {
         return;
     }
     SYMBOL_DROP_HINT.with(|hint| {
@@ -1491,53 +1491,44 @@ fn stash_snapshot_atom_spare(buf: Vec<std::mem::MaybeUninit<AtomDatum>>) {
     });
 }
 
-fn arc_str_strong<T: ?Sized>(symbol: &std::sync::Arc<T>) -> *const std::sync::atomic::AtomicUsize {
-    let header = 2 * std::mem::size_of::<usize>();
-    let align = std::mem::align_of_val(symbol.as_ref());
-    let rem = header % align;
-    let offset = if rem == 0 {
-        header
-    } else {
-        header + (align - rem)
-    };
-    let bytes = std::sync::Arc::as_ptr(symbol) as *const u8;
-    unsafe { bytes.sub(offset) as *const std::sync::atomic::AtomicUsize }
-}
-
 fn release_arc_str_count<T: ?Sized>(symbol: &std::sync::Arc<T>, n: usize) {
     if n == 0 {
         return;
     }
-    unsafe {
-        (*arc_str_strong(symbol)).fetch_sub(n - 1, std::sync::atomic::Ordering::Release);
+    let ptr = std::sync::Arc::as_ptr(symbol);
+    // Leave the last count for an `Arc` drop. This API can free the
+    // allocation when a decrement reaches zero.
+    for _ in 1..n {
+        unsafe { std::sync::Arc::decrement_strong_count(ptr) };
     }
     // The atoms can hold the last references. The final count is an `Arc`
     // drop, so the string is freed when no other owner remains.
-    drop(share_arc_str(symbol));
+    drop(unsafe { share_arc_str(symbol) });
 }
 
-/// Add `extra` strong references to `symbol` in one atomic add.
+/// Add `extra` strong references to `symbol`.
 ///
 /// Pair each added count with [`share_arc_str`]. The source `Arc` must stay
 /// alive until those shares exist, or the allocation can be freed early.
+/// Use the public `Arc` API rather than relying on its private header layout.
 #[cfg(any(feature = "chemfiles", test))]
 pub(crate) fn bump_arc_str<T: ?Sized>(symbol: &std::sync::Arc<T>, extra: usize) {
-    if extra == 0 {
-        return;
-    }
-    unsafe {
-        (*arc_str_strong(symbol)).fetch_add(extra, std::sync::atomic::Ordering::Relaxed);
+    let ptr = std::sync::Arc::as_ptr(symbol);
+    for _ in 0..extra {
+        unsafe { std::sync::Arc::increment_strong_count(ptr) };
     }
 }
 
 /// One strong reference already counted by [`bump_arc_str`].
-pub(crate) fn share_arc_str<T: ?Sized>(symbol: &std::sync::Arc<T>) -> std::sync::Arc<T> {
+pub(crate) unsafe fn share_arc_str<T: ?Sized>(
+    symbol: &std::sync::Arc<T>,
+) -> std::sync::Arc<T> {
     unsafe { std::sync::Arc::from_raw(std::sync::Arc::as_ptr(symbol)) }
 }
 
 impl Drop for ConFrame {
     fn drop(&mut self) {
-        crate::writer::invalidate_packed_lengths_if(self as *const Self as usize);
+        crate::writer::invalidate_packed_lengths_if((self as *const Self).addr());
         bulk_drop_uniform_symbols(&mut self.atom_data);
     }
 }
@@ -1796,14 +1787,14 @@ impl<'a> CoordSnapshot<'a> {
         let ends = sources.next().map(|first| {
             let last = sources.last().unwrap_or(first);
             (
-                *first as *const ConFrame as usize,
-                *last as *const ConFrame as usize,
+                (*first as *const ConFrame).addr(),
+                (*last as *const ConFrame).addr(),
             )
         });
         let identities: Arc<[usize]> = frames
             .iter()
             .map(|slot| {
-                slot.map(|frame| frame as *const ConFrame as usize)
+                slot.map(|frame| (frame as *const ConFrame).addr())
                     .unwrap_or(0)
             })
             .collect();
@@ -1892,7 +1883,7 @@ impl<'a> CoordSnapshot<'a> {
             .frames
             .iter()
             .flatten()
-            .map(|frame| frame as *const ConFrame as usize)
+            .map(|frame| (frame as *const ConFrame).addr())
             .collect();
         if view_identities.is_empty() {
             return None;
@@ -2021,7 +2012,7 @@ impl Drop for CoordSnapshot<'_> {
             self.frames
                 .iter()
                 .flatten()
-                .map(|frame| frame as *const ConFrame as usize),
+                .map(|frame| (frame as *const ConFrame).addr()),
         );
         let mut views = SnapshotViewGuard {
             frames: std::mem::take(&mut self.frames),
@@ -5038,6 +5029,35 @@ impl ConFrameBuilder {
             .expect("masses standard layout invariant violated")
     }
 
+    /// The positions allocation. FFI exports this pointer, not a slice.
+    pub(crate) fn positions_2d_mut(&mut self) -> &mut ndarray::ArcArray2<f64> {
+        &mut self.positions
+    }
+
+    pub(crate) fn velocities_2d_mut(&mut self) -> &mut ndarray::ArcArray2<f64> {
+        &mut self.velocities
+    }
+
+    pub(crate) fn forces_2d_mut(&mut self) -> &mut ndarray::ArcArray2<f64> {
+        &mut self.forces
+    }
+
+    pub(crate) fn displacements_2d_mut(&mut self) -> &mut ndarray::ArcArray2<f64> {
+        &mut self.displacements
+    }
+
+    pub(crate) fn spreads_2d_mut(&mut self) -> &mut ndarray::ArcArray2<f64> {
+        &mut self.spreads
+    }
+
+    pub(crate) fn atom_energies_1d_mut(&mut self) -> &mut ndarray::ArcArray1<f64> {
+        &mut self.atom_energies
+    }
+
+    pub(crate) fn masses_1d_mut(&mut self) -> &mut ndarray::ArcArray1<f64> {
+        &mut self.masses
+    }
+
     /// Per-atom atom_id slice (length `atom_count()`).
     pub fn atom_ids(&self) -> &[u64] {
         self.atom_ids
@@ -5911,7 +5931,7 @@ mod tests {
     fn bulk_drop_is_marked(atoms: &[AtomDatum]) -> bool {
         SYMBOL_DROP_HINT.with(|hint| {
             let hint = hint.get();
-            hint.atoms == atoms.as_ptr() as usize && hint.n == atoms.len()
+            hint.atoms == atoms.as_ptr().addr() && hint.n == atoms.len()
         })
     }
 
@@ -6055,7 +6075,8 @@ mod tests {
         bump_arc_str(&value, n);
         // The shares stand in for the atoms. The bulk drop gives their counts
         // back in one call instead of dropping each one.
-        let mut shares: Vec<Arc<Counted>> = (0..n).map(|_| share_arc_str(&value)).collect();
+        let mut shares: Vec<Arc<Counted>> =
+            (0..n).map(|_| unsafe { share_arc_str(&value) }).collect();
         drop(value);
         assert_eq!(drops.load(Ordering::SeqCst), 0);
         release_arc_str_count(&shares[0], n);
@@ -6071,7 +6092,16 @@ mod tests {
         let weak = Arc::downgrade(&symbol);
         bump_arc_str(&symbol, n);
         let mut atoms: Vec<AtomDatum> = (0..n)
-            .map(|i| AtomDatum::coords(share_arc_str(&symbol), 0.0, 0.0, 0.0, [false; 3], i as u64))
+            .map(|i| {
+                AtomDatum::coords(
+                    unsafe { share_arc_str(&symbol) },
+                    0.0,
+                    0.0,
+                    0.0,
+                    [false; 3],
+                    i as u64,
+                )
+            })
             .collect();
         mark_uniform_symbol_drop(&atoms);
         drop(symbol);
