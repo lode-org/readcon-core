@@ -158,14 +158,17 @@ def main() -> int:
     run_bench.install_wheel(release_wheel, prefix["readcon_release"])
     prefixes = {name: str(path) for name, path in prefix.items()}
     eon_root = str(arms.fetch_eon(WORK / "eon-src"))
+    tip_version = run_bench.installed_version(prefix["readcon_tip_a"])
+    if run_bench.installed_version(prefix["readcon_tip_b"]) != tip_version:
+        fail("tip builds report different versions")
     labels = {
-        "readcon_tip_a": f"0.24.0 {revision} tip-a {tip_a_hash}",
-        "readcon_tip_b": f"0.24.0 {revision} tip-b {tip_b_hash}",
+        "readcon_tip_a": f"{tip_version} {revision} tip-a {tip_a_hash}",
+        "readcon_tip_b": f"{tip_version} {revision} tip-b {tip_b_hash}",
         "readcon_release": release_pin["version"],
         "ase": PINS["ase"]["version"],
         "eon": PINS["eon_reader"]["commit"],
-        "readcon_positions_1": f"0.24.0 {revision} tip-a {tip_a_hash}",
-        "readcon_positions_all": f"0.24.0 {revision} tip-a {tip_a_hash}",
+        "readcon_positions_1": f"{tip_version} {revision} tip-a {tip_a_hash}",
+        "readcon_positions_all": f"{tip_version} {revision} tip-a {tip_a_hash}",
     }
     units = [
         (arm, work, threads, spec) for arm, work, threads in run_bench.arm_table(cores)

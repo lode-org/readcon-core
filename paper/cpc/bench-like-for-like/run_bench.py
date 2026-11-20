@@ -114,6 +114,22 @@ def build_tip(label: str) -> tuple[Path, str]:
     return wheels[0], arms.file_sha256(wheels[0])
 
 
+def installed_version(prefix: Path) -> str:
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(prefix)
+    env.pop("PYTHONHOME", None)
+    completed = subprocess.run(
+        [sys.executable, "-c", "import readcon; print(readcon.__version__, end='')"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0 or not completed.stdout.strip():
+        fail((completed.stderr or "empty readcon version")[-400:])
+    return completed.stdout.strip()
+
+
 def install_wheel(wheel: Path, dest: Path) -> None:
     if dest.exists():
         shutil.rmtree(dest)
@@ -243,14 +259,17 @@ def main() -> int:
     install_wheel(tip_b_wheel, prefix["readcon_tip_b"])
     install_wheel(release_wheel, prefix["readcon_release"])
     prefixes = {name: str(path) for name, path in prefix.items()}
+    tip_version = installed_version(prefix["readcon_tip_a"])
+    if installed_version(prefix["readcon_tip_b"]) != tip_version:
+        fail("tip builds report different versions")
     labels = {
-        "readcon_tip_a": f"0.24.0 {revision} tip-a {tip_a_hash}",
-        "readcon_tip_b": f"0.24.0 {revision} tip-b {tip_b_hash}",
+        "readcon_tip_a": f"{tip_version} {revision} tip-a {tip_a_hash}",
+        "readcon_tip_b": f"{tip_version} {revision} tip-b {tip_b_hash}",
         "readcon_release": release_pin["version"],
         "ase": PINS["ase"]["version"],
         "eon": PINS["eon_reader"]["commit"],
-        "readcon_positions_1": f"0.24.0 {revision} tip-a {tip_a_hash}",
-        "readcon_positions_all": f"0.24.0 {revision} tip-a {tip_a_hash}",
+        "readcon_positions_1": f"{tip_version} {revision} tip-a {tip_a_hash}",
+        "readcon_positions_all": f"{tip_version} {revision} tip-a {tip_a_hash}",
     }
     units = []
     for arm, work, threads in arm_table(cores):
