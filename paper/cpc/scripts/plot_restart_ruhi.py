@@ -42,11 +42,11 @@ def main() -> None:
     barriers = [item["barrier_eV"] for _, item, _ in rows]
     colors = [color for _, _, color in rows]
     axes[0].bar(range(4), calls, color=colors, edgecolor=BLACK, linewidth=0.4)
-    axes[0].set_xticks(range(4), labels, rotation=20, ha="right")
+    axes[0].set_xticks(range(4), labels, rotation=60, ha="right")
     axes[0].set_ylabel("force calls")
     axes[1].bar(range(4), barriers, color=colors, edgecolor=BLACK, linewidth=0.4)
     axes[1].axhline(barriers[0], color=SUNSHINE, linewidth=1.2)
-    axes[1].set_xticks(range(4), labels, rotation=20, ha="right")
+    axes[1].set_xticks(range(4), labels, rotation=60, ha="right")
     axes[1].set_ylabel("barrier (eV)")
     for ax in axes:
         ax.spines["top"].set_visible(False)
