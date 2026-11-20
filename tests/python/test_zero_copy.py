@@ -8,6 +8,7 @@ repeated access, ``tracemalloc`` and, when the module has the
 import gc
 import json
 import os
+import pickle
 import threading
 import tracemalloc
 
@@ -496,6 +497,97 @@ def test_metadata_dict_is_built_only_when_asked(tmp_path):
         _peak_bytes(lambda: held.extend(f.metadata for f in frames))
         >= n_frames * note_len
     )
+
+
+# --- symbols --------------------------------------------------------------------
+
+
+def test_symbols_match_the_atoms_on_the_corpus():
+    checked = 0
+    for path in _readable_corpus():
+        fresh, walked = readcon.read_con(path), readcon.read_con(path)
+        for index in range(len(fresh)):
+            symbols = fresh[index].symbols
+            expected = [atom.symbol for atom in walked[index].atoms]
+            assert symbols == expected, path
+            assert symbols == tuple(expected), path
+            assert list(symbols) == expected, path
+            assert symbols.tolist() == expected, path
+            assert len(symbols) == len(expected), path
+            table = symbols.table()
+            assert [table[i] for i in symbols.ids()] == expected, path
+            assert fresh[index].symbols == walked[index].symbols, path
+            checked += 1
+    assert checked >= 20
+
+
+def test_symbols_are_one_interned_string_per_run(tmp_path):
+    path = _big_con(tmp_path / "big.con", n_atoms=10, n_frames=2)
+    frames = readcon.read_con(path)
+    first, second = frames[0].symbols, frames[1].symbols
+    assert first[0] is first[4] is second[0]
+    assert first[5] is first[-1] is second[9]
+    assert first.table() == ("Cu", "H")
+    assert first[3:7] == ("Cu", "Cu", "H", "H")
+    assert first[::-4] == ("H", "H", "Cu")
+    with pytest.raises(IndexError):
+        first[10]
+    assert first[-10] == "Cu"
+    assert pickle.loads(pickle.dumps(first)) == first
+    assert hash(first) == hash(tuple(first))
+    assert readcon.FrameSymbols(["Cu", "H"], [5, 5]) == first
+
+
+def test_symbols_follow_atom_edits():
+    path = os.path.join(ROOT, "test", "tiny_cuh2.con")
+    frame = readcon.read_con(path)[0]
+    before = frame.symbols
+    frame.atoms[1].symbol = "Ag"
+    assert frame.symbols == ["Cu", "Ag", "H", "H"]
+    assert before == ["Cu", "Cu", "H", "H"]
+    built = readcon.ConFrame(frame.cell, frame.angles, frame.atoms)
+    assert built.symbols == ["Cu", "Ag", "H", "H"]
+
+
+def test_symbols_allocate_nothing_per_atom(tmp_path):
+    path = _big_con(tmp_path / "big.con")
+    frame = readcon.read_con(path)[0]
+    held = []
+
+    def access():
+        for _ in range(5):
+            symbols = frame.symbols
+            held.append((len(symbols), symbols[0], symbols[-1], symbols.table()))
+
+    assert _peak_bytes(access) < N_BIG * 8 // 4
+    assert _peak_bytes(lambda: held.append(frame.symbols.tolist())) >= N_BIG * 8
+
+
+def test_concurrent_symbol_and_column_reads(tmp_path):
+    path = _sections_con(tmp_path / "sections.con", 64)
+    frames = readcon.read_con(path)
+    expected = [atom.symbol for atom in readcon.read_con(path)[0].atoms]
+    reference = readcon.read_con(path)[0].vel.tobytes()
+    errors = []
+    barrier = threading.Barrier(8)
+
+    def worker():
+        try:
+            barrier.wait()
+            for _ in range(200):
+                frame = frames[0]
+                assert frame.symbols == expected
+                assert frame.vel.tobytes() == reference
+                assert frame.metadata is frame.metadata
+        except Exception as error:  # noqa: BLE001
+            errors.append(error)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert not errors
 
 
 if __name__ == "__main__":
