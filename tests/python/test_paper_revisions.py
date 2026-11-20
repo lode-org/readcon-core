@@ -415,3 +415,17 @@ def test_recorded_tags_match_git() -> None:
         if line.startswith("release_commit ")
     )
     assert tagged.stdout.strip() == named
+
+
+def test_provenance_uses_the_latest_library_source_commit() -> None:
+    path = ROOT / "paper" / "cpc" / "scripts" / "provenance.py"
+    spec = importlib.util.spec_from_file_location("paper_provenance", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    expected = _git(
+        "log", "-1", "--format=%H", "HEAD", "--", *module.LIBRARY_PATHS
+    ).stdout.strip()
+    identity = module.source_identity()
+    assert identity["source_commit"] == expected
+    assert module.library_digest_at(expected) == identity["library_digest"]
