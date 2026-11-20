@@ -166,7 +166,7 @@ def main() -> int:
         "readcon_tip_b": f"{tip_version} {revision} tip-b {tip_b_hash}",
         "readcon_release": release_pin["version"],
         "ase": PINS["ase"]["version"],
-        "eon": PINS["eon_reader"]["commit"],
+        "eon_legacy_python": PINS["eon_reader"]["commit"],
         "readcon_positions_1": f"{tip_version} {revision} tip-a {tip_a_hash}",
         "readcon_positions_all": f"{tip_version} {revision} tip-a {tip_a_hash}",
     }

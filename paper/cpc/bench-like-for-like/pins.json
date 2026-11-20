@@ -39,6 +39,26 @@
       "eon/config.yaml": "49c833446e802aafddd03e0c9ec6cfa9fb16574f753a4ebb986dd70f918b8a1c"
     }
   },
+  "eon_svn_cxx": {
+    "arm": "eon_svn_cxx",
+    "repository": "https://theory.cm.utexas.edu/svn/eon",
+    "revision": 1213,
+    "revision_url": "https://theory.cm.utexas.edu/svn/eon/!svn/bc/1213/client/Matter.cpp",
+    "base_url": "https://theory.cm.utexas.edu/svn/eon/!svn/bc/1213/client/",
+    "note": "Matter::con2matter at SVN r1213, the last revision whose public deactivatePeriodicBoundaries leaves parsed coordinates unchanged. The driver loops con2matter(FILE*) once per frame. client/Eigen is the bundled header tree at the same revision.",
+    "compile": "g++ -std=gnu++98 -O3",
+    "files": {
+      "Matter.cpp": "8031ac15f94f1405d2503e4a6c4c791bffb1f29163ebc93f00da417ac1f13635",
+      "Matter.h": "eb37adca8b71c67ccc5b8c8973981cf9caed6f2d068bd3b8aa4a0ca03d8900ef",
+      "Eigen.h": "fadd2bdb12b6948fdb74b3f5efe8f3b33a2e3a3a0c82f2e5593a6933eb02a611",
+      "Parameters.h": "66fa07d67178b62ff760d9937b7f1420c214e431294024b97c9338cb15dee064",
+      "Potential.h": "8f8f2af8867afd5d84981e6bb307c51f56b00f00da643cd99878d256020c78d1",
+      "HelperFunctions.h": "69a84402cae4d80f5a3d449d2eab73e8feb39688e1da68df109567f442fdf3ee",
+      "Constants.h": "2977328aa8e20d7b944fde81304ddca83559e916085e35a3bd366886abee59f9"
+    },
+    "eigen_tree_files": 240,
+    "eigen_tree_sha256": "d85d93246f190fbac2e75c0fbed9683efc7f076b65280b8be35c95e325f768e8"
+  },
   "protocol": {
     "repeats": 6,
     "schedule": "ABBA-rotated",

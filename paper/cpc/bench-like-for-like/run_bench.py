@@ -155,7 +155,7 @@ def arm_table(cores: int) -> list[tuple[str, str, int]]:
         ("readcon_tip_b", "full-frame", 1),
         ("readcon_release", "full-frame", 1),
         ("ase", "full-frame", 1),
-        ("eon", "full-frame", 1),
+        ("eon_legacy_python", "full-frame", 1),
         ("readcon_positions_1", "coords-only", 1),
         ("readcon_positions_all", "coords-only", cores),
     ]
@@ -174,7 +174,7 @@ def one(
         env["PYTHONPATH"] = prefix
     else:
         env.pop("READCON_PREFIX", None)
-    if arm == "eon":
+    if arm == "eon_legacy_python":
         env["EON_ROOT"] = eon_root
         env["PYTHONPATH"] = eon_root
     else:
@@ -267,7 +267,7 @@ def main() -> int:
         "readcon_tip_b": f"{tip_version} {revision} tip-b {tip_b_hash}",
         "readcon_release": release_pin["version"],
         "ase": PINS["ase"]["version"],
-        "eon": PINS["eon_reader"]["commit"],
+        "eon_legacy_python": PINS["eon_reader"]["commit"],
         "readcon_positions_1": f"{tip_version} {revision} tip-a {tip_a_hash}",
         "readcon_positions_all": f"{tip_version} {revision} tip-a {tip_a_hash}",
     }
@@ -386,8 +386,10 @@ def _check_version(arm: str, version: str) -> None:
         fail(f"release version {version}")
     if arm == "ase" and version != PINS["ase"]["version"]:
         fail(f"ase version {version}")
-    if arm == "eon" and version != PINS["eon_reader"]["commit"]:
-        fail(f"eon version {version}")
+    if arm == "eon_legacy_python" and version != PINS["eon_reader"]["commit"]:
+        fail(f"eon_legacy_python version {version}")
+    if arm == "eon_svn_cxx" and version != str(PINS["eon_svn_cxx"]["revision"]):
+        fail(f"eon_svn_cxx version {version}")
     if arm.startswith("readcon_tip") or arm.startswith("readcon_positions"):
         if version == PINS["readcon_release"]["version"] or not version:
             fail(f"{arm} loaded version {version}")

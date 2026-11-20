@@ -9,7 +9,8 @@ Full-frame, one thread (`RAYON_NUM_THREADS=1`, `n_threads=1`, OpenMP/MKL/OpenBLA
 - `readcon_tip_a` and `readcon_tip_b`: two separate release builds of this tree's Python bindings. The ratio of the two is the A/A noise band.
 - `readcon_release`: the PyPI wheel recorded in `pins.json`.
 - `ase`: `ase.io.read(path, index=':', format='eon')`.
-- `eon`: `loadcons` from eOn's own reader at the commit in `pins.json`, before that module called the readcon package.
+- `eon_legacy_python`: `loadcons` from eOn's Python fileio at the commit in `pins.json`, before that module delegated CON parsing to readcon. The rows below record this arm as `eon`.
+- `eon_svn_cxx`: `Matter::con2matter` from the eOn SVN client at the revision in `pins.json`. The client reads one frame per call, so the driver loops that `FILE` reader until only whitespace is left. Periodic boundaries start on and would rewrite coordinates into the minimum image; the driver calls `deactivatePeriodicBoundaries` first so the checksum is the parsed positions.
 
 Each full-frame arm builds positions, cell, symbols, masses, and fixed flags for every frame.
 

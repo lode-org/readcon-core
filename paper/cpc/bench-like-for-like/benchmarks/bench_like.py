@@ -34,7 +34,7 @@ class FullFrame(_OneThread):
         super().setup(input_name)
         arms.prepare("readcon_tip_a")
         arms.prepare("ase")
-        arms.prepare("eon")
+        arms.prepare("eon_legacy_python")
 
     def time_readcon_tip(self, input_name):
         arms.run_arm("readcon_tip_a", self.path, 1)
@@ -42,8 +42,8 @@ class FullFrame(_OneThread):
     def time_ase(self, input_name):
         arms.run_arm("ase", self.path, 1)
 
-    def time_eon(self, input_name):
-        arms.run_arm("eon", self.path, 1)
+    def time_eon_legacy_python(self, input_name):
+        arms.run_arm("eon_legacy_python", self.path, 1)
 
 
 class CoordsOne(_OneThread):

@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import struct
+import subprocess
 import urllib.request
 from pathlib import Path
 
@@ -141,6 +143,99 @@ def fetch_eon(dest_root: Path) -> Path:
     return dest_root
 
 
+def _svn_bytes(url: str) -> bytes:
+    with urllib.request.urlopen(url, timeout=120) as response:
+        return response.read()
+
+
+def _eigen_manifest(root: Path) -> str:
+    rows = []
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        rel = path.relative_to(root).as_posix()
+        rows.append(f"{rel} {file_sha256(path)}")
+    text = "\n".join(rows) + "\n"
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def ensure_eon_svn() -> Path:
+    """Fetch the pinned SVN client reader and compile the thin driver."""
+    pin = PINS["eon_svn_cxx"]
+    root = WORK / "eon-svn-r1213"
+    root.mkdir(parents=True, exist_ok=True)
+    base = pin["base_url"]
+    for rel, expect in pin["files"].items():
+        target = root / rel
+        if target.is_file() and file_sha256(target) == expect:
+            continue
+        data = _svn_bytes(base + rel)
+        digest = hashlib.sha256(data).hexdigest()
+        if digest != expect:
+            raise RuntimeError(f"{rel} hash {digest} != pin {expect}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    eigen = root / "Eigen"
+    if not eigen.is_dir() or _eigen_manifest(eigen) != pin["eigen_tree_sha256"]:
+        if eigen.exists():
+            import shutil
+
+            shutil.rmtree(eigen)
+        _fetch_eigen_tree(base + "Eigen/", eigen)
+        found = _eigen_manifest(eigen)
+        if found != pin["eigen_tree_sha256"]:
+            raise RuntimeError(f"eigen tree {found} != pin {pin['eigen_tree_sha256']}")
+    binary = WORK / "eon_svn_cxx"
+    stamp = root / "built-sha256"
+    source = BENCH / "eon_svn_driver.cpp"
+    source_hash = file_sha256(source)
+    if (
+        binary.is_file()
+        and stamp.is_file()
+        and stamp.read_text(encoding="utf-8").strip() == source_hash
+    ):
+        return binary
+    log_path = WORK / "eon-svn-build.log"
+    command = [
+        "g++",
+        "-std=gnu++98",
+        "-O3",
+        "-I",
+        str(root),
+        "-ffunction-sections",
+        "-fdata-sections",
+        str(source),
+        str(root / "Matter.cpp"),
+        "-Wl,--gc-sections",
+        "-o",
+        str(binary),
+    ]
+    with log_path.open("w", encoding="utf-8") as log:
+        completed = subprocess.run(
+            command,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+    if completed.returncode != 0:
+        raise RuntimeError(f"eon_svn_cxx compile exited {completed.returncode}")
+    stamp.write_text(source_hash + "\n", encoding="utf-8", newline="\n")
+    return binary
+
+
+def _fetch_eigen_tree(url: str, folder: Path) -> None:
+    import re
+
+    folder.mkdir(parents=True, exist_ok=True)
+    page = _svn_bytes(url).decode("utf-8", "replace")
+    for href in re.findall(r'href="([^"]+)"', page):
+        if href in {"../"} or href.startswith("?") or "://" in href:
+            continue
+        if href.endswith("/"):
+            _fetch_eigen_tree(url + href, folder / href[:-1])
+            continue
+        target = folder / href
+        target.write_bytes(_svn_bytes(url + href))
+
+
 def abba_order(items: list, rep: int) -> list:
     """Forward, reversed, reversed, forward, rotated by the repeat index."""
     seq = list(items)
@@ -205,11 +300,15 @@ def prepare(arm: str) -> str:
 
         _PREPARED.add("ase")
         return str(ase.__version__)
-    if arm == "eon":
+    if arm == "eon_legacy_python":
         from eon.fileio import loadcons  # noqa: F401
 
-        _PREPARED.add("eon")
+        _PREPARED.add("eon_legacy_python")
         return PINS["eon_reader"]["commit"]
+    if arm == "eon_svn_cxx":
+        ensure_eon_svn()
+        _PREPARED.add("eon_svn_cxx")
+        return str(PINS["eon_svn_cxx"]["revision"])
     raise RuntimeError(arm)
 
 
@@ -218,8 +317,10 @@ def run_arm(arm: str, path: str, threads: int):
         return _full_readcon(path, threads)
     if arm == "ase":
         return _full_ase(path)
-    if arm == "eon":
+    if arm == "eon_legacy_python":
         return _full_eon(path)
+    if arm == "eon_svn_cxx":
+        return _full_eon_svn(path)
     if arm in {"readcon_positions_1", "readcon_positions_all"}:
         return _coords_readcon(path, threads)
     raise RuntimeError(arm)
@@ -332,6 +433,154 @@ def _full_eon(path: str) -> list[dict]:
         frozen = np.asarray(frame.free) == 0
         fixed[frozen, :] = 1
         built.append(_frame_record(pos, cell, symbols, masses, fixed))
+    return built
+
+
+def _full_eon_svn(path: str) -> list[dict]:
+    binary = ensure_eon_svn()
+    completed = subprocess.run(
+        [str(binary), path],
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", "replace")[-400:]
+        raise RuntimeError(detail or f"eon_svn_cxx exited {completed.returncode}")
+    return _parse_eon_svn(completed.stdout)
+
+
+_SVN_SYMBOLS = (
+    "Unknown",
+    "H",
+    "He",
+    "Li",
+    "Be",
+    "B",
+    "C",
+    "N",
+    "O",
+    "F",
+    "Ne",
+    "Na",
+    "Mg",
+    "Al",
+    "Si",
+    "P",
+    "S",
+    "Cl",
+    "Ar",
+    "K",
+    "Ca",
+    "Sc",
+    "Ti",
+    "V",
+    "Cr",
+    "Mn",
+    "Fe",
+    "Co",
+    "Ni",
+    "Cu",
+    "Zn",
+    "Ga",
+    "Ge",
+    "As",
+    "Se",
+    "Br",
+    "Kr",
+    "Rb",
+    "Sr",
+    "Y",
+    "Zr",
+    "Nb",
+    "Mo",
+    "Tc",
+    "Ru",
+    "Rh",
+    "Pd",
+    "Ag",
+    "Cd",
+    "In",
+    "Sn",
+    "Sb",
+    "Te",
+    "I",
+    "Xe",
+    "Cs",
+    "Ba",
+    "La",
+    "Ce",
+    "Pr",
+    "Nd",
+    "Pm",
+    "Sm",
+    "Eu",
+    "Gd",
+    "Tb",
+    "Dy",
+    "Ho",
+    "Er",
+    "Tm",
+    "Yb",
+    "Lu",
+    "Hf",
+    "Ta",
+    "W",
+    "Re",
+    "Os",
+    "Ir",
+    "Pt",
+    "Au",
+    "Hg",
+    "Tl",
+    "Pb",
+    "Bi",
+    "Po",
+    "At",
+    "Rn",
+    "Fr",
+    "Ra",
+    "Ac",
+    "Th",
+    "Pa",
+    "U",
+)
+
+
+def _parse_eon_svn(blob: bytes) -> list[dict]:
+    if not blob.startswith(b"EONSVN1\n"):
+        raise RuntimeError("eon_svn_cxx output is not a frame record")
+    offset = 8
+    n_frames, n_atoms = struct.unpack_from("<II", blob, offset)
+    offset += 8
+    if n_frames < 1 or n_atoms < 1:
+        raise RuntimeError(f"eon_svn_cxx counts {n_frames} {n_atoms}")
+    count = n_frames * n_atoms
+    cells = np.frombuffer(blob, dtype="<f8", count=n_frames * 6, offset=offset).copy()
+    offset += n_frames * 6 * 8
+    masses = np.frombuffer(blob, dtype="<f8", count=count, offset=offset).copy()
+    offset += count * 8
+    numbers = np.frombuffer(blob, dtype="<u2", count=count, offset=offset).copy()
+    offset += count * 2
+    fixed_flat = np.frombuffer(blob, dtype=np.uint8, count=count, offset=offset).copy()
+    offset += count
+    positions = np.frombuffer(blob, dtype="<f8", count=count * 3, offset=offset).copy()
+    offset += count * 3 * 8
+    if offset != len(blob):
+        raise RuntimeError(f"eon_svn_cxx trailing bytes {len(blob) - offset}")
+    if int(numbers.max()) >= len(_SVN_SYMBOLS):
+        raise RuntimeError("eon_svn_cxx atomic number is outside the client table")
+    built = []
+    for frame in range(n_frames):
+        start = frame * n_atoms
+        pos = positions[start * 3 : (start + n_atoms) * 3].reshape(n_atoms, 3)
+        cell = cells[frame * 6 : frame * 6 + 6]
+        frame_symbols = [
+            _SVN_SYMBOLS[int(number)] for number in numbers[start : start + n_atoms]
+        ]
+        frame_masses = masses[start : start + n_atoms]
+        flags = np.zeros((n_atoms, 3), dtype=np.uint8)
+        flags[fixed_flat[start : start + n_atoms] != 0, :] = 1
+        built.append(_frame_record(pos, cell, frame_symbols, frame_masses, flags))
     return built
 
 
