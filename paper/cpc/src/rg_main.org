@@ -810,7 +810,7 @@ That Protein Data Bank row was measured with MDAnalysis 2.10.0.
 Release 2.11.0 adds read benchmarks for XYZ and the Protein Data Bank, and its trajectory-reader benchmark covers XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, Protein Data Bank and XYZ \cite{gowersMdanalysisTrajReader21102026,gowersMdanalysisTrajReader21002026}.
 This panel is separate from the CON table.
 A row passes only when the atom count, the cell and the coordinates match, so the NumPy row fails the cell check.
-Table~\ref{tab:format-h2h} gives the per-format comparison of the cross-format campaign labeled v0.23.3, measured with one commit on one host, \hhfHost{}, as the processor listing stored with that campaign reports it.
+Table~\ref{tab:format-h2h} gives the per-format comparison of the cross-format campaign directory labeled v0.23.3, a directory name and not a release tag, measured with one commit on one host, \hhfHost{}, as the processor listing stored with that campaign reports it.
 readcon reads plain CON, binary CON and CON.zst, each other tool reads the formats it supports, and readcon-chemfiles has its own row.
 For every reader the table gives the warm and cold median read, the peak resident set of the read, the file size and the CON 3.1 fields that the format drops.
 Each median is the type-7 median of \hhfSamplesSubOneM{} samples below one million atoms and \hhfSamplesOneM{} at one million, each read in a fresh process on one thread.
@@ -945,6 +945,9 @@ This paper describes readcon-core~\readconversion{}.
 The latest release tag is v\rcLatestTag{} at commit {\ttfamily\expandafter\seqsplit\expandafter{\rcLatestTagCommit}}.
 The deposited timing records name the measured commit {\ttfamily\expandafter\seqsplit\expandafter{\readconcommit}}.
 That commit is readcon-core~\rcMeasuredVersion{} and is not a release tag.
+That is the one version this paper describes.
+A result measured on another version names that version in Table~\ref*{tab:versionmap} and in the source notes beside that table.
+This paper gives no version a tag or a DOI that the repository does not hold.
 The supplementary material holds that commit with its whole history as the git bundle readcon-core.bundle, and the scripts, records and TeX sources of this paper as the archive paper-cpc.tar.gz.
 Rebuild that commit with \texttt{cargo build -{}-release}, which builds the Rust library and the command-line program \texttt{readcon-core}.
 \texttt{-{}-features capi} adds the shared and static C libraries, and \texttt{-{}-features capi,zstd,parallel} adds compression and parallelism.
