@@ -54,7 +54,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 |---|---|
 | `DIR/em-flat/` from `python3 paper/cpc/scripts/make_em_flat.py --out DIR` (TeX Live 2025) | `rg_main.tex` first, then `rg_main.bbl`, then every other file of the set, then the figure PDFs |
 | `paper/cpc/highlights.txt` | Highlights |
-| `paper/cpc/src/rg_supp.pdf` (66 pages, sha256 `fff46531705ecbe46f54d87b06e979fd486df706eecea0418ecd9cf5443422ae`) | Supplementary material |
+| `paper/cpc/src/rg_supp.pdf` (66 pages, sha256 `484dcf12b495d5ff76707d0818a80b254c9b20541b1af59116de84f7f94da555`) | Supplementary material |
 | `paper-cpc.tar.gz`, the directory `paper/cpc` (`paper/cpc/REPRO-ARCHIVE.md`) | Supplementary material |
 | `readcon-core.bundle` and `patches/` | Program files |
 | The author's cover letter | Cover letter |
@@ -65,7 +65,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 Data availability names readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, which
 `readcon-core.bundle` holds with its whole history, and links the concept record https://doi.org/10.5281/zenodo.18753567
 of readcon-core. This commit is not a release tag.
-`rg_main.pdf` has 66 pages, sha256 `0fdfe70422fd9ab9eb939b70ec8350d9664b35558b4cb83f034dd06a059f1360`.
+`rg_main.pdf` has 66 pages, sha256 `79d69eb95464c1b0fa63e5182c1fac296f0a9b1a88fd3a8051c82f68cffd7765`.
 
 ## Form answers
 
