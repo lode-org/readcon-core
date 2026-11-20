@@ -1617,7 +1617,7 @@ fn metadata_json_rebuilt(frame: &ConFrame) -> String {
     for (k, v) in &frame.header.metadata {
         obj.insert(k.clone(), v.clone());
     }
-    serde_json::Value::Object(obj).to_string()
+    crate::writer::serialize_json_object_with_minor_raw(obj, frame.header.metadata.huge_minor_raw())
 }
 
 /// Plain geometry for the eOn cache: coordinates, sequential ids, no sections.
@@ -7874,5 +7874,313 @@ Coordinates of Component 1
         assert_eq!(err.frame_index, 0);
         let message = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
         assert!(message.contains("missing file"), "{message}");
+    }
+
+    #[test]
+    fn c_api_reads_and_roundtrips_arbitrary_size_con_spec_minor() {
+        const TWO_POW_64: &str = "18446744073709551616";
+        const TWO_POW_64_PLUS_1: &str = "18446744073709551617";
+        const FORTY_DIGITS: &str = "1000000000000000000000000000000000000007";
+        let three_hundred_digits = format!("1{}7", "0".repeat(298));
+        let four_hundred_digits = format!("1{}7", "0".repeat(398));
+
+        let d14 = format!(
+            "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{TWO_POW_64},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}}}}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n2\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n1.0 1.0 1.0 0 1\n"
+        );
+        let v2 = format!(
+            "corpus31 version 2 con_spec_minor 2^64\n{{\"con_spec_version\":2,\"con_spec_minor\":{TWO_POW_64}}}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0 0\n1\n2\n195.084\nPt\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n2.5 2.5 0.0 0 1\n"
+        );
+        let plus1 = format!(
+            "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{TWO_POW_64_PLUS_1},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}}}}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n"
+        );
+        let forty = format!(
+            "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{FORTY_DIGITS},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}}}}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n"
+        );
+        let three_hundred = format!(
+            "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{three_hundred_digits},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}}}}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n"
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        for (idx, (name, text, expect_major, minor)) in [
+            ("d14.con", d14.as_str(), 3u32, TWO_POW_64),
+            ("v2.con", v2.as_str(), 2u32, TWO_POW_64),
+            ("plus1.con", plus1.as_str(), 3u32, TWO_POW_64_PLUS_1),
+            ("forty.con", forty.as_str(), 3u32, FORTY_DIGITS),
+            (
+                "three_hundred.con",
+                three_hundred.as_str(),
+                3u32,
+                three_hundred_digits.as_str(),
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let path = dir.path().join(name);
+            std::fs::write(&path, text).unwrap();
+            let c_path = CString::new(path.to_str().unwrap()).unwrap();
+
+            let first = unsafe { rkr_read_first_frame(c_path.as_ptr()) };
+            assert!(!first.is_null(), "{name} rkr_read_first_frame failed");
+            assert_eq!(rkr_frame_spec_version(first), expect_major);
+
+            let meta_ptr = unsafe { rkr_frame_metadata_json(first) };
+            assert!(!meta_ptr.is_null(), "{name} rkr_frame_metadata_json failed");
+            let meta_str = unsafe { CStr::from_ptr(meta_ptr) }.to_str().unwrap();
+            let needle = format!("\"con_spec_minor\":{minor}");
+            assert!(meta_str.contains(&needle), "{name}: {meta_str}");
+            unsafe { rkr_free_string(meta_ptr) };
+
+            let mut hdr_buf = vec![0 as c_char; minor.len() + 256];
+            assert_eq!(
+                unsafe {
+                    rkr_frame_get_header_line(first, true, 1, hdr_buf.as_mut_ptr(), hdr_buf.len())
+                },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            let hdr_line2 = unsafe { CStr::from_ptr(hdr_buf.as_ptr()) }
+                .to_str()
+                .unwrap();
+            assert!(
+                hdr_line2.contains(&needle),
+                "{name} header line 2: {hdr_line2}"
+            );
+
+            let rewritten = unsafe { rkr_frame_binding_rewrite(first) };
+            assert!(!rewritten.is_null(), "{name} binding rewrite failed");
+            assert_eq!(rkr_frame_spec_version(rewritten), 3);
+            let rw_meta = unsafe { rkr_frame_metadata_json(rewritten) };
+            assert!(!rw_meta.is_null());
+            let rw_str = unsafe { CStr::from_ptr(rw_meta) }.to_str().unwrap();
+            assert!(rw_str.contains(&needle), "{name} rewrite: {rw_str}");
+            unsafe {
+                rkr_free_string(rw_meta);
+                free_rkr_frame(rewritten);
+                free_rkr_frame(first);
+            }
+
+            let mut n_frames = 0usize;
+            let all = unsafe { rkr_read_all_frames(c_path.as_ptr(), &mut n_frames) };
+            assert!(
+                !all.is_null() && n_frames == 1,
+                "{name} rkr_read_all_frames"
+            );
+            unsafe { free_rkr_frame_array(all, n_frames) };
+
+            let mut n_t2 = 0usize;
+            let all_t2 = unsafe { rkr_read_all_frames_n_threads(c_path.as_ptr(), &mut n_t2, 2) };
+            assert!(!all_t2.is_null() && n_t2 == 1, "{name} n_threads=2");
+            unsafe { free_rkr_frame_array(all_t2, n_t2) };
+
+            let nth = unsafe { rkr_read_nth_frame(c_path.as_ptr(), 0) };
+            assert!(!nth.is_null(), "{name} rkr_read_nth_frame");
+            unsafe { free_rkr_frame(nth) };
+
+            let mut pos_frames = 0usize;
+            let mut pos_atoms = 0usize;
+            let pos =
+                unsafe { rkr_read_positions(c_path.as_ptr(), &mut pos_frames, &mut pos_atoms) };
+            assert!(
+                !pos.is_null() && pos_frames == 1,
+                "{name} rkr_read_positions"
+            );
+            unsafe { rkr_free_position_block(pos) };
+
+            let traj = unsafe { rkr_trajectory_open(c_path.as_ptr(), 0) };
+            assert!(!traj.is_null(), "{name} rkr_trajectory_open");
+            assert_eq!(unsafe { rkr_trajectory_len(traj) }, 1);
+            let mut tframe: *mut RKRConFrame = ptr::null_mut();
+            assert_eq!(
+                unsafe { rkr_trajectory_read_frame(traj, 0, &mut tframe) },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            assert!(!tframe.is_null());
+            unsafe {
+                free_rkr_frame(tframe);
+                rkr_trajectory_free(traj);
+            }
+
+            let mut builder = test_builder_handle();
+            let valid_json = c_string(&format!(
+                r#"{{"con_spec_version":3,"con_spec_minor":{minor},"units":{{"length":"angstrom","energy":"eV"}}}}"#
+            ));
+            assert_eq!(
+                unsafe { rkr_frame_builder_set_metadata_json(builder, valid_json.as_ptr()) },
+                RKRStatus::RKR_STATUS_SUCCESS,
+                "case {idx}"
+            );
+            let sym = c_string("H");
+            assert_eq!(
+                unsafe { rkr_frame_add_atom(builder, sym.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.0) },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            let built = unsafe { rkr_frame_builder_build(&mut builder) };
+            assert!(!built.is_null());
+            let built_json = unsafe { rkr_frame_metadata_json(built) };
+            let built_str = unsafe { CStr::from_ptr(built_json) }.to_str().unwrap();
+            assert!(built_str.contains(&needle), "{built_str}");
+            unsafe {
+                rkr_free_string(built_json);
+                free_rkr_frame(built);
+            }
+        }
+
+        // 400-digit minor exceeds f64::MAX and surfaces BASE InvalidMetadataJson in C ABI too.
+        let four_hundred = format!(
+            "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{four_hundred_digits},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}}}}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n"
+        );
+        let bad_path = dir.path().join("four_hundred.con");
+        std::fs::write(&bad_path, &four_hundred).unwrap();
+        let bad_c = CString::new(bad_path.to_str().unwrap()).unwrap();
+        let bad_first = unsafe { rkr_read_first_frame(bad_c.as_ptr()) };
+        assert!(bad_first.is_null());
+        let err = unsafe { &*rkr_last_error() };
+        assert_eq!(err.code, RKRStatus::RKR_STATUS_INVALID_JSON as i32);
+        let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert!(
+            msg.contains("number out of range at line 1 column 439"),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn c_api_builder_set_metadata_json_preserves_untrimmed_base_behavior() {
+        // B2: rkr_frame_builder_set_metadata_json must not trim leading/trailing whitespace.
+        for bad in [
+            "\u{00a0}{\"con_spec_version\":3,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}",
+            "{\"con_spec_version\":3,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\u{2028}",
+            "{\"con_spec_version\":3,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\u{2003}",
+            "\u{000b}{\"con_spec_version\":3,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}",
+            "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\u{000c}",
+            "\n{\"con_spec_version\":2,\"x\":1e999}",
+        ] {
+            let builder = test_builder_handle();
+            let c_bad = c_string(bad);
+            let status = unsafe { rkr_frame_builder_set_metadata_json(builder, c_bad.as_ptr()) };
+            assert_eq!(
+                status,
+                RKRStatus::RKR_STATUS_INVALID_JSON,
+                "expected INVALID_JSON for {bad:?}"
+            );
+            let err = unsafe { &*rkr_last_error() };
+            assert_eq!(err.code, RKRStatus::RKR_STATUS_INVALID_JSON as i32);
+            unsafe { free_rkr_frame_builder(builder) };
+        }
+
+        // Exact untrimmed line/column preservation through C builder.
+        let builder = test_builder_handle();
+        let c_nl = c_string("\n{\"con_spec_version\":2,\"x\":1e999}");
+        assert_eq!(
+            unsafe { rkr_frame_builder_set_metadata_json(builder, c_nl.as_ptr()) },
+            RKRStatus::RKR_STATUS_INVALID_JSON
+        );
+        unsafe { free_rkr_frame_builder(builder) };
+    }
+
+    #[test]
+    fn c_api_preserves_base_canonical_json_on_neb_band() {
+        for rel in [
+            "resources/examples/neb_band.con",
+            "bench/fidelity/fixtures/neb_band_3.con",
+        ] {
+            let c_path = CString::new(rel).unwrap();
+            let mut n = 0usize;
+            let arr = unsafe { rkr_read_all_frames(c_path.as_ptr(), &mut n) };
+            assert!(!arr.is_null() && n > 0, "{rel}");
+            let mut saw_energy = false;
+            for i in 0..n {
+                let fr = unsafe { *arr.add(i) };
+                let meta_ptr = unsafe { rkr_frame_metadata_json(fr) };
+                let meta_str = unsafe { CStr::from_ptr(meta_ptr) }.to_str().unwrap();
+                assert!(!meta_str.contains("-1.20"), "{rel}: {meta_str}");
+                if meta_str.contains("-1.2") {
+                    saw_energy = true;
+                }
+                unsafe { rkr_free_string(meta_ptr) };
+
+                let rw = unsafe { rkr_frame_binding_rewrite(fr) };
+                let rw_ptr = unsafe { rkr_frame_metadata_json(rw) };
+                let rw_str = unsafe { CStr::from_ptr(rw_ptr) }.to_str().unwrap();
+                assert!(!rw_str.contains("-1.20"), "{rel} rewrite: {rw_str}");
+                unsafe {
+                    rkr_free_string(rw_ptr);
+                    free_rkr_frame(rw);
+                }
+            }
+            assert!(saw_energy, "{rel}");
+            unsafe { free_rkr_frame_array(arr, n) };
+        }
+    }
+
+    #[test]
+    fn c_api_huge_minor_rejects_form_feed_and_quoted_control_bytes_like_base() {
+        let dir = tempfile::tempdir().unwrap();
+        let cases = [
+            (
+                "ff_before",
+                "{\"con_spec_version\":2,\"con_spec_minor\":\x0c18446744073709551616}",
+                "expected value at line 1 column 40",
+            ),
+            (
+                "ff_after",
+                "{\"con_spec_version\":2,\"con_spec_minor\":18446744073709551616\x0c}",
+                "expected `,` or `}` at line 1 column 60",
+            ),
+            (
+                "ff_units",
+                "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"units\":\x0c{\"length\":\"angstrom\",\"energy\":\"eV\"}}",
+                "expected value at line 1 column 69",
+            ),
+            (
+                "v3_tab_length",
+                "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"units\":{\"length\":\"ang\tstrom\",\"energy\":\"eV\"}}",
+                "control character (\\u0000-\\u001F) found while parsing a string at line 1 column 83",
+            ),
+            (
+                "v3_vt_energy",
+                "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"units\":{\"length\":\"angstrom\",\"energy\":\"\x0beV\"}}",
+                "control character (\\u0000-\\u001F) found while parsing a string at line 1 column 100",
+            ),
+            (
+                "v3_cr_time",
+                "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\r\"}}",
+                "control character (\\u0000-\\u001F) found while parsing a string at line 1 column 114",
+            ),
+            (
+                "v2_ff_units",
+                "{\"con_spec_version\":2,\"con_spec_minor\":1000000000000000000000000000000000000007,\"units\":{\"length\":\"x\x0cy\",\"energy\":\"z\"}}",
+                "control character (\\u0000-\\u001F) found while parsing a string at line 1 column 101",
+            ),
+            (
+                "v2_soh_units",
+                "{\"con_spec_version\":2,\"con_spec_minor\":1000000000000000000000000000000000000007,\"units\":{\"length\":\"x\x01y\",\"energy\":\"z\"}}",
+                "control character (\\u0000-\\u001F) found while parsing a string at line 1 column 101",
+            ),
+        ];
+
+        for (name, line2, expected_frag) in cases {
+            let text = format!(
+                "gen\n{line2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n"
+            );
+            let p = dir.path().join(format!("{name}.con"));
+            std::fs::write(&p, &text).unwrap();
+            let c_p = CString::new(p.to_str().unwrap()).unwrap();
+            let fr = unsafe { rkr_read_first_frame(c_p.as_ptr()) };
+            assert!(fr.is_null(), "{name} should fail on C ABI read");
+            let err = unsafe { &*rkr_last_error() };
+            assert_eq!(
+                err.code,
+                RKRStatus::RKR_STATUS_INVALID_JSON as i32,
+                "{name}"
+            );
+            let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+            assert!(msg.contains(expected_frag), "{name}: {msg}");
+
+            let builder = test_builder_handle();
+            let c_line2 = c_string(line2);
+            let st = unsafe { rkr_frame_builder_set_metadata_json(builder, c_line2.as_ptr()) };
+            assert_eq!(st, RKRStatus::RKR_STATUS_INVALID_JSON, "{name} builder");
+            unsafe { free_rkr_frame_builder(builder) };
+        }
     }
 }

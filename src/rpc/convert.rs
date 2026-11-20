@@ -69,8 +69,11 @@ pub fn fill_frame_builder(
         sections.set(i as u32, s.as_str());
     }
 
-    let meta_json = serde_json::to_string(&frame.header.metadata.to_map())
-        .map_err(|e| format!("metadata json: {e}"))?;
+    let meta_json = crate::writer::serialize_json_map_with_minor_raw(
+        &frame.header.metadata.to_map(),
+        frame.header.metadata.huge_minor_raw(),
+    )
+    .map_err(|e| format!("metadata json: {e}"))?;
     fb.set_metadata_json(&meta_json);
     fb.set_strict_validation(frame.header.strict_validation);
     fb.set_sections_declared(frame.header.sections_declared);
@@ -237,20 +240,22 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Con
         sections.push(s);
     }
 
-    let metadata: BTreeMap<String, serde_json::Value> = if fd.has_metadata_json() {
-        let raw = fd
-            .get_metadata_json()
-            .map_err(|e| e.to_string())?
-            .to_str()
-            .unwrap_or("{}");
-        if raw.trim().is_empty() {
-            BTreeMap::new()
+    let (metadata, minor_raw): (BTreeMap<String, serde_json::Value>, Option<String>) =
+        if fd.has_metadata_json() {
+            let raw = fd
+                .get_metadata_json()
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .unwrap_or("{}");
+            if raw.trim().is_empty() {
+                (BTreeMap::new(), None)
+            } else {
+                crate::parser::parse_metadata_map_with_minor_raw(raw)
+                    .map_err(|e| format!("metadataJson: {e}"))?
+            }
         } else {
-            serde_json::from_str(raw).map_err(|e| format!("metadataJson: {e}"))?
-        }
-    } else {
-        BTreeMap::new()
-    };
+            (BTreeMap::new(), None)
+        };
 
     let spec_version = fd.get_spec_version();
     let atoms_list = fd.get_atoms().map_err(|e| e.to_string())?;
@@ -356,7 +361,7 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Con
         natms_per_type,
         masses_per_type,
         spec_version: fd.get_spec_version(),
-        metadata: FrameMeta::from_map(metadata),
+        metadata: FrameMeta::from_map_with_minor_raw(metadata, minor_raw.as_deref()),
         sections,
         strict_validation: fd.get_strict_validation(),
         sections_declared: fd.get_sections_declared(),
@@ -476,6 +481,48 @@ mod tests {
                 encode_fixed_bitmask(a.fixed()),
                 encode_fixed_bitmask(b.fixed())
             );
+        }
+    }
+
+    #[test]
+    fn capnp_roundtrip_arbitrary_size_con_spec_minor() {
+        let three_hundred = format!("1{}7", "0".repeat(298));
+        for minor in [
+            "18446744073709551616",
+            "18446744073709551617",
+            "1000000000000000000000000000000000000007",
+            three_hundred.as_str(),
+        ] {
+            let text = format!(
+                "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{minor},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}}}}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n"
+            );
+            let frame = ConFrameIterator::new(&text).next().unwrap().unwrap();
+            assert_eq!(frame.header.con_spec_minor_str(), minor);
+
+            let mut message = Builder::new_default();
+            {
+                let root = message.init_root::<con_frame_data::Builder>();
+                fill_frame_builder(root, &frame).unwrap();
+            }
+            let reader = message
+                .get_root_as_reader::<con_frame_data::Reader>()
+                .unwrap();
+            let back = frame_from_reader(reader).unwrap();
+
+            assert_eq!(back.header.spec_version, 3);
+            assert_eq!(
+                back.header.con_spec_minor_saturating(),
+                crate::types::SATURATED_SPEC_MINOR
+            );
+            assert_eq!(back.header.con_spec_minor_str(), minor);
+
+            let mut out = Vec::new();
+            crate::writer::ConFrameWriter::new(&mut out)
+                .write_frame(&back)
+                .unwrap();
+            let written = String::from_utf8(out).unwrap();
+            let needle = format!("\"con_spec_minor\":{minor}");
+            assert!(written.contains(&needle), "{written}");
         }
     }
 }

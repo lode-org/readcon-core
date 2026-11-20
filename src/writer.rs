@@ -276,6 +276,7 @@ pub struct ConFrameWriter<W: Write> {
 struct BoundHeader {
     meta: BTreeMap<String, Value>,
     spec: u32,
+    minor_raw: Option<Box<str>>,
 }
 
 /// One column of the round-trip float cache.
@@ -314,6 +315,7 @@ struct MetadataCacheEntry {
     has_displacements: bool,
     has_spreads: bool,
     metadata: std::collections::BTreeMap<String, serde_json::Value>,
+    minor_raw: Option<Box<str>>,
     /// Cached serialised metadata line (without trailing newline).
     serialized: String,
 }
@@ -324,6 +326,7 @@ impl MetadataCacheEntry {
         spec_version: u32,
         sections: [bool; 8],
         metadata: &std::collections::BTreeMap<String, serde_json::Value>,
+        minor_raw: Option<&str>,
     ) -> bool {
         let [
             has_velocities,
@@ -344,12 +347,66 @@ impl MetadataCacheEntry {
             && self.has_magmoms == has_magmoms
             && self.has_displacements == has_displacements
             && self.has_spreads == has_spreads
+            && self.minor_raw.as_deref() == minor_raw
             && self.metadata.len() == metadata.len()
             && self
                 .metadata
                 .iter()
                 .zip(metadata)
                 .all(|((ka, a), (kb, b))| ka == kb && metadata_value_eq(a, b))
+    }
+}
+
+pub(crate) fn serialize_json_object_with_minor_raw(
+    obj: serde_json::Map<String, serde_json::Value>,
+    minor_raw: Option<&str>,
+) -> String {
+    match minor_raw {
+        None => serde_json::Value::Object(obj).to_string(),
+        Some(digits) => {
+            let mut out = String::from("{");
+            for (idx, (k, v)) in obj.iter().enumerate() {
+                if idx > 0 {
+                    out.push(',');
+                }
+                out.push_str(&serde_json::to_string(k).expect("metadata key serializes"));
+                out.push(':');
+                if k == meta::CON_SPEC_MINOR {
+                    out.push_str(digits);
+                } else {
+                    out.push_str(&serde_json::to_string(v).expect("metadata value serializes"));
+                }
+            }
+            out.push('}');
+            out
+        }
+    }
+}
+
+#[cfg_attr(not(feature = "rpc"), allow(dead_code))]
+pub(crate) fn serialize_json_map_with_minor_raw(
+    map: &std::collections::BTreeMap<String, serde_json::Value>,
+    minor_raw: Option<&str>,
+) -> Result<String, serde_json::Error> {
+    match minor_raw {
+        None => serde_json::to_string(map),
+        Some(digits) => {
+            let mut out = String::from("{");
+            for (idx, (k, v)) in map.iter().enumerate() {
+                if idx > 0 {
+                    out.push(',');
+                }
+                out.push_str(&serde_json::to_string(k)?);
+                out.push(':');
+                if k == meta::CON_SPEC_MINOR {
+                    out.push_str(digits);
+                } else {
+                    out.push_str(&serde_json::to_string(v)?);
+                }
+            }
+            out.push('}');
+            Ok(out)
+        }
     }
 }
 
@@ -529,6 +586,7 @@ impl<W: Write> ConFrameWriter<W> {
         &mut self,
         spec_version: u32,
         metadata: &BTreeMap<String, Value>,
+        minor_raw: Option<&str>,
         present: [bool; 8],
     ) -> Result<(), WriteError> {
         let [
@@ -549,6 +607,7 @@ impl<W: Write> ConFrameWriter<W> {
                         has_vel, has_frc, has_eng, has_chg, has_spn, has_mm, has_dsp, has_spr,
                     ],
                     metadata,
+                    minor_raw,
                 )
             });
         if cache_hit {
@@ -616,10 +675,14 @@ impl<W: Write> ConFrameWriter<W> {
                 }
             }
         }
-        let minor = metadata
-            .get(meta::CON_SPEC_MINOR)
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
+        let minor = if minor_raw.is_some() {
+            crate::types::SATURATED_SPEC_MINOR
+        } else {
+            metadata
+                .get(meta::CON_SPEC_MINOR)
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+        };
         if spec_version >= 3 && minor >= 1 && has_vel {
             let time_ok = meta_obj
                 .get(meta::UNITS)
@@ -635,7 +698,7 @@ impl<W: Write> ConFrameWriter<W> {
         // A minor of 2 or later lists every section minor 1 does not reserve
         // (CON-section.16). Reserved names need no entry.
         require_minor2_section_arity(minor, &sections, &meta_obj)?;
-        let serialized = serde_json::Value::Object(meta_obj).to_string();
+        let serialized = serialize_json_object_with_minor_raw(meta_obj, minor_raw);
         self.metadata_cache = Some(MetadataCacheEntry {
             spec_version,
             has_velocities: has_vel,
@@ -647,6 +710,7 @@ impl<W: Write> ConFrameWriter<W> {
             has_displacements: has_dsp,
             has_spreads: has_spr,
             metadata: metadata.clone(),
+            minor_raw: minor_raw.map(Box::from),
             serialized,
         });
         Ok(())
@@ -680,11 +744,10 @@ impl<W: Write> ConFrameWriter<W> {
         let line = frame.header.prebox_header.metadata_line();
         // Energy, neb_bead, and every other metadata key live in the header.
         // A matching atom skeleton is not the same header.
-        let incoming = binding_metadata(frame);
-        let meta_same = self
-            .bound
-            .as_ref()
-            .is_some_and(|item| item.spec == spec && item.meta == incoming);
+        let (incoming, minor_raw) = binding_metadata_with_minor_raw(frame);
+        let meta_same = self.bound.as_ref().is_some_and(|item| {
+            item.spec == spec && item.meta == incoming && item.minor_raw == minor_raw
+        });
         let reuse = self.exact_scratch
             && meta_same
             && self.bound_flags == Some(flags)
@@ -693,6 +756,7 @@ impl<W: Write> ConFrameWriter<W> {
             self.bound = Some(BoundHeader {
                 meta: incoming,
                 spec,
+                minor_raw,
             });
             if self.exact_scratch {
                 // The cached JSON also lists the sections. Drop it whenever
@@ -782,16 +846,17 @@ impl<W: Write> ConFrameWriter<W> {
         let skip_refresh = keep_bound && self.metadata_cache.is_some();
         if !skip_refresh {
             let owned_meta;
-            let metadata = if let Some(item) = bound.as_ref() {
-                &item.meta
+            let (metadata, minor_raw) = if let Some(item) = bound.as_ref() {
+                (&item.meta, item.minor_raw.as_deref())
             } else {
                 owned_meta = frame.header.metadata.to_map();
-                &owned_meta
+                (&owned_meta, frame.header.metadata.huge_minor_raw())
             };
             if spec_version >= 2 {
                 self.refresh_metadata_cache(
                     spec_version,
                     metadata,
+                    minor_raw,
                     [
                         frame.has_velocities(),
                         frame.has_forces(),
@@ -1957,11 +2022,12 @@ fn push_atom_motion(
 /// The bytes match a binding rewrite up to the first coordinate row.
 pub(crate) fn binding_header_bytes(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
     let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
-    let meta = binding_metadata(frame);
+    let (meta, minor_raw) = binding_metadata_with_minor_raw(frame);
     let mut writer = ConFrameWriter::new(Vec::<u8>::new());
     writer.refresh_metadata_cache(
         spec,
         &meta,
+        minor_raw.as_deref(),
         [
             frame.has_velocities(),
             frame.has_forces(),
@@ -3051,10 +3117,19 @@ pub fn binding_metadata(frame: &ConFrame) -> BTreeMap<String, Value> {
     meta
 }
 
+pub(crate) fn binding_metadata_with_minor_raw(
+    frame: &ConFrame,
+) -> (BTreeMap<String, Value>, Option<Box<str>>) {
+    let minor_raw = frame.header.metadata.huge_minor_raw().map(Box::from);
+    (binding_metadata(frame), minor_raw)
+}
+
 /// Same bytes as a binding rewrite, without rebuilding each atom.
 pub fn binding_rewrite_frame(frame: &ConFrame) -> Result<ConFrame, crate::error::ParseError> {
     let mut out = frame.clone();
-    out.header.metadata = crate::types::FrameMeta::from_map(binding_metadata(frame));
+    let (meta, minor_raw) = binding_metadata_with_minor_raw(frame);
+    out.header.metadata =
+        crate::types::FrameMeta::from_map_with_minor_raw(meta, minor_raw.as_deref());
     // A parsed spec 1 frame keeps line 2 as free text. The builder emits
     // the current spec as JSON, so the rewrite does too.
     if out.header.spec_version < crate::CON_SPEC_VERSION {

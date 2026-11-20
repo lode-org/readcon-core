@@ -1,0 +1,4958 @@
+{
+  "adversarial_lines": [
+    {
+      "line2": "{\"con_spec_version\":2,\"f\":1.50,\"e\":1E5,\"p\":1e+2}",
+      "metadata_json": "{\"con_spec_version\":2,\"e\":100000.0,\"f\":1.5,\"p\":100.0}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"energy\":-1.20}",
+      "metadata_json": "{\"con_spec_version\":2,\"energy\":-1.2}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"energy\":-0,\"x\":-0}",
+      "metadata_json": "{\"con_spec_version\":2,\"energy\":-0.0,\"x\":-0.0}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"extra\":18446744073709551616}",
+      "metadata_json": "{\"con_spec_version\":2,\"extra\":1.8446744073709552e+19}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"prec\":0.1000000000000000055511151231257827}",
+      "metadata_json": "{\"con_spec_version\":2,\"prec\":0.1}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"nested\":{\"con_spec_minor\":18446744073709551616}}",
+      "metadata_json": "{\"con_spec_version\":2,\"nested\":{\"con_spec_minor\":1.8446744073709552e+19}}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 449",
+      "line2": "{\"con_spec_version\":2,\"nested\":{\"con_spec_minor\":1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 430",
+      "line2": "{\"con_spec_version\":2,\"other\":1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"note\":\"\\\"con_spec_minor\\\":18446744073709551616\"}",
+      "metadata_json": "{\"con_spec_version\":2,\"note\":\"\\\"con_spec_minor\\\":18446744073709551616\"}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"note\":\"}{\",\"energy\":1.50}",
+      "metadata_json": "{\"con_spec_version\":2,\"energy\":1.5,\"note\":\"}{\"}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":18446744073709551617}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":1000000000000000000000000000000000000007}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: section_arity.widgets must be an integer >= 1",
+      "line2": "{\"con_spec_version\":2,\"section_arity\":{\"widgets\":18446744073709551616}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: section_arity.widgets must be an integer >= 1",
+      "line2": "{\"con_spec_version\":2,\"section_arity\":{\"widgets\":1000000000000000000000000000000000000007}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: section_arity.velocities must be an integer >= 1",
+      "line2": "{\"con_spec_version\":3,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"},\"section_arity\":{\"velocities\":18446744073709551616}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: section_arity.widgets must be an integer >= 1",
+      "line2": "{\"con_spec_version\":2,\"section_arity\":{\"widgets\":-0}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidCount",
+      "error_message": "invalid count: section_arity.widgets must be >= 1",
+      "line2": "{\"con_spec_version\":2,\"section_arity\":{\"widgets\":0}}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"section_arity\":{\"widgets\":-0,\"widgets\":2}}",
+      "metadata_json": "{\"con_spec_version\":2,\"section_arity\":{\"widgets\":2}}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: section_arity.widgets must be an integer >= 1",
+      "line2": "{\"con_spec_version\":2,\"section_arity\":{\"widgets\":2,\"widgets\":-0}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_version must be a JSON integer, the major version",
+      "line2": "{\"con_spec_version\":18446744073709551616}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 420",
+      "line2": "{\"con_spec_version\":1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_version must be a JSON integer, the major version",
+      "line2": "{\"con_spec_version\":-0}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":-0,\"con_spec_version\":3,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}",
+      "metadata_json": "{\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+      "spec_version": 3,
+      "status": "ok"
+    },
+    {
+      "line2": "{\"con_spec_version\":3,\"con_spec_minor\":-0,\"con_spec_minor\":0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}",
+      "metadata_json": "{\"con_spec_minor\":0,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+      "spec_version": 3,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":3,\"con_spec_minor\":0,\"con_spec_minor\":-0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"con_spec_minor\":-0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: frame_index must be a non-negative integer",
+      "line2": "{\"con_spec_version\":2,\"sections\":[],\"validate\":true,\"frame_index\":-0}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 36",
+      "line2": "{\"con_spec_version\":2,\"energy\":1e400}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 69",
+      "line2": "{\"con_spec_version\":2,\"lattice_vectors\":[[10,0,0],[0,10,0],[0,0,1e999]]}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":\"1\"}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":1.0}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":1e0}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":-1}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: expected value at line 1 column 40",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":+1}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: invalid number at line 1 column 41",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":01}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: trailing characters at line 1 column 24",
+      "line2": "{\"con_spec_version\":2} trailing",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 53",
+      "line2": "{\"con_spec_minor\":18446744073709551616,\"energy\":1e999,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 54",
+      "line2": "{\"con_spec_minor\":184467440737095516161,\"energy\":1e999,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 73",
+      "line2": "{\"con_spec_minor\":1000000000000000000000000000000000000007,\"energy\":1e999,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: expected value at line 1 column 69",
+      "line2": "{\"con_spec_minor\":1000000000000000000000000000000000000007,\"energy\":, \"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 333",
+      "line2": "{\"con_spec_minor\":100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007,\"energy\":1e999,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 418",
+      "line2": "{\"con_spec_minor\":1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007,\"energy\":1e999,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 439",
+      "line2": "{\"con_spec_version\":3,\"con_spec_minor\":1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: expected value at line 1 column 40",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":\f18446744073709551616}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: expected `,` or `}` at line 1 column 60",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":18446744073709551616\f}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: expected value at line 1 column 69",
+      "line2": "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"units\":\f{\"length\":\"angstrom\",\"energy\":\"eV\"}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: expected value at line 1 column 31",
+      "line2": "{\"con_spec_version\":3,\"units\":\f{\"length\":\"angstrom\",\"energy\":\"eV\"},\"con_spec_minor\":18446744073709551616}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: expected value at line 1 column 40",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":\u000b18446744073709551616}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: expected `,` or `}` at line 1 column 60",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":18446744073709551616\u000b}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: expected value at line 1 column 69",
+      "line2": "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"units\":\u000b{\"length\":\"angstrom\",\"energy\":\"eV\"}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: expected value at line 1 column 31",
+      "line2": "{\"con_spec_version\":3,\"units\":\u000b{\"length\":\"angstrom\",\"energy\":\"eV\"},\"con_spec_minor\":18446744073709551616}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: control character (\\u0000-\\u001F) found while parsing a string at line 1 column 83",
+      "line2": "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"units\":{\"length\":\"ang\tstrom\",\"energy\":\"eV\"}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: control character (\\u0000-\\u001F) found while parsing a string at line 1 column 100",
+      "line2": "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"units\":{\"length\":\"angstrom\",\"energy\":\"\u000beV\"}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: control character (\\u0000-\\u001F) found while parsing a string at line 1 column 114",
+      "line2": "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\r\"}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: control character (\\u0000-\\u001F) found while parsing a string at line 1 column 88",
+      "line2": "{\"con_spec_version\":3,\"con_spec_minor\":18446744073709551616,\"units\":{\"length\":\"angstrom\f\",\"energy\":\"eV\"}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: control character (\\u0000-\\u001F) found while parsing a string at line 1 column 101",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":1000000000000000000000000000000000000007,\"units\":{\"length\":\"x\fy\",\"energy\":\"z\"}}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: control character (\\u0000-\\u001F) found while parsing a string at line 1 column 101",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":1000000000000000000000000000000000000007,\"units\":{\"length\":\"x\u0000y\",\"energy\":\"z\"}}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":0,\"e\":-1.20}",
+      "metadata_json": "{\"con_spec_minor\":0,\"con_spec_version\":2,\"e\":-1.2}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":0,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":7,\"e\":-1.20}",
+      "metadata_json": "{\"con_spec_minor\":7,\"con_spec_version\":2,\"e\":-1.2}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":7,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":18446744073709551615,\"e\":-1.20}",
+      "metadata_json": "{\"con_spec_minor\":18446744073709551615,\"con_spec_version\":2,\"e\":-1.2}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":18446744073709551615,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":-0,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":-0,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":-1,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":-1,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":1.5,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":1.5,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":1e2,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":1e2,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":\"7\",\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":\"7\",\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\": 0 ,\"e\":-1.20}",
+      "metadata_json": "{\"con_spec_minor\":0,\"con_spec_version\":2,\"e\":-1.2}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\": 0 ,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\": 7 ,\"e\":-1.20}",
+      "metadata_json": "{\"con_spec_minor\":7,\"con_spec_version\":2,\"e\":-1.2}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\": 7 ,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\": 18446744073709551615 ,\"e\":-1.20}",
+      "metadata_json": "{\"con_spec_minor\":18446744073709551615,\"con_spec_version\":2,\"e\":-1.2}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\": 18446744073709551615 ,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\": -0 ,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\": -0 ,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\": -1 ,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\": -1 ,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\": 1.5 ,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\": 1.5 ,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\": 1e2 ,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\": 1e2 ,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\": \"7\" ,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\": \"7\" ,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":  \t0  \t,\"e\":-1.20}",
+      "metadata_json": "{\"con_spec_minor\":0,\"con_spec_version\":2,\"e\":-1.2}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":  \t0  \t,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":  \t7  \t,\"e\":-1.20}",
+      "metadata_json": "{\"con_spec_minor\":7,\"con_spec_version\":2,\"e\":-1.2}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":  \t7  \t,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":  \t18446744073709551615  \t,\"e\":-1.20}",
+      "metadata_json": "{\"con_spec_minor\":18446744073709551615,\"con_spec_version\":2,\"e\":-1.2}",
+      "spec_version": 2,
+      "status": "ok"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":  \t18446744073709551615  \t,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":  \t-0  \t,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":  \t-0  \t,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":  \t-1  \t,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":  \t-1  \t,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":  \t1.5  \t,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":  \t1.5  \t,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":  \t1e2  \t,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":  \t1e2  \t,\"con_spec_version\":2}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "line2": "{\"con_spec_version\":2,\"con_spec_minor\":  \t\"7\"  \t,\"e\":-1.20}",
+      "status": "err"
+    },
+    {
+      "error_class": "InvalidMetadataJson",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 10",
+      "line2": "{\"e\":1e999,\"con_spec_minor\":  \t\"7\"  \t,\"con_spec_version\":2}",
+      "status": "err"
+    }
+  ],
+  "corpus31": {
+    "d01_time_unit_metre.convel": {
+      "error_class": "Error",
+      "error_message": "invalid units: v3 units: CON validation failed: unit 'm' is not valid for quantity 'time'",
+      "status": "err"
+    },
+    "d02_legacy_velocity_no_time.convel": {
+      "error_class": "Error",
+      "error_message": "invalid units: minor >= 1 requires units.time when a velocities section is present",
+      "status": "err"
+    },
+    "d03_nbsp_after_id.con": {
+      "error_class": "Error",
+      "error_message": "invalid number format: invalid integer: 0\u00a0",
+      "status": "err"
+    },
+    "d04_vertical_tab_separator.con": {
+      "error_class": "Error",
+      "error_message": "invalid number format: invalid float: 0.0\u000b0.0",
+      "status": "err"
+    },
+    "d05_lattice_nan.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: expected value at line 1 column 128",
+      "status": "err"
+    },
+    "d06_lattice_1e999.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: number out of range at line 1 column 132",
+      "status": "err"
+    },
+    "d07_sections_capital_velocities.convel": {
+      "error_class": "Error",
+      "error_message": "unknown section type in metadata: Velocities",
+      "status": "err"
+    },
+    "d08_sections_null.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: sections must be an array of strings",
+      "status": "err"
+    },
+    "d09_arity_velocities_1.con": {
+      "error_class": "Error",
+      "error_message": "expected 3 values on line, found 1",
+      "status": "err"
+    },
+    "d10_json_depth_129.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: recursion limit exceeded at line 1 column 153",
+      "status": "err"
+    },
+    "d11_validate_pbc_object.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: pbc must be a length-3 boolean array",
+      "status": "err"
+    },
+    "d12_length_trailing_space.con": {
+      "canonical_line2": "{\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom \"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "d13_blank_symbol_energies.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"sections\":[\"energies\"]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"sections\":[\"energies\"]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "d14_minor_2pow64.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "status": "err"
+    },
+    "d15_json_depth_100001.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: recursion limit exceeded at line 1 column 153",
+      "status": "err"
+    },
+    "empty.con": {
+      "canonical_line2": null,
+      "frames": [],
+      "status": "ok"
+    },
+    "f20_v30_time_fs.convel": {
+      "canonical_line2": "{\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "f26_cell_10_10_170.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"sections\":[],\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"validate\":true}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "f27_minor1_no_ids.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "f27_minor2_no_ids.con": {
+      "canonical_line2": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "ff_tail_610_frames.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "gram_170_v1.con": {
+      "canonical_line2": "0.0000 TIME",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":1}",
+          "spec_version": 1
+        }
+      ],
+      "status": "ok"
+    },
+    "gram_170_v2.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "gram_170_v30.con": {
+      "canonical_line2": "{\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "gram_170_v31_validate.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "gram_60_60_119_9.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "gram_60_60_119_9_validate.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "gram_60_60_120.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "gram_60_60_120_1.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "gram_60_60_120_1_validate.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "json_version_1.con": {
+      "error_class": "Error",
+      "error_message": "unsupported con_spec_version: 1",
+      "status": "err"
+    },
+    "json_version_4.con": {
+      "error_class": "Error",
+      "error_message": "unsupported con_spec_version: 4",
+      "status": "err"
+    },
+    "sections_empty_velocity.con": {
+      "error_class": "Error",
+      "error_message": "invalid number format: invalid float: Velocities",
+      "status": "err"
+    },
+    "sections_empty_velocity_6001_frames.con": {
+      "error_class": "Error",
+      "error_message": "invalid number format: invalid float: Velocities",
+      "status": "err"
+    },
+    "sections_empty_velocity_x300.con": {
+      "error_class": "Error",
+      "error_message": "invalid number format: invalid float: Velocities",
+      "status": "err"
+    },
+    "two_frames_blank.con": {
+      "error_class": "Error",
+      "error_message": "invalid number format: invalid float: {\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"mass\":\"amu\",\"time\":\"fs\"},\"sections\":[]}",
+      "status": "err"
+    },
+    "v1_convel.convel": {
+      "canonical_line2": "0.0000 TIME",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":1,\"sections\":[\"velocities\"]}",
+          "spec_version": 1
+        }
+      ],
+      "status": "ok"
+    },
+    "v1_then_json_frame_empty_title.con": {
+      "canonical_line2": "0.0000 TIME",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":1}",
+          "spec_version": 1
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "v2_convel_time_fs.convel": {
+      "canonical_line2": "{\"con_spec_version\":2,\"sections\":[\"velocities\"],\"units\":{\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"sections\":[\"velocities\"],\"units\":{\"time\":\"fs\"}}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "v2_json_depth_127.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "v2_json_depth_128.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: recursion limit exceeded at line 1 column 153",
+      "status": "err"
+    },
+    "v2_minor1_velocity_no_time.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "v2_minor_2pow64.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "status": "err"
+    },
+    "v2_pbc_absent.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "v2_pbc_string.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"pbc\":\"bad\"}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"pbc\":\"bad\"}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "v2_time_banana.con": {
+      "canonical_line2": null,
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"units\":{\"time\":\"banana\"}}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "v30_convel_fs.convel": {
+      "canonical_line2": "{\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v30_convel_fs_validate.convel": {
+      "canonical_line2": "{\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v30_legacy_velocity_time_fs.convel": {
+      "canonical_line2": "{\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_atom_count_1e12.con": {
+      "error_class": "Error",
+      "error_message": "file ended unexpectedly while reading atom data",
+      "status": "err"
+    },
+    "v31_blank_symbol_velocities.convel": {
+      "error_class": "Error",
+      "error_message": "file ended unexpectedly while reading velocities section",
+      "status": "err"
+    },
+    "v31_bom.con": {
+      "error_class": "Error",
+      "error_message": "CON validation failed: file begins with a byte-order mark",
+      "status": "err"
+    },
+    "v31_bom_later_frame.con": {
+      "error_class": "Error",
+      "error_message": "CON validation failed: file begins with a byte-order mark",
+      "status": "err"
+    },
+    "v31_bonds_one_index.con": {
+      "canonical_line2": "{\"bonds\":[[0]],\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"bonds\":[[0]],\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_convel_fs.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_convel_natural.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"(amu*angstrom^2/eV)^0.5\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"(amu*angstrom^2/eV)^0.5\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_convel_no_time.convel": {
+      "error_class": "Error",
+      "error_message": "invalid units: minor >= 1 requires units.time when a velocities section is present",
+      "status": "err"
+    },
+    "v31_coord_label_mismatch.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_cr_separator.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_crlf.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_energy_string.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"energy\":\"-1.0\",\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"energy\":\"-1.0\",\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_float_forms.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_form_feed_separator.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_gzip.con.gz": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_gzip_by_content.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_gzip_two_members.con.gz": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_id_2pow64.con": {
+      "error_class": "Error",
+      "error_message": "invalid number format: integer out of range 0..=2^64-1: 18446744073709551616",
+      "status": "err"
+    },
+    "v31_ids_beyond_binary64.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_inf_velocity.convel": {
+      "error_class": "Error",
+      "error_message": "non-finite value: -Infinity",
+      "status": "err"
+    },
+    "v31_kcal_per_mol.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"kcal / mol\",\"length\":\"angstrom\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"kcal/mol\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_label_case.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_label_case_coordinates.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_label_coordinates_1_xyz.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_label_coordinates_2.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_label_velocities_0.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_label_velocities_01.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_label_velocities_1_xyz.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_label_velocities_2.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_label_velocities_no_index.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_label_velocities_xyz.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_lattice_ok.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"lattice_vectors\":[[10.0,0.0,0.0],[0.0,10.0,0.0],[0.0,0.0,10.0]],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"lattice_vectors\":[[10.0,0.0,0.0],[0.0,10.0,0.0],[0.0,0.0,10.0]],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_lattice_string.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"lattice_vectors\":[[10.0,0.0,0.0],[0.0,10.0,0.0],[0.0,0.0,\"10.0\"]],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"lattice_vectors\":[[10.0,0.0,0.0],[0.0,10.0,0.0],[0.0,0.0,\"10.0\"]],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_lattice_two_rows.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"lattice_vectors\":[[10.0,0.0,0.0],[0.0,10.0,0.0]],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"lattice_vectors\":[[10.0,0.0,0.0],[0.0,10.0,0.0]],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_legacy_velocity_no_time.convel": {
+      "error_class": "Error",
+      "error_message": "invalid units: minor >= 1 requires units.time when a velocities section is present",
+      "status": "err"
+    },
+    "v31_legacy_velocity_time.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_length_area.con": {
+      "error_class": "Error",
+      "error_message": "invalid units: v3 units: CON validation failed: unit 'angstrom^2' is not valid for quantity 'length'",
+      "status": "err"
+    },
+    "v31_mask_8.con": {
+      "error_class": "Error",
+      "error_message": "invalid fixed flag: column 4 flag \"8\" is not a legal integer for spec 3",
+      "status": "err"
+    },
+    "v31_mask_float.con": {
+      "error_class": "Error",
+      "error_message": "invalid fixed flag: column 4 flag \"7.0\" is not a legal integer for spec 3",
+      "status": "err"
+    },
+    "v31_masks_0to7.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_mass_ev.con": {
+      "error_class": "Error",
+      "error_message": "invalid units: v3 units: CON validation failed: unit 'eV' is not valid for quantity 'mass'",
+      "status": "err"
+    },
+    "v31_minor_2pow64_minus_1.con": {
+      "canonical_line2": "{\"con_spec_minor\":18446744073709551615,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":18446744073709551615,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_minor_string.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: con_spec_minor must be a JSON integer >= 0",
+      "status": "err"
+    },
+    "v31_mixed_ids.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_nan_coordinate.con": {
+      "error_class": "Error",
+      "error_message": "non-finite value: NaN",
+      "status": "err"
+    },
+    "v31_overflow_coordinate.con": {
+      "error_class": "Error",
+      "error_message": "non-finite value: 1e400",
+      "status": "err"
+    },
+    "v31_pbc_numbers.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[1,1,1],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[1,1,1],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_pbc_slab.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[true,true,false],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[true,true,false],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_pbc_two.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[true,true],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[true,true],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_repeated_ids.con": {
+      "canonical_line2": null,
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_reserved_arity_wrong.con": {
+      "error_class": "Error",
+      "error_message": "expected 3 values on line, found 1",
+      "status": "err"
+    },
+    "v31_section_label_mismatch.convel": {
+      "error_class": "Error",
+      "error_message": "file ended unexpectedly while reading velocities section",
+      "status": "err"
+    },
+    "v31_section_row_id_mismatch.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_sections_out_of_order.convel": {
+      "error_class": "Error",
+      "error_message": "file ended unexpectedly while reading forces section",
+      "status": "err"
+    },
+    "v31_spreads_negative.con": {
+      "error_class": "Error",
+      "error_message": "CON validation failed: spreads: atom 0 has a negative or non-finite spread",
+      "status": "err"
+    },
+    "v31_trailing_ff.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_trailing_ws.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_two_blanks_before_section.convel": {
+      "error_class": "Error",
+      "error_message": "file ended unexpectedly while reading velocities section",
+      "status": "err"
+    },
+    "v31_type_count_2pow64.con": {
+      "error_class": "Error",
+      "error_message": "invalid count: count field is out of range: 18446744073709551616",
+      "status": "err"
+    },
+    "v31_type_count_2pow64_minus_1.con": {
+      "error_class": "Error",
+      "error_message": "expected 18446744073709551615 values on line, found 1",
+      "status": "err"
+    },
+    "v31_unicode_blank_before_section.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_unicode_tail.con": {
+      "error_class": "Error",
+      "error_message": "file ended unexpectedly while parsing frame header",
+      "status": "err"
+    },
+    "v31_units_compound.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"kJ / mol\",\"force\":\"kJ / (mol * nm)\",\"length\":\"nm\",\"mass\":\"kg / mol\",\"time\":\"ps\",\"velocity\":\"nm / ps\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"kJ / mol\",\"force\":\"kJ/(mol*nm)\",\"length\":\"nm\",\"mass\":\"kg/mol\",\"time\":\"ps\",\"velocity\":\"nm/ps\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_units_string.con": {
+      "error_class": "Error",
+      "error_message": "invalid units: v3 units: CON validation failed: units must be a JSON object",
+      "status": "err"
+    },
+    "v31_units_time.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_unknown_section.con": {
+      "error_class": "Error",
+      "error_message": "unknown section type in metadata: stress",
+      "status": "err"
+    },
+    "v31_utf8_line1.con": {
+      "error_class": "Error",
+      "error_message": "CON validation failed: invalid UTF-8",
+      "status": "err"
+    },
+    "v31_utf8_number_token.con": {
+      "error_class": "Error",
+      "error_message": "invalid number format: invalid float: 0\ufffd.0",
+      "status": "err"
+    },
+    "v31_utf8_separator_line.convel": {
+      "error_class": "Error",
+      "error_message": "CON validation failed: invalid UTF-8",
+      "status": "err"
+    },
+    "v31_validate_bad_label.convel": {
+      "error_class": "Error",
+      "error_message": "file ended unexpectedly while reading velocities section",
+      "status": "err"
+    },
+    "v31_validate_count_change.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_validate_ok.convel": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_validate_repeated_ids.con": {
+      "canonical_line2": null,
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_validate_row_id_mismatch.convel": {
+      "error_class": "Error",
+      "error_message": "CON validation failed: velocities row 0 atom_id mismatch: expected 0, found 5",
+      "status": "err"
+    },
+    "v31_validate_string.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: validate must be a boolean",
+      "status": "err"
+    },
+    "v31_validate_symbol_change.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v31_validate_symbol_mismatch.convel": {
+      "error_class": "Error",
+      "error_message": "CON validation failed: Velocities component 1 symbol mismatch: expected Pt, found H",
+      "status": "err"
+    },
+    "v31_velocity_no_id.convel": {
+      "error_class": "Error",
+      "error_message": "expected 5 values on line, found 4",
+      "status": "err"
+    },
+    "v31_version_3_5.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: con_spec_version must be a JSON integer, the major version",
+      "status": "err"
+    },
+    "v31_version_3e0.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: con_spec_version must be a JSON integer, the major version",
+      "status": "err"
+    },
+    "v31_version_float.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: con_spec_version must be a JSON integer, the major version",
+      "status": "err"
+    },
+    "v31_version_string.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: con_spec_version must be a JSON integer, the major version",
+      "status": "err"
+    },
+    "v31_zero_atom_unicode_blank.con": {
+      "error_class": "Error",
+      "error_message": "invalid count: a zero-atom frame requires whitespace-only lines 8 and 9",
+      "status": "err"
+    },
+    "v31_zstd.con.zst": {
+      "error_class": "Error",
+      "error_message": "zstd-compressed input detected; rebuild readcon-core with --features zstd",
+      "status": "err"
+    },
+    "v31_zstd_two_frames.con.zst": {
+      "error_class": "Error",
+      "error_message": "zstd-compressed input detected; rebuild readcon-core with --features zstd",
+      "status": "err"
+    },
+    "v32_mixed_ids.con": {
+      "canonical_line2": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v32_repeated_ids.con": {
+      "canonical_line2": null,
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v32_unknown_section_arity.con": {
+      "canonical_line2": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"section_arity\":{\"stress\":6},\"sections\":[\"forces\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"section_arity\":{\"stress\":6},\"sections\":[\"forces\",\"stress\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v32_validate_count_change.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v32_validate_repeated_ids.con": {
+      "canonical_line2": null,
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v32_validate_symbol_change.con": {
+      "canonical_line2": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"sections\":[],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_minor\":2,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v33_unknown_section_arity.con": {
+      "canonical_line2": "{\"con_spec_minor\":3,\"con_spec_version\":3,\"section_arity\":{\"stress\":6},\"sections\":[\"forces\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":3,\"con_spec_version\":3,\"section_arity\":{\"stress\":6},\"sections\":[\"forces\",\"stress\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "v33_unknown_section_no_arity.con": {
+      "error_class": "Error",
+      "error_message": "unknown section type in metadata: stress",
+      "status": "err"
+    },
+    "whitespace_only.con": {
+      "error_class": "Error",
+      "error_message": "invalid number format: invalid float: \u3000",
+      "status": "err"
+    }
+  },
+  "provenance": {
+    "base_commit": "9aff911e809390163d2d7b08671145ad99f24496",
+    "base_commit_date_utc": "2026-11-19T11:45:16-06:00",
+    "base_tree": "d775f9f7fda1ddff5becaea3e1b1545b1d1ba053",
+    "generator_script": "tests/fixtures/generate_base_oracle.py",
+    "rust_generator": "readcon_core::iterators::read_all_frames + readcon_core::parser::parse_frame_header + readcon_core::writer::ConFrameWriter"
+  },
+  "tracked_corpus": {
+    "bench/fidelity/fixtures/claisen.con": {
+      "canonical_line2": "{\"comment\":\"Claisen reactant, allyl vinyl ether\",\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"comment\":\"Claisen reactant, allyl vinyl ether\",\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"comment\":\"Claisen product, oxygen first, C5 image\",\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "bench/fidelity/fixtures/neb_band_3.con": {
+      "canonical_line2": "{\"con_spec_version\":3,\"energy\":-1.2,\"fmax\":0.31,\"neb_band\":0,\"neb_bead\":0,\"sections\":[\"forces\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"energy\":-1.2,\"fmax\":0.31,\"neb_band\":0,\"neb_bead\":0,\"sections\":[\"forces\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"energy\":-0.4,\"fmax\":0.08,\"neb_band\":0,\"neb_bead\":1,\"sections\":[\"forces\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"energy\":-0.65,\"fmax\":0.12,\"neb_band\":0,\"neb_bead\":2,\"sections\":[\"forces\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "bench/fidelity/fixtures/pt100_slab.con": {
+      "canonical_line2": "{\"comment\":\"Pt100 2x2x2 hollow adatom, failure_matrix geometry\",\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[true,true,false],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"comment\":\"Pt100 2x2x2 hollow adatom, failure_matrix geometry\",\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[true,true,false],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "bench/fidelity/fixtures/tiny_multi_cuh2.convel": {
+      "canonical_line2": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "bench/fidelity/fixtures/v30_fs_label.convel": {
+      "canonical_line2": "{\"con_spec_minor\":0,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":0,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "paper/cpc/data/v31_large_ids.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "paper/cpc/src/figures/generated/survey_frame.con": {
+      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[true,true,false],\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"(amu*angstrom^2/eV)^0.5\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[true,true,false],\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"(amu*angstrom^2/eV)^0.5\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/invalid/column4_out_of_range.con": {
+      "error_class": "Error",
+      "error_message": "invalid fixed flag: column 4 flag \"8\" is not a legal integer for spec 2",
+      "status": "err"
+    },
+    "resources/conformance/invalid/missing_spec_version.con": {
+      "error_class": "Error",
+      "error_message": "line 2 must be a JSON object containing \"con_spec_version\"",
+      "status": "err"
+    },
+    "resources/conformance/invalid/per_type_zero.con": {
+      "error_class": "Error",
+      "error_message": "invalid count: each per-type count must be >= 1",
+      "status": "err"
+    },
+    "resources/conformance/invalid/unknown_section.con": {
+      "error_class": "Error",
+      "error_message": "unknown section type in metadata: not_a_real_section",
+      "status": "err"
+    },
+    "resources/conformance/invalid/unsupported_spec_version.con": {
+      "error_class": "Error",
+      "error_message": "unsupported con_spec_version: 4",
+      "status": "err"
+    },
+    "resources/conformance/invalid/v3_bad_units.con": {
+      "error_class": "Error",
+      "error_message": "invalid units: v3 units: CON validation failed: unit 'eV' is not valid for quantity 'length'",
+      "status": "err"
+    },
+    "resources/conformance/invalid/v3_missing_units.con": {
+      "error_class": "Error",
+      "error_message": "invalid units: con_spec_version >= 3 requires metadata \"units\" with length and energy",
+      "status": "err"
+    },
+    "resources/conformance/invalid/validate_true_missing_sections.con": {
+      "error_class": "Error",
+      "error_message": "invalid JSON metadata on line 2: validate=true requires a sections array, even when empty",
+      "status": "err"
+    },
+    "resources/conformance/valid/column4_spec1_all_fixed.con": {
+      "canonical_line2": "0.0000 TIME",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":1}",
+          "spec_version": 1
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/column4_spec2_all_fixed.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/column4_spec2_x_only.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/column4_spec2_xz.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/column4_spec2_y_only.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/empty_header_both.con": {
+      "canonical_line2": "",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":1}",
+          "spec_version": 1
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/empty_line2.con": {
+      "canonical_line2": "",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":1}",
+          "spec_version": 1
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/empty_user_line.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/empty_user_line_two.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/v2_minimal.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/v3_units.con": {
+      "canonical_line2": "{\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/zero_atom.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/zero_atom_eof.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/conformance/valid/zero_atom_then_frame.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/examples/cuh2_band.con": {
+      "canonical_line2": "{\"con_spec_version\":3,\"energy\":-1.2,\"fmax\":0.31,\"neb_band\":0,\"neb_bead\":0,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"energy\":-1.2,\"fmax\":0.31,\"neb_band\":0,\"neb_bead\":0,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"energy\":-0.4,\"fmax\":0.08,\"neb_band\":0,\"neb_bead\":1,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"energy\":-0.65,\"fmax\":0.12,\"neb_band\":0,\"neb_bead\":2,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"energy\":-1.1,\"fmax\":0.27,\"neb_band\":0,\"neb_bead\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/examples/neb_band.con": {
+      "canonical_line2": "{\"con_spec_version\":3,\"energy\":-1.2,\"fmax\":0.31,\"neb_band\":0,\"neb_bead\":0,\"sections\":[\"forces\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"energy\":-1.2,\"fmax\":0.31,\"neb_band\":0,\"neb_bead\":0,\"sections\":[\"forces\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"energy\":-0.4,\"fmax\":0.08,\"neb_band\":0,\"neb_bead\":1,\"sections\":[\"forces\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"energy\":-0.65,\"fmax\":0.12,\"neb_band\":0,\"neb_bead\":2,\"sections\":[\"forces\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"energy\":-1.1,\"fmax\":0.27,\"neb_band\":0,\"neb_bead\":3,\"sections\":[\"forces\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/cuh2.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/sulfolene.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/tiny_cuh2.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/tiny_cuh2.convel": {
+      "canonical_line2": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/tiny_cuh2_charges_spins_magmoms.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"charges\",\"spins\",\"magmoms\"],\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"charges\",\"spins\",\"magmoms\"],\"validate\":true}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/tiny_cuh2_displacements.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"displacements\"],\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"displacements\"],\"validate\":true}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/tiny_cuh2_forces.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"energy\":-42.5,\"potential\":{\"params\":{\"cutoff\":6.0},\"type\":\"EMT\"},\"sections\":[\"forces\"]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"energy\":-42.5,\"potential\":{\"params\":{\"cutoff\":6.0},\"type\":\"EMT\"},\"sections\":[\"forces\"]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/tiny_cuh2_spreads.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"spreads\"],\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"spreads\"],\"validate\":true}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/tiny_cuh2_strict_invalid.con": {
+      "error_class": "Error",
+      "error_message": "invalid fixed flag: column 4 flag \"8\" is not a legal integer for spec 2",
+      "status": "err"
+    },
+    "resources/test/tiny_cuh2_vel_forces.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"energy\":-42.5,\"potential\":{\"params\":{},\"type\":\"EMT\"},\"sections\":[\"velocities\",\"forces\"]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"energy\":-42.5,\"potential\":{\"params\":{},\"type\":\"EMT\"},\"sections\":[\"velocities\",\"forces\"]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/tiny_multi_cuh2.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/tiny_multi_cuh2.convel": {
+      "canonical_line2": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "resources/test/v30_fs_label.convel": {
+      "canonical_line2": "{\"con_spec_minor\":0,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":0,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__cuh2.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__sulfolene.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__tiny_cuh2.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__tiny_cuh2.convel": {
+      "canonical_line2": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__tiny_cuh2_charges_spins_magmoms.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"charges\",\"spins\",\"magmoms\"],\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"charges\",\"spins\",\"magmoms\"],\"validate\":true}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__tiny_cuh2_displacements.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"displacements\"],\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"displacements\"],\"validate\":true}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__tiny_cuh2_forces.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"energy\":-42.5,\"potential\":{\"params\":{\"cutoff\":6.0},\"type\":\"EMT\"},\"sections\":[\"forces\"]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"energy\":-42.5,\"potential\":{\"params\":{\"cutoff\":6.0},\"type\":\"EMT\"},\"sections\":[\"forces\"]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__tiny_cuh2_spreads.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"spreads\"],\"validate\":true}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"energy\":-1.0,\"sections\":[\"spreads\"],\"validate\":true}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__tiny_cuh2_vel_forces.con": {
+      "canonical_line2": "{\"con_spec_version\":2,\"energy\":-42.5,\"potential\":{\"params\":{},\"type\":\"EMT\"},\"sections\":[\"velocities\",\"forces\"]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"energy\":-42.5,\"potential\":{\"params\":{},\"type\":\"EMT\"},\"sections\":[\"velocities\",\"forces\"]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__tiny_multi_cuh2.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__tiny_multi_cuh2.convel": {
+      "canonical_line2": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2,\"sections\":[\"velocities\"]}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/test__v30_fs_label.convel": {
+      "canonical_line2": "{\"con_spec_minor\":0,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_minor\":0,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__column4_spec1_all_fixed.con": {
+      "canonical_line2": "0.0000 TIME",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":1}",
+          "spec_version": 1
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__column4_spec2_all_fixed.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__column4_spec2_x_only.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__column4_spec2_xz.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__column4_spec2_y_only.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__empty_header_both.con": {
+      "canonical_line2": "",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":1}",
+          "spec_version": 1
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__empty_line2.con": {
+      "canonical_line2": "",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":1}",
+          "spec_version": 1
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__empty_user_line.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__empty_user_line_two.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__v2_minimal.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__v3_units.con": {
+      "canonical_line2": "{\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}",
+          "spec_version": 3
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__zero_atom.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__zero_atom_eof.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    },
+    "tests/writer_golden/valid__zero_atom_then_frame.con": {
+      "canonical_line2": "{\"con_spec_version\":2}",
+      "frames": [
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        },
+        {
+          "metadata_json": "{\"con_spec_version\":2}",
+          "spec_version": 2
+        }
+      ],
+      "status": "ok"
+    }
+  }
+}
