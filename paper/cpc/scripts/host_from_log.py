@@ -104,6 +104,73 @@ def rev_short(text: str) -> str:
     raise SystemExit("reader-exchange.log has no rev_parse line")
 
 
+class UnequalWork(Exception):
+    """Two rows are not the same work, thread count, or input."""
+
+
+def _field(row: dict[str, str], key: str):
+    if key not in row:
+        return None
+    value = row[key]
+    if value is None or value == "":
+        return None
+    return value
+
+
+def require_same(arm: dict[str, str], tip: dict[str, str]) -> float:
+    """Return arm median / tip median when the rows are the same work.
+
+    ``work``, ``threads``, ``input``, ``input_kind``, and ``input_sha256``
+    must be present and equal. A missing field is not treated as a match.
+    """
+    for key in ("work", "threads", "input", "input_kind", "input_sha256"):
+        left = _field(arm, key)
+        right = _field(tip, key)
+        if left is None or right is None or left != right:
+            raise UnequalWork(f"refuse to divide: {key} {left} vs {right}")
+    numerator = float(arm["median_s"])
+    denom = float(tip["median_s"])
+    if not denom > 0.0 or numerator < 0.0:
+        raise UnequalWork("refuse to divide: median is not a positive duration")
+    return numerator / denom
+
+
+def self_check() -> int:
+    base = {
+        "work": "full-frame",
+        "threads": "1",
+        "input": "synthetic",
+        "input_kind": "synthetic",
+        "input_sha256": "abc",
+        "median_s": "1",
+    }
+    arm = dict(base, median_s="2")
+    if require_same(arm, base) != 2.0:
+        raise SystemExit("ratio")
+    for key, value in (
+        ("work", "coords-only"),
+        ("threads", "8"),
+        ("input", "other"),
+        ("input_kind", "real"),
+        ("input_sha256", "def"),
+    ):
+        bad = dict(base, **{key: value})
+        try:
+            require_same(arm, bad)
+        except UnequalWork:
+            continue
+        raise SystemExit(f"divided mismatched {key}")
+    missing = dict(base)
+    del missing["work"]
+    try:
+        require_same(arm, missing)
+    except UnequalWork:
+        pass
+    else:
+        raise SystemExit("divided a row with no work field")
+    return 0
+
+
 def arm_s(found: dict[str, dict[str, str]], name: str) -> float:
     return float(found[name]["median_s"])
 
