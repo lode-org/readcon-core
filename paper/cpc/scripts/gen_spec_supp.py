@@ -83,11 +83,10 @@ OUT = PAPER_SRC / "figures" / "generated" / "spec_normative.tex"
 VERSIONS_OUT = PAPER_SRC / "figures" / "generated" / "versions_table.tex"
 MACROS_OUT = PAPER_SRC / "figures" / "generated" / "spec_macros.tex"
 SPEC_DATA = ROOT / "paper" / "cpc" / "data" / "spec"
-LEGACY_VERSIONS = SPEC_DATA / "versions.json"
 MEASUREMENT = SPEC_DATA / (
     f"spec-measurement-{(ROOT / 'VERSION').read_text().strip()}.json"
 )
-VERSIONS = MEASUREMENT if MEASUREMENT.is_file() else LEGACY_VERSIONS
+VERSIONS = MEASUREMENT
 RELEASE = r"[0-9]+\.[0-9]+\.[0-9]+"
 CLAUSE_ID = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) ::", re.M)
 CLAUSE_LINE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+ :: .*)$")
@@ -573,16 +572,25 @@ def second_text_change(changes: list[dict], texts: dict[str, str]) -> str:
     return " ".join(parts)
 
 
+def read_versions() -> dict:
+    """The tag record of this release. No other release's record stands in for it."""
+    if not VERSIONS.is_file():
+        raise SystemExit(
+            f"{VERSIONS.relative_to(ROOT)} is absent. Run gen_spec_supp.py --measure for this release."
+        )
+    return json.loads(VERSIONS.read_text())
+
+
 def release_rows(org: str) -> list[dict]:
     """The version history of a spec.org without a Release column, as a release tree ships it.
 
-    A row's release is the first tag of versions.json whose history lists the row's version with the row's
+    A row's release is the first tag of the measurement record whose history lists the row's version with the row's
     date; version 1 is the eOn text and has no readcon-core release.  A tag whose spec.org differs from that
     of the tag before it under the same newest version, both with numbered clauses, published a second text
     of that version. It is a row of its own after the version's rows, dated by the tag, and its change is
     what --measure recorded for the tag (second_text_change).
     """
-    record = json.loads(VERSIONS.read_text())
+    record = read_versions()
     rows = history_rows(org)
     for row in rows:
         if row["version"] == "1":
@@ -650,7 +658,7 @@ def spec_macros(org: str) -> str:
     A release-preparation tree may name the upcoming release before its tag
     exists. Any other spec.org that no release tag holds stops the build.
     """
-    record = json.loads(VERSIONS.read_text())
+    record = read_versions()
     blob = git("hash-object", str(SPEC)).stdout.strip()
     same = next((t["tag"][1:] for t in record["tags"] if t["spec_blob"] == blob), None)
     tree = record["tree"]

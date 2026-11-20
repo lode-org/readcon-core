@@ -294,9 +294,13 @@ def kernel_sentence(runs: dict[str, dict]) -> str:
 def restart_walls() -> tuple[dict[str, dict[str, str]], int]:
     """Median walls per route, only from a campaign that clocked exactly the counted leg."""
     meta = WALLS / "restart_walls.json"
-    record = json.loads(meta.read_text()) if meta.is_file() else {}
+    if not meta.is_file():
+        raise SystemExit(f"{meta} is absent. Run scripts/run_restart_walls.py.")
+    record = json.loads(meta.read_text())
     if record.get("timed") != "resumed leg":
-        return {}, 0
+        raise SystemExit(
+            f"{meta} clocked {record.get('timed')!r}, not the resumed leg that the table's Wall column states"
+        )
     return {row["route"]: row for row in read_csv(WALLS / "restart_walls.csv")}, int(
         record["wall_repeats"]
     )
