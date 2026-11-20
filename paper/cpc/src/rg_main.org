@@ -620,7 +620,7 @@ That corpus has few files for the header, the sections and the units, so we wrot
 For each file, its manifest names the clauses that decide it and the outcome: the frame count and periodic flags of a legal file, or the error class and line of an illegal one.
 For \(\cthreeoneExplicit\) entries the outcome follows from the text of a clause, and the others record a reading where the text leaves the case open (Section~\ref*{sec:supp-corpus31}).
 All \(\cthreeoneMatch\) files return the outcome of their entry at one, two and eight threads and at the default.
-Both corpora also go through every read path of the Python module and the C library, in the default and the parallel build at each of those thread counts, and all \(\cpathsReads\) reads return the outcome that the manifests name (Table~\ref*{tab:corpus-paths}).
+Both corpora also go through every read path of the Python module and the C library, in the serial capi build and the parallel build at each of those thread counts, and all \(\cpathsReads\) reads return the outcome that the manifests name (Table~\ref*{tab:corpus-paths}).
 
 We also wrote an independent reader in \(\corpusIndepLines\) lines of Python that import nothing from readcon.
 It follows the clauses of the specification, and where a clause requires a rejection without naming its class, or no clause decides a case, it follows the reading of the corpus manifest.
