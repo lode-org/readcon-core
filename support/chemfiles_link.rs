@@ -5,6 +5,8 @@
 //! this compiler's cxx11 string (`Atom` is 128 bytes). The scan walks atoms
 //! inline, so the shim has to match the archive that will actually be linked.
 
+use std::path::Path;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StringAbi {
     /// Old libstdc++ `std::string`, mangled as `Ss`.
@@ -27,6 +29,23 @@ pub fn classify_symbol_text(text: &str) -> StringAbi {
     } else {
         StringAbi::Unknown
     }
+}
+
+/// Directory that should be passed to `-I`, containing `chemfiles/exports.h`.
+///
+/// Accepts the include directory itself or a prefix whose `include/` child
+/// holds the header. A `links = "chemfiles"` override sets
+/// `DEP_CHEMFILES_INCLUDE` to one of those.
+pub fn include_dir_holding_exports(dir: &Path) -> Option<std::path::PathBuf> {
+    let direct = dir.join("chemfiles/exports.h");
+    if direct.is_file() {
+        return Some(dir.to_path_buf());
+    }
+    let nested = dir.join("include/chemfiles/exports.h");
+    if nested.is_file() {
+        return Some(dir.join("include"));
+    }
+    None
 }
 
 pub fn library_file_names() -> &'static [&'static str] {

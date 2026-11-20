@@ -156,10 +156,13 @@ fn main() {
 
 #[cfg(feature = "chemfiles")]
 fn compile_chemfiles_atom_view() {
-    let headers = chemfiles_include_dir();
-    let generated = chemfiles_generated_include();
+    let (headers, generated) = chemfiles_header_dirs();
     println!("cargo:rerun-if-changed=src/chemfiles_atom_view.cpp");
     println!("cargo:rerun-if-changed={}", headers.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        generated.join("chemfiles/exports.h").display()
+    );
     let mut build = cc::Build::new();
     build
         .cpp(true)
@@ -187,11 +190,43 @@ fn compile_chemfiles_atom_view() {
 }
 
 #[cfg(feature = "chemfiles")]
+fn chemfiles_header_dirs() -> (PathBuf, PathBuf) {
+    println!("cargo:rerun-if-env-changed=DEP_CHEMFILES_INCLUDE");
+    if let Some(include) = overridden_chemfiles_include() {
+        return (include.clone(), include);
+    }
+    (chemfiles_include_dir(), chemfiles_generated_include())
+}
+
+/// `DEP_CHEMFILES_INCLUDE` is set by a `links = "chemfiles"` override
+/// (`cargo:include=...` or config `metadata.include`). chemfiles-sys does
+/// not run in that case, so its generated `exports.h` is not on disk.
+#[cfg(feature = "chemfiles")]
+fn overridden_chemfiles_include() -> Option<PathBuf> {
+    let value = env::var_os("DEP_CHEMFILES_INCLUDE")?;
+    let dir = PathBuf::from(&value);
+    match chemfiles_link::include_dir_holding_exports(&dir) {
+        Some(include) => Some(include),
+        None => panic!(
+            "DEP_CHEMFILES_INCLUDE={} has no chemfiles/exports.h",
+            dir.display()
+        ),
+    }
+}
+
+#[cfg(feature = "chemfiles")]
 fn linked_chemfiles_string_abi() -> chemfiles_link::StringAbi {
     println!("cargo:rerun-if-env-changed=DEP_CHEMFILES_LIBDIR");
     println!("cargo:rerun-if-env-changed=DEP_CHEMFILES_LIB_DIR");
     println!("cargo:rerun-if-env-changed=DEP_CHEMFILES_ROOT");
+    println!("cargo:rerun-if-env-changed=DEP_CHEMFILES_INCLUDE");
     let mut libraries = Vec::new();
+    if let Some(include) = overridden_chemfiles_include() {
+        if let Some(prefix) = include.parent() {
+            push_chemfiles_libraries(&prefix.join("lib"), &mut libraries);
+            push_chemfiles_libraries(&prefix.join("lib64"), &mut libraries);
+        }
+    }
     for key in [
         "DEP_CHEMFILES_LIBDIR",
         "DEP_CHEMFILES_LIB_DIR",
@@ -204,9 +239,13 @@ fn linked_chemfiles_string_abi() -> chemfiles_link::StringAbi {
             push_chemfiles_libraries(&value.join("lib64"), &mut libraries);
         }
     }
-    let out = PathBuf::from(env::var("OUT_DIR").unwrap());
-    for dir in chemfiles_build_dirs(&out) {
-        libraries.extend(chemfiles_sys_libraries(&dir));
+    // A links override does not run chemfiles-sys. A leftover prebuilt
+    // archive in the target dir must not decide the ABI for the system library.
+    if env::var_os("DEP_CHEMFILES_INCLUDE").is_none() {
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        for dir in chemfiles_build_dirs(&out) {
+            libraries.extend(chemfiles_sys_libraries(&dir));
+        }
     }
     for library in &libraries {
         println!("cargo:rerun-if-changed={}", library.display());
