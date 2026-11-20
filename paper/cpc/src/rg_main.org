@@ -86,7 +86,6 @@ Elsevier%
 % A value from a macro printed to a fixed number of significant figures.
 \newcommand{\sigfig}[2]{\num[round-mode=figures,round-precision=#1]{#2}}
 \newcommand{\DOIPENDING}{The version DOI for this commit is not minted.}
-\newcommand{\todo}[1]{#1}
 \newcommand{\rcAITool}{Cursor, routing between Claude Opus 5.5, GPT-5.6 Sol and Grok 4.7}
 % Import labels from the supplement without its \\bibcite entries (same keys in both aux files).
 % The supplement's captions contain generated macros, so those macros are defined first.
@@ -797,7 +796,6 @@ Every arm on an input matched the frame count, the atom count and the position c
 The authors maintain both eOn and readcon, so this is an in-house comparison.
 Former is eOn's former Python reader, \path{eon/fileio.py}, on a full frame, the last version before eOn delegated CON parsing to readcon.
 Current eOn reads CON files through readcon.
-A column for the original SVN-era eOn C++ CON reader is written only when that arm is in the record.
 
 \input{figures/generated/like_section}
 
