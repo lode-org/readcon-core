@@ -1,7 +1,7 @@
 use ndarray::{Array1, Array2, Array3, ArrayView1, ArrayView2};
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3,
-    PyUntypedArrayMethods, ToPyArray,
+    PyUntypedArrayMethods,
 };
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
@@ -421,6 +421,21 @@ fn py_atoms_to_list(py: Python<'_>, atoms: Vec<PyAtomDatum>) -> PyResult<Py<PyLi
 
 #[cfg(any(test, feature = "borrow-path-counts"))]
 static BINDING_COPIES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// A new NumPy-owned `[N, 3]` array (`OWNDATA`, no base) holding `rows`,
+/// written in place with no intermediate buffer.
+fn filled_rows<'py>(
+    py: Python<'py>,
+    rows: impl ExactSizeIterator<Item = [f64; 3]>,
+) -> Bound<'py, PyArray2<f64>> {
+    let array = PyArray2::<f64>::zeros(py, [rows.len(), 3], false);
+    // SAFETY: the array was just created here and nothing else can reach it.
+    let out = unsafe { array.as_slice_mut() }.expect("a new array is contiguous");
+    for (slot, row) in out.chunks_exact_mut(3).zip(rows) {
+        slot.copy_from_slice(&row);
+    }
+    array
+}
 
 /// Note one per-atom buffer the binding had to copy instead of sharing.
 fn count_binding_copy() {
@@ -1028,28 +1043,19 @@ impl PyConFrame {
         // doubles written here are the ones the per-atom walk would read.
         if !self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
             if let Some(frame) = self.inner.as_ref() {
-                let n = frame.atom_data.len();
-                let mut data: Vec<f64> = Vec::with_capacity(n * 3);
-                for atom in &frame.atom_data {
-                    data.extend_from_slice(&atom.atomic_coords());
-                }
-                let array = Array2::from_shape_vec((n, 3), data)
-                    .map_err(|e| PyValueError::new_err(format!("coords_array shape error: {e}")))?;
-                // NumPy allocates this buffer (`OWNDATA`, no base). The
-                // frame can be dropped and the array stays valid.
-                return Ok(array.to_pyarray(py));
+                return Ok(filled_rows(
+                    py,
+                    frame.atom_data.iter().map(AtomDatum::atomic_coords),
+                ));
             }
         }
         // The Python atom list exists (it was accessed or edited). Walk it
         // so in-place edits to `atoms` are reflected.
         let atoms = self.py_atoms(py)?;
-        let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
-        for atom in &atoms {
-            data.extend_from_slice(&[atom.x, atom.y, atom.z]);
-        }
-        let array = Array2::from_shape_vec((atoms.len(), 3), data)
-            .map_err(|e| PyValueError::new_err(format!("coords_array shape error: {e}")))?;
-        Ok(array.to_pyarray(py))
+        Ok(filled_rows(
+            py,
+            atoms.iter().map(|atom| [atom.x, atom.y, atom.z]),
+        ))
     }
 
     /// Returns the per-atom velocity vectors as a contiguous numpy
