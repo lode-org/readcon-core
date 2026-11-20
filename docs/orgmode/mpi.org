@@ -21,7 +21,11 @@ library works on its own duplicate of it.
 * Building
 
 #+begin_src bash
+# Rust API only
 cargo build --release --features mpi
+
+# C, C++, and Fortran MPI bindings (exports rkr_* and rkr_mpi_* symbols)
+cargo build --release --features capi,mpi
 #+end_src
 
 The =mpi= feature uses rsmpi, which needs an MPI implementation (MPICH or

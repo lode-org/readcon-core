@@ -30,7 +30,11 @@ Building
 
 .. code:: bash
 
+    # Rust API only
     cargo build --release --features mpi
+
+    # C, C++, and Fortran MPI bindings (exports rkr_* and rkr_mpi_* symbols)
+    cargo build --release --features capi,mpi
 
 The ``mpi`` feature uses rsmpi, which needs an MPI implementation (MPICH or
 Open MPI) and libclang at build time.

@@ -106,7 +106,7 @@ export PKG_CONFIG_PATH=$PWD/prefix/lib/pkgconfig
 pkg-config --cflags --libs readcon-core
 #+end_src
 
-Fortran smoke from a checkout (after a release build of the cdylib):
+Fortran smoke from a checkout (after =cargo build --release --features capi=):
 
 #+begin_src shell
 cd fortran/ReadCon && fpm test --flag "-L../../target/release" \

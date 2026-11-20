@@ -124,7 +124,7 @@ From a git checkout:
     export PKG_CONFIG_PATH=$PWD/prefix/lib/pkgconfig
     pkg-config --cflags --libs readcon-core
 
-Fortran smoke from a checkout (after a release build of the cdylib):
+Fortran smoke from a checkout (after ``cargo build --release --features capi``):
 
 .. code:: shell
 
