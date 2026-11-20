@@ -278,7 +278,9 @@ def main() -> int:
             stdout=subprocess.DEVNULL,
         )
         c31_files = sorted(
-            p.name for p in c31_dir.iterdir() if p.is_file() and p.name != "manifest.toml"
+            p.name
+            for p in c31_dir.iterdir()
+            if p.is_file() and p.name != "manifest.toml"
         )
         assert len(c31_files) == 143, len(c31_files)
 
@@ -294,7 +296,7 @@ def main() -> int:
                     'edition = "2024"',
                     "",
                     "[dependencies]",
-                    f'readcon-core = {{ path = {json.dumps(str(base_repo))} }}',
+                    f"readcon-core = {{ path = {json.dumps(str(base_repo))} }}",
                     'serde_json = { version = "1.0", features = ["float_roundtrip"] }',
                     "",
                 ]
@@ -332,9 +334,7 @@ def main() -> int:
             env=env,
         )
         if proc.returncode != 0:
-            raise SystemExit(
-                f"oracle_probe failed ({proc.returncode}):\n{proc.stderr}"
-            )
+            raise SystemExit(f"oracle_probe failed ({proc.returncode}):\n{proc.stderr}")
         raw_out = json.loads(proc.stdout)
 
     final = {
@@ -354,7 +354,9 @@ def main() -> int:
         "adversarial_lines": raw_out["adversarial_lines"],
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(final, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    args.out.write_text(
+        json.dumps(final, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return 0
 
 
