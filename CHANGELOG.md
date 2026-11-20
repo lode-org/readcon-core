@@ -76,6 +76,13 @@ All notable changes to this project will be documented in this file. See [conven
   `OSError` from `write_con_string` (`invalid units: minor >= 1 requires
   units.time when a velocities section is present`), matching the `minor >= 1`
   rule instead of silently clamping or rewriting the minor.
+- **metatensor:** the position, velocity, force and energy blocks label
+  samples with `atom_id`, and metatensor labels are `i32`. An id above
+  `i32::MAX` used to be cast with `as i32`, so `2^32` became label `0`, or
+  a row-index label when `0` was already taken. Such an id is now an error naming
+  the atom and the id (`MTS_INVALID_PARAMETER_ERROR` in Rust; the C ABI
+  block exports return `RKR_STATUS_INTERNAL_ERROR`, as for any other
+  metatensor error). Ids up to `i32::MAX` keep their labels.
 - Rust library builds no longer install mimalloc as the process-wide global
   allocator. The optional `mimalloc-allocator` feature is reserved for final
   readcon artifacts, and `default-features = false` removes both the mimalloc
