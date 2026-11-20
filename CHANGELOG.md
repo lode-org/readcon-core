@@ -59,6 +59,9 @@ All notable changes to this project will be documented in this file. See [conven
   use) and `ids()` (per-atom `uint32` index into `table()`). Once
   `frame.atoms` has been built it reads the atoms, so an edited
   `Atom.symbol` shows up.
+- **Python:** `read_con_string` parses the argument string's UTF-8 buffer
+  in place with the GIL released, instead of copying the whole text first.
+  Its `read_con_phases()` reports `open_mmap_s` as zero.
 
 ### Bugfixes
 

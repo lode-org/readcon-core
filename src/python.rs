@@ -3689,34 +3689,36 @@ fn read_con_string(
     contents: &str,
     n_threads: Option<usize>,
 ) -> PyResult<Py<ConFrameList>> {
-    // Clone so parsing can release the GIL (contents may be a borrowed Py str).
-    let t_open = std::time::Instant::now();
-    let owned = contents.to_owned();
-    let open_mmap_s = t_open.elapsed().as_secs_f64();
-    let n_bytes = owned.len();
+    // `contents` is the UTF-8 buffer of the argument `str`, which the call
+    // keeps alive and nothing can change, so it is parsed in place detached.
+    let open_mmap_s = 0.0;
+    let n_bytes = contents.len();
     let parsed = py
         .detach(|| {
-            crate::iterators::frames_from_bytes_phased(owned.as_bytes(), n_threads).map_err(|e| {
-                if utf8_failure(&e) {
-                    return CountFail::Io(e.to_string());
-                }
-                let located = crate::iterators::frames_from_text_located(&owned, n_threads).err();
-                if let Some(loc) = located {
-                    CountFail::Parse {
-                        class: loc.error.class_name(),
-                        message: loc.error.to_string(),
-                        line: loc.line,
-                        frame: loc.frame_index,
+            crate::iterators::frames_from_bytes_phased(contents.as_bytes(), n_threads).map_err(
+                |e| {
+                    if utf8_failure(&e) {
+                        return CountFail::Io(e.to_string());
                     }
-                } else {
-                    CountFail::Parse {
-                        class: e.class_name(),
-                        message: e.to_string(),
-                        line: e.line(),
-                        frame: 0,
+                    let located =
+                        crate::iterators::frames_from_text_located(contents, n_threads).err();
+                    if let Some(loc) = located {
+                        CountFail::Parse {
+                            class: loc.error.class_name(),
+                            message: loc.error.to_string(),
+                            line: loc.line,
+                            frame: loc.frame_index,
+                        }
+                    } else {
+                        CountFail::Parse {
+                            class: e.class_name(),
+                            message: e.to_string(),
+                            line: e.line(),
+                            frame: 0,
+                        }
                     }
-                }
-            })
+                },
+            )
         })
         .map_err(count_fail_to_py)?;
     let phases = crate::iterators::ReadPhaseTimes {
