@@ -173,7 +173,10 @@ def full_table(rows: list[dict[str, str]]) -> str:
         "A synthetic input is not a recorded trajectory. "
     )
     if any(heading == "Former" for _arm, heading, _kind in columns):
-        caption += "Former is eOn's former Python reader, before eOn adopted readcon. "
+        caption += (
+            "Former is eOn's former Python reader, eon/fileio.py, on a full frame, "
+            "before eOn adopted readcon. "
+        )
     if any(heading == "SVN" for _arm, heading, _kind in columns):
         caption += "SVN is the original SVN-era eOn C++ CON reader. "
     return "\n".join(
@@ -196,6 +199,19 @@ def full_table(rows: list[dict[str, str]]) -> str:
     )
 
 
+def coord_keys(rows: list[dict[str, str]]) -> list[tuple[str, str]]:
+    keys: list[tuple[str, str]] = []
+    for row in rows:
+        if row["work"] != "coords-only":
+            continue
+        key = (row["arm"], row["input"])
+        if key not in keys:
+            keys.append(key)
+    preferred = {name: index for index, name in enumerate(INPUTS)}
+    keys.sort(key=lambda item: (preferred.get(item[1], len(INPUTS)), item[1], item[0]))
+    return keys
+
+
 def coord_table(rows: list[dict[str, str]]) -> str:
     threads = sorted(
         {row["threads"] for row in rows if row["work"] == "coords-only"},
@@ -203,35 +219,24 @@ def coord_table(rows: list[dict[str, str]]) -> str:
     )
     if not threads:
         return ""
-    names = []
-    for thread in threads:
-        for name in inputs_of(rows, "coords-only", thread):
-            if name not in names:
-                names.append(name)
-    header = (
-        " & ".join(
-            ["Input"]
-            + [
-                f"{thread} thread" if thread == "1" else f"{thread} threads"
-                for thread in threads
-            ]
-        )
-        + r" \\"
-    )
+    keys = coord_keys(rows)
+    arms = {arm for arm, _name in keys}
+    readcon_only = arms <= {"readcon_positions_1", "readcon_positions_all"}
+    header_cells = ["Input"]
+    if not readcon_only:
+        header_cells.append("Arm")
+    header_cells += [
+        f"{thread} thread" if thread == "1" else f"{thread} threads"
+        for thread in threads
+    ]
+    header = " & ".join(header_cells) + r" \\"
     body = []
-    for name in names:
+    for arm, name in keys:
         cells = [tex_name(name)]
+        if not readcon_only:
+            cells.append(tex_name(arm))
         for thread in threads:
-            row = next(
-                (
-                    item
-                    for item in rows
-                    if item["work"] == "coords-only"
-                    and item["threads"] == thread
-                    and item["input"] == name
-                ),
-                None,
-            )
+            row = pick(rows, arm, "coords-only", thread, name)
             cells.append("" if row is None else show_time(row["median_s"]))
         body.append(" & ".join(cells) + r" \\")
     return "\n".join(
@@ -242,7 +247,10 @@ def coord_table(rows: list[dict[str, str]]) -> str:
             r"\caption{Coordinate-only reads from the same record. "
             r"A cell is a median time, not a ratio to a full-frame arm.}",
             r"\label{tab:like-coords}",
-            r"\begin{tabular}{@{}l" + "r" * len(threads) + r"@{}}",
+            r"\begin{tabular}{@{}l"
+            + ("l" if not readcon_only else "")
+            + "r" * len(threads)
+            + r"@{}}",
             r"\toprule",
             header,
             r"\midrule",
@@ -252,6 +260,60 @@ def coord_table(rows: list[dict[str, str]]) -> str:
             r"\end{table}",
         ]
     )
+
+
+def svn_sentences(rows: list[dict[str, str]]) -> list[str]:
+    """One sentence per recorded SVN row. No row, no number."""
+    label = "the original SVN-era eOn C++ CON reader"
+    order = {name: index for index, name in enumerate(INPUTS)}
+    full = sorted(
+        (
+            row
+            for row in rows
+            if row["arm"] == SVN_ARM
+            and row["work"] == "full-frame"
+            and row["threads"] == "1"
+        ),
+        key=lambda row: (order.get(row["input"], len(INPUTS)), row["input"]),
+    )
+    coords = sorted(
+        (row for row in rows if row["arm"] == SVN_ARM and row["work"] == "coords-only"),
+        key=lambda row: (
+            order.get(row["input"], len(INPUTS)),
+            row["input"],
+            int(row["threads"]),
+        ),
+    )
+    if not full and not coords:
+        return [
+            "The record does not settle a full-frame or coordinate comparison "
+            f"with {label}.",
+            r"\todo{}",
+        ]
+    lines = []
+    for row in full:
+        taken = cell_value(row, "ratio") if row.get("ratio_over_tip") else r"\todo{}"
+        lines.append(
+            f"On a full-frame read of \\texttt{{{tex_name(row['input'])}}}, "
+            f"{label} takes {taken} times the tip median."
+        )
+    for row in coords:
+        threads = "1 thread" if row["threads"] == "1" else f"{row['threads']} threads"
+        lines.append(
+            f"On a coordinate-only read of \\texttt{{{tex_name(row['input'])}}} "
+            f"at {threads}, {label} has median {show_time(row['median_s'])}."
+        )
+    if full and not coords:
+        lines.append(
+            f"The record does not settle a coordinate comparison with {label}."
+        )
+        lines.append(r"\todo{}")
+    if coords and not full:
+        lines.append(
+            f"The record does not settle a full-frame comparison with {label}."
+        )
+        lines.append(r"\todo{}")
+    return lines
 
 
 def prose(rows: list[dict[str, str]]) -> list[str]:
@@ -305,23 +367,29 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
             f"{tip['n_frames']} frames of {tip['n_atoms']} atoms, "
             f"with {tip['n']} repetitions."
         )
-    claims = []
-    if ase is not None:
-        claims.append(f"{cell_value(ase, 'ratio')} times as fast as ASE")
-    if former is not None:
-        claims.append(
-            f"{cell_value(former, 'ratio')} times as fast as eOn's former Python reader"
-        )
-    if claims and primary == "al_eam_md":
+    if ase is not None and primary == "al_eam_md" and ase.get("ratio_over_tip"):
         lines.append(
-            "On that trajectory, and on equal work, readcon is "
-            + " and ".join(claims)
-            + "."
+            "On a full-frame read of that trajectory, readcon is "
+            f"{cell_value(ase, 'ratio')} times as fast as ASE."
         )
+    if former is not None and primary == "al_eam_md":
+        if former.get("ratio_over_tip"):
+            taken = cell_value(former, "ratio")
+        else:
+            taken = r"\todo{}"
+        lines.append(
+            "On a full-frame read of that trajectory, eOn's former Python reader, "
+            f"eon/fileio.py, takes {taken} times the tip median."
+        )
+    lines.extend(svn_sentences(rows))
     synthetic_ase = pick(rows, "ase", "full-frame", "1", "synthetic")
-    if synthetic_ase is not None and primary != "synthetic":
+    if (
+        synthetic_ase is not None
+        and primary != "synthetic"
+        and synthetic_ase.get("ratio_over_tip")
+    ):
         lines.append(
-            "On the large synthetic file, readcon is "
+            "On a full-frame read of the large synthetic file, readcon is "
             f"{cell_value(synthetic_ase, 'ratio')} times as fast as ASE."
         )
     if release is not None:
