@@ -788,6 +788,17 @@ The ASE full-frame read adds \rcAseMib~MiB, chemfiles reading XYZ adds \rcChemMi
 To initialize from the first frame alone, \texttt{Matter.con2matter} takes \rcMatterMedian~s and \texttt{read\_first\_frame} takes \rcFirstMedian~s, with both matching 1 of 1 frame.
 The first builds a Matter and the second returns the first frame.
 
+\subsection{Like-for-like reads}\label{sec:like}
+The like-for-like record is \path{paper/cpc/bench-like-for-like/results/summary.csv}.
+One machine and one thread pinned to cpu 0.
+Every arm on an input matched the frame count, the atom count and the position checksum.
+The authors maintain both eOn and readcon, so this is an in-house comparison.
+The eOn comparison will be against the original SVN-era eOn C++ CON reader when that arm is in the record.
+Until then, the row labelled Former is eOn's former Python reader, \path{eon/fileio.py}, the last version before eOn delegated CON parsing to readcon.
+Current eOn reads CON files through readcon.
+
+\input{figures/generated/like_section}
+
 \subsection{Same-file and nearest-native panel}\label{sec:h2h}
 The same-file comparison reads one CON file with readcon from C, Fortran and Python, with the eOn client and the eOn Python module, and with ASE through its eon format.
 The nearest-native panel reads different files that carry the same atoms and the same cell, each in a format native to its reader.
