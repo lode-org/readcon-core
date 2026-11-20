@@ -403,6 +403,15 @@ def check_release(version: str, concept: str) -> list[str]:
     return bad
 
 
+def log_undefined(name: str, text: str) -> list[str]:
+    """pdfTeX lines that report something undefined, including a natbib citation."""
+    return [
+        f"{name}.log: {line.strip()}"
+        for line in text.splitlines()
+        if re.search(r"\bundefined\b", line)
+    ]
+
+
 def render(draft: bool = False) -> tuple[dict[str, str], str]:
     """The text of each form and a line that sums up what it counts."""
     problems = stale()
@@ -423,10 +432,7 @@ def render(draft: bool = False) -> tuple[dict[str, str], str]:
         for name in ("rg_main", "rg_supp")
     }
     undefined = [
-        f"{name}.log: {line.strip()}"
-        for name, text in logs.items()
-        for line in text.splitlines()
-        if re.search(r"\bundefined\b", line)
+        item for name, text in logs.items() for item in log_undefined(name, text)
     ]
     if undefined:
         refuse(undefined)
