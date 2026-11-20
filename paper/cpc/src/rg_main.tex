@@ -487,7 +487,8 @@ From minor 1 onward, a frame with a velocity section declares \texttt{units.time
 Frames of earlier versions are read in the natural unit, whatever \texttt{units.time} names (Table~\ref{tab:clauses}).
 Producers of that period wrote natural-unit numbers under an fs label, and the public release eOn~\eOneEonVersion{} still does \cite{rohitgoswamiTheochemuieonV3602026}.
 That release embeds readcon-core~\eOneEonReadcon{} and writes CON~3.0, and since its velocity writer sets no time unit, the library writes its default label of fs.
-After that release, the development line of eOn writes velocity files with \texttt{units.time} set to the natural unit \((\mathrm{amu}\,\text{\AA}^2/\mathrm{eV})^{1/2}\), which corrects the label \cite{goswamiTheochemuieonCommit624f4592026}, and it links readcon-core 0.20.0 \cite{goswamiTheochemuieonCommitBf5d3282026}.
+After that release, the Subversion development line of eOn writes velocity files in the natural time unit.
+This paper gives that line no measured number.
 The tables of this paper use eOn~\eOneEonVersion{}.
 The reader keeps such a label without applying it, and a rewrite keeps the frame at its minor and with its label, so the next reader again applies the natural unit.
 
