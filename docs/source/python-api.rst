@@ -82,9 +82,12 @@ carries ``n_frames``, ``n_atoms``, ``parse_s``, ``convert_s``, and
 ``ConFrameList.columns`` and ``write_columns``
 ----------------------------------------------
 
-A ``read_con`` result keeps one coordinate slab when every frame has the
-same atom count. ``columns()`` returns that slab as ``positions``. A second
-call is the same array object. ``masses`` is ``(frames, atoms)``. ``fixed``
+A ``read_con`` result keeps each frame's coordinates in the buffer the parse
+wrote. ``frame.xyz`` views that buffer, and every frame of one read has the
+same ``base``, which owns the buffers. ``columns()`` returns the coordinates
+as one ``positions`` array; a second call is the same array object. A
+one-frame read returns its parse buffer. A longer read packs the frames once,
+on the first call, and the frames then read that array. ``masses`` is ``(frames, atoms)``. ``fixed``
 is ``(frames, atoms, 3)``, with ``1.0`` where that axis is held. ``cell`` is
 ``(frames, 6)``, lengths then angles. ``velocities`` and ``forces`` are
 ``(frames, atoms, 3)`` when any frame carries that section, and ``None``
