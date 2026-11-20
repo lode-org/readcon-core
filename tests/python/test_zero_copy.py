@@ -6,6 +6,7 @@ repeated access, ``tracemalloc`` and, when the module has the
 """
 
 import gc
+import json
 import os
 import threading
 import tracemalloc
@@ -432,6 +433,69 @@ def test_column_views_export_through_dlpack(tmp_path):
         imported = np.from_dlpack(view)
         assert _pointer(imported) == _pointer(view), name
         assert imported.flags.writeable == view.flags.writeable, name
+
+
+# --- metadata -------------------------------------------------------------------
+
+
+def _noted_con(path, n_frames, note_len):
+    lines = []
+    for frame in range(n_frames):
+        note = chr(ord("a") + frame % 26) * note_len
+        lines += [
+            "noted",
+            json.dumps({"con_spec_version": 2, "energy": -1.5 * frame, "note": note}),
+            "10.0 10.0 10.0",
+            "90.0 90.0 90.0",
+            "0 0",
+            "0 0 0",
+            "1",
+            "1",
+            "1.00793",
+            "H",
+            "Coordinates of Component 1",
+            f"{frame}.0 0.0 0.0 0 0",
+        ]
+    path.write_text("\n".join(lines) + "\n")
+    return str(path)
+
+
+def test_metadata_is_one_live_dict_per_frame(tmp_path):
+    path = _noted_con(tmp_path / "noted.con", 3, 8)
+    frames = readcon.read_con(path)
+    frame = frames[1]
+    assert frame.metadata is frame.metadata
+    assert frame.metadata["note"] == "b" * 8
+    assert frame.energy == -1.5
+    frame.metadata["extra"] = 7
+    assert frame.metadata["extra"] == 7
+    frame.set_energy(2.0)
+    assert frame.metadata["energy"] == 2.0
+    frame.metadata = {"energy": 3.0}
+    assert frame.energy == 3.0 and "note" not in frame.metadata
+    assert readcon.read_con(path)[1].metadata == {"energy": -1.5, "note": "b" * 8}
+
+
+def test_metadata_matches_across_read_paths():
+    for path in _readable_corpus():
+        eager = [frame.metadata for frame in readcon.read_con(path)]
+        streamed = [frame.metadata for frame in readcon.iter_con(path)]
+        assert eager == streamed, path
+
+
+def test_metadata_dict_is_built_only_when_asked(tmp_path):
+    n_frames, note_len = 200, 4096
+    path = _noted_con(tmp_path / "noted.con", n_frames, note_len)
+    frames = list(readcon.read_con(path))
+    held = []
+    assert (
+        _peak_bytes(lambda: held.extend(f.xyz for f in frames))
+        < n_frames * note_len // 4
+    )
+    assert (
+        _peak_bytes(lambda: held.extend(f.metadata for f in frames))
+        >= n_frames * note_len
+    )
 
 
 if __name__ == "__main__":

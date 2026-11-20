@@ -46,6 +46,10 @@ All notable changes to this project will be documented in this file. See [conven
   Builds with the `borrow-path-counts` feature export
   `binding_copy_count()`, the number of per-atom buffers the binding had to
   copy (for example a float32 column), for tests.
+- **Python:** a parsed frame builds its `metadata` dict on first use (the
+  `metadata` property, the `energy`-style getters, a setter or a write)
+  instead of when the frame object is made. It is still one live dict per
+  frame with the same contents.
 
 ### Bugfixes
 
