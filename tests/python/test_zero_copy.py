@@ -590,5 +590,50 @@ def test_concurrent_symbol_and_column_reads(tmp_path):
     assert not errors
 
 
+# --- read_con_string ------------------------------------------------------------
+
+
+def _same_frames(left, right):
+    assert len(left) == len(right)
+    for a, b in zip(left, right):
+        assert a.xyz.tobytes() == b.xyz.tobytes()
+        assert a.symbols == b.symbols
+        assert a.metadata == b.metadata
+        assert list(a.cell) == list(b.cell) and list(a.angles) == list(b.angles)
+
+
+def test_read_con_string_matches_read_con_on_the_corpus():
+    for path in _readable_corpus():
+        if path.endswith((".gz", ".zst", ".xz", ".bz2")):
+            continue
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        _same_frames(readcon.read_con_string(text), readcon.read_con(path))
+
+
+def test_concurrent_read_con_string_of_one_str(tmp_path):
+    path = _big_con(tmp_path / "big.con", n_atoms=2000, n_frames=4)
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    reference = readcon.read_con(path)
+    errors = []
+    barrier = threading.Barrier(6)
+
+    def worker():
+        try:
+            barrier.wait()
+            for _ in range(10):
+                _same_frames(readcon.read_con_string(text), reference)
+        except Exception as error:  # noqa: BLE001
+            errors.append(error)
+
+    threads = [threading.Thread(target=worker) for _ in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert not errors
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
