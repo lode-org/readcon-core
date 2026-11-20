@@ -340,8 +340,8 @@ def clib_child(build: str, library: Path, jobs: list[dict]) -> dict:
     for name, args, res in (
         ("read_con_buffer_iterator", [vp, size], vp),
         ("read_con_file_iterator", [cp], vp),
-        ("con_frame_iterator_next_status", [vp, ctypes.POINTER(vp)], ctypes.c_int),
-        ("con_frame_iterator_error_message", [vp], cp),
+        ("con_frame_iterator_next", [vp], vp),
+        ("rkr_clear_error", [], None),
         ("free_con_frame_iterator", [vp], None),
         ("free_rkr_frame", [vp], None),
         (
@@ -362,16 +362,17 @@ def clib_child(build: str, library: Path, jobs: list[dict]) -> dict:
     def iterate(it) -> str:
         if not it:
             return rejected(lib.rkr_last_error_message())
-        frame, frames = vp(), 0
+        frames = 0
         while True:
-            status = lib.con_frame_iterator_next_status(it, ctypes.byref(frame))
-            if status != 0:
+            lib.rkr_clear_error()
+            frame = lib.con_frame_iterator_next(it)
+            if not frame:
                 break
             lib.free_rkr_frame(frame)
             frames += 1
-        message = lib.con_frame_iterator_error_message(it)
+        message = lib.rkr_last_error_message()
         lib.free_con_frame_iterator(it)
-        return f"accept {frames}" if status == -14 else rejected(message)
+        return f"accept {frames}" if message is None else rejected(message)
 
     def read_all(path: str, n: int | None) -> str:
         count = size(0)
