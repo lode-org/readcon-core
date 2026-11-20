@@ -242,24 +242,32 @@ CON_ARMS = (
     "readcon_db",
 )
 CON_LABELS = {
-    "readcon_tip": "readcon tip",
-    "readcon_v0173": "readcon release",
-    "readcon_base": "readcon main",
-    "ase_eon": "ASE ase.io (format eon)",
-    "eon_py": "eOn loadcons",
-    "readcon_db": "readcon-db",
+    "readcon_tip": "readcon tip, coordinates, 8 cores",
+    "readcon_v0173": "readcon release, full frames, 1 thread",
+    "readcon_base": "readcon main, full frames, 1 thread",
+    "ase_eon": "ASE Atoms, 1 thread",
+    "eon_py": "eOn loadcons, 1 thread",
+    "readcon_db": "readcon-db positions",
 }
+# Full frames on the calling thread. The tip arm is coordinates on every
+# core, and readcon-db is a store read, so neither is a ratio against these.
+LIKE_ARMS = (
+    "readcon_base",
+    "ase_eon",
+    "eon_py",
+)
 
 
 def ratios(theme) -> None:
+    """Full-frame, one-thread CON readers over the release arm of the same file."""
     arms = _reader_samples()
-    tip = arms["readcon_tip"]
-    order = [name for name in CON_ARMS if name in arms and name != "readcon_tip"]
+    base = arms["readcon_v0173"]
+    order = [name for name in LIKE_ARMS if name in arms]
     fig, ax = plt.subplots(figsize=(7.2, 3.2))
     y = list(range(len(order)))
     med, lo, hi = [], [], []
     for name in order:
-        ratios_rep = [p / t for t, p in zip(tip, arms[name], strict=True)]
+        ratios_rep = [p / t for t, p in zip(base, arms[name], strict=True)]
         m, q1, q3 = _type7(ratios_rep)
         med.append(m)
         lo.append(q1)
@@ -269,7 +277,7 @@ def ratios(theme) -> None:
     ax.axvline(1.0, color=BLACK, lw=0.6)
     ax.set_yticks(y)
     ax.set_yticklabels([CON_LABELS.get(name, name) for name in order], fontsize=8)
-    ax.set_xlabel("other CON time / readcon tip time")
+    ax.set_xlabel("full-frame time / release readcon time")
     ax.set_xscale("log")
     pf._theme_axes([ax], theme)
     pf._save(fig, "ratios", None)
