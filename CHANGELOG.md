@@ -15,9 +15,16 @@ All notable changes to this project will be documented in this file. See [conven
   A from-source build, a failed prebuilt download, and a distro or conda
   library use the cxx11 string (an atom is 128 bytes). The shim now reads
   the linked archive's symbols and uses the old string ABI only for the
-  COW archive. A C++ exception is returned as `ChemfilesImportError`
-  instead of aborting. A `links = "chemfiles"` override is honoured via
-  `DEP_CHEMFILES_INCLUDE`.
+  COW archive. `nm` is taken from `NM` and the target-prefixed tool;
+  if it cannot start, exits nonzero, or cannot classify a libstdc++
+  archive, the build stops instead of guessing. MSVC and libc++ leave
+  the macro unset. The symbols come from the library Cargo links
+  (`DEP_CHEMFILES_ROOT`, `DEP_CHEMFILES_LIBDIR`, or the include prefix),
+  not from a leftover `chemfiles-sys` output, and a `dylib` override is
+  not read from `libchemfiles.a`. A C++ exception is returned as
+  `ChemfilesImportError` instead of aborting. A `links = "chemfiles"`
+  override is honoured via `DEP_CHEMFILES_INCLUDE`, `DEP_CHEMFILES_ROOT`,
+  or `DEP_CHEMFILES_LIBDIR`.
 
 - Rust library builds no longer install mimalloc as the process-wide global
   allocator. The optional `mimalloc-allocator` feature is reserved for final
