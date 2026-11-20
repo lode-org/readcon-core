@@ -284,18 +284,13 @@ def svn_sentences(rows: list[dict[str, str]]) -> list[str]:
             int(row["threads"]),
         ),
     )
-    if not full and not coords:
-        return [
-            "The record does not settle a full-frame or coordinate comparison "
-            f"with {label}.",
-            r"\todo{}",
-        ]
     lines = []
     for row in full:
-        taken = cell_value(row, "ratio") if row.get("ratio_over_tip") else r"\todo{}"
+        if not row.get("ratio_over_tip"):
+            continue
         lines.append(
             f"On a full-frame read of \\texttt{{{tex_name(row['input'])}}}, "
-            f"{label} takes {taken} times the tip median."
+            f"{label} takes {cell_value(row, 'ratio')} times the tip median."
         )
     for row in coords:
         threads = "1 thread" if row["threads"] == "1" else f"{row['threads']} threads"
@@ -303,16 +298,6 @@ def svn_sentences(rows: list[dict[str, str]]) -> list[str]:
             f"On a coordinate-only read of \\texttt{{{tex_name(row['input'])}}} "
             f"at {threads}, {label} has median {show_time(row['median_s'])}."
         )
-    if full and not coords:
-        lines.append(
-            f"The record does not settle a coordinate comparison with {label}."
-        )
-        lines.append(r"\todo{}")
-    if coords and not full:
-        lines.append(
-            f"The record does not settle a full-frame comparison with {label}."
-        )
-        lines.append(r"\todo{}")
     return lines
 
 
@@ -372,14 +357,10 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
             "On a full-frame read of that trajectory, readcon is "
             f"{cell_value(ase, 'ratio')} times as fast as ASE."
         )
-    if former is not None and primary == "al_eam_md":
-        if former.get("ratio_over_tip"):
-            taken = cell_value(former, "ratio")
-        else:
-            taken = r"\todo{}"
+    if former is not None and primary == "al_eam_md" and former.get("ratio_over_tip"):
         lines.append(
             "On a full-frame read of that trajectory, eOn's former Python reader, "
-            f"eon/fileio.py, takes {taken} times the tip median."
+            f"eon/fileio.py, takes {cell_value(former, 'ratio')} times the tip median."
         )
     lines.extend(svn_sentences(rows))
     synthetic_ase = pick(rows, "ase", "full-frame", "1", "synthetic")
