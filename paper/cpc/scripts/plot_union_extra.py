@@ -170,20 +170,24 @@ def _type7(samples: list[float]) -> tuple[float, float, float]:
 
 
 READER_LOG = ROOT / "logs" / "reader-exchange.log"
-READER_JSON = Path(
-    os.environ.get("READER_EXCHANGE_JSON", str(ROOT / "logs" / "reader-exchange.json"))
-)
 
 
 def _reader_document() -> dict | None:
-    """The campaign JSON. The historical log remains the fallback."""
-    if READER_JSON.is_file():
-        return json.loads(READER_JSON.read_text(encoding="utf-8"))
-    return None
+    """The campaign JSON that READER_EXCHANGE_JSON names, or None to read the log.
+
+    A named file that is absent is an error: the log is a different record.
+    """
+    named = os.environ.get("READER_EXCHANGE_JSON")
+    if not named:
+        return None
+    path = Path(named)
+    if not path.is_file():
+        raise SystemExit(f"READER_EXCHANGE_JSON names {path}, which does not exist")
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _reader_samples() -> dict[str, list[float]]:
-    """Wall times, one list per arm. Prefer reader-exchange.json."""
+    """Wall times, one list per arm, from READER_EXCHANGE_JSON or the stored log."""
     doc = _reader_document()
     if doc is not None:
         arms = {}
@@ -198,7 +202,7 @@ def _reader_samples() -> dict[str, list[float]]:
         return arms
     if not READER_LOG.is_file():
         raise SystemExit(
-            "reader-exchange.json is missing. Run the reader_exchange campaign first."
+            f"{READER_LOG} is missing. Run the reader_exchange campaign first."
         )
     arms: dict[str, list[float]] = {}
     for line in READER_LOG.read_text(encoding="utf-8").splitlines():
