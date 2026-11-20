@@ -20,6 +20,8 @@ SRC = ROOT / "src"
 # READCON_GIT_COMMIT, READCON_GIT_TREE, READCON_SOURCE_DIGEST: build identity
 # baked by build.rs. A re-stamp that does not change src/ or Cargo.lock keeps
 # the source digest.
+# READCON_TEST_PUBLISH_HOOK: integration-test control for kill-before-publish
+# paths in writer_publish_hooks.rs.
 DOCUMENTED = {
     "READCON_RANKED_WRITE",
     "READCON_MPI_TEST_CHUNK",
@@ -27,6 +29,7 @@ DOCUMENTED = {
     "READCON_GIT_COMMIT",
     "READCON_GIT_TREE",
     "READCON_SOURCE_DIGEST",
+    "READCON_TEST_PUBLISH_HOOK",
 }
 _LITERAL = re.compile(r'"((?:\\.|[^"\\])*)"')
 _LET = re.compile(

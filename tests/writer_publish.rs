@@ -1,12 +1,16 @@
 //! A writer that is killed mid-write must not replace the destination with
 //! a partial file, and must not leave a `.readcon-write-*.tmp` name behind.
+#![cfg_attr(miri, ignore)]
 
 use readcon_core::iterators::frames_from_text;
 use readcon_core::types::ConFrameBuilder;
-use readcon_core::writer::{
-    publish_ranked_slices, rewrite_frame_refs_to_path, write_frame_refs_to_path,
-};
+use readcon_core::writer::{publish_ranked_slices, write_frame_refs_to_path};
 use std::path::Path;
+
+// Writer integration tests touch the filesystem and spawn child processes.
+// Run them under Miri with:
+// MIRIFLAGS="-Zmiri-strict-provenance -Zmiri-disable-isolation" \
+//   cargo +nightly miri test --test writer_publish -- --test-threads=1
 
 fn wide_frame(n: usize) -> readcon_core::types::ConFrame {
     let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
@@ -48,80 +52,6 @@ fn a_finished_write_replaces_the_destination_and_leaves_no_scratch() {
     assert_eq!(parsed.len(), 1);
     assert_eq!(parsed[0].atom_data.len(), 32);
     assert!(scratch_names(dir.path()).is_empty());
-}
-
-#[cfg(unix)]
-#[test]
-fn a_killed_write_keeps_the_previous_file_or_a_complete_one() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("out.con");
-    let old = b"previous-complete\n".to_vec();
-    std::fs::write(&path, &old).unwrap();
-    let path_buf = path.clone();
-    let pid = unsafe { libc::fork() };
-    assert!(pid >= 0, "fork");
-    if pid == 0 {
-        let frame = wide_frame(8_000);
-        loop {
-            let _ = write_frame_refs_to_path(&path_buf, &[&frame], 4, None, false, false);
-        }
-    }
-    std::thread::sleep(std::time::Duration::from_millis(30));
-    unsafe {
-        libc::kill(pid, libc::SIGKILL);
-        let mut status = 0;
-        libc::waitpid(pid, &mut status, 0);
-    }
-    for _ in 0..20 {
-        if scratch_names(dir.path()).is_empty() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    let got = std::fs::read(&path).unwrap();
-    if got != old {
-        let text = String::from_utf8(got).expect("published text");
-        let parsed = frames_from_text(&text, Some(1)).expect("complete frame");
-        assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].atom_data.len(), 8_000);
-    }
-    let left = scratch_names(dir.path());
-    assert!(left.is_empty(), "scratch left behind: {left:?}");
-}
-
-#[cfg(unix)]
-#[test]
-fn a_killed_rewrite_leaves_the_published_file_whole() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("out.con");
-    let previous = wide_frame(64);
-    write_frame_refs_to_path(&path, &[&previous], 1, None, false, false).unwrap();
-    let previous_bytes = std::fs::read(&path).unwrap();
-    let replacement = wide_frame(8_000);
-    let complete = dir.path().join("complete.con");
-    write_frame_refs_to_path(&complete, &[&replacement], 4, None, false, false).unwrap();
-    let published = std::fs::read(&complete).unwrap();
-    let path_buf = path.clone();
-    let pid = unsafe { libc::fork() };
-    assert!(pid >= 0, "fork");
-    if pid == 0 {
-        let frame = wide_frame(8_000);
-        loop {
-            let _ = rewrite_frame_refs_to_path(&path_buf, &[&frame], 4, None, false, false, false);
-        }
-    }
-    std::thread::sleep(std::time::Duration::from_millis(30));
-    unsafe {
-        libc::kill(pid, libc::SIGKILL);
-        let mut status = 0;
-        libc::waitpid(pid, &mut status, 0);
-    }
-    let got = std::fs::read(&path).unwrap();
-    assert!(
-        got == previous_bytes || got == published,
-        "published rewrite is neither complete file ({} bytes)",
-        got.len()
-    );
 }
 
 #[test]
@@ -166,51 +96,60 @@ fn ranked_slices_round_trip_empty_and_one_byte_pieces() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn ranked_store_modes_round_trip_and_a_bad_override_keeps_the_file() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("modes.bin");
-    std::fs::write(&path, b"keep-me").unwrap();
-    for mode in ["parallel", "sequential"] {
-        let status = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--ignored", "--exact", "ranked_store_mode_child"])
-            .env("READCON_RANKED_WRITE", mode)
-            .env("READCON_RANKED_WRITE_TEST_PATH", &path)
-            .status()
-            .unwrap();
-        assert!(status.success(), "{mode} ranked store did not round-trip");
-    }
-    let status = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--ignored", "--exact", "ranked_store_mode_child"])
-        .env("READCON_RANKED_WRITE", "ext4")
-        .env("READCON_RANKED_WRITE_TEST_PATH", &path)
-        .status()
-        .unwrap();
-    assert!(
-        status.success(),
-        "a bad ranked-store override changed the file"
-    );
-}
-
-#[test]
-#[ignore]
-fn ranked_store_mode_child() {
-    let path = std::path::PathBuf::from(
-        std::env::var_os("READCON_RANKED_WRITE_TEST_PATH").expect("child path"),
-    );
-    let mode = std::env::var("READCON_RANKED_WRITE").expect("child mode");
-    let slices: [&[u8]; 4] = [b"ab", &[], b"c", b"def"];
-    let result = publish_ranked_slices(&path, &slices, false, false);
-    let got = std::fs::read(&path).unwrap_or_default();
-    if mode == "ext4" {
-        assert!(result.is_err());
-        assert_eq!(got, b"abcdef");
-    } else {
-        result.unwrap();
-        assert_eq!(got, b"abcdef");
+    const MODE_ENV: &str = "READCON_TEST_RANKED_MODE";
+    const PATH_ENV: &str = "READCON_TEST_RANKED_PATH";
+    const EXPECT_ENV: &str = "READCON_TEST_RANKED_EXPECT";
+    const INVALID_ENV: &str = "READCON_TEST_RANKED_INVALID";
+    if let Ok(mode) = std::env::var(MODE_ENV) {
+        let path = Path::new(&std::env::var(PATH_ENV).expect("child path")).to_path_buf();
+        let expect = std::env::var(EXPECT_ENV).expect("child expected bytes");
+        let slices: [&[u8]; 4] = [b"ab", &[], b"c", b"def"];
+        unsafe { std::env::set_var("READCON_RANKED_WRITE", mode) };
+        let wrote = publish_ranked_slices(&path, &slices, false, false);
+        let got = std::fs::read(&path).unwrap_or_default();
         let spare = path.with_file_name(format!(
             "{}.rewrite",
             path.file_name().unwrap().to_string_lossy()
         ));
-        assert!(!spare.exists());
+        let ok = wrote.is_ok() && got == expect.as_bytes() && !spare.exists();
+        std::process::exit(if ok { 0 } else { 1 });
     }
+    if std::env::var_os(INVALID_ENV).is_some() {
+        let path = Path::new(&std::env::var(PATH_ENV).expect("child path")).to_path_buf();
+        let slices: [&[u8]; 4] = [b"ab", &[], b"c", b"def"];
+        unsafe { std::env::set_var("READCON_RANKED_WRITE", "ext4") };
+        let rejected = publish_ranked_slices(&path, &slices, false, false);
+        let kept = std::fs::read(&path).unwrap_or_default();
+        let ok = rejected.is_err() && kept == b"abcdef";
+        std::process::exit(if ok { 0 } else { 1 });
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("modes.bin");
+    std::fs::write(&path, b"keep-me").unwrap();
+    let exe = std::env::current_exe().expect("test binary");
+    for mode in ["parallel", "sequential"] {
+        let status = std::process::Command::new(&exe)
+            .arg("ranked_store_modes_round_trip_and_a_bad_override_keeps_the_file")
+            .arg("--exact")
+            .env(MODE_ENV, mode)
+            .env(PATH_ENV, path.as_os_str())
+            .env(EXPECT_ENV, "abcdef")
+            .status()
+            .expect("spawn child");
+        assert!(status.success(), "{mode} ranked store did not round-trip");
+    }
+    let status = std::process::Command::new(&exe)
+        .arg("ranked_store_modes_round_trip_and_a_bad_override_keeps_the_file")
+        .arg("--exact")
+        .env(INVALID_ENV, "1")
+        .env(PATH_ENV, path.as_os_str())
+        .status()
+        .expect("spawn child");
+    assert!(
+        status.success(),
+        "a bad ranked-store override changed the file"
+    );
 }

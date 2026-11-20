@@ -85,6 +85,7 @@ borrow-path-counts = []
 # so pytest can import readcon._atom_list_race. cfg(test) does not:
 # those tests load the maturin extension, which is not built as a test.
 race-hooks = ["python"]
+test-hooks = []
 python = ["dep:pyo3", "dep:numpy", "parallel", "mimalloc-allocator"]
 zstd = ["dep:zstd"]
 # Distributed I/O over a caller-supplied communicator (rsmpi). Needs an
@@ -259,6 +260,10 @@ required-features = ["rpc", "benchmark"]
 [[test]]
 name = "default_read_threads"
 required-features = ["parallel"]
+
+[[test]]
+name = "writer_publish_hooks"
+required-features = ["test-hooks"]
 
 [[bench]]
 name = "iterator_bench"

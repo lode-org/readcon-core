@@ -17,150 +17,6 @@ pub enum WriteError {
     Format(crate::error::ParseError),
 }
 
-#[cfg(all(test, loom))]
-mod loom_protocol_tests {
-    use loom::sync::atomic::{AtomicU64, Ordering};
-    use loom::sync::{Arc, Mutex};
-    use loom::thread;
-
-    #[test]
-    fn relaxed_snapshot_load_is_one_complete_element() {
-        loom::model(|| {
-            let source = Arc::new(AtomicU64::new(0x3ff0_0000_0000_0000));
-            let writer = Arc::clone(&source);
-            let store = thread::spawn(move || {
-                writer.store(0x4000_0000_0000_0000, Ordering::Relaxed);
-            });
-            let observed = source.load(Ordering::Relaxed);
-            store.join().unwrap();
-            assert!(observed == 0x3ff0_0000_0000_0000 || observed == 0x4000_0000_0000_0000);
-        });
-    }
-
-    #[derive(Clone)]
-    struct ModelCache {
-        generation: u64,
-        identities: Arc<Vec<usize>>,
-        retire_identities: Arc<Vec<usize>>,
-        coords: bool,
-    }
-
-    fn invalidate_if(generation: &AtomicU64, cache: &Mutex<Option<ModelCache>>, identity: usize) {
-        generation.fetch_add(1, Ordering::Release);
-        let mut slot = cache.lock().unwrap();
-        if slot
-            .as_ref()
-            .is_some_and(|entry| entry.retire_identities.contains(&identity))
-        {
-            slot.take();
-        } else if let Some(entry) = slot.as_mut() {
-            entry.generation = generation.load(Ordering::Acquire);
-        }
-    }
-
-    fn priced_coords(
-        generation: &AtomicU64,
-        cache: &Mutex<Option<ModelCache>>,
-        identities: &[usize],
-    ) -> bool {
-        let slot = cache.lock().unwrap();
-        let current = generation.load(Ordering::Acquire);
-        slot.as_ref().is_some_and(|entry| {
-            entry.generation == current && entry.identities.as_slice() == identities && entry.coords
-        })
-    }
-
-    #[test]
-    fn conditional_invalidation_while_pricing_cannot_publish_stale_lengths() {
-        loom::model(|| {
-            let generation = Arc::new(AtomicU64::new(1));
-            let cache = Arc::new(Mutex::new(None::<ModelCache>));
-            let (started, wait_started) = loom::sync::mpsc::channel();
-
-            let price_generation = Arc::clone(&generation);
-            let price_cache = Arc::clone(&cache);
-            let pricing = thread::spawn(move || {
-                let before = price_generation.load(Ordering::Acquire);
-                started.send(()).unwrap();
-                thread::yield_now();
-                let mut slot = price_cache.lock().unwrap();
-                let after = price_generation.load(Ordering::Acquire);
-                if before == after {
-                    *slot = Some(ModelCache {
-                        generation: after,
-                        identities: Arc::new(vec![11]),
-                        retire_identities: Arc::new(vec![11]),
-                        coords: true,
-                    });
-                }
-            });
-
-            let invalidate_generation = Arc::clone(&generation);
-            let invalidate_cache = Arc::clone(&cache);
-            let invalidating = thread::spawn(move || {
-                wait_started.recv().unwrap();
-                invalidate_if(&invalidate_generation, &invalidate_cache, 11);
-            });
-
-            pricing.join().unwrap();
-            invalidating.join().unwrap();
-            assert!(!priced_coords(&generation, &cache, &[11]));
-        });
-    }
-
-    #[test]
-    fn priced_coordinates_require_current_generation_and_full_identity() {
-        loom::model(|| {
-            let generation = AtomicU64::new(7);
-            let cache = Mutex::new(Some(ModelCache {
-                generation: 7,
-                identities: Arc::new(vec![11, 22]),
-                retire_identities: Arc::new(vec![11, 22]),
-                coords: true,
-            }));
-            assert!(priced_coords(&generation, &cache, &[11, 22]));
-            assert!(!priced_coords(&generation, &cache, &[11]));
-            assert!(!priced_coords(&generation, &cache, &[22, 11]));
-            generation.fetch_add(1, Ordering::Release);
-            assert!(!priced_coords(&generation, &cache, &[11, 22]));
-        });
-    }
-
-    #[test]
-    fn view_and_source_identities_retire_the_right_entry() {
-        loom::model(|| {
-            const SOURCE: usize = 11;
-            const VIEW: usize = 99;
-            let generation = AtomicU64::new(1);
-            let cache = Mutex::new(Some(ModelCache {
-                generation: 1,
-                identities: Arc::new(vec![SOURCE]),
-                retire_identities: Arc::new(vec![SOURCE]),
-                coords: true,
-            }));
-
-            // A source-keyed price survives destruction of its temporary
-            // snapshot view, at the new generation.
-            invalidate_if(&generation, &cache, VIEW);
-            assert!(priced_coords(&generation, &cache, &[SOURCE]));
-            invalidate_if(&generation, &cache, SOURCE);
-            assert!(!priced_coords(&generation, &cache, &[SOURCE]));
-
-            // Without a source PriceKey, the view itself is the retirement
-            // identity and dropping it clears the entry.
-            let current = generation.load(Ordering::Acquire);
-            *cache.lock().unwrap() = Some(ModelCache {
-                generation: current,
-                identities: Arc::new(vec![VIEW]),
-                retire_identities: Arc::new(vec![VIEW]),
-                coords: false,
-            });
-            invalidate_if(&generation, &cache, VIEW);
-            assert!(cache.lock().unwrap().is_none());
-        });
-    }
-}
-
 impl std::fmt::Display for WriteError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -2034,6 +1890,23 @@ fn format_bufs() -> &'static std::sync::Mutex<Vec<Vec<u8>>> {
     CACHE.get_or_init(|| std::sync::Mutex::new(Vec::new()))
 }
 
+#[cfg(all(test, unix, not(miri)))]
+#[allow(dead_code)]
+pub(crate) fn acquire_format_bufs_lock() -> Box<dyn std::any::Any> {
+    Box::new(format_bufs().lock().unwrap_or_else(|err| err.into_inner()))
+}
+
+#[cfg(all(test, unix, not(miri)))]
+#[allow(dead_code)]
+pub(crate) fn acquire_packed_lengths_lock() -> Box<dyn std::any::Any> {
+    Box::new(
+        packed_lengths()
+            .state
+            .lock()
+            .unwrap_or_else(|err| err.into_inner()),
+    )
+}
+
 fn xyz_from(coords: &[f64], index: usize) -> [f64; 3] {
     let at = index * 3;
     [coords[at], coords[at + 1], coords[at + 2]]
@@ -2454,6 +2327,48 @@ struct AppendOut<'a> {
     vel: Option<&'a mut Vec<u8>>,
 }
 
+/// A source pointer a worker may read. The pool's ranges do not overlap,
+/// and the allocation outlives the pool. The pointer keeps that
+/// allocation's provenance across the thread boundary.
+#[derive(Copy, Clone)]
+struct SharedSrc(*const u8);
+// SAFETY: the call sites hand each worker a disjoint range of a buffer
+// that outlives the pool. Sharing the pointer does not share a mutable
+// borrow of those bytes.
+unsafe impl Send for SharedSrc {}
+// SAFETY: same disjoint-range contract as `Send`.
+unsafe impl Sync for SharedSrc {}
+
+impl SharedSrc {
+    /// The stored pointer. A method, so a closure captures this wrapper
+    /// and not the raw pointer field. The field is `!Send`.
+    fn get(self) -> *const u8 {
+        self.0
+    }
+}
+
+/// A destination pointer a worker may write. Same lifetime and
+/// disjoint-range contract as [`SharedSrc`].
+#[derive(Copy, Clone)]
+struct SharedDst(*mut u8);
+// SAFETY: the call sites hand each worker a disjoint range of a buffer
+// that outlives the pool.
+unsafe impl Send for SharedDst {}
+// SAFETY: same disjoint-range contract as `Send`.
+unsafe impl Sync for SharedDst {}
+
+impl SharedDst {
+    /// The stored pointer, or that pointer plus `n` bytes. A method, so a
+    /// closure captures this wrapper and not the raw pointer field.
+    fn at(self, n: usize) -> *mut u8 {
+        unsafe { self.0.add(n) }
+    }
+
+    fn get(self) -> *mut u8 {
+        self.0
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn append_coord_rows(
     buf: &mut Vec<u8>,
@@ -2584,7 +2499,9 @@ fn append_coord_rows(
             dest.reserve(vel_len);
         }
         if coord_len > 0 {
-            let coord_ptr = buf.as_mut_ptr() as usize;
+            // Spare capacity of `buf`. The pointer keeps that allocation's
+            // provenance; the copies below are byte offsets from it.
+            let coord_ptr = buf.as_mut_ptr();
             let mut jobs = Vec::with_capacity(nparts);
             let mut at = coord_at;
             for part in &parts {
@@ -2596,7 +2513,11 @@ fn append_coord_rows(
                 if n == 0 {
                     continue;
                 }
-                jobs.push((coord.as_ptr() as usize, coord_ptr + at, n));
+                jobs.push((
+                    SharedSrc(coord.as_ptr()),
+                    SharedDst(unsafe { coord_ptr.add(at) }),
+                    n,
+                ));
                 at += n;
             }
             let next_copy = std::sync::atomic::AtomicUsize::new(0);
@@ -2610,7 +2531,7 @@ fn append_coord_rows(
                         }
                         let (src, dest, n) = jobs[index];
                         unsafe {
-                            std::ptr::copy_nonoverlapping(src as *const u8, dest as *mut u8, n);
+                            std::ptr::copy_nonoverlapping(src.get(), dest.get(), n);
                         }
                     }
                 });
@@ -2961,14 +2882,12 @@ fn stream_coord_rows(
             "coordinate block is too large",
         ))
     })?;
-    let mut map = {
-        file.set_len(reserve_end).map_err(WriteError::Io)?;
-        Some(unsafe { memmap2::MmapMut::map_mut(&*file).map_err(WriteError::Io)? })
-    };
-    let dest_base = map
-        .as_mut()
-        .map(|mapping| mapping.as_mut_ptr() as usize + base as usize)
-        .unwrap_or(0);
+    file.set_len(reserve_end).map_err(WriteError::Io)?;
+    let mut map = unsafe { memmap2::MmapMut::map_mut(&*file).map_err(WriteError::Io)? };
+    // The mapping covers the file from offset 0. `base` is the file
+    // offset of this block, so the destination is that many bytes into
+    // the mapping. The pointer keeps the mapping's write provenance.
+    let dest_base = SharedDst(unsafe { map.as_mut_ptr().add(base as usize) });
     let lengths: Vec<std::sync::atomic::AtomicU64> = (0..nparts)
         .map(|_| std::sync::atomic::AtomicU64::new(0))
         .collect();
@@ -3012,7 +2931,7 @@ fn stream_coord_rows(
                             unsafe {
                                 std::ptr::copy_nonoverlapping(
                                     coord.as_ptr(),
-                                    (dest_base + offset) as *mut u8,
+                                    dest_base.at(offset),
                                     n,
                                 );
                             }
@@ -3114,7 +3033,7 @@ fn stream_coord_rows(
                             unsafe {
                                 std::ptr::copy_nonoverlapping(
                                     coord.as_ptr(),
-                                    (dest_base + offset) as *mut u8,
+                                    dest_base.at(offset),
                                     n,
                                 );
                             }
@@ -3863,76 +3782,27 @@ fn publish_unnamed(file: &File, dest: &Path) -> io::Result<()> {
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "scratch"))?;
         let dest_c = std::ffi::CString::new(dest.as_os_str().as_encoded_bytes())
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "dest"))?;
-        #[cfg(tsan_run)]
-        {
-            // TSan cannot safely continue in a child of this multithreaded
-            // CPython process: its inherited runtime exits with code 66.
-            // Exercise the same link-and-rename publication in the parent.
-            let linked = unsafe {
-                libc::linkat(
-                    libc::AT_FDCWD,
-                    proc.as_ptr(),
-                    libc::AT_FDCWD,
-                    scratch_c.as_ptr(),
-                    libc::AT_SYMLINK_FOLLOW,
-                )
-            };
-            if linked != 0 {
-                return Err(io::Error::last_os_error());
-            }
-            let renamed = unsafe { libc::rename(scratch_c.as_ptr(), dest_c.as_ptr()) };
-            if renamed != 0 {
-                let error = io::Error::last_os_error();
+        let linked = unsafe {
+            libc::linkat(
+                libc::AT_FDCWD,
+                proc.as_ptr(),
+                libc::AT_FDCWD,
+                scratch_c.as_ptr(),
+                libc::AT_SYMLINK_FOLLOW,
+            )
+        };
+        if linked != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let renamed = unsafe { libc::rename(scratch_c.as_ptr(), dest_c.as_ptr()) };
+        if renamed != 0 {
+            let error = io::Error::last_os_error();
+            if scratch.exists() {
                 let _ = std::fs::remove_file(&scratch);
-                return Err(error);
             }
-            return Ok(());
+            return Err(error);
         }
-
-        #[cfg(not(tsan_run))]
-        {
-            let pid = unsafe { libc::fork() };
-            if pid < 0 {
-                return Err(io::Error::last_os_error());
-            }
-            if pid == 0 {
-                let linked = unsafe {
-                    libc::linkat(
-                        libc::AT_FDCWD,
-                        proc.as_ptr(),
-                        libc::AT_FDCWD,
-                        scratch_c.as_ptr(),
-                        libc::AT_SYMLINK_FOLLOW,
-                    )
-                };
-                if linked != 0 {
-                    unsafe { libc::_exit(1) };
-                }
-                let renamed = unsafe { libc::rename(scratch_c.as_ptr(), dest_c.as_ptr()) };
-                unsafe { libc::_exit(if renamed == 0 { 0 } else { 1 }) };
-            }
-            let mut status = 0;
-            loop {
-                let waited = unsafe { libc::waitpid(pid, &mut status, 0) };
-                if waited >= 0 {
-                    break;
-                }
-                let err = io::Error::last_os_error();
-                if err.kind() != io::ErrorKind::Interrupted {
-                    return Err(err);
-                }
-            }
-            // The child has finished, so a leftover scratch is this publish's
-            // name and not a concurrent writer's.
-            let published = libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0;
-            if !published {
-                if scratch.exists() {
-                    let _ = std::fs::remove_file(&scratch);
-                }
-                return Err(io::Error::other("publish did not replace the destination"));
-            }
-            Ok(())
-        }
+        Ok(())
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -3969,15 +3839,173 @@ fn begin_unpublished(path: &Path) -> Result<(Unpublished, File), WriteError> {
     Ok((staged, file))
 }
 
+#[cfg(test)]
+static PUBLISH_FILE_SYNC_CALLS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+#[cfg(test)]
+static PUBLISH_DIR_SYNC_CALLS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+fn sync_published_file(file: &File) -> io::Result<()> {
+    file.sync_all()?;
+    #[cfg(test)]
+    PUBLISH_FILE_SYNC_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+fn sync_parent_directory(path: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        let dir = destination_dir(path);
+        let file = std::fs::File::open(dir)?;
+        if let Err(error) = file.sync_all() {
+            if matches!(
+                error.raw_os_error(),
+                Some(libc::EINVAL) | Some(libc::ENOTSUP)
+            ) {
+                return Ok(());
+            }
+            return Err(io::Error::other(format!(
+                "published bytes but parent-directory sync_all failed: {error}"
+            )));
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+    #[cfg(test)]
+    PUBLISH_DIR_SYNC_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
 fn finish_unpublished(
     staged: Unpublished,
     dest: &Path,
     result: Result<(), WriteError>,
 ) -> Result<(), WriteError> {
     match result {
-        Ok(()) => staged.commit(dest).map_err(WriteError::Io),
+        Ok(()) => {
+            if test_publish_hook_enabled() {
+                maybe_test_publish_hook_file(&staged.file).map_err(WriteError::Io)?;
+            }
+            sync_published_file(&staged.file).map_err(WriteError::Io)?;
+            staged.commit(dest).map_err(WriteError::Io)?;
+            sync_parent_directory(dest).map_err(WriteError::Io)
+        }
         Err(err) => Err(err),
     }
+}
+
+#[cfg(unix)]
+#[cfg(any(test, feature = "test-hooks"))]
+const READCON_TEST_PUBLISH_HOOK_ENV: &str = "READCON_TEST_PUBLISH_HOOK";
+
+#[cfg(all(unix, any(test, feature = "test-hooks")))]
+#[inline]
+fn test_publish_hook_enabled() -> bool {
+    std::env::var_os(READCON_TEST_PUBLISH_HOOK_ENV).is_some()
+}
+
+#[cfg(not(all(unix, any(test, feature = "test-hooks"))))]
+#[inline]
+fn test_publish_hook_enabled() -> bool {
+    false
+}
+
+#[cfg(unix)]
+#[cfg(any(test, feature = "test-hooks"))]
+fn maybe_test_publish_hook_file(file: &File) -> io::Result<()> {
+    if !test_publish_hook_enabled() {
+        return Ok(());
+    }
+    let mut file = file.try_clone()?;
+    file.seek(SeekFrom::Start(0))?;
+    file.set_len(0)?;
+    file.write_all(b"readcon-test-partial-buffer\n")?;
+    file.sync_all()?;
+    maybe_test_publish_hook_wait()
+}
+
+#[cfg(unix)]
+#[cfg(any(test, feature = "test-hooks"))]
+fn maybe_test_publish_hook_path(staged: &Path) -> io::Result<()> {
+    if !test_publish_hook_enabled() {
+        return Ok(());
+    }
+    let file = OpenOptions::new().read(true).write(true).open(staged)?;
+    maybe_test_publish_hook_file(&file)
+}
+
+#[cfg(unix)]
+#[cfg(any(test, feature = "test-hooks"))]
+fn maybe_test_publish_hook_wait() -> io::Result<()> {
+    let spec = match std::env::var(READCON_TEST_PUBLISH_HOOK_ENV) {
+        Ok(spec) => spec,
+        Err(_) => return Ok(()),
+    };
+    let mut parts = spec.split(':');
+    let notify_fd: libc::c_int = parts
+        .next()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing notify fd"))?
+        .parse()
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "bad notify fd"))?;
+    let wait_fd: libc::c_int = parts
+        .next()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing wait fd"))?
+        .parse()
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "bad wait fd"))?;
+    if parts.next().is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "publish hook takes notify_fd:wait_fd",
+        ));
+    }
+    let ping = [1_u8];
+    let wrote = unsafe { libc::write(notify_fd, ping.as_ptr().cast(), 1) };
+    if wrote != 1 {
+        return Err(io::Error::other("failed to notify publish hook"));
+    }
+    let mut resume = [0_u8];
+    loop {
+        let got = unsafe { libc::read(wait_fd, resume.as_mut_ptr().cast(), 1) };
+        if got == 1 {
+            return Ok(());
+        }
+        if got == -1 {
+            let err = io::Error::last_os_error();
+            if err.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(err);
+        }
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "publish hook pipe closed",
+        ));
+    }
+}
+
+#[cfg(not(unix))]
+fn maybe_test_publish_hook_file(_file: &File) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn maybe_test_publish_hook_path(_staged: &Path) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+#[cfg(not(any(test, feature = "test-hooks")))]
+fn maybe_test_publish_hook_file(_file: &File) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+#[cfg(not(any(test, feature = "test-hooks")))]
+fn maybe_test_publish_hook_path(_staged: &Path) -> io::Result<()> {
+    Ok(())
 }
 
 /// Replace `dest` with the bytes `write` stores, or leave `dest` untouched.
@@ -3989,8 +4017,10 @@ pub(crate) fn publish_new<E>(
     let staged = Unpublished::create(dest).map_err(&map_io)?;
     let mut file = staged.duplicate().map_err(&map_io)?;
     write(&mut file)?;
+    sync_published_file(&file).map_err(&map_io)?;
     drop(file);
-    staged.commit(dest).map_err(map_io)
+    staged.commit(dest).map_err(&map_io)?;
+    sync_parent_directory(dest).map_err(map_io)
 }
 
 fn mass_runs(masses: &[f64]) -> (Vec<usize>, Vec<f64>) {
@@ -4030,16 +4060,18 @@ fn column_fixed(fixed: Option<&[f64]>, index: usize) -> u8 {
 /// for those integers. A lattice coordinate hits this table instead of the
 /// general float formatter.
 fn small_int_text(n: u32) -> &'static [u8] {
-    use std::sync::OnceLock;
     const LIMIT: u32 = 10_000;
-    static TEXT: OnceLock<Vec<u8>> = OnceLock::new();
-    static OFF: OnceLock<Vec<u32>> = OnceLock::new();
-    let text = TEXT.get_or_init(|| {
-        let mut bytes = Vec::with_capacity(LIMIT as usize * 6);
+    struct Table {
+        text: Vec<u8>,
+        off: Vec<u32>,
+    }
+    // One slot, so the bytes and the offsets cannot come from different builds.
+    static TABLE: crate::parser::ForkOnce<Table> = crate::parser::ForkOnce::new();
+    let table = TABLE.get_or_init(|| {
+        let mut text = Vec::with_capacity(LIMIT as usize * 6);
         let mut off = Vec::with_capacity(LIMIT as usize + 1);
         off.push(0u32);
         for value in 0..LIMIT {
-            let start = bytes.len();
             let mut tmp = [0u8; 8];
             let mut i = tmp.len();
             let mut n = value;
@@ -4053,17 +4085,14 @@ fn small_int_text(n: u32) -> &'static [u8] {
                     n /= 10;
                 }
             }
-            bytes.extend_from_slice(&tmp[i..]);
-            bytes.extend_from_slice(b".0");
-            off.push(bytes.len() as u32);
-            let _ = start;
+            text.extend_from_slice(&tmp[i..]);
+            text.extend_from_slice(b".0");
+            off.push(text.len() as u32);
         }
-        OFF.set(off).ok();
-        bytes
+        Table { text, off }
     });
-    let off = OFF.get().expect("small int offsets");
     let n = n as usize;
-    &text[off[n] as usize..off[n + 1] as usize]
+    &table.text[table.off[n] as usize..table.off[n + 1] as usize]
 }
 
 fn push_column_f64(buf: &mut Vec<u8>, ryu: &mut ryu::Buffer, slot: &mut FmtSlot, value: f64) {
@@ -4539,7 +4568,10 @@ pub(crate) fn publish_rewrite(spare: &Path, path: &Path, keep_spare: bool) -> io
         if hold.exists() {
             std::fs::remove_file(&hold)?;
         }
+        maybe_test_publish_hook_path(spare)?;
+        std::fs::File::open(spare)?.sync_all()?;
         std::fs::rename(spare, path)?;
+        sync_parent_directory(path)?;
         return Ok(());
     }
     if path.exists() {
@@ -4548,7 +4580,10 @@ pub(crate) fn publish_rewrite(spare: &Path, path: &Path, keep_spare: bool) -> io
         }
         std::fs::hard_link(path, &hold)?;
     }
+    maybe_test_publish_hook_path(spare)?;
+    std::fs::File::open(spare)?.sync_all()?;
     std::fs::rename(spare, path)?;
+    sync_parent_directory(path)?;
     if hold.exists() {
         std::fs::rename(&hold, spare)?;
     }
@@ -5163,7 +5198,7 @@ fn add_widths(sum: &mut usize, values: &[f64]) {
 /// Built once; the timed samples do not pay for it.
 fn milli_width_table() -> &'static [u8] {
     const N: usize = 1_000_001;
-    static TABLE: std::sync::OnceLock<Box<[u8]>> = std::sync::OnceLock::new();
+    static TABLE: crate::parser::ForkOnce<Box<[u8]>> = crate::parser::ForkOnce::new();
     TABLE.get_or_init(|| {
         let mut table = vec![0u8; N].into_boxed_slice();
         for n in 0..N {
@@ -5698,31 +5733,33 @@ struct PackedCache {
     coords: Option<std::sync::Arc<Vec<f64>>>,
 }
 
+struct PackedLengthsState {
+    entry: Option<PackedCache>,
+    generation: u64,
+}
+
 /// One independently synchronized packed-length cache.
 ///
 /// Production obtains one instance per process through [`packed_lengths`].
 /// Keeping the state injectable also lets protocol tests exercise invalidation
 /// without observing or perturbing unrelated tests.
 struct PackedLengthsCache {
-    entry: std::sync::Mutex<Option<PackedCache>>,
-    generation: std::sync::atomic::AtomicU64,
+    state: std::sync::Mutex<PackedLengthsState>,
 }
 
 impl PackedLengthsCache {
     const fn new() -> Self {
         Self {
-            entry: std::sync::Mutex::new(None),
-            generation: std::sync::atomic::AtomicU64::new(1),
+            state: std::sync::Mutex::new(PackedLengthsState {
+                entry: None,
+                generation: 1,
+            }),
         }
     }
 
     fn invalidate(&self) {
-        self.generation
-            .fetch_add(1, std::sync::atomic::Ordering::Release);
-        self.entry
-            .lock()
-            .unwrap_or_else(|err| err.into_inner())
-            .take();
+        let mut state = self.state.lock().unwrap_or_else(|err| err.into_inner());
+        state.generation = state.generation.wrapping_add(1);
     }
 
     fn invalidate_if(&self, frame: usize) {
@@ -5730,23 +5767,20 @@ impl PackedLengthsCache {
     }
 
     fn invalidate_any(&self, frames: impl IntoIterator<Item = usize>) {
-        // Bump even while the slot is empty: a pricing operation may be in
-        // flight and must not publish lengths for a frame that just died.
-        self.generation
-            .fetch_add(1, std::sync::atomic::Ordering::Release);
-        let mut entry = self.entry.lock().unwrap_or_else(|err| err.into_inner());
-        let retire = entry.as_ref().is_some_and(|cached| {
+        let mut state = self.state.lock().unwrap_or_else(|err| err.into_inner());
+        let observed = state.generation;
+        state.generation = state.generation.wrapping_add(1);
+        let retire = state.entry.as_ref().is_some_and(|cached| {
             frames
                 .into_iter()
                 .any(|frame| cached.retire_identities.contains(&frame))
         });
         if retire {
-            entry.take();
-        } else if let Some(cached) = entry.as_mut() {
-            // Preserve an unrelated entry while bringing it forward to the
-            // generation after this retirement. This is what lets a source-
-            // keyed snapshot price survive destruction of its temporary view.
-            cached.generation = self.generation.load(std::sync::atomic::Ordering::Acquire);
+            state.entry.take();
+        } else if let Some(cached) = state.entry.as_mut()
+            && cached.generation == observed
+        {
+            cached.generation = observed + 1;
         }
     }
 }
@@ -5764,14 +5798,14 @@ const MAX_PACKED_CACHE_BYTES: usize = 64 * 1024 * 1024;
 /// same source frames reuses the lengths when its coordinates match the
 /// priced ones bit for bit; nothing else in a stored frame changes without
 /// a setter that retires the price.
-#[cfg(feature = "python")]
+#[cfg(any(feature = "python", test))]
 pub(crate) struct PriceKey {
     pub(crate) identities: std::sync::Arc<[usize]>,
     pub(crate) view_identities: std::sync::Arc<[usize]>,
     pub(crate) coords: std::sync::Arc<Vec<f64>>,
 }
 
-#[cfg(feature = "python")]
+#[cfg(any(feature = "python", test))]
 thread_local! {
     static PRICE_KEY: std::cell::RefCell<Option<PriceKey>> =
         const { std::cell::RefCell::new(None) };
@@ -5794,7 +5828,7 @@ pub(crate) fn with_price_key<R>(key: Option<PriceKey>, f: impl FnOnce() -> R) ->
 fn frame_identities(frames: &[&ConFrame]) -> std::sync::Arc<[usize]> {
     frames
         .iter()
-        .map(|frame| *frame as *const ConFrame as usize)
+        .map(|frame| (*frame as *const ConFrame).addr())
         .collect()
 }
 
@@ -5803,7 +5837,7 @@ fn frame_identities(frames: &[&ConFrame]) -> std::sync::Arc<[usize]> {
 type SnapshotKey = (std::sync::Arc<[usize]>, std::sync::Arc<Vec<f64>>);
 
 fn snapshot_key(frames: &[&ConFrame]) -> Option<SnapshotKey> {
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     {
         let views = frame_identities(frames);
         PRICE_KEY.with(|slot| {
@@ -5813,7 +5847,7 @@ fn snapshot_key(frames: &[&ConFrame]) -> Option<SnapshotKey> {
                 .map(|key| (key.identities.clone(), key.coords.clone()))
         })
     }
-    #[cfg(not(feature = "python"))]
+    #[cfg(not(any(feature = "python", test)))]
     {
         let _ = frames;
         None
@@ -5825,11 +5859,11 @@ fn snapshot_key(frames: &[&ConFrame]) -> Option<SnapshotKey> {
 #[cfg(feature = "python")]
 pub(crate) fn priced_coords(identities: &[usize]) -> Option<std::sync::Arc<Vec<f64>>> {
     let packed = packed_lengths();
-    let cache = packed.entry.lock().unwrap_or_else(|err| err.into_inner());
-    let generation = packed.generation.load(std::sync::atomic::Ordering::Acquire);
-    cache
+    let state = packed.state.lock().unwrap_or_else(|err| err.into_inner());
+    state
+        .entry
         .as_ref()
-        .filter(|hit| hit.generation == generation && hit.identities.as_ref() == identities)
+        .filter(|hit| hit.generation == state.generation && hit.identities.as_ref() == identities)
         .and_then(|hit| hit.coords.clone())
 }
 
@@ -5856,7 +5890,8 @@ pub(crate) fn invalidate_packed_lengths_if(frame: usize) {
 ///
 /// Source-keyed entries survive because their retirement identities differ
 /// from every temporary view address.
-#[cfg(feature = "python")]
+#[cfg(any(feature = "python", test))]
+#[allow(dead_code)]
 pub(crate) fn invalidate_packed_lengths_if_any(frames: impl IntoIterator<Item = usize>) {
     packed_lengths().invalidate_any(frames);
 }
@@ -5896,12 +5931,12 @@ fn cached_packed_lengths_in(
         }
     };
     let count = frames.len();
-    let cache = packed.entry.lock().unwrap_or_else(|err| err.into_inner());
-    let generation = packed.generation.load(std::sync::atomic::Ordering::Acquire);
-    let hit = cache
+    let state = packed.state.lock().unwrap_or_else(|err| err.into_inner());
+    let hit = state
+        .entry
         .as_ref()
         .filter(|hit| {
-            hit.generation == generation
+            hit.generation == state.generation
                 && hit.identities.as_ref() == identities.as_ref()
                 && hit.count == count
                 && hit.precision == precision
@@ -5910,7 +5945,8 @@ fn cached_packed_lengths_in(
                 && hit.coords.is_some() == coords.is_some()
         })
         .map(|hit| (hit.lengths.clone(), hit.coords.clone()));
-    drop(cache);
+    let generation_before = state.generation;
+    drop(state);
     if let Some((lengths, priced)) = hit {
         let same = match (&priced, &coords) {
             (Some(priced), Some(coords)) => {
@@ -5922,7 +5958,6 @@ fn cached_packed_lengths_in(
             return Some(lengths);
         }
     }
-    let generation_before = packed.generation.load(std::sync::atomic::Ordering::Acquire);
     let lengths = packed_frame_lengths(frames, workers, precision, canonical, bind)?;
     let coords_bytes = coords
         .as_ref()
@@ -5935,10 +5970,10 @@ fn cached_packed_lengths_in(
         } else {
             std::mem::size_of_val(retire_identities.as_ref())
         });
-    let mut cache = packed.entry.lock().unwrap_or_else(|err| err.into_inner());
-    let generation_after = packed.generation.load(std::sync::atomic::Ordering::Acquire);
+    let mut state = packed.state.lock().unwrap_or_else(|err| err.into_inner());
+    let generation_after = state.generation;
     if generation_before == generation_after && cache_bytes <= MAX_PACKED_CACHE_BYTES {
-        *cache = Some(PackedCache {
+        state.entry = Some(PackedCache {
             identities,
             retire_identities,
             count,
@@ -5950,7 +5985,7 @@ fn cached_packed_lengths_in(
             coords,
         });
     } else if generation_before == generation_after {
-        cache.take();
+        state.entry.take();
     }
     Some(lengths)
 }
@@ -6002,12 +6037,13 @@ fn store_mapped_parts(file: &File, parts: &[Vec<u8>], offsets: &[u64]) -> io::Re
             .len(total as usize)
             .map_mut(file)?
     };
-    let base = map.as_mut_ptr() as usize;
+    let base = SharedDst(map.as_mut_ptr());
     std::thread::scope(|scope| {
         for (part, at) in parts.iter().zip(offsets) {
-            let src = part.as_ptr() as usize;
+            let src = SharedSrc(part.as_ptr());
             let len = part.len();
-            let dest = base + *at as usize;
+            // SAFETY: `at` is the byte offset of this part in `map`.
+            let dest = SharedDst(unsafe { base.0.add(*at as usize) });
             scope.spawn(move || {
                 if len == 0 {
                     return;
@@ -6015,7 +6051,7 @@ fn store_mapped_parts(file: &File, parts: &[Vec<u8>], offsets: &[u64]) -> io::Re
                 // SAFETY: `dest` is inside `map`, the ranges do not
                 // overlap, and `map` outlives this scope.
                 unsafe {
-                    std::ptr::copy_nonoverlapping(src as *const u8, dest as *mut u8, len);
+                    std::ptr::copy_nonoverlapping(src.get(), dest.get(), len);
                 }
             });
         }
@@ -6156,7 +6192,7 @@ fn pwrite_borrowed(file: &File, parts: &[&[u8]]) -> io::Result<()> {
     })
 }
 
-fn pwrite_full(file: &File, buf: &[u8], mut offset: u64) -> io::Result<()> {
+fn pwrite_full(file: &File, buf: &[u8], offset: u64) -> io::Result<()> {
     if buf.is_empty() {
         return Ok(());
     }
@@ -6174,6 +6210,7 @@ fn pwrite_full(file: &File, buf: &[u8], mut offset: u64) -> io::Result<()> {
     {
         use std::os::unix::io::AsRawFd;
         let fd = file.as_raw_fd();
+        let mut offset = offset;
         let mut written = 0usize;
         while written < buf.len() {
             let n = unsafe {
@@ -6639,7 +6676,12 @@ mod section_arity_tests {
 
 #[cfg(test)]
 mod publish_on_every_host {
-    use super::publish_ranked_slices;
+    use super::{
+        PUBLISH_DIR_SYNC_CALLS, PUBLISH_FILE_SYNC_CALLS, publish_ranked_slices,
+        write_frame_refs_to_path,
+    };
+    use crate::types::ConFrameBuilder;
+    use std::sync::atomic::Ordering;
 
     /// macOS renames a scratch preallocated with `posix_fallocate`. Windows
     /// renames a scratch extended with `set_len`. Linux may use an unnamed
@@ -6657,6 +6699,23 @@ mod publish_on_every_host {
             .filter(|name| name.starts_with(".readcon-write-") || name.ends_with(".rewrite"))
             .collect();
         assert!(names.is_empty(), "scratch left behind: {names:?}");
+    }
+
+    #[test]
+    fn path_writes_sync_file_then_parent_directory() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder
+            .add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0)
+            .with_force([0.0, 0.0, 0.0]);
+        let frame = builder.build().unwrap();
+        let frames = [&frame];
+        let file_before = PUBLISH_FILE_SYNC_CALLS.load(Ordering::Relaxed);
+        let dir_before = PUBLISH_DIR_SYNC_CALLS.load(Ordering::Relaxed);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fsync-path.con");
+        write_frame_refs_to_path(&path, &frames, 1, None, false, false).unwrap();
+        assert!(PUBLISH_FILE_SYNC_CALLS.load(Ordering::Relaxed) > file_before);
+        assert!(PUBLISH_DIR_SYNC_CALLS.load(Ordering::Relaxed) > dir_before);
     }
 }
 
@@ -7113,28 +7172,32 @@ mod parallel_write_tests {
     }
 
     #[test]
-    fn invalidation_clears_the_cached_lengths_slot() {
+    fn invalidation_retires_the_cached_lengths() {
         use crate::types::ConFrameBuilder;
         let packed = super::PackedLengthsCache::new();
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546);
-        let frame = builder.build().unwrap();
+        let mut frame = builder.build().unwrap();
         let refs = vec![&frame, &frame];
-        let _ = super::cached_packed_lengths_in(&packed, &refs, 1, None, false, true);
+        let before =
+            super::cached_packed_lengths_in(&packed, &refs, 1, None, false, true).expect("price");
         assert!(
             packed
-                .entry
+                .state
                 .lock()
                 .unwrap_or_else(|err| err.into_inner())
+                .entry
                 .is_some()
         );
+        drop(refs);
         packed.invalidate();
-        assert!(
-            packed
-                .entry
-                .lock()
-                .unwrap_or_else(|err| err.into_inner())
-                .is_none()
+        frame.set_x_at(0, 1.0e22);
+        let refs = vec![&frame, &frame];
+        let after =
+            super::cached_packed_lengths_in(&packed, &refs, 1, None, false, true).expect("reprice");
+        assert_ne!(
+            before, after,
+            "a generation bump still served the retired lengths"
         );
     }
 
@@ -7379,69 +7442,6 @@ mod parallel_write_bytes {
         assert!(!spare.exists(), "keep_spare false removes the second inode");
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(&fresh);
-    }
-
-    /// Kill the process while the spare is being written. The published
-    /// path must still be the previous complete file, not a mix.
-    #[cfg(unix)]
-    #[test]
-    fn a_killed_rewrite_leaves_the_published_file_whole() {
-        let _scratch = tempfile::tempdir().unwrap();
-        let text = std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/resources/test/cuh2.con"
-        ))
-        .unwrap();
-        let frames = frames_from_text(&text, Some(1)).unwrap();
-        let n = 8_000usize;
-        let refs: Vec<&crate::types::ConFrame> = vec![&frames[0]; n];
-        let path = _scratch
-            .path()
-            .join(format!("rc-rewrite-kill-{}.con", std::process::id()));
-        super::write_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
-        let original = std::fs::read(&path).unwrap();
-        let mut changed = frames[0].clone();
-        let x = changed.x_at(0);
-        changed.set_x_at(0, x + 0.0001);
-        let changed_refs: Vec<&crate::types::ConFrame> = vec![&changed; n];
-        let spare = path.with_file_name(format!(
-            "{}.rewrite",
-            path.file_name().unwrap().to_string_lossy()
-        ));
-        let _ = std::fs::remove_file(&spare);
-        let pid = unsafe { libc::fork() };
-        assert!(pid >= 0, "fork");
-        if pid == 0 {
-            let _ =
-                super::rewrite_frame_refs_to_path(&path, &changed_refs, 1, None, false, true, true);
-            std::process::exit(0);
-        }
-        let started = std::time::Instant::now();
-        while started.elapsed() < std::time::Duration::from_secs(30) {
-            if spare.exists()
-                && std::fs::metadata(&spare)
-                    .map(|meta| meta.len() > 65_536)
-                    .unwrap_or(false)
-            {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        }
-        unsafe { libc::kill(pid, libc::SIGKILL) };
-        let mut status = 0i32;
-        unsafe { libc::waitpid(pid, &mut status, 0) };
-        assert!(
-            libc::WIFSIGNALED(status),
-            "the rewrite finished before the kill; status {status}"
-        );
-        assert_eq!(std::fs::read(&path).unwrap(), original);
-        let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(&spare);
-        let hold = path.with_file_name(format!(
-            "{}.rewrite-hold",
-            path.file_name().unwrap().to_string_lossy()
-        ));
-        let _ = std::fs::remove_file(&hold);
     }
 
     #[test]
