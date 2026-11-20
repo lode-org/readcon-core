@@ -156,15 +156,14 @@ def _reads_path() -> Path:
 def timing_and_fairness() -> None:
     cells = json.loads(_reads_path().read_text())["cells"]
 
+    def cell_of(reader: str, threads: int = 1) -> dict:
+        key = f"python:{reader}:{threads}"
+        if key not in cells:
+            raise SystemExit(f"{_reads_path()}: no cell {key}")
+        return cells[key]
+
     def med(reader: str, threads: int = 1) -> float:
-        for cell in cells.values():
-            if (
-                cell["reader"] == reader
-                and cell["threads"] == threads
-                and cell["kind"] == "python"
-            ):
-                return cell["median_s"]
-        raise KeyError(reader)
+        return cell_of(reader, threads)["median_s"]
 
     labels = [
         "readcon",
@@ -188,7 +187,6 @@ def timing_and_fairness() -> None:
     bars("timing", labels, values, "median wall time (s)")
     ratios = [med("readcon") / med(key) for key in keys[1:]]
     bars("fairness_ratios", labels[1:], ratios, "readcon median / peer median")
-    frames = 10000
     rate_labels = [
         "full, 1",
         "full, 8",
@@ -197,14 +195,18 @@ def timing_and_fairness() -> None:
         "coords, 1",
         "coords, 8",
     ]
-    rates = [
-        frames / med("readcon", 1),
-        frames / med("readcon", 8),
-        frames / med("readcon_fields", 1),
-        frames / med("readcon_fields", 8),
-        frames / med("readcon_coords", 1),
-        frames / med("readcon_coords", 8),
+    rate_cells = [
+        cell_of(reader, threads)
+        for reader in ("readcon", "readcon_fields", "readcon_coords")
+        for threads in (1, 8)
     ]
+    counts = {cell["printed"]["frames"] for cell in rate_cells}
+    if len(counts) != 1:
+        raise SystemExit(
+            f"{_reads_path()}: the rate cells read {sorted(counts)} frames"
+        )
+    frames = counts.pop()
+    rates = [frames / cell["median_s"] for cell in rate_cells]
     bars("layers", rate_labels, rates, "frames per second")
     bars("roofline", rate_labels, rates, "frames per second")
 
