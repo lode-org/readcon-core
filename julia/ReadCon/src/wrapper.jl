@@ -829,14 +829,25 @@ function _reject_duplicate_con_spec_minor(metadata_json::AbstractString)
     return nothing
 end
 
+const _INVALID_CON_SPEC_MINOR = "con_spec_minor must be a JSON integer >= 0"
+
+# For con_spec_minor: 0 when the key is absent, typemax(UInt64) for an
+# integer above it that serde_json accepts, and an ErrorException for a
+# repeated key. Any top-level token the builder rejects throws ReadConError
+# code -3 (RKR_STATUS_INVALID_JSON): leading zeros, a sign, a fraction, an
+# exponent (1e0, 1e309, 1E400), a non-number, or an integer at or above
+# the half-ULP midpoint floor(f64::MAX) + 2^970.
 function _json_u64(metadata_json::AbstractString, key::AbstractString)
     if key == "con_spec_minor"
         tokens = _top_level_minor_tokens(metadata_json)
         if length(tokens) > 1
             error(_DUPLICATE_CON_SPEC_MINOR)
         end
-        if !isempty(tokens) && _substitutable_huge_minor(tokens[end])
-            return typemax(UInt64)
+        if !isempty(tokens)
+            _minor_token_u64(tokens[1]) === nothing && throw(ReadConError(
+                "con_spec_minor", Int32(-3), _INVALID_CON_SPEC_MINOR, UInt32(0), UInt64(0),
+            ))
+            _substitutable_huge_minor(tokens[1]) && return typemax(UInt64)
         end
         return _base_minor_u64(metadata_json)
     end
