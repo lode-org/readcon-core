@@ -61,6 +61,11 @@ extern "C" {
 int rkr_block_range(uint64_t n_frames, uint32_t n_ranks, uint32_t rank,
                     uint64_t *start, uint64_t *end);
 
+/* Exported by libreadcon_core built with the `mpi` feature.
+ * Writes the communicator size and calling rank into *size and *rank.
+ * Returns 0 on success, -1 on NULL output pointer, or the MPI error. */
+int rkr_mpi_comm_info_f(MPI_Fint comm_f, int *size, int *rank);
+
 /*
  * Exported by libreadcon_core built with the `mpi` feature.
  * Reads this rank's block of frames (block partition of the whole file).
