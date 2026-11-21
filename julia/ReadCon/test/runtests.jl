@@ -409,4 +409,5 @@ end
     end
 
     include("test_conformance_goldens.jl")
+    include("test_write_con_roundtrip.jl")
 end

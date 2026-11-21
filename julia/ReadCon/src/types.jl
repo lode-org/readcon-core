@@ -37,8 +37,16 @@ struct CFrame
     has_energies::Bool
 end
 
+_maybe_f64(::Nothing) = nothing
+_maybe_f64(value::Real) = Float64(value)
+_maybe_f64(value::NTuple{3, Real}) = Float64.(value)
+
 """
 High-level Julia representation of a single atom.
+
+`charge`, `spin`, `magmom`, `displacement`, and `spread` hold the optional
+per-atom sections of the same names, or `nothing` when the frame has none.
+Pass them as keywords to the full positional constructor.
 """
 struct Atom
     atomic_number::UInt64
@@ -59,6 +67,11 @@ struct Atom
     has_forces::Bool
     energy::Float64
     has_energy::Bool
+    charge::Union{Nothing, Float64}
+    spin::Union{Nothing, Float64}
+    magmom::Union{Nothing, NTuple{3, Float64}}
+    displacement::Union{Nothing, NTuple{3, Float64}}
+    spread::Union{Nothing, NTuple{3, Float64}}
 
     function Atom(
         atomic_number::UInt64,
@@ -81,6 +94,7 @@ struct Atom
             vx, vy, vz, has_velocity,
             0.0, 0.0, 0.0, false,
             0.0, false,
+            nothing, nothing, nothing, nothing, nothing,
         )
     end
 
@@ -110,6 +124,7 @@ struct Atom
             vx, vy, vz, has_velocity,
             fx, fy, fz, has_forces,
             0.0, false,
+            nothing, nothing, nothing, nothing, nothing,
         )
     end
 
@@ -131,7 +146,12 @@ struct Atom
         fz::Float64,
         has_forces::Bool,
         energy::Float64,
-        has_energy::Bool,
+        has_energy::Bool;
+        charge::Union{Nothing, Real}=nothing,
+        spin::Union{Nothing, Real}=nothing,
+        magmom::Union{Nothing, NTuple{3, Real}}=nothing,
+        displacement::Union{Nothing, NTuple{3, Real}}=nothing,
+        spread::Union{Nothing, NTuple{3, Real}}=nothing,
     )
         new(
             atomic_number,
@@ -141,6 +161,8 @@ struct Atom
             vx, vy, vz, has_velocity,
             fx, fy, fz, has_forces,
             energy, has_energy,
+            _maybe_f64(charge), _maybe_f64(spin),
+            _maybe_f64(magmom), _maybe_f64(displacement), _maybe_f64(spread),
         )
     end
 end
