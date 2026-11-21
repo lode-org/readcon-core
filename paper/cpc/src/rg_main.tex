@@ -493,7 +493,7 @@ A C caller that needs the tensor after the builder is gone takes the versioned m
 Python materializes a contiguous NumPy array, which implements the DLPack protocol, so PyTorch and JAX take the array without a second copy, whereas CuPy accepts only device memory and needs one copy from the host.
 An optional Cargo feature, off by default, also exports a frame to metatensor from Rust, from the C header and from the Fortran wrappers, and Python and Julia have no binding for that feature \cite{bigiMetatensorMetatomicFoundational2026}.
 
-The measured exchange is a Rust program that calls \texttt{ConFrameBuilder::positions\_dlpack} on a builder of \dlpackAtoms{} copper atoms and either sums the borrowed view in place or copies it into an owned buffer and sums the copy, in six repeats of each arm.
+The measured exchange is a Rust program that calls \texttt{positions\_dlpack} on a \texttt{ConFrameBuilder} of \dlpackAtoms{} copper atoms and either sums the borrowed view in place or copies it into an owned buffer and sums the copy, in six repeats of each arm.
 The view takes a median of \dlpackViewUs{} microseconds and the copy a median of \dlpackCopyUs{} microseconds, so the view costs \dlpackRatio{} times the copy.
 A 95 percent bootstrap interval for that ratio, drawn from those six samples, is \dlpackRatioLo{} to \dlpackRatioHi{}, and the interval excludes 1.
 The type 7 interquartile ranges are \dlpackViewIqr{} microseconds and \dlpackCopyIqr{} microseconds, and Figure~\ref{fig:dlpack} shows the six repeats.
@@ -521,7 +521,8 @@ As in differential testing \cite{mckeemanDifferentialTestingSoftware1998}, the t
 The readers agree on \(\mutantSame\) of them, with the same frame count or error class.
 The other \(\mutantDiffer\) all fall in one case that no clause decides, a JSON number on line 2 beyond the binary64 range, which the independent reader rejects anywhere on that line and readcon-core accepts in a key that is not reserved.
 A variant of the independent reader that follows readcon-core on that case returns the readcon-core verdict on all of them.
-Of the \(\clauseTotal\) clauses of the specification, \(\clauseCovered\) are named by a corpus file, a probe or a test of the library, and the other \(\clauseUncovered\) state no duty of a reader, such as the rules for revising the specification.
+Of the \(\clauseTotal\) clauses of the specification, \(\clauseCovered\) are named by a corpus file, a probe or a test of the library.
+The other \(\clauseUncovered\) split as seven MUST and ten MUST NOT clauses, one SHOULD and one SHOULD NOT clause, and four MAY clauses; by role they are eleven reader clauses, ten writer clauses and two specification-revision clauses.
 
 One name must mean one language for every reader that carries it.
 The published wheels of readcon-core 0.17.0, 0.17.1, 0.17.2 and \rcDriftFourth{} do not return the same outcome on every probe file.
@@ -733,6 +734,7 @@ The specification and the conformance corpus of CON 3.1 belong to no single simu
 
 \FloatBarrier \section*{Data availability}\label{sec:data} The source code of readcon-core is developed at \url{https://github.com/lode-org/readcon-core}, and its releases are archived under the Zenodo concept record \cite{goswamiReadconcoreConConvel2026} \begin{center} \url{https://doi.org/10.5281/zenodo.18753567} \end{center}
 This paper describes readcon-core~\readconCargoVersion{}, the version of this branch, and Algorithm~\ref{alg:parser} and the source lines of Table~\ref*{tab:anchors} follow that version.
+The measured release named in the records is readcon-core~\readconversion{}.
 The latest release tag is v\rcLatestTag{} at commit {\ttfamily\expandafter\seqsplit\expandafter{\rcLatestTagCommit}}.
 The deposited timing records name the measured commit {\ttfamily\expandafter\seqsplit\expandafter{\readconcommit}}, which is readcon-core~\rcMeasuredVersion{} and is not a release tag.
 A result measured on another version names that version in Table~\ref*{tab:versionmap} and in the source notes beside that table.

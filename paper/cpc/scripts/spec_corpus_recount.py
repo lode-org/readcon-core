@@ -168,7 +168,7 @@ def table(result: dict) -> str:
 \\begin{{table}}[tbp]
 \\centering
 \\small
-\\caption{{Conformance corpus of readcon-core \\readconversion{{}} by the verdict that a conforming reader returns on each group of files.
+\\caption{{Conformance corpus of readcon-core \\readconCargoVersion{{}} by the verdict that a conforming reader returns on each group of files.
 The counts come from reading every file of the corpus with that release.}}
 \\label{{tab:corpus}}
 \\begin{{tabular}}{{@{{}}lrp{{0.55\\linewidth}}@{{}}}}
