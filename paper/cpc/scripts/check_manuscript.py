@@ -607,7 +607,7 @@ HOST_KEY_JSON = re.compile(
     re.I,
 )
 HOST_KEY_KV = re.compile(
-    r"""(?:^|[\s,{])(?:hostname|nodename|node)\s*=\s*(?!host(?:\b|$))\S+""",
+    r"""\b(?:hostname|nodename)=(?!host\b)\S+""",
     re.I,
 )
 ABS_PATH = re.compile(
