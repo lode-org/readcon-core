@@ -1654,6 +1654,11 @@ fn skip_json_ws(bytes: &[u8], i: &mut usize) {
     }
 }
 
+/// Same ASCII whitespace as [`skip_ascii_ws`], including form feed.
+fn skip_ascii_ws_mut(bytes: &[u8], i: &mut usize) {
+    *i = skip_ascii_ws(bytes, *i);
+}
+
 fn scan_json_string_end(bytes: &[u8], start: usize) -> Option<usize> {
     if bytes.get(start) != Some(&b'"') {
         return None;
@@ -1724,7 +1729,8 @@ fn decode_json_key(raw_quoted: &str) -> Option<std::borrow::Cow<'_, str>> {
 fn scan_json_object_fields(
     json: &str,
     start: usize,
-    mut on_field: impl FnMut(&str, std::ops::Range<usize>),
+    skip_ws: fn(&[u8], &mut usize),
+    mut on_field: impl FnMut(&str, usize, std::ops::Range<usize>),
 ) {
     let bytes = json.as_bytes();
     if bytes.get(start) != Some(&b'{') {
@@ -1732,13 +1738,13 @@ fn scan_json_object_fields(
     }
     let mut i = start + 1;
     loop {
-        skip_json_ws(bytes, &mut i);
+        skip_ws(bytes, &mut i);
         if i >= bytes.len() || bytes[i] == b'}' {
             break;
         }
         if bytes[i] == b',' {
             i += 1;
-            skip_json_ws(bytes, &mut i);
+            skip_ws(bytes, &mut i);
         }
         if bytes.get(i) != Some(&b'"') {
             break;
@@ -1748,19 +1754,19 @@ fn scan_json_object_fields(
         };
         let raw_key = &json[i..k_end];
         i = k_end;
-        skip_json_ws(bytes, &mut i);
+        skip_ws(bytes, &mut i);
         if bytes.get(i) != Some(&b':') {
             break;
         }
         i += 1;
-        skip_json_ws(bytes, &mut i);
+        skip_ws(bytes, &mut i);
         let v_start = i;
         let Some(v_end) = scan_json_value_end(bytes, v_start) else {
             break;
         };
         i = v_end;
         if let Some(key) = decode_json_key(raw_key) {
-            on_field(key.as_ref(), v_start..v_end);
+            on_field(key.as_ref(), k_end, v_start..v_end);
         }
     }
 }
@@ -1774,12 +1780,33 @@ pub(crate) fn top_level_minor_spans(json: &str) -> Vec<std::ops::Range<usize>> {
     if bytes.get(start) != Some(&b'{') {
         return out;
     }
-    scan_json_object_fields(json, start, |key, span| {
+    scan_json_object_fields(json, start, skip_json_ws, |key, _key_end, span| {
         if key == meta::CON_SPEC_MINOR {
             out.push(span);
         }
     });
     out
+}
+
+/// Byte index just after the first top-level `con_spec_minor` key.
+///
+/// CON-line2.10 says a missing minor is 0. A nested object, an array
+/// element, or a dotted name is not that field. Tokens may be separated
+/// by ASCII whitespace, the set the fast path skips, including form feed.
+pub(crate) fn top_level_first_minor_key_end(json: &str) -> Option<usize> {
+    let bytes = json.as_bytes();
+    let mut start = 0usize;
+    skip_ascii_ws_mut(bytes, &mut start);
+    if bytes.get(start) != Some(&b'{') {
+        return None;
+    }
+    let mut found = None;
+    scan_json_object_fields(json, start, skip_ascii_ws_mut, |key, key_end, _span| {
+        if found.is_none() && key == meta::CON_SPEC_MINOR {
+            found = Some(key_end);
+        }
+    });
+    found
 }
 
 /// Returns the last raw value token for top-level `target` in `json`.
@@ -1791,7 +1818,7 @@ pub(crate) fn top_level_last_raw_token<'a>(json: &'a str, target: &str) -> Optio
         return None;
     }
     let mut last: Option<std::ops::Range<usize>> = None;
-    scan_json_object_fields(json, start, |key, span| {
+    scan_json_object_fields(json, start, skip_json_ws, |key, _key_end, span| {
         if key == target {
             last = Some(span);
         }
@@ -5723,12 +5750,20 @@ Forces of Component 1
         assert_eq!(fm.spec_minor(), 0);
         assert_eq!(fm.spec_minor_str(), "0");
 
-        // In-range FrameMeta::from_line preserves BASE's first-match rule.
+        // CON-line2.10 says a missing minor is 0. A nested key, or the same
+        // text inside a string, does not supply it. The nested value stays.
         let escaped = crate::types::FrameMeta::from_line(
             r#"{"con_spec_version":2,"note":"\"con_spec_minor\":99","nested":{"con_spec_minor":77}}"#,
         );
-        assert_eq!(escaped.spec_minor(), 77);
-        assert_eq!(escaped.spec_minor_str(), "77");
+        assert_eq!(escaped.spec_minor(), 0);
+        assert_eq!(escaped.spec_minor_str(), "0");
+        assert_eq!(
+            escaped
+                .get("nested")
+                .and_then(|v| v.get("con_spec_minor"))
+                .and_then(|v| v.as_u64()),
+            Some(77)
+        );
 
         // Unicode-escaped key at top level preserves 2^64 minor.
         let unicode_key = [
@@ -5769,6 +5804,191 @@ Forces of Component 1
         let neb_written = String::from_utf8(neb_out).unwrap();
         assert!(neb_written.contains("\"energy\":-1.2}"), "{neb_written}");
         assert!(!neb_written.contains("-1.20"), "{neb_written}");
+    }
+
+    /// CON-line2.10 says a missing minor is 0. Read as the top-level field:
+    /// a nested key, an array element, or a dotted name does not supply it
+    /// and must be kept (CON-line2.8). It must not shadow the top-level
+    /// minor, `units.length` (CON-header.3, CON-units.1), or the minor used
+    /// by CON-units.11 and CON-section.7. A rewrite must not flip that minor.
+    #[test]
+    fn nested_and_dotted_metadata_keys_follow_spec() {
+        let nested_only = crate::types::FrameMeta::from_line(
+            r#"{"con_spec_version":2,"note":"\"con_spec_minor\":99","nested":{"con_spec_minor":77,"a.b":1}}"#,
+        );
+        assert_eq!(nested_only.spec_minor(), 0);
+        assert_eq!(nested_only.spec_minor_str(), "0");
+        assert_eq!(
+            nested_only
+                .get("nested")
+                .and_then(|v| v.get("con_spec_minor"))
+                .and_then(|v| v.as_u64()),
+            Some(77)
+        );
+        assert_eq!(
+            nested_only
+                .get("nested")
+                .and_then(|v| v.get("a.b"))
+                .and_then(|v| v.as_u64()),
+            Some(1)
+        );
+
+        let shadowed = crate::types::FrameMeta::from_line(
+            r#"{"con_spec_version":3,"nest":{"con_spec_minor":9},"con_spec_minor":0}"#,
+        );
+        assert_eq!(shadowed.spec_minor(), 0);
+        assert_eq!(
+            shadowed
+                .get("nest")
+                .and_then(|v| v.get("con_spec_minor"))
+                .and_then(|v| v.as_u64()),
+            Some(9)
+        );
+
+        let dotted = crate::types::FrameMeta::from_line(
+            r#"{"con_spec_version":2,"arr":[{"con_spec_minor":4}],"a.con_spec_minor":8}"#,
+        );
+        assert_eq!(dotted.spec_minor(), 0);
+        assert_eq!(
+            dotted.get("a.con_spec_minor").and_then(|v| v.as_u64()),
+            Some(8)
+        );
+
+        let velocities = concat!(
+            "PRE\n",
+            r#"{"con_spec_version":3,"x":{"con_spec_minor":1},"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
+            "\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n",
+            "Coordinates of Component 1\n0 0 0 0 0\n\n",
+            "H\nVelocities of Component 1\n0.1 0 0 0 0\n",
+        );
+        let read = crate::iterators::frames_from_text(velocities, None)
+            .expect("nested minor is not minor >= 1");
+        assert_eq!(read[0].header.con_spec_minor_saturating(), 0);
+
+        let shadowed_vel = concat!(
+            "PRE\n",
+            r#"{"con_spec_version":3,"x":{"con_spec_minor":1},"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
+            "\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n",
+            "Coordinates of Component 1\n0 0 0 0 0\n\n",
+            "H\nVelocities of Component 1\n0.1 0 0 0 0\n",
+        );
+        let read = crate::iterators::frames_from_text(shadowed_vel, None)
+            .expect("top-level minor 0 allows velocities without units.time");
+        assert_eq!(read[0].header.con_spec_minor_saturating(), 0);
+
+        let unknown = concat!(
+            "PRE\n",
+            r#"{"con_spec_version":3,"nest":{"con_spec_minor":99},"units":{"length":"angstrom","energy":"eV"},"sections":["widgets"],"section_arity":{"widgets":2}}"#,
+            "\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n",
+            "Coordinates of Component 1\n0 0 0 0 0\n\n",
+            "H\nWidgets of Component 1\n1.0 2.0 0 0\n",
+        );
+        let err = crate::iterators::frames_from_text(unknown, None)
+            .expect_err("minor 0 must not skip an unknown section");
+        assert_eq!(err.class_name(), "UnknownSection", "{err}");
+
+        let round = concat!(
+            "PRE\n",
+            r#"{"con_spec_version":3,"nest":{"con_spec_minor":9,"a.b":1},"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"units.length":"bohr"}"#,
+            "\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n",
+            "Coordinates of Component 1\n0 0 0 0 0\n",
+        );
+        let frames = crate::iterators::frames_from_text(round, None).unwrap();
+        let frame = &frames[0];
+        assert_eq!(frame.header.con_spec_minor_saturating(), 0);
+        assert_eq!(frame.header.length_unit(), Some("angstrom"));
+        assert_eq!(
+            frame
+                .header
+                .metadata
+                .get("units.length")
+                .and_then(|v| v.as_str()),
+            Some("bohr")
+        );
+        assert_eq!(
+            frame
+                .header
+                .metadata
+                .get("nest")
+                .and_then(|v| v.get("a.b"))
+                .and_then(|v| v.as_u64()),
+            Some(1)
+        );
+        let mut out = Vec::new();
+        crate::writer::ConFrameWriter::new(&mut out)
+            .write_frame(frame)
+            .unwrap();
+        let written = String::from_utf8(out).unwrap();
+        let again = crate::iterators::frames_from_text(&written, None).unwrap();
+        assert_eq!(
+            again[0].header.con_spec_minor_saturating(),
+            frame.header.con_spec_minor_saturating()
+        );
+        assert_eq!(again[0].header.length_unit(), Some("angstrom"));
+        assert_eq!(
+            again[0]
+                .header
+                .metadata
+                .get("units.length")
+                .and_then(|v| v.as_str()),
+            Some("bohr")
+        );
+        assert_eq!(
+            again[0]
+                .header
+                .metadata
+                .get("nest")
+                .and_then(|v| v.get("con_spec_minor"))
+                .and_then(|v| v.as_u64()),
+            Some(9)
+        );
+        assert_eq!(
+            again[0]
+                .header
+                .metadata
+                .get("nest")
+                .and_then(|v| v.get("a.b"))
+                .and_then(|v| v.as_u64()),
+            Some(1)
+        );
+    }
+
+    /// ASCII whitespace between line-2 tokens is the set the fast path
+    /// skips, including a form feed. A decoded top-level escape is that key.
+    #[test]
+    fn form_feed_and_escaped_top_level_minor_match_the_fast_path() {
+        let ff = '\u{000c}';
+        let minor_lines = [
+            format!(r#"{{"con_spec_version":2,{ff}"con_spec_minor":5}}"#),
+            format!(r#"{{"con_spec_version":2,"con_spec_minor"{ff}:5}}"#),
+            format!(r#"{{{ff}"con_spec_version":2,"con_spec_minor":5}}"#),
+            format!(
+                r#"{{"con_spec_version":2,"units":{ff}{{"length":"angstrom"}},"con_spec_minor":5}}"#
+            ),
+        ];
+        for line in &minor_lines {
+            let meta = crate::types::FrameMeta::from_line(line.as_str());
+            assert_eq!(meta.spec_minor(), 5, "{line:?}");
+        }
+        let escaped =
+            crate::types::FrameMeta::from_line(r#"{"con_spec_version":2,"con_spec_\u006dinor":5}"#);
+        assert_eq!(escaped.spec_minor(), 5);
+
+        let units = r#"{"length":"angstrom","energy":"eV"}"#;
+        let velocity_lines = [
+            format!(r#"{{"con_spec_version":3,{ff}"con_spec_minor":1,"units":{units}}}"#),
+            format!(r#"{{"con_spec_version":3,"con_spec_minor"{ff}:1,"units":{units}}}"#),
+            format!(r#"{{{ff}"con_spec_version":3,"con_spec_minor":1,"units":{units}}}"#),
+            format!(r#"{{"con_spec_version":3,"units":{ff}{units},"con_spec_minor":1}}"#),
+        ];
+        for line2 in &velocity_lines {
+            let text = format!(
+                "PRE\n{line2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0 0 0 0\n"
+            );
+            let err = crate::iterators::frames_from_text(&text, None)
+                .expect_err("minor 1 requires units.time");
+            assert_eq!(err.class_name(), "InvalidUnits", "{line2:?}: {err}");
+        }
     }
 }
 
