@@ -6054,6 +6054,36 @@ mod tests {
     }
 
     #[test]
+    fn test_builder_set_metadata_json_accepts_validate_without_sections() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder
+            .set_metadata_json(r#"{"con_spec_version":2,"validate":true}"#)
+            .unwrap();
+        builder
+            .add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546)
+            .with_charge(0.5);
+        let frame = builder.build().unwrap();
+        let mut buf = Vec::new();
+        crate::writer::ConFrameWriter::new(&mut buf)
+            .write_frame(&frame)
+            .unwrap();
+        let text = String::from_utf8(buf).unwrap();
+        assert!(text.contains(r#""sections":["charges"]"#), "{text}");
+        assert!(text.contains(r#""validate":true"#), "{text}");
+        let reread: Vec<_> = crate::iterators::ConFrameIterator::new(&text)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(reread[0].atom_data[0].charge(), Some(0.5));
+
+        let mut bad = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        assert!(bad.set_metadata_json(r#"{"validate":1}"#).is_err());
+        assert!(
+            bad.set_metadata_json(r#"{"validate":true,"sections":"charges"}"#)
+                .is_err()
+        );
+    }
+
+    #[test]
     fn test_builder_typed_metadata_setters() {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
         builder.set_frame_index(7);

@@ -1180,7 +1180,7 @@ impl PyConFrame {
     fn set_metadata_json(&mut self, py: Python<'_>, metadata_json: &str) -> PyResult<()> {
         let (obj, minor_raw) = crate::parser::parse_metadata_json_object_with_raw(metadata_json)
             .map_err(|e| PyValueError::new_err(format!("invalid metadata JSON: {e}")))?;
-        crate::parser::validate_metadata_schema(&obj)
+        crate::parser::validate_builder_metadata_schema(&obj)
             .map_err(|e| PyValueError::new_err(format!("invalid metadata: {e}")))?;
         let mut metadata = BTreeMap::new();
         for (key, value) in obj {
