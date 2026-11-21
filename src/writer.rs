@@ -7621,6 +7621,7 @@ mod gzip_stream_memory {
     /// Isolated measurements of that rewrite: 26 MiB high-water and 30 MB
     /// committed before, 4 MiB high-water and 5.5 MB committed after (the
     /// deflate arena, flat in the frame count).
+    #[cfg_attr(miri, ignore = "pre-existing hang under Miri at base; see kit")]
     #[test]
     fn parsed_frames_gzip_write_drops_the_metadata_maps() {
         let _scratch = tempfile::tempdir().unwrap();
