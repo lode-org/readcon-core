@@ -8,7 +8,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CON="$ROOT/resources/examples/neb_band.con"
 TSV="$ROOT/resources/examples/neb_band.tsv"
 
-python3 "$ROOT/scripts/print_neb_band.py" "$CON" | python3 - "$TSV" <<'PY'
+python3 "$ROOT/scripts/print_neb_band.py" "$CON" | python3 /dev/fd/3 "$TSV" 3<<'PY'
 import sys
 from pathlib import Path
 

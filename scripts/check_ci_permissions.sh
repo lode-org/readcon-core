@@ -23,12 +23,16 @@ workflow_perm_block() {
 [[ -f "$COV" ]] || die "missing $COV"
 
 docs_perm="$(workflow_perm_block "$DOCS")"
-echo "$docs_perm" | grep -q 'pages:[[:space:]]*write' \
-  && die "ci_docs.yml grants pages: write at workflow scope" \
-  || ok "ci_docs.yml workflow-scope has no pages: write"
-echo "$docs_perm" | grep -q 'id-token:[[:space:]]*write' \
-  && die "ci_docs.yml grants id-token: write at workflow scope" \
-  || ok "ci_docs.yml workflow-scope has no id-token: write"
+if echo "$docs_perm" | grep -q 'pages:[[:space:]]*write'; then
+  die "ci_docs.yml grants pages: write at workflow scope"
+else
+  ok "ci_docs.yml workflow-scope has no pages: write"
+fi
+if echo "$docs_perm" | grep -q 'id-token:[[:space:]]*write'; then
+  die "ci_docs.yml grants id-token: write at workflow scope"
+else
+  ok "ci_docs.yml workflow-scope has no id-token: write"
+fi
 
 # Deploy job keeps Pages + OIDC, and only runs on the default branch.
 if awk '
@@ -56,9 +60,11 @@ else
 fi
 
 cov_perm="$(workflow_perm_block "$COV")"
-echo "$cov_perm" | grep -q 'id-token:[[:space:]]*write' \
-  && die "coverage.yml grants id-token: write at workflow scope" \
-  || ok "coverage.yml workflow-scope has no id-token: write"
+if echo "$cov_perm" | grep -q 'id-token:[[:space:]]*write'; then
+  die "coverage.yml grants id-token: write at workflow scope"
+else
+  ok "coverage.yml workflow-scope has no id-token: write"
+fi
 
 # OIDC stays on a trusted-push upload job, not on the generate jobs.
 if grep -n 'id-token:[[:space:]]*write' "$COV" | grep -vq '^\s*#'; then

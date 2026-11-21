@@ -278,7 +278,11 @@ jobs:
         run: |
           ls -la dist/
           echo "--- expected packages: readcon (lean) and readcon-chemfiles (full) ---"
-          ls dist/*.whl dist/*.tar.gz | sed 's|.*/||' | sort -u
+          for artifact in dist/*.whl dist/*.tar.gz; do
+            if [[ -e "$artifact" ]]; then
+              basename "$artifact"
+            fi
+          done | sort -u
 
       # Trusted publishers must be configured on PyPI for *both* project names
       # `readcon` and `readcon-chemfiles` (same workflow + environment `pypi`).
