@@ -20,7 +20,7 @@ Failure campaign, band arrays of each format & Figure~\ref{fig:structures}, Figu
 Failure campaign, extended XYZ drift & Section~\ref{sec:conformance}, Table~\ref{tab:drift}, Section~\ref{sec:supp-failure}, Section~\ref{sec:supp-versions} \\
 Failure campaign, failure matrix & Section~\ref{sec:cases}, Table~\ref{tab:survey} \\
 Failure campaign, restart bands & Table~\ref{tab:restartfmt}, Section~\ref{sec:supp-restart} \\
-Failure campaign, restart formats & Section~\ref{sec:cases}, Table~\ref{tab:params}, Table~\ref{tab:restartfmt}, Section~\ref{sec:supp-restart} \\
+Failure campaign, restart formats & Section~\ref{sec:cases}, Table~\ref{tab:params}, Table~\ref{tab:restartfmt}, Section~\ref{sec:supp-restart}, Section~\ref{sec:supp-readcon-db} \\
 Failure campaign, restart formats on the Cooper Lake kernel set & Table~\ref{tab:restartfmt}, Section~\ref{sec:supp-restart} \\
 Failure campaign, restart formats on the Haswell kernel set & Table~\ref{tab:restartfmt}, Section~\ref{sec:supp-restart} \\
 Failure campaign, restart formats on the Nehalem kernel set & Table~\ref{tab:restartfmt}, Section~\ref{sec:supp-restart} \\
@@ -32,7 +32,7 @@ Specification campaign, mutant differential & Section~\ref{sec:conformance}, Sec
 Survey frame & Listing~\ref{lst:frame}, Section~\ref{sec:supp-failure} \\
 Survey frame, CON text & Listing~\ref{lst:frame} \\
 Timing campaign r0174 & Section~\ref{sec:supp-timing}, Table~\ref{tab:ordering}, Figure~\ref{fig:fairness}, Figure~\ref{fig:layers}, Figure~\ref{fig:roofline} \\
-Velocity case & Section~\ref{sec:introduction}, Section~\ref{sec:worked}, Section~\ref{sec:cases}, Section~\ref{sec:spec-normative}, Section~\ref{sec:supp-failure}, Section~\ref{sec:supp-velocity}, Figure~\ref{fig:supp-velocity} \\
+Velocity case & Section~\ref{sec:introduction}, Section~\ref{sec:worked}, Section~\ref{sec:spec-normative}, Section~\ref{sec:supp-failure}, Section~\ref{sec:supp-velocity}, Figure~\ref{fig:supp-velocity} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-db commit \texttt{a584a28816c2}, tree \texttt{c1c761697b9a}; Intel(R) Xeon(R) Processor, 8 CPUs, 2700 MHz, kernel 6.12.113+} \\
 readcon-db campaign db24 & Section~\ref{sec:supp-readcon-db} \\
@@ -46,14 +46,14 @@ Limiter r15 read ladder & Figure~\ref{fig:mpi-weak} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.17.4, library \texttt{3b4d00ae2427}; Python module readcon, SHA-256 \texttt{7a74a7329002}; rustc 1.88.0, Python 3.12.16; family 6 model 207, 2400 MHz, 8 threads; eOn 3.6.0 (\texttt{np2py314h465d2a2\_0}), which embeds readcon-core 0.16.0} \\
 Evidence E1, L-BFGS control & Section~\ref{sec:format} \\
-Evidence E1, restart & Section~\ref{sec:format}, Section~\ref{sec:cases}, Figure~\ref{fig:restart}, Section~\ref{sec:supp-restart} \\
+Evidence E1, restart & Section~\ref{sec:format}, Section~\ref{sec:cases}, Section~\ref{sec:supp-restart}, Figure~\ref{fig:restart} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-db commit \texttt{043c3091c960}} \\
-readcon-db campaign db8 & Section~\ref{sec:readcon-db} \\
-readcon-db fair-store campaign db30 & Section~\ref{sec:readcon-db} \\
+readcon-db campaign db8 & Section~\ref{sec:supp-readcon-db} \\
+readcon-db fair-store campaign db30 & Section~\ref{sec:supp-readcon-db} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.17.3, library \texttt{b49c0be7352a}} \\
-Test run & Section~\ref{sec:worked}, Section~\ref{sec:supp-testrun}, Listing~\ref{lst:testrun} \\
+Test run & Section~\ref{sec:supp-testrun}, Listing~\ref{lst:testrun} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.17.4} \\
 Worked example & Section~\ref{sec:introduction}, Table~\ref{tab:frame}, Section~\ref{sec:worked}, Section~\ref{sec:format}, Section~\ref{sec:implementation}, Algorithm~\ref{alg:parser}, Table~\ref{tab:rules-numbers}, Section~\ref{sec:supp-testrun} \\
@@ -77,12 +77,12 @@ Specification campaign, version drift & Section~\ref{sec:conformance}, Section~\
 Specification campaign, corpus recount & Section~\ref{sec:conformance}, Table~\ref{tab:corpus} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-db commit \texttt{a584a28816c2}, tree \texttt{c1c761697b9a}; Intel(R) Xeon(R) Processor, 2700 MHz, kernel 6.12.113+} \\
-readcon-db campaign db31, corpus operations & Section~\ref{sec:readcon-db} \\
+readcon-db campaign db31, corpus operations & Section~\ref{sec:supp-readcon-db} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-db commit \texttt{a584a28816c2}; Intel(R) Xeon(R) Processor, 2700 MHz, kernel 6.12.113+} \\
-readcon-db fair-store campaign db31 & Section~\ref{sec:readcon-db} \\
+readcon-db fair-store campaign db31 & Section~\ref{sec:supp-readcon-db} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-db commit \texttt{d8bf1cb567c4}; Intel(R) Xeon(R) Processor, 2700 MHz, kernel 6.12.113+} \\
-readcon-db fair-store campaign db32 & Section~\ref{sec:readcon-db} \\
+readcon-db fair-store campaign db32 & Section~\ref{sec:supp-readcon-db} \\
 \end{longtable}
 \endgroup
