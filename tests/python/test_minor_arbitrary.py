@@ -423,7 +423,9 @@ def test_python_v5_b1_b2_b3_b4_base_parity():
         assert msg.startswith("invalid metadata JSON: "), msg
         assert want_sub in msg, f"{bad!r} -> {msg}"
 
-    # B3: in-range duplicate and nested con_spec_minor with velocities and no units.time match BASE.
+    # Repeated in-range minors still use the first top-level key.
+    # CON-line2.10 says a missing minor is 0. A nested key does not
+    # supply it.
     for line2, want_ok in (
         (
             '{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
@@ -451,11 +453,11 @@ def test_python_v5_b1_b2_b3_b4_base_parity():
         ),
         (
             '{"con_spec_version":3,"x":{"con_spec_minor":1},"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
-            False,
+            True,
         ),
         (
             '{"con_spec_version":3,"x":{"con_spec_minor":1},"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
-            False,
+            True,
         ),
     ):
         txt = (
@@ -689,3 +691,38 @@ def test_huge_minor_form_feed_and_quoted_control_bytes_match_base(line2, expecte
         with pytest.raises(ValueError) as sm_exc:
             fr.set_metadata_json(line2)
         assert str(sm_exc.value).startswith("invalid metadata JSON:")
+
+
+def _velocities_without_time(line2: str) -> str:
+    return (
+        f"gen\n{line2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n"
+        "Coordinates of Component 1\n0 0 0 0 0\n\n"
+        "H\nVelocities of Component 1\n0.1 0 0 0 0\n"
+    )
+
+
+def test_form_feed_between_line2_tokens_requires_units_time():
+    # CON-line2.10 says a missing minor is 0. Form feed is whitespace the
+    # fast path skips, so these top-level minors are 1 and CON-units.11
+    # rejects velocities with no units.time.
+    ff = "\x0c"
+    units = '{"length":"angstrom","energy":"eV"}'
+    lines = [
+        f'{{"con_spec_version":3,{ff}"con_spec_minor":1,"units":{units}}}',
+        f'{{"con_spec_version":3,"con_spec_minor"{ff}:1,"units":{units}}}',
+        f'{{{ff}"con_spec_version":3,"con_spec_minor":1,"units":{units}}}',
+        f'{{"con_spec_version":3,"units":{ff}{units},"con_spec_minor":1}}',
+    ]
+    for line2 in lines:
+        with pytest.raises(readcon.InvalidUnits):
+            readcon.read_con_string(_velocities_without_time(line2))
+
+
+def test_escaped_top_level_con_spec_minor_is_the_minor():
+    text = (
+        'gen\n{"con_spec_version":2,"con_spec_\\u006dinor":5}\n'
+        "10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n"
+        "Coordinates of Component 1\n0 0 0 0 0\n"
+    )
+    frame = readcon.read_con_string(text)[0]
+    assert frame.metadata["con_spec_minor"] == 5
