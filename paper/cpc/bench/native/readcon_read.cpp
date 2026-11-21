@@ -35,16 +35,99 @@ struct Kept {
     std::vector<Record> records;
 };
 
-const char *after_key(const std::string &json, const char *key) {
-    const std::size_t at = json.find(key);
-    return at == std::string::npos ? nullptr : json.c_str() + at + std::strlen(key);
+const char *skip_ws(const char *p) {
+    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+        ++p;
+    return p;
 }
 
-std::array<double, 9> cell_of(const readcon::ConFrame &frame, const std::string &json) {
-    std::array<double, 9> m{};
-    if (const char *p = after_key(json, "\"lattice_vectors\":")) {
+const char *skip_string(const char *p) {
+    if (*p != '"')
+        return nullptr;
+    ++p;
+    while (*p != '\0') {
+        if (*p == '\\') {
+            ++p;
+            if (*p == '\0')
+                return nullptr;
+            ++p;
+            continue;
+        }
+        if (*p == '"')
+            return p + 1;
+        ++p;
+    }
+    return nullptr;
+}
+
+const char *skip_value(const char *p) {
+    p = skip_ws(p);
+    if (*p == '"')
+        return skip_string(p);
+    if (*p == '{' || *p == '[') {
+        std::size_t depth = 1;
+        ++p;
+        while (*p != '\0' && depth > 0) {
+            if (*p == '"') {
+                p = skip_string(p);
+                if (!p)
+                    return nullptr;
+                continue;
+            }
+            if (*p == '{' || *p == '[')
+                ++depth;
+            else if (*p == '}' || *p == ']')
+                --depth;
+            ++p;
+        }
+        return depth == 0 ? p : nullptr;
+    }
+    const char *start = p;
+    while (*p != '\0' && *p != ',' && *p != '}' && *p != ']' && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r')
+        ++p;
+    return p == start ? nullptr : p;
+}
+
+const char *after_key(const std::string &json, const char *key) {
+    const std::size_t key_len = std::strlen(key);
+    const char *p = skip_ws(json.c_str());
+    if (*p != '{')
+        return nullptr;
+    ++p;
+    while (true) {
+        p = skip_ws(p);
+        if (*p == '}' || *p == '\0')
+            return nullptr;
+        if (*p != '"')
+            return nullptr;
+        const char *name_start = p + 1;
+        const char *name_end = skip_string(p);
+        if (!name_end)
+            return nullptr;
+        const std::size_t name_len = static_cast<std::size_t>((name_end - 1) - name_start);
+        const bool match = name_len == key_len && std::memcmp(name_start, key, key_len) == 0;
+        p = skip_ws(name_end);
+        if (*p != ':')
+            return nullptr;
+        p = skip_ws(p + 1);
+        if (match)
+            return p;
+        p = skip_value(p);
+        if (!p)
+            return nullptr;
+        p = skip_ws(p);
+        if (*p == ',') {
+            ++p;
+            continue;
+        }
+        return nullptr;
+    }
+}
+
+bool parse_lattice_vectors(const std::string &json, std::array<double, 9> &m) {
+    if (const char *p = after_key(json, "lattice_vectors")) {
         for (double &x : m) {
-            while (*p == '[' || *p == ']' || *p == ',' || *p == ' ')
+            while (*p == '[' || *p == ']' || *p == ',' || *p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
                 ++p;
             char *end = nullptr;
             x = std::strtod(p, &end);
@@ -52,8 +135,48 @@ std::array<double, 9> cell_of(const readcon::ConFrame &frame, const std::string 
                 throw std::runtime_error("malformed lattice_vectors");
             p = end;
         }
-        return m;
+        return true;
     }
+    return false;
+}
+
+std::array<bool, 3> pbc_of(const std::string &json) {
+    std::array<bool, 3> flags{true, true, true};
+    const char *p = after_key(json, "pbc");
+    if (!p)
+        return flags;
+    p = skip_ws(p);
+    if (*p != '[')
+        throw std::runtime_error("malformed pbc");
+    ++p;
+    for (std::size_t i = 0; i < 3; ++i) {
+        p = skip_ws(p);
+        if (std::strncmp(p, "true", 4) == 0) {
+            flags[i] = true;
+            p += 4;
+        } else if (std::strncmp(p, "false", 5) == 0) {
+            flags[i] = false;
+            p += 5;
+        } else {
+            throw std::runtime_error("malformed pbc");
+        }
+        p = skip_ws(p);
+        if (i < 2) {
+            if (*p != ',')
+                throw std::runtime_error("malformed pbc");
+            ++p;
+        }
+    }
+    if (*p != ']')
+        throw std::runtime_error("malformed pbc");
+    return flags;
+}
+
+#ifndef READCON_READ_NO_MAIN
+std::array<double, 9> cell_of(const readcon::ConFrame &frame, const std::string &json) {
+    std::array<double, 9> m{};
+    if (parse_lattice_vectors(json, m))
+        return m;
     const auto &len = frame.cell();
     const auto &deg = frame.angles();
     const double pi = std::acos(-1.0);
@@ -64,27 +187,6 @@ std::array<double, 9> cell_of(const readcon::ConFrame &frame, const std::string 
     const double cz = cz2 < 0.0 && cz2 > -1e-12 ? 0.0 : std::sqrt(cz2);
     m = {len[0], 0.0, 0.0, len[1] * cg, len[1] * sg, 0.0, len[2] * cb, len[2] * cy, len[2] * cz};
     return m;
-}
-
-std::array<bool, 3> pbc_of(const std::string &json) {
-    std::array<bool, 3> flags{true, true, true};
-    const char *p = after_key(json, "\"pbc\":");
-    if (!p)
-        return flags;
-    for (bool &flag : flags) {
-        while (*p == '[' || *p == ',' || *p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
-            ++p;
-        if (std::strncmp(p, "true", 4) == 0) {
-            flag = true;
-            p += 4;
-        } else if (std::strncmp(p, "false", 5) == 0) {
-            flag = false;
-            p += 5;
-        } else {
-            throw std::runtime_error("malformed pbc");
-        }
-    }
-    return flags;
 }
 
 Record record_of(const readcon::ConFrame &frame, bool moc) {
@@ -139,9 +241,11 @@ Checksums check(const Kept &k) {
     }
     return o;
 }
+#endif // READCON_READ_NO_MAIN
 
 } // namespace
 
+#ifndef READCON_READ_NO_MAIN
 int main(int argc, char **argv) {
     if (argc != 5) {
         std::fprintf(stderr, "usage: readcon_read moc|coords PATH WARM THREADS\n");
@@ -163,3 +267,4 @@ int main(int argc, char **argv) {
     };
     return run_protocol(argv[2], argv[3], threads, read, check);
 }
+#endif // READCON_READ_NO_MAIN
