@@ -2534,6 +2534,59 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_spread(
     builder.with_spread(d);
     note(RKRStatus::RKR_STATUS_SUCCESS)
 }
+/// Attaches a partial charge to the most recently added atom on a
+/// builder. No-op if no atom has been added yet.
+///
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_last_charge(
+    builder_handle: *mut RKRConFrameBuilder,
+    charge: f64,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.with_charge(charge);
+    note(RKRStatus::RKR_STATUS_SUCCESS)
+}
+/// Attaches a spin scalar to the most recently added atom on a builder.
+/// No-op if no atom has been added yet.
+///
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_last_spin(
+    builder_handle: *mut RKRConFrameBuilder,
+    spin: f64,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.with_spin(spin);
+    note(RKRStatus::RKR_STATUS_SUCCESS)
+}
+/// Attaches a magnetic moment vector to the most recently added atom on
+/// a builder. No-op if no atom has been added yet.
+///
+/// # Safety
+/// builder_handle must be valid. magmom must point to 3 contiguous f64
+/// values.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_last_magmom(
+    builder_handle: *mut RKRConFrameBuilder,
+    magmom: *const f64,
+) -> RKRStatus {
+    if builder_handle.is_null() || magmom.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let m = unsafe { [*magmom, *magmom.add(1), *magmom.add(2)] };
+    builder.with_magmom(m);
+    note(RKRStatus::RKR_STATUS_SUCCESS)
+}
 /// Attaches a per-atom energy to the most recently added atom on a
 /// builder. No-op if no atom has been added yet.
 ///
@@ -5344,6 +5397,45 @@ pub unsafe extern "C" fn rkr_frame_spreads_view(
     fill_array2_view(frame_handle, out, |f| &f.spreads, true)
 }
 
+/// True when the frame carries a `"charges"` section. False for a
+/// NULL handle.
+///
+/// # Safety
+/// `frame_handle` is NULL or a valid frame handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_has_charges(frame_handle: *const RKRConFrame) -> bool {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.has_charges(),
+        None => false,
+    }
+}
+
+/// True when the frame carries a `"spins"` section. False for a NULL
+/// handle.
+///
+/// # Safety
+/// `frame_handle` is NULL or a valid frame handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_has_spins(frame_handle: *const RKRConFrame) -> bool {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.has_spins(),
+        None => false,
+    }
+}
+
+/// True when the frame carries a `"magmoms"` section. False for a NULL
+/// handle.
+///
+/// # Safety
+/// `frame_handle` is NULL or a valid frame handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_has_magmoms(frame_handle: *const RKRConFrame) -> bool {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.has_magmoms(),
+        None => false,
+    }
+}
+
 /// Borrow per-atom energies, or `SECTION_ABSENT`.
 /// # Safety
 ///
@@ -5681,6 +5773,43 @@ pub unsafe extern "C" fn rkr_frame_copy_spreads(
     out_len: usize,
 ) -> RKRStatus {
     copy_array2_f64(frame_handle, out, out_len, |f| &f.spreads, true)
+}
+/// Copy per-atom charges into `out` (length >= `N`), or `SECTION_ABSENT`.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_charges(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    copy_array1_f64(frame_handle, out, out_len, |f| &f.charges, true)
+}
+/// Copy per-atom spins into `out` (length >= `N`), or `SECTION_ABSENT`.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_spins(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    copy_array1_f64(frame_handle, out, out_len, |f| &f.spins, true)
+}
+/// Copy magnetic moments into row-major `out` (length >= `3 * N`), or
+/// `SECTION_ABSENT`.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_magmoms(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    copy_array2_f64(frame_handle, out, out_len, |f| &f.magmoms, true)
 }
 /// # Safety
 ///
