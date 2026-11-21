@@ -34,9 +34,9 @@
     "tests",
     "src"
    ],
-   "files": 198,
-   "rust_tests": 877,
-   "python_tests": 502,
+   "files": 200,
+   "rust_tests": 893,
+   "python_tests": 511,
    "naming": 36,
    "clause_ids": 83,
    "unknown_ids": []
