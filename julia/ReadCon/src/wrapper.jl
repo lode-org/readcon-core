@@ -597,7 +597,8 @@ end
 # Same gate as Rust `is_substitutable_huge_minor`: JSON integer grammar,
 # does not fit in UInt64, and parses as a finite binary64 value.
 # serde_json accepts an integer that rounds to a finite Float64, including
-# values above floatmax(Float64) up to the half-ULP midpoint.
+# values above floatmax(Float64) below the half-ULP midpoint
+# floor(f64::MAX) + 2^970. The midpoint itself is rejected.
 function _substitutable_huge_minor(token::AbstractString)
     _is_nonneg_decimal_int(token) || return false
     tryparse(UInt64, token) !== nothing && return false
