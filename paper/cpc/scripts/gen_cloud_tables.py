@@ -285,7 +285,7 @@ def kernel_sentence(runs: dict[str, dict]) -> str:
     listed = ", ".join(sets[:-1]) + " and " + sets[-1] if len(sets) > 1 else sets[0]
     return (
         f"File, $\\Delta E^\\ddagger$ and the displacement are printed to the significant figures, three at most, "
-        f"on which reruns of every route on {words.get(len(runs), str(len(runs)))} pinned kernel sets "
+        f"on which repeat runs of every route on {words.get(len(runs), str(len(runs)))} pinned kernel sets "
         f"on that host agree, and as a range where their first figures "
         f"differ: {listed}, the kernels that hosts of those generations select when nothing is pinned."
     )
@@ -370,7 +370,7 @@ def main() -> None:
             if notes
             else "",
             kernel_sentence(runs),
-            "Every rerun takes the steps of the table"
+            "Every repeat run takes the steps of the table"
             + (
                 r", the wall times are those of host \rfWallHost{}, and"
                 if walls
