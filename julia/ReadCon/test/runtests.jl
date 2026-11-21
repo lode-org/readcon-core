@@ -464,10 +464,16 @@ end
         @test ReadCon._json_u64(
             "{\"con_spec_minor\":18446744073709551615}", "con_spec_minor",
         ) == typemax(UInt64)
-        # Nested key is the first literal match when the top-level token is in range.
+        # A nested key is not the top-level key.
         @test ReadCon._json_u64(
             "{\"x\":{\"con_spec_minor\":2},\"con_spec_minor\":0}", "con_spec_minor",
-        ) == UInt64(2)
+        ) == UInt64(0)
+        @test ReadCon._json_u64(
+            "{\"x\":{\"con_spec_minor\":2}}", "con_spec_minor",
+        ) == UInt64(0)
+        @test ReadCon._json_u64(
+            "{\"\\u0063on_spec_minor\":1}", "con_spec_minor",
+        ) == UInt64(1)
         # A substitutable huge top-level token saturates even if a nested key is earlier.
         @test ReadCon._json_u64(
             "{\"x\":{\"con_spec_minor\":2},\"con_spec_minor\":$two64}", "con_spec_minor",
@@ -691,6 +697,59 @@ end
         stamped, _ = ReadCon._legacy_velocity_units(frame_with(zero_meta))
         @test occursin("\"con_spec_minor\":1", stamped)
         @test occursin(natural, stamped)
+    end
+
+    @testset "escaped and nested con_spec_minor keys on write" begin
+        natural = "(amu*angstrom^2/eV)^0.5"
+        with_time = "\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}"
+        no_time = "\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}"
+        atom = Atom(
+            UInt64(1), 0.0, 0.0, 0.0, UInt64(0), 1.0,
+            false, (false, false, false),
+            0.1, 0.2, 0.3, true,
+            0.0, 0.0, 0.0, false,
+        )
+        function line2_of(metadata_line::String)
+            frame = ConFrame(
+                (10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom], true,
+                ("", ""), ("", ""), false, false, UInt32(3), metadata_line,
+                nothing, nothing, nothing, nothing, nothing, nothing,
+            )
+            text = mktemp() do path, io
+                close(io)
+                write_con(path, [frame])
+                read(path, String)
+            end
+            return split(text, '\n')[2]
+        end
+        stamped_units = "\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"time\":\"$natural\"}"
+        fs_units = "\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"time\":\"fs\"}"
+        head = "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],"
+        # An escaped minor 1 names the time unit, as in Rust, C, Python, and RPC.
+        @test line2_of("{\"con_spec_version\":3,\"\\u0063on_spec_minor\":1,$with_time}") ==
+            head * fs_units * "}"
+        err = try
+            line2_of("{\"con_spec_version\":3,\"\\u0063on_spec_minor\":1,$no_time}")
+            nothing
+        catch e
+            e
+        end
+        @test err isa ReadCon.ReadConError
+        @test occursin("units.time", err.message)
+        # An escaped minor 0 is promoted like a plain one.
+        @test line2_of("{\"con_spec_version\":3,\"\\u0063on_spec_minor\":0,$with_time}") ==
+            head * stamped_units * "}"
+        # Nested keys do not set the minor and keep their values.
+        for units in (with_time, no_time)
+            @test line2_of("{\"con_spec_version\":3,\"x\":{\"con_spec_minor\":1},$units}") ==
+                head * stamped_units * ",\"x\":{\"con_spec_minor\":1}}"
+            @test line2_of(
+                "{\"con_spec_version\":3,\"x\":{\"con_spec_minor\":2},\"con_spec_minor\":0,$units}",
+            ) == head * stamped_units * ",\"x\":{\"con_spec_minor\":2}}"
+            @test line2_of(
+                "{\"con_spec_version\":3,\"x\":{\"con_spec_minor\":0},\"con_spec_minor\":0,$units}",
+            ) == head * stamped_units * ",\"x\":{\"con_spec_minor\":0}}"
+        end
     end
 
     include("test_conformance_goldens.jl")
