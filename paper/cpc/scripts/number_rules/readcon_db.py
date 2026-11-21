@@ -3,7 +3,7 @@
 The counts printed in that subsection are recomputed here, and its other
 numbers are macros that readcon_db_macros.py writes with the helpers of this
 module.  All of them come from the reviewed db31 records
-(lode-org/readcon-db ``ff1210e3``) and the fair-store rerun in the db32 records
+(lode-org/readcon-db ``ff1210e3``) and the fair-store run in the db32 records
 (lode-org/readcon-db ``227e45cf``, measured code ``d8bf1cb5``) that now holds
 the fair-store numbers, with the one-million-atom warm-read range taken across
 the one-thread campaigns in db30, db31 and db32.  Each rule is scoped to its
