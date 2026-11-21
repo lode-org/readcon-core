@@ -599,12 +599,20 @@ fn extract_minor_from_value(value: &serde_json::Value) -> (u64, Option<Box<str>>
     }
 }
 
+/// In-range top-level `con_spec_minor`, the first one when it is repeated.
+///
+/// CON-line2.10 says a missing minor is 0. A nested object, an array
+/// element, or a dotted name is not that field, so the minor stays
+/// missing. The bytes skipped around the key are ASCII whitespace, the
+/// set the fast path skips. `1.5` yields 1, and a token that does not
+/// fit in `u64` yields 0. [`minor_from_line`] handles a last huge token
+/// before this runs.
 fn base_minor_from_line(line: &str) -> u64 {
-    let key = "\"con_spec_minor\"";
-    let Some(at) = line.find(key) else {
+    let trimmed = line.trim();
+    let Some(at) = crate::parser::top_level_first_minor_key_end(trimmed) else {
         return 0;
     };
-    let rest = line[at + key.len()..].trim_start();
+    let rest = trimmed[at..].trim_start();
     let rest = rest.strip_prefix(':').unwrap_or(rest).trim_start();
     let end = rest
         .find(|c: char| !c.is_ascii_digit())

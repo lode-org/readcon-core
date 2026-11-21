@@ -395,9 +395,11 @@ fn untrimmed_builder_metadata_json_preserves_base_columns_and_rejects_unicode_ws
 }
 
 #[test]
-fn in_range_duplicate_and_nested_minor_velocities_match_base() {
-    // B3: for in-range minors, velocities without units.time follow BASE's first-match
-    // lookup anywhere in the line, while huge top-level minors still trigger minor >= 1.
+fn in_range_minor_velocities_use_the_top_level_key() {
+    // Repeated in-range minors still use the first top-level key.
+    // CON-line2.10 says a missing minor is 0. A nested key does not
+    // supply it, so it does not require units.time. A huge top-level
+    // minor still does.
     let cases = [
         (
             r#"{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
@@ -425,11 +427,11 @@ fn in_range_duplicate_and_nested_minor_velocities_match_base() {
         ),
         (
             r#"{"con_spec_version":3,"x":{"con_spec_minor":1},"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
-            false,
+            true,
         ),
         (
             r#"{"con_spec_version":3,"x":{"con_spec_minor":1},"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
-            false,
+            true,
         ),
         (
             r#"{"con_spec_version":3,"con_spec_minor":18446744073709551616,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
