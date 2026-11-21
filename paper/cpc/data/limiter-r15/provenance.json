@@ -20,9 +20,14 @@
   "frames_per_worker": 16384,
   "atoms_per_frame": 218,
   "repeats": 6,
-  "workers": [1, 2, 4, 8],
+  "workers": [
+    1,
+    2,
+    4,
+    8
+  ],
   "files": {
     "limiter-r15.json": "f91f7934845b899af1214b51737a2517847d8ff94eb3e1399a3dfe2d3480b951",
-    "measure.txt": "dff775f22a39553762956d8cb5f7520a424054cfdd3d7c494e9ce54cdbd40efb"
+    "measure.txt": "f3b7fcb897c778634e3e38da60e6afef34ec0c89c4de75e59e37db3f8c0531be"
   }
 }

@@ -601,9 +601,13 @@ def check_release(imported: dict) -> str:
     )
 
 
-# A redacted record keeps the key and the placeholder value host. Any other value is a leak.
-HOST_KEY = re.compile(
-    r"""["'](?:hostname|nodename|node)["']\s*:\s*(?!\s*["']host["'])""",
+# A redacted record keeps host identity as host. Any other host value is a leak.
+HOST_KEY_JSON = re.compile(
+    r"""["'](?:hostname|nodename|node)["']\s*:\s*["'](?!host["'])[^"']+["']""",
+    re.I,
+)
+HOST_KEY_KV = re.compile(
+    r"""(?:^|[\s,{])(?:hostname|nodename|node)\s*=\s*(?!host(?:\b|$))\S+""",
     re.I,
 )
 ABS_PATH = re.compile(
@@ -630,7 +634,12 @@ def check_leaks() -> str:
             text = path.read_text(errors="replace")
             rel = path.relative_to(ROOT)
             hits += [
-                f"{rel}: hostname key {m.group(0)!r}" for m in HOST_KEY.finditer(text)
+                f"{rel}: host identity {m.group(0)!r}"
+                for m in HOST_KEY_JSON.finditer(text)
+            ]
+            hits += [
+                f"{rel}: host identity {m.group(0).strip()!r}"
+                for m in HOST_KEY_KV.finditer(text)
             ]
             hits += [
                 f"{rel}: absolute path {m.group(1)}" for m in ABS_PATH.finditer(text)
