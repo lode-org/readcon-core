@@ -622,6 +622,54 @@ end
         @test occursin("invalid JSON", over_write.message)
     end
 
+    @testset "write_con rejects a leading-zero con_spec_minor" begin
+        fmax = (BigInt(2)^53 - 1) << 971
+        natural = "(amu*angstrom^2/eV)^0.5"
+        atom = Atom(
+            UInt64(1), 0.0, 0.0, 0.0, UInt64(0), 1.0,
+            false, (false, false, false),
+            0.1, 0.2, 0.3, true,
+            0.0, 0.0, 0.0, false,
+        )
+        function frame_with(metadata_line::String)
+            return ConFrame(
+                (10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom], true,
+                ("", ""), ("", ""), false, false, UInt32(3), metadata_line,
+                nothing, nothing, nothing, nothing, nothing, nothing,
+            )
+        end
+        for token in ("00", "000", "01", "007", "0" * string(fmax + 1))
+            for units in (
+                "{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}",
+                "{\"length\":\"angstrom\",\"energy\":\"eV\"}",
+            )
+                meta = "{\"con_spec_version\":3,\"con_spec_minor\":$token,\"units\":$units}"
+                frame = frame_with(meta)
+                written = Ref("")
+                err = try
+                    mktemp() do path, io
+                        close(io)
+                        write_con(path, [frame])
+                        written[] = read(path, String)
+                    end
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa ReadCon.ReadConError
+                @test err.code == -3
+                @test isempty(written[])
+                @test frame.metadata_json == meta
+                @test ReadCon._legacy_velocity_units(frame) == (meta, false)
+                @test !occursin(natural, first(ReadCon._legacy_velocity_units(frame)))
+            end
+        end
+        zero_meta = "{\"con_spec_version\":3,\"con_spec_minor\":0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+        stamped, _ = ReadCon._legacy_velocity_units(frame_with(zero_meta))
+        @test occursin("\"con_spec_minor\":1", stamped)
+        @test occursin(natural, stamped)
+    end
+
     include("test_conformance_goldens.jl")
     include("test_write_con_roundtrip.jl")
 end
