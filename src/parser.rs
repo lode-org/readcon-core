@@ -1991,6 +1991,11 @@ pub fn validate_builder_metadata_schema(
     validate_metadata_schema(&with_sections)
 }
 
+/// Map and exact huge-minor digits for an RPC `metadataJson` string.
+///
+/// `con_spec_minor` must be a JSON integer >= 0 (CON-line2.13), as on
+/// read, so a frame received over RPC cannot be written with a minor no
+/// reader accepts.
 #[cfg_attr(not(feature = "rpc"), allow(dead_code))]
 pub(crate) fn parse_metadata_map_with_minor_raw(
     metadata_json: &str,
@@ -2007,6 +2012,14 @@ pub(crate) fn parse_metadata_map_with_minor_raw(
             meta::CON_SPEC_MINOR.into(),
             Value::from(crate::types::SATURATED_SPEC_MINOR),
         );
+    }
+    if map
+        .get(meta::CON_SPEC_MINOR)
+        .is_some_and(|value| json_u64(value).is_none())
+    {
+        return Err(serde_json::Error::custom(
+            "con_spec_minor must be a JSON integer >= 0",
+        ));
     }
     Ok((map, minor_raw))
 }
