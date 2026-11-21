@@ -4503,7 +4503,10 @@ fn store_pipeline_in(
     if heavy
         && let Some(lengths) = cached_packed_lengths(frames, workers, precision, canonical, bind)
     {
-        return place_packed(file, frames, &lengths, workers, precision, canonical, bind);
+        match place_packed(file, frames, &lengths, workers, precision, canonical, bind) {
+            Err(err) if is_packed_drift(&err) => invalidate_packed_lengths(),
+            result => return result,
+        }
     }
     let groups = workers.saturating_mul(4).max(workers);
     let ranges = group_frame_ranges(frames, groups);
@@ -5244,8 +5247,25 @@ fn packed_frame_lengths(
     Some(lengths)
 }
 
-/// Format `group` into `dest`. `dest` is the exact concatenation, so the
-/// bytes are not copied into a second buffer afterwards.
+const PACKED_DRIFT: &str = "packed frame length drifted";
+
+fn packed_drift() -> WriteError {
+    WriteError::Io(io::Error::other(PACKED_DRIFT))
+}
+
+/// A priced length no longer matches the text. The price is keyed by frame
+/// address, and a public field store or a move out of a slot does not
+/// retire it.
+fn is_packed_drift(err: &WriteError) -> bool {
+    matches!(err, WriteError::Io(io) if io.kind() == io::ErrorKind::Other
+        && io.get_ref().is_some_and(|inner| inner.to_string() == PACKED_DRIFT))
+}
+
+/// Format `group` into `dest`, which must be exactly the length of the text.
+///
+/// `dest` is a bounded writer. Text longer than `dest` stops at its end and
+/// shorter text leaves a tail; both are [`is_packed_drift`]. Nothing past
+/// `dest` is written and its memory is never reallocated.
 pub(crate) fn format_group_into(
     group: &[&ConFrame],
     dest: &mut [u8],
@@ -5256,38 +5276,24 @@ pub(crate) fn format_group_into(
     if dest.is_empty() {
         return Ok(());
     }
-    struct Held {
-        writer: ConFrameWriter<Vec<u8>>,
-    }
-    impl Drop for Held {
-        fn drop(&mut self) {
-            // `scratch` aliases `dest`. Dropping it would free that memory.
-            std::mem::forget(std::mem::take(&mut self.writer.scratch));
+    let mut rest: &mut [u8] = dest;
+    {
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::with_precision(&mut rest, precision),
+            None => ConFrameWriter::new(&mut rest),
+        }
+        .canonical(canonical);
+        let result = write_group(&mut writer, group, bind)
+            .and_then(|()| writer.flush().map_err(WriteError::Io));
+        match result {
+            Err(WriteError::Io(err)) if err.kind() == io::ErrorKind::WriteZero => {
+                return Err(packed_drift());
+            }
+            other => other?,
         }
     }
-    let cap = dest.len();
-    let ptr = dest.as_mut_ptr();
-    let mut held = Held {
-        writer: match precision {
-            Some(precision) => ConFrameWriter::with_precision(Vec::new(), precision),
-            None => ConFrameWriter::new(Vec::new()),
-        }
-        .canonical(canonical)
-        .retain_scratch(true),
-    };
-    held.writer.exact_scratch = true;
-    let previous = std::mem::replace(&mut held.writer.scratch, unsafe {
-        Vec::from_raw_parts(ptr, 0, cap)
-    });
-    drop(previous);
-    let result = write_group(&mut held.writer, group, bind);
-    let written = held.writer.scratch.len();
-    let stable = held.writer.scratch.as_ptr() == ptr;
-    result?;
-    if written != cap || !stable {
-        return Err(WriteError::Io(io::Error::other(
-            "packed frame length drifted",
-        )));
+    if !rest.is_empty() {
+        return Err(packed_drift());
     }
     Ok(())
 }
@@ -5317,13 +5323,11 @@ fn place_packed(
     if cfg!(miri) {
         let mut parts = Vec::with_capacity(ranges.len());
         for &(start, end) in &ranges {
-            parts.push(format_group_bytes(
-                &frames[start..end],
-                1,
-                precision,
-                canonical,
-                bind,
-            )?);
+            let part = format_group_bytes(&frames[start..end], 1, precision, canonical, bind)?;
+            if part.len() != prefix[end] - prefix[start] {
+                return Err(packed_drift());
+            }
+            parts.push(part);
         }
         return store_disjoint_parts(file, &parts).map_err(WriteError::Io);
     }
@@ -5392,7 +5396,10 @@ fn write_serial_frames(
     {
         let (staged, file) = begin_unpublished(path)?;
         let result = place_packed(&file, frames, &lengths, 1, precision, canonical, bind);
-        return finish_unpublished(staged, path, result);
+        match result {
+            Err(err) if is_packed_drift(&err) => invalidate_packed_lengths(),
+            result => return finish_unpublished(staged, path, result),
+        }
     }
     let (staged, file) = begin_unpublished(path)?;
     let mut writer = match precision {
@@ -5454,7 +5461,10 @@ fn pipeline_frame_groups(
     {
         let (staged, file) = begin_unpublished(path)?;
         let result = place_packed(&file, frames, &lengths, workers, precision, canonical, bind);
-        return finish_unpublished(staged, path, result);
+        match result {
+            Err(err) if is_packed_drift(&err) => invalidate_packed_lengths(),
+            result => return finish_unpublished(staged, path, result),
+        }
     }
     // Several groups per worker so the first one finishes early and the
     // copy overlaps the rest. Uniform frames skip the weight scan;
