@@ -1859,8 +1859,28 @@ pub(crate) fn parse_metadata_object_with_raw(
     metadata_json: &str,
 ) -> Result<(serde_json::Map<String, Value>, Option<String>), ParseError> {
     let (object, minor_raw) = parse_metadata_json_object_with_raw(metadata_json)?;
-    validate_metadata_schema(&object)?;
+    validate_builder_metadata_schema(&object)?;
     Ok((object, minor_raw))
+}
+
+/// Validates metadata handed to a frame builder.
+///
+/// Builders drop `sections` and the writer derives it from the atoms,
+/// emitting it whenever `validate` is true. A missing `sections` array is
+/// therefore not an error here, so metadata read from a strict file can be
+/// handed back unchanged. Every other check matches
+/// [`validate_metadata_schema`].
+pub fn validate_builder_metadata_schema(
+    json_obj: &serde_json::Map<String, Value>,
+) -> Result<(), ParseError> {
+    if json_obj.contains_key(meta::SECTIONS)
+        || json_obj.get(meta::VALIDATE) != Some(&Value::Bool(true))
+    {
+        return validate_metadata_schema(json_obj);
+    }
+    let mut with_sections = json_obj.clone();
+    with_sections.insert(meta::SECTIONS.into(), Value::Array(Vec::new()));
+    validate_metadata_schema(&with_sections)
 }
 
 #[cfg_attr(not(feature = "rpc"), allow(dead_code))]
