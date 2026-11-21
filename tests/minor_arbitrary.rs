@@ -395,58 +395,51 @@ fn untrimmed_builder_metadata_json_preserves_base_columns_and_rejects_unicode_ws
 }
 
 #[test]
-fn in_range_duplicate_and_nested_minor_velocities_match_base() {
-    // B3: for in-range minors, velocities without units.time follow BASE's first-match
-    // lookup anywhere in the line, while huge top-level minors still trigger minor >= 1.
-    let cases = [
-        (
-            r#"{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
-            true,
-        ),
-        (
-            r#"{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":2,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
-            true,
-        ),
-        (
-            r#"{"con_spec_version":3,"con_spec_minor":18446744073709551616,"con_spec_minor":7,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
-            true,
-        ),
-        (
-            r#"{"con_spec_version":3,"con_spec_minor":18446744073709551616,"con_spec_minor":18446744073709551615,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
-            true,
-        ),
-        (
-            r#"{"con_spec_version":3,"con_spec_minor":1,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
-            false,
-        ),
-        (
-            r#"{"con_spec_version":3,"con_spec_minor":2,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
-            false,
-        ),
-        (
-            r#"{"con_spec_version":3,"x":{"con_spec_minor":1},"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
-            false,
-        ),
-        (
-            r#"{"con_spec_version":3,"x":{"con_spec_minor":1},"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
-            false,
-        ),
-        (
-            r#"{"con_spec_version":3,"con_spec_minor":18446744073709551616,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
-            false,
-        ),
+fn in_range_minor_velocities_use_the_top_level_key() {
+    // Repeated top-level con_spec_minor is rejected on read (CON-line2.14),
+    // so it cannot pass the velocity check and then fail the same check on write.
+    let duplicates = [
+        r#"{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
+        r#"{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":2,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
+        r#"{"con_spec_version":3,"con_spec_minor":18446744073709551616,"con_spec_minor":7,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
+        r#"{"con_spec_version":3,"con_spec_minor":18446744073709551616,"con_spec_minor":18446744073709551615,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
+        r#"{"con_spec_version":3,"con_spec_minor":1,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
+        r#"{"con_spec_version":3,"con_spec_minor":2,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
     ];
-    for (line2, want_ok) in cases {
+    // CON-line2.10 says a missing minor is 0. A nested key does not
+    // supply it, so it does not require units.time.
+    let nested_ok = [
+        r#"{"con_spec_version":3,"x":{"con_spec_minor":1},"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
+        r#"{"con_spec_version":3,"x":{"con_spec_minor":1},"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
+    ];
+    // A huge top-level minor still does.
+    let units_errors = [
+        r#"{"con_spec_version":3,"con_spec_minor":18446744073709551616,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}"#,
+    ];
+    for line2 in duplicates {
+        let full = format!(
+            "PRE\n{line2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0 0 0 0\n"
+        );
+        let err = frames_from_text(&full, None).unwrap_err();
+        assert_eq!(err.class_name(), "InvalidMetadataJson", "{line2}: {err}");
+        assert!(
+            err.to_string().contains("duplicate con_spec_minor key"),
+            "{line2}: {err}"
+        );
+    }
+    for line2 in nested_ok {
         let full = format!(
             "PRE\n{line2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0 0 0 0\n"
         );
         let res = frames_from_text(&full, None);
-        if want_ok {
-            assert!(res.is_ok(), "expected Ok for {line2}, got {:?}", res.err());
-        } else {
-            let err = res.unwrap_err();
-            assert_eq!(err.class_name(), "InvalidUnits", "{line2}: {err}");
-        }
+        assert!(res.is_ok(), "expected Ok for {line2}, got {:?}", res.err());
+    }
+    for line2 in units_errors {
+        let full = format!(
+            "PRE\n{line2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0 0 0 0\n"
+        );
+        let err = frames_from_text(&full, None).unwrap_err();
+        assert_eq!(err.class_name(), "InvalidUnits", "{line2}: {err}");
     }
 }
 
@@ -559,18 +552,36 @@ fn differential_base_oracle_from_committed_9aff911e_snapshot() {
         check_file_against_oracle(&root.join(rel), expected, true);
     }
 
-    // 2. All 105 adversarial lines: only the 2 standalone plain-valid huge minors (2^64+1, 40-digit)
-    //    flip from BASE error to accepted; all remaining 103 match BASE verbatim.
+    // 2. All 105 adversarial lines. The oracle file is the BASE 9aff911e record
+    //    and is not rewritten. Two standalone plain-valid huge minors (2^64+1,
+    //    40-digit) flip from BASE error to accepted. Three lines that repeat
+    //    con_spec_minor are rejected. The other 100 match BASE verbatim.
     let adv = oracle["adversarial_lines"].as_array().unwrap();
     assert_eq!(adv.len(), 105);
     let plain_valid_2pow64_plus_1 =
         format!(r#"{{"con_spec_version":2,"con_spec_minor":{TWO_POW_64_PLUS_1}}}"#);
     let plain_valid_40 = format!(r#"{{"con_spec_version":2,"con_spec_minor":{FORTY_DIGITS}}}"#);
+    let duplicate_minor_lines = [
+        r#"{"con_spec_version":3,"con_spec_minor":-0,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"}}"#,
+        r#"{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":-0,"units":{"length":"angstrom","energy":"eV"}}"#,
+        r#"{"con_spec_version":3,"con_spec_minor":18446744073709551616,"con_spec_minor":-0,"units":{"length":"angstrom","energy":"eV"}}"#,
+    ];
     let mut adv_huge_diffs = Vec::new();
+    let mut dup_minor_diffs = Vec::new();
     for entry in adv {
         let line2 = entry["line2"].as_str().unwrap();
         let lines = ["PRE", line2, "10 10 10", "90 90 90", "", "", "0", "", ""];
         let status = entry["status"].as_str().unwrap();
+        if duplicate_minor_lines.contains(&line2) {
+            let err = parse_frame_header(&mut lines.iter().copied()).unwrap_err();
+            assert_eq!(err.class_name(), "InvalidMetadataJson", "{line2}: {err}");
+            assert!(
+                err.to_string().contains("duplicate con_spec_minor key"),
+                "{line2}: {err}"
+            );
+            dup_minor_diffs.push(line2.to_owned());
+            continue;
+        }
         if line2 == plain_valid_2pow64_plus_1 || line2 == plain_valid_40 {
             assert_eq!(status, "err", "{line2}");
             let h = parse_frame_header(&mut lines.iter().copied()).unwrap();
@@ -621,6 +632,7 @@ fn differential_base_oracle_from_committed_9aff911e_snapshot() {
         }
     }
     assert_eq!(adv_huge_diffs.len(), 2);
+    assert_eq!(dup_minor_diffs.len(), 3);
 
     // 3. When zstandard is available to Python, verify all 143 corpus31 files against BASE too.
     let py = std::env::var("PYTHON").unwrap_or_else(|_| "python3".into());

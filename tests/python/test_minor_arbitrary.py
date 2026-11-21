@@ -19,6 +19,10 @@ TWO_POW_64_PLUS_1 = 2**64 + 1
 FORTY_DIGITS = 10**39 + 7
 THREE_HUNDRED_DIGITS = 10**299 + 7
 FOUR_HUNDRED_DIGITS = 10**399 + 7
+_F64_MAX_INT = (2**53 - 1) * 2**971
+F64_MAX_PLUS_1 = _F64_MAX_INT + 1
+F64_MAX_LAST_FINITE = _F64_MAX_INT + 2**970 - 1
+F64_MAX_OVERFLOW = _F64_MAX_INT + 2**970
 
 
 def _d14_minor_2pow64_text() -> str:
@@ -310,27 +314,23 @@ def test_v4_blockers_and_duplicate_semantics_in_python():
     e = f.metadata["energy"]
     assert type(e) is float and e == 0.0 and math.copysign(1.0, e) < 0
 
-    # 3. Last-key-wins duplicate semantics match BASE: -0 then valid accepts; valid then -0 rejects.
-    for line2, expected_minor in (
-        (
-            '{"con_spec_version":3,"con_spec_minor":-0,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"}}',
-            0,
-        ),
-        (
-            f'{{"con_spec_version":3,"con_spec_minor":-0,"con_spec_minor":{TWO_POW_64},"units":{{"length":"angstrom","energy":"eV"}}}}',
-            TWO_POW_64,
-        ),
-        (
-            '{"con_spec_version":-0,"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"}}',
-            None,
-        ),
-        ('{"con_spec_version":2,"section_arity":{"widgets":-0,"widgets":2}}', None),
+    # 3. A repeated con_spec_minor is rejected. Other duplicate keys stay last-wins.
+    for line2 in (
+        '{"con_spec_version":3,"con_spec_minor":-0,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"}}',
+        f'{{"con_spec_version":3,"con_spec_minor":-0,"con_spec_minor":{TWO_POW_64},"units":{{"length":"angstrom","energy":"eV"}}}}',
+    ):
+        txt = f"gen\n{line2}\n10 10 10\n90 90 90\n\n\n0\n\n\n"
+        with pytest.raises(
+            readcon.InvalidMetadataJson, match="duplicate con_spec_minor key"
+        ):
+            readcon.read_con_string(txt)
+    for line2 in (
+        '{"con_spec_version":-0,"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"}}',
+        '{"con_spec_version":2,"section_arity":{"widgets":-0,"widgets":2}}',
     ):
         txt = f"gen\n{line2}\n10 10 10\n90 90 90\n\n\n0\n\n\n"
         frames = readcon.read_con_string(txt)
         assert len(frames) == 1
-        if expected_minor is not None:
-            assert frames[0].metadata["con_spec_minor"] == expected_minor
 
     # 4. Last-key -0, frame_index:-0, section_arity >= 2^64, and major overflow match BASE.
     for line2 in (
@@ -344,8 +344,10 @@ def test_v4_blockers_and_duplicate_semantics_in_python():
         f'{{"con_spec_version":3,"con_spec_minor":{TWO_POW_64},"con_spec_minor":-0,"units":{{"length":"angstrom","energy":"eV"}}}}',
     ):
         txt = f"gen\n{line2}\n10 10 10\n90 90 90\n\n\n0\n\n\n"
-        with pytest.raises(readcon.InvalidMetadataJson):
+        with pytest.raises(readcon.InvalidMetadataJson) as exc_info:
             readcon.read_con_string(txt)
+        if line2.count("con_spec_minor") > 1:
+            assert "duplicate con_spec_minor key" in str(exc_info.value)
 
     # 5. Exact column positions preserved after serde-valid huge con_spec_minor;
     #    400-digit minor (> f64::MAX) surfaces BASE's own column 418 error.
@@ -423,52 +425,45 @@ def test_python_v5_b1_b2_b3_b4_base_parity():
         assert msg.startswith("invalid metadata JSON: "), msg
         assert want_sub in msg, f"{bad!r} -> {msg}"
 
-    # B3: in-range duplicate and nested con_spec_minor with velocities and no units.time match BASE.
-    for line2, want_ok in (
-        (
-            '{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
-            True,
-        ),
-        (
-            '{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":2,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
-            True,
-        ),
-        (
-            f'{{"con_spec_version":3,"con_spec_minor":{TWO_POW_64},"con_spec_minor":7,"units":{{"length":"angstrom","energy":"eV"}},"sections":["velocities"]}}',
-            True,
-        ),
-        (
-            f'{{"con_spec_version":3,"con_spec_minor":{TWO_POW_64},"con_spec_minor":18446744073709551615,"units":{{"length":"angstrom","energy":"eV"}},"sections":["velocities"]}}',
-            True,
-        ),
-        (
-            '{"con_spec_version":3,"con_spec_minor":1,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
-            False,
-        ),
-        (
-            '{"con_spec_version":3,"con_spec_minor":2,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
-            False,
-        ),
-        (
-            '{"con_spec_version":3,"x":{"con_spec_minor":1},"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
-            False,
-        ),
-        (
-            '{"con_spec_version":3,"x":{"con_spec_minor":1},"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
-            False,
-        ),
+    # B3: a repeated con_spec_minor is rejected.
+    for line2 in (
+        '{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
+        '{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":2,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
+        f'{{"con_spec_version":3,"con_spec_minor":{TWO_POW_64},"con_spec_minor":7,"units":{{"length":"angstrom","energy":"eV"}},"sections":["velocities"]}}',
+        f'{{"con_spec_version":3,"con_spec_minor":{TWO_POW_64},"con_spec_minor":18446744073709551615,"units":{{"length":"angstrom","energy":"eV"}},"sections":["velocities"]}}',
+        '{"con_spec_version":3,"con_spec_minor":1,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
+        '{"con_spec_version":3,"con_spec_minor":2,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
     ):
         txt = (
             f"gen\n{line2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n"
             "Coordinates of Component 1\n0 0 0 0 0\n\n"
             "H\nVelocities of Component 1\n0.1 0 0 0 0\n"
         )
-        if want_ok:
-            frames = readcon.read_con_string(txt)
-            assert len(frames) == 1
-        else:
-            with pytest.raises(readcon.InvalidUnits):
-                readcon.read_con_string(txt)
+        with pytest.raises(
+            readcon.InvalidMetadataJson, match="duplicate con_spec_minor key"
+        ):
+            readcon.read_con_string(txt)
+    # CON-line2.10 says a missing minor is 0. A nested key does not
+    # supply it.
+    for line2 in (
+        '{"con_spec_version":3,"x":{"con_spec_minor":1},"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
+        '{"con_spec_version":3,"x":{"con_spec_minor":1},"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}',
+    ):
+        txt = (
+            f"gen\n{line2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n"
+            "Coordinates of Component 1\n0 0 0 0 0\n\n"
+            "H\nVelocities of Component 1\n0.1 0 0 0 0\n"
+        )
+        frames = readcon.read_con_string(txt)
+        assert len(frames) == 1
+
+    with pytest.raises(ValueError, match="duplicate con_spec_minor key") as exc_info:
+        frame.set_metadata_json(
+            '{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":1}'
+        )
+    set_msg = str(exc_info.value)
+    assert set_msg.startswith("invalid metadata JSON: "), set_msg
+    assert "line 2:" not in set_msg
 
     # B4: float minors >= 2^64 (1e20, 1e300, float(2**64)) stay floats like BASE.
     for fval in (1e20, 1e300, float(TWO_POW_64)):
@@ -501,6 +496,67 @@ def test_python_v5_b1_b2_b3_b4_base_parity():
     assert json.loads(fd_out.splitlines()[1])["con_spec_minor"] == TWO_POW_64_PLUS_1
 
 
+def _velocity_text(line2: str) -> str:
+    return (
+        f"gen\n{line2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n"
+        "Coordinates of Component 1\n0 0 0 0 0\n\n"
+        "H\nVelocities of Component 1\n0.1 0 0 0 0\n"
+    )
+
+
+def test_binary64_half_ulp_minor_matches_other_bindings():
+    natural = "(amu*angstrom^2/eV)^0.5"
+    for minor in (F64_MAX_PLUS_1, F64_MAX_LAST_FINITE):
+        with_time = (
+            '{"con_spec_version":3,"con_spec_minor":'
+            f"{minor}"
+            ',"units":{"length":"angstrom","energy":"eV","time":"fs"},'
+            '"sections":["velocities"]}'
+        )
+        frames = readcon.read_con_string(_velocity_text(with_time))
+        assert frames[0].metadata["con_spec_minor"] == minor
+        written = readcon.write_con_string(frames)
+        assert f'"con_spec_minor":{minor}' in written
+        assert '"time":"fs"' in written
+        assert natural not in written
+
+        no_time = (
+            '{"con_spec_version":3,"con_spec_minor":'
+            f"{minor}"
+            ',"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}'
+        )
+        with pytest.raises(readcon.InvalidUnits):
+            readcon.read_con_string(_velocity_text(no_time))
+
+        frame = readcon.ConFrame(
+            [10.0, 10.0, 10.0],
+            [90.0, 90.0, 90.0],
+            [readcon.Atom("H", 0.0, 0.0, 0.0, [False, False, False], 0, 1.0)],
+        )
+        frame.set_metadata_json(with_time)
+        assert frame.metadata["con_spec_minor"] == minor
+
+    over = (
+        '{"con_spec_version":3,"con_spec_minor":'
+        f"{F64_MAX_OVERFLOW}"
+        ',"units":{"length":"angstrom","energy":"eV","time":"fs"}}'
+    )
+    with pytest.raises(readcon.InvalidMetadataJson, match="number out of range"):
+        readcon.read_con_string(
+            "gen\n"
+            f"{over}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n"
+            "Coordinates of Component 1\n0 0 0 0 0\n"
+        )
+    frame = readcon.ConFrame(
+        [10.0, 10.0, 10.0],
+        [90.0, 90.0, 90.0],
+        [readcon.Atom("H", 0.0, 0.0, 0.0, [False, False, False], 0, 1.0)],
+    )
+    with pytest.raises(ValueError, match="number out of range") as exc_info:
+        frame.set_metadata_json(over)
+    assert str(exc_info.value).startswith("invalid metadata JSON: ")
+
+
 def test_differential_against_committed_base_oracle_in_python():
     oracle = json.loads(BASE_ORACLE_PATH.read_text(encoding="utf-8"))
     assert (
@@ -530,16 +586,31 @@ def test_differential_against_committed_base_oracle_in_python():
                 readcon.read_con(p)
             assert str(exc_info.value) == expected["error_message"], rel
 
-    # 2. All 105 adversarial lines: only standalone plain-valid 2^64+1 and 40-digit flip from BASE err to ok.
+    # 2. All 105 adversarial lines. The oracle file stays the BASE record.
+    # Standalone plain-valid 2^64+1 and 40-digit flip from BASE err to ok.
+    # Three lines that repeat con_spec_minor are rejected.
     plain_valid_2pow64_plus_1 = (
         f'{{"con_spec_version":2,"con_spec_minor":{TWO_POW_64_PLUS_1}}}'
     )
     plain_valid_40 = f'{{"con_spec_version":2,"con_spec_minor":{FORTY_DIGITS}}}'
+    duplicate_minor_lines = {
+        '{"con_spec_version":3,"con_spec_minor":-0,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"}}',
+        '{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":-0,"units":{"length":"angstrom","energy":"eV"}}',
+        '{"con_spec_version":3,"con_spec_minor":18446744073709551616,"con_spec_minor":-0,"units":{"length":"angstrom","energy":"eV"}}',
+    }
     adv_huge_diffs = []
+    dup_minor_diffs = []
     assert len(oracle["adversarial_lines"]) == 105
     for entry in oracle["adversarial_lines"]:
         line2 = entry["line2"]
         txt = f"adv\n{line2}\n10 10 10\n90 90 90\n\n\n0\n\n\n"
+        if line2 in duplicate_minor_lines:
+            with pytest.raises(
+                readcon.InvalidMetadataJson, match="duplicate con_spec_minor key"
+            ):
+                readcon.read_con_string(txt)
+            dup_minor_diffs.append(line2)
+            continue
         if line2 in (plain_valid_2pow64_plus_1, plain_valid_40):
             assert entry["status"] == "err"
             frames = readcon.read_con_string(txt)
@@ -568,6 +639,7 @@ def test_differential_against_committed_base_oracle_in_python():
             assert type(exc_info.value).__name__ == entry["error_class"], line2
             assert str(exc_info.value) == entry["error_message"], line2
     assert len(adv_huge_diffs) == 2
+    assert len(dup_minor_diffs) == 3
 
 
 def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
@@ -689,3 +761,38 @@ def test_huge_minor_form_feed_and_quoted_control_bytes_match_base(line2, expecte
         with pytest.raises(ValueError) as sm_exc:
             fr.set_metadata_json(line2)
         assert str(sm_exc.value).startswith("invalid metadata JSON:")
+
+
+def _velocities_without_time(line2: str) -> str:
+    return (
+        f"gen\n{line2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n"
+        "Coordinates of Component 1\n0 0 0 0 0\n\n"
+        "H\nVelocities of Component 1\n0.1 0 0 0 0\n"
+    )
+
+
+def test_form_feed_between_line2_tokens_requires_units_time():
+    # CON-line2.10 says a missing minor is 0. Form feed is whitespace the
+    # fast path skips, so these top-level minors are 1 and CON-units.11
+    # rejects velocities with no units.time.
+    ff = "\x0c"
+    units = '{"length":"angstrom","energy":"eV"}'
+    lines = [
+        f'{{"con_spec_version":3,{ff}"con_spec_minor":1,"units":{units}}}',
+        f'{{"con_spec_version":3,"con_spec_minor"{ff}:1,"units":{units}}}',
+        f'{{{ff}"con_spec_version":3,"con_spec_minor":1,"units":{units}}}',
+        f'{{"con_spec_version":3,"units":{ff}{units},"con_spec_minor":1}}',
+    ]
+    for line2 in lines:
+        with pytest.raises(readcon.InvalidUnits):
+            readcon.read_con_string(_velocities_without_time(line2))
+
+
+def test_escaped_top_level_con_spec_minor_is_the_minor():
+    text = (
+        'gen\n{"con_spec_version":2,"con_spec_\\u006dinor":5}\n'
+        "10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\n"
+        "Coordinates of Component 1\n0 0 0 0 0\n"
+    )
+    frame = readcon.read_con_string(text)[0]
+    assert frame.metadata["con_spec_minor"] == 5

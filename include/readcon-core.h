@@ -1115,6 +1115,37 @@ enum RKRStatus rkr_frame_builder_set_last_spread(struct RKRConFrameBuilder *buil
                                                        const double *spread);
 
 /**
+ * Attaches a partial charge to the most recently added atom on a
+ * builder. No-op if no atom has been added yet.
+ *
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_last_charge(struct RKRConFrameBuilder *builder_handle,
+                                                 double charge);
+
+/**
+ * Attaches a spin scalar to the most recently added atom on a builder.
+ * No-op if no atom has been added yet.
+ *
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_last_spin(struct RKRConFrameBuilder *builder_handle,
+                                               double spin);
+
+/**
+ * Attaches a magnetic moment vector to the most recently added atom on
+ * a builder. No-op if no atom has been added yet.
+ *
+ * # Safety
+ * builder_handle must be valid. magmom must point to 3 contiguous f64
+ * values.
+ */
+enum RKRStatus rkr_frame_builder_set_last_magmom(struct RKRConFrameBuilder *builder_handle,
+                                                 const double *magmom);
+
+/**
  * Attaches a per-atom energy to the most recently added atom on a
  * builder. No-op if no atom has been added yet.
  *
@@ -2300,6 +2331,33 @@ enum RKRStatus rkr_frame_spreads_view(const struct RKRConFrame *frame_handle,
                                             struct RKRArrayView *out);
 
 /**
+ * True when the frame carries a `"charges"` section. False for a
+ * NULL handle.
+ *
+ * # Safety
+ * `frame_handle` is NULL or a valid frame handle.
+ */
+bool rkr_frame_has_charges(const struct RKRConFrame *frame_handle);
+
+/**
+ * True when the frame carries a `"spins"` section. False for a NULL
+ * handle.
+ *
+ * # Safety
+ * `frame_handle` is NULL or a valid frame handle.
+ */
+bool rkr_frame_has_spins(const struct RKRConFrame *frame_handle);
+
+/**
+ * True when the frame carries a `"magmoms"` section. False for a NULL
+ * handle.
+ *
+ * # Safety
+ * `frame_handle` is NULL or a valid frame handle.
+ */
+bool rkr_frame_has_magmoms(const struct RKRConFrame *frame_handle);
+
+/**
  * Borrow per-atom energies, or `SECTION_ABSENT`.
  */
 enum RKRStatus rkr_frame_energies_view(const struct RKRConFrame *frame_handle,
@@ -2405,6 +2463,37 @@ enum RKRStatus rkr_frame_copy_displacements(const struct RKRConFrame *frame_hand
 enum RKRStatus rkr_frame_copy_spreads(const struct RKRConFrame *frame_handle,
                                             double *out,
                                             uintptr_t out_len);
+
+/**
+ * Copy per-atom charges into `out` (length >= `N`), or `SECTION_ABSENT`.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+ */
+enum RKRStatus rkr_frame_copy_charges(const struct RKRConFrame *frame_handle,
+                                      double *out,
+                                      uintptr_t out_len);
+
+/**
+ * Copy per-atom spins into `out` (length >= `N`), or `SECTION_ABSENT`.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+ */
+enum RKRStatus rkr_frame_copy_spins(const struct RKRConFrame *frame_handle,
+                                    double *out,
+                                    uintptr_t out_len);
+
+/**
+ * Copy magnetic moments into row-major `out` (length >= `3 * N`), or
+ * `SECTION_ABSENT`.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+ */
+enum RKRStatus rkr_frame_copy_magmoms(const struct RKRConFrame *frame_handle,
+                                      double *out,
+                                      uintptr_t out_len);
 
 enum RKRStatus rkr_frame_copy_atom_energies(const struct RKRConFrame *frame_handle,
                                             double *out,

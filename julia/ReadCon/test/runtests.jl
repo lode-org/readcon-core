@@ -1,4 +1,5 @@
 using Test
+using TOML
 using ReadCon
 
 const TEST_DIR = joinpath(dirname(dirname(dirname(@__DIR__))), "resources", "test")
@@ -408,5 +409,452 @@ end
         @test a3.has_energy
     end
 
+    @testset "huge con_spec_minor saturates and duplicate keys are rejected" begin
+        two64 = "18446744073709551616"
+        forty = "1000000000000000000000000000000000000007"
+        three_hundred = "1" * "0"^298 * "7"
+        four_hundred = "1" * "0"^398 * "7"
+        natural = "(amu*angstrom^2/eV)^0.5"
+
+        @test ReadCon._json_u64("{\"con_spec_minor\":7}", "con_spec_minor") == UInt64(7)
+        @test ReadCon._json_u64("{}", "con_spec_minor") == UInt64(0)
+        @test ReadCon._json_u64("{\"con_spec_minor\":$two64}", "con_spec_minor") == typemax(UInt64)
+        @test ReadCon._json_u64("{\"con_spec_minor\":$forty}", "con_spec_minor") == typemax(UInt64)
+        @test ReadCon._json_u64(
+            "{\"con_spec_minor\":$three_hundred}", "con_spec_minor",
+        ) == typemax(UInt64)
+        # An integer that neither fits in UInt64 nor parses as a finite Float64 throws.
+        @test_throws ReadCon.ReadConError ReadCon._json_u64(
+            "{\"con_spec_minor\":$four_hundred}", "con_spec_minor",
+        )
+        # floor(f64::MAX) = (2^53 - 1) * 2^971. serde_json accepts integers
+        # through one less than the half-ULP step and rejects the next one.
+        fmax = (BigInt(2)^53 - 1) << 971
+        plus1 = string(fmax + 1)
+        last_finite = string(fmax + (BigInt(2)^970) - 1)
+        overflow = string(fmax + BigInt(2)^970)
+        @test ReadCon._json_u64(
+            "{\"con_spec_minor\":$plus1}", "con_spec_minor",
+        ) == typemax(UInt64)
+        @test ReadCon._json_u64(
+            "{\"con_spec_minor\":$last_finite}", "con_spec_minor",
+        ) == typemax(UInt64)
+        @test_throws ReadCon.ReadConError ReadCon._json_u64(
+            "{\"con_spec_minor\":$overflow}", "con_spec_minor",
+        )
+        # Every token the builder rejects throws, as in the other bindings.
+        for token in (
+            "1e309", "1E400", "1.5", "01", "00", "000", "-1", "-0", "1.0",
+            "0.0", "1e0", "1e20", "true", "null", "\"1\"", "[1]", "{\"a\":1}",
+            "-" * plus1, plus1 * ".0", "0" * plus1, string(fmax + BigInt(2)^971),
+        )
+            err = try
+                ReadCon._json_u64("{\"con_spec_minor\":$token}", "con_spec_minor")
+                nothing
+            catch e
+                e
+            end
+            @test err isa ReadCon.ReadConError
+            @test err.code == -3
+            @test err.message == ReadCon._INVALID_CON_SPEC_MINOR
+            @test_throws ReadCon.ReadConError ReadCon._json_u64(
+                "{\"\\u0063on_spec_minor\":$token}", "con_spec_minor",
+            )
+        end
+        @test ReadCon._json_u64("{\"con_spec_minor\":0}", "con_spec_minor") == UInt64(0)
+        @test ReadCon._json_u64(
+            "{\"con_spec_minor\":18446744073709551615}", "con_spec_minor",
+        ) == typemax(UInt64)
+        # A nested key is not the top-level key.
+        @test ReadCon._json_u64(
+            "{\"x\":{\"con_spec_minor\":2},\"con_spec_minor\":0}", "con_spec_minor",
+        ) == UInt64(0)
+        @test ReadCon._json_u64(
+            "{\"x\":{\"con_spec_minor\":2}}", "con_spec_minor",
+        ) == UInt64(0)
+        @test ReadCon._json_u64(
+            "{\"\\u0063on_spec_minor\":1}", "con_spec_minor",
+        ) == UInt64(1)
+        # A substitutable huge top-level token saturates even if a nested key is earlier.
+        @test ReadCon._json_u64(
+            "{\"x\":{\"con_spec_minor\":2},\"con_spec_minor\":$two64}", "con_spec_minor",
+        ) == typemax(UInt64)
+        @test ReadCon._json_u64(
+            "{\"\\u0063on_spec_minor\":$two64}", "con_spec_minor",
+        ) == typemax(UInt64)
+        @test_throws ErrorException(ReadCon._DUPLICATE_CON_SPEC_MINOR) ReadCon._json_u64(
+            "{\"con_spec_minor\":0,\"con_spec_minor\":1}", "con_spec_minor",
+        )
+        @test_throws ErrorException(ReadCon._DUPLICATE_CON_SPEC_MINOR) ReadCon._json_u64(
+            "{\"con_spec_minor\":1,\"\\u0063on_spec_minor\":2}", "con_spec_minor",
+        )
+
+        function velocity_text(metadata_line::String)
+            lines = [
+                "seed",
+                metadata_line,
+                "10 10 10",
+                "90 90 90",
+                "0 0",
+                "0 0 0",
+                "1",
+                "1",
+                "1.0",
+                "H",
+                "Coordinates of Component 1",
+                "0 0 0 0 0",
+                "",
+                "H",
+                "Velocities of Component 1",
+                "0.1 0.2 0.3 0 0",
+            ]
+            return join(lines, '\n') * "\n"
+        end
+        function round_trip(metadata_line::String)
+            mktemp() do src, io
+                write(io, velocity_text(metadata_line))
+                close(io)
+                frames = read_con(src)
+                mktemp() do dst, out
+                    close(out)
+                    write_con(dst, frames)
+                    return read(dst, String)
+                end
+            end
+        end
+
+        huge_meta = "{\"con_spec_version\":3,\"con_spec_minor\":$two64,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+        written = round_trip(huge_meta)
+        @test occursin("\"con_spec_minor\":$two64", written)
+        @test occursin("\"time\":\"fs\"", written)
+        @test !occursin(natural, written)
+
+        for digits in (plus1, last_finite)
+            with_time = "{\"con_spec_version\":3,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+            written = round_trip(with_time)
+            @test occursin("\"con_spec_minor\":$digits", written)
+            @test occursin("\"time\":\"fs\"", written)
+            @test !occursin(natural, written)
+
+            no_time = "{\"con_spec_version\":3,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}"
+            frames = mktemp() do src, io
+                write(io, velocity_text(no_time))
+                close(io)
+                read_con(src)
+            end
+            @test isempty(frames)
+            err = ReadCon.last_error()
+            @test occursin("InvalidUnits", err.message)
+            @test occursin("units.time", err.message)
+        end
+        frames = mktemp() do src, io
+            over = "{\"con_spec_version\":3,\"con_spec_minor\":$overflow,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+            write(io, velocity_text(over))
+            close(io)
+            read_con(src)
+        end
+        @test isempty(frames)
+        over_err = ReadCon.last_error()
+        @test occursin("number out of range", over_err.message)
+
+        atom = Atom(
+            UInt64(1), 0.0, 0.0, 0.0, UInt64(0), 1.0,
+            false, (false, false, false),
+            0.1, 0.2, 0.3, true,
+            0.0, 0.0, 0.0, false,
+        )
+        dup_meta = "{\"con_spec_version\":3,\"con_spec_minor\":0,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+        dup_frame = ConFrame(
+            (10.0, 10.0, 10.0),
+            (90.0, 90.0, 90.0),
+            [atom],
+            true,
+            ("", ""),
+            ("", ""),
+            false,
+            false,
+            UInt32(3),
+            dup_meta,
+            nothing, nothing, nothing, nothing, nothing, nothing,
+        )
+        @test_throws ErrorException(ReadCon._DUPLICATE_CON_SPEC_MINOR) mktemp() do path, io
+            close(io)
+            write_con(path, [dup_frame])
+        end
+        quiet = ConFrame(
+            (10.0, 10.0, 10.0),
+            (90.0, 90.0, 90.0),
+            [atom],
+            false,
+            ("", ""),
+            ("", ""),
+            false,
+            false,
+            UInt32(3),
+            dup_meta,
+            nothing, nothing, nothing, nothing, nothing, nothing,
+        )
+        @test_throws ErrorException(ReadCon._DUPLICATE_CON_SPEC_MINOR) mktemp() do path, io
+            close(io)
+            write_con(path, [quiet])
+        end
+
+        function constructed(metadata_line::String, velocities::Bool)
+            return ConFrame(
+                (10.0, 10.0, 10.0),
+                (90.0, 90.0, 90.0),
+                [atom],
+                velocities,
+                ("", ""),
+                ("", ""),
+                false,
+                false,
+                UInt32(3),
+                metadata_line,
+                nothing, nothing, nothing, nothing, nothing, nothing,
+            )
+        end
+        for digits in (plus1, last_finite)
+            with_time = "{\"con_spec_version\":3,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+            written = mktemp() do path, io
+                close(io)
+                write_con(path, [constructed(with_time, true)])
+                read(path, String)
+            end
+            @test occursin("\"con_spec_minor\":$digits", written)
+            @test occursin("\"time\":\"fs\"", written)
+            @test !occursin(natural, written)
+
+            no_time = "{\"con_spec_version\":3,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}"
+            err = try
+                mktemp() do path, io
+                    close(io)
+                    write_con(path, [constructed(no_time, true)])
+                end
+                nothing
+            catch e
+                e
+            end
+            @test err isa ReadCon.ReadConError
+            @test occursin("units.time", err.message)
+        end
+        over_meta = "{\"con_spec_version\":3,\"con_spec_minor\":$overflow,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+        over_write = try
+            mktemp() do path, io
+                close(io)
+                write_con(path, [constructed(over_meta, true)])
+            end
+            nothing
+        catch e
+            e
+        end
+        @test over_write isa ReadCon.ReadConError
+        @test over_write.code == -3
+        @test occursin("number out of range at line 1 column 348", over_write.message)
+        for token in ("1e309", "1E400")
+            meta = "{\"con_spec_version\":3,\"con_spec_minor\":$token,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+            for velocities in (true, false)
+                err = try
+                    mktemp() do path, io
+                        close(io)
+                        write_con(path, [constructed(meta, velocities)])
+                    end
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa ReadCon.ReadConError
+                @test err.code == -3
+                @test occursin("number out of range", err.message)
+            end
+        end
+    end
+
+    @testset "write_con rejects a leading-zero con_spec_minor" begin
+        fmax = (BigInt(2)^53 - 1) << 971
+        natural = "(amu*angstrom^2/eV)^0.5"
+        atom = Atom(
+            UInt64(1), 0.0, 0.0, 0.0, UInt64(0), 1.0,
+            false, (false, false, false),
+            0.1, 0.2, 0.3, true,
+            0.0, 0.0, 0.0, false,
+        )
+        function frame_with(metadata_line::String)
+            return ConFrame(
+                (10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom], true,
+                ("", ""), ("", ""), false, false, UInt32(3), metadata_line,
+                nothing, nothing, nothing, nothing, nothing, nothing,
+            )
+        end
+        for token in ("00", "000", "01", "007", "0" * string(fmax + 1))
+            for units in (
+                "{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}",
+                "{\"length\":\"angstrom\",\"energy\":\"eV\"}",
+            )
+                meta = "{\"con_spec_version\":3,\"con_spec_minor\":$token,\"units\":$units}"
+                frame = frame_with(meta)
+                written = Ref("")
+                err = try
+                    mktemp() do path, io
+                        close(io)
+                        write_con(path, [frame])
+                        written[] = read(path, String)
+                    end
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa ReadCon.ReadConError
+                @test err.code == -3
+                @test isempty(written[])
+                @test frame.metadata_json == meta
+                @test ReadCon._legacy_velocity_units(frame) == (meta, false)
+                @test !occursin(natural, first(ReadCon._legacy_velocity_units(frame)))
+            end
+        end
+        zero_meta = "{\"con_spec_version\":3,\"con_spec_minor\":0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+        stamped, _ = ReadCon._legacy_velocity_units(frame_with(zero_meta))
+        @test occursin("\"con_spec_minor\":1", stamped)
+        @test occursin(natural, stamped)
+    end
+
+    @testset "escaped and nested con_spec_minor keys on write" begin
+        natural = "(amu*angstrom^2/eV)^0.5"
+        with_time = "\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}"
+        no_time = "\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}"
+        atom = Atom(
+            UInt64(1), 0.0, 0.0, 0.0, UInt64(0), 1.0,
+            false, (false, false, false),
+            0.1, 0.2, 0.3, true,
+            0.0, 0.0, 0.0, false,
+        )
+        function line2_of(metadata_line::String)
+            frame = ConFrame(
+                (10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom], true,
+                ("", ""), ("", ""), false, false, UInt32(3), metadata_line,
+                nothing, nothing, nothing, nothing, nothing, nothing,
+            )
+            text = mktemp() do path, io
+                close(io)
+                write_con(path, [frame])
+                read(path, String)
+            end
+            return split(text, '\n')[2]
+        end
+        stamped_units = "\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"time\":\"$natural\"}"
+        fs_units = "\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"time\":\"fs\"}"
+        head = "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],"
+        # An escaped minor 1 names the time unit, as in Rust, C, Python, and RPC.
+        @test line2_of("{\"con_spec_version\":3,\"\\u0063on_spec_minor\":1,$with_time}") ==
+            head * fs_units * "}"
+        err = try
+            line2_of("{\"con_spec_version\":3,\"\\u0063on_spec_minor\":1,$no_time}")
+            nothing
+        catch e
+            e
+        end
+        @test err isa ReadCon.ReadConError
+        @test occursin("units.time", err.message)
+        # An escaped minor 0 is promoted like a plain one.
+        @test line2_of("{\"con_spec_version\":3,\"\\u0063on_spec_minor\":0,$with_time}") ==
+            head * stamped_units * "}"
+        # Nested keys do not set the minor and keep their values.
+        for units in (with_time, no_time)
+            @test line2_of("{\"con_spec_version\":3,\"x\":{\"con_spec_minor\":1},$units}") ==
+                head * stamped_units * ",\"x\":{\"con_spec_minor\":1}}"
+            @test line2_of(
+                "{\"con_spec_version\":3,\"x\":{\"con_spec_minor\":2},\"con_spec_minor\":0,$units}",
+            ) == head * stamped_units * ",\"x\":{\"con_spec_minor\":2}}"
+            @test line2_of(
+                "{\"con_spec_version\":3,\"x\":{\"con_spec_minor\":0},\"con_spec_minor\":0,$units}",
+            ) == head * stamped_units * ",\"x\":{\"con_spec_minor\":0}}"
+        end
+    end
+
+    # Shared with the Rust, C, RPC, and Python tests. See
+    # tests/fixtures/generate_minor_token_probes.py.
+    @testset "con_spec_minor token probes" begin
+        probes = TOML.parsefile(joinpath(
+            dirname(dirname(dirname(@__DIR__))), "tests", "fixtures", "minor_token_probes.toml",
+        ))
+        cases = probes["cases"]
+        @test length(cases) == 59
+        body = "\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n" *
+            "\nH\nVelocities of Component 1\n0.1 0.2 0.3 0 0\n"
+        atom = Atom(
+            UInt64(1), 0.0, 0.0, 0.0, UInt64(0), 1.0,
+            false, (false, false, false),
+            0.1, 0.2, 0.3, true,
+            0.0, 0.0, 0.0, false,
+        )
+        function read_line2(line2::String)
+            ReadCon.clear_error()
+            return mktemp() do path, io
+                write(io, "gen\n" * line2[1:end-1] * ",\"sections\":[\"velocities\"]}" * body)
+                close(io)
+                read_con(path)
+            end
+        end
+        function written_line2(frames)
+            text = mktemp() do path, io
+                close(io)
+                write_con(path, frames)
+                read(path, String)
+            end
+            return String(split(text, '\n')[2])
+        end
+        constructed(line2::String) = ConFrame(
+            (10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom], true,
+            ("", ""), ("", ""), false, false, UInt32(3), line2,
+            nothing, nothing, nothing, nothing, nothing, nothing,
+        )
+        @testset "$(case["name"])" for case in cases
+            for (line2, expected) in ((case["line2_w"], case["read_w"]), (case["line2_n"], case["read_n"]))
+                frames = read_line2(line2)
+                if expected == "ok"
+                    @test length(frames) == 1
+                    continue
+                end
+                @test isempty(frames)
+                err = ReadCon.last_error()
+                @test err !== nothing
+                if expected == "dup"
+                    @test occursin("duplicate con_spec_minor key", err.message)
+                elseif expected == "invalid"
+                    @test err.code == -3
+                    @test !occursin("duplicate", err.message)
+                else
+                    @test occursin("InvalidUnits", err.message)
+                end
+            end
+            for (line2, expected) in ((case["line2_w"], case["binding_w"]), (case["line2_n"], case["binding_n"]))
+                frame = constructed(line2)
+                result = try
+                    written_line2([frame])
+                catch e
+                    e
+                end
+                if expected == "dup"
+                    @test result isa ErrorException
+                    @test occursin("duplicate con_spec_minor key", sprint(showerror, result))
+                elseif expected == "invalid"
+                    @test result isa ReadCon.ReadConError
+                    @test result isa ReadCon.ReadConError && result.code == -3
+                elseif expected == "units"
+                    @test result isa ReadCon.ReadConError
+                    @test result isa ReadCon.ReadConError && occursin("units.time", result.message)
+                else
+                    @test result == expected
+                end
+                @test frame.metadata_json == line2
+            end
+            if case["read_w"] == "ok"
+                frames = read_line2(case["line2_w"])
+                @test written_line2(frames) == case["binding_w"]
+            end
+        end
+    end
+
     include("test_conformance_goldens.jl")
+    include("test_write_con_roundtrip.jl")
 end

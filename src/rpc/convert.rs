@@ -525,4 +525,212 @@ mod tests {
             assert!(written.contains(&needle), "{written}");
         }
     }
+
+    #[test]
+    fn capnp_rejects_duplicate_con_spec_minor() {
+        let frame = load_fixture("tiny_cuh2.con");
+        let mut message = Builder::new_default();
+        {
+            let mut root = message.init_root::<con_frame_data::Builder>();
+            fill_frame_builder(root.reborrow(), &frame).unwrap();
+            root.set_metadata_json(
+                r#"{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"}}"#,
+            );
+        }
+        let reader = message
+            .get_root_as_reader::<con_frame_data::Reader>()
+            .unwrap();
+        let err = frame_from_reader(reader).unwrap_err();
+        assert!(
+            err.to_string().contains("duplicate con_spec_minor key"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn capnp_binary64_half_ulp_minor_matches_rust() {
+        let (plus_one, last_finite, overflow) = crate::parser::f64_max_minor_edge_digits();
+        for digits in [&plus_one, &last_finite] {
+            let text = format!(
+                "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{digits},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}},\"sections\":[\"velocities\"]}}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n\nH\nVelocities of Component 1\n0.1 0.0 0.0 0 0\n"
+            );
+            let frame = ConFrameIterator::new(&text).next().unwrap().unwrap();
+            assert_eq!(
+                frame.header.con_spec_minor_saturating(),
+                crate::types::SATURATED_SPEC_MINOR
+            );
+            assert_eq!(frame.header.con_spec_minor_str(), digits.as_str());
+
+            let mut message = Builder::new_default();
+            {
+                let root = message.init_root::<con_frame_data::Builder>();
+                fill_frame_builder(root, &frame).unwrap();
+            }
+            let reader = message
+                .get_root_as_reader::<con_frame_data::Reader>()
+                .unwrap();
+            let back = frame_from_reader(reader).unwrap();
+            assert_eq!(
+                back.header.con_spec_minor_saturating(),
+                crate::types::SATURATED_SPEC_MINOR
+            );
+            assert_eq!(back.header.con_spec_minor_str(), digits.as_str());
+            let mut out = Vec::new();
+            crate::writer::ConFrameWriter::new(&mut out)
+                .write_frame(&back)
+                .unwrap();
+            let written = String::from_utf8(out).unwrap();
+            assert!(written.contains(&format!("\"con_spec_minor\":{digits}")));
+            assert!(written.contains("\"time\":\"fs\""));
+            assert!(!written.contains("(amu*angstrom^2/eV)^0.5"));
+        }
+
+        let frame = load_fixture("tiny_cuh2.con");
+        let mut message = Builder::new_default();
+        {
+            let mut root = message.init_root::<con_frame_data::Builder>();
+            fill_frame_builder(root.reborrow(), &frame).unwrap();
+            root.set_metadata_json(format!(
+                "{{\"con_spec_version\":3,\"con_spec_minor\":{overflow},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}}}}"
+            ));
+        }
+        let reader = message
+            .get_root_as_reader::<con_frame_data::Reader>()
+            .unwrap();
+        let err = frame_from_reader(reader).unwrap_err();
+        assert!(err.to_string().contains("number out of range"), "{err}");
+    }
+
+    fn frame_from_metadata_json(metadata_json: &str) -> Result<ConFrame, ConvertError> {
+        let text = "gen\n{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"},\"sections\":[\"velocities\"]}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n\nH\nVelocities of Component 1\n0.1 0.0 0.0 0 0\n";
+        let frame = ConFrameIterator::new(text).next().unwrap().unwrap();
+        let mut message = Builder::new_default();
+        {
+            let mut root = message.init_root::<con_frame_data::Builder>();
+            fill_frame_builder(root.reborrow(), &frame).unwrap();
+            root.set_metadata_json(metadata_json);
+        }
+        let reader = message
+            .get_root_as_reader::<con_frame_data::Reader>()
+            .unwrap();
+        frame_from_reader(reader)
+    }
+
+    /// Probe cases shared with the Rust, C, Python, and Julia tests
+    /// (`tests/fixtures/minor_token_probes.json`).
+    #[test]
+    fn capnp_matches_minor_token_probe_table() {
+        let root: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/minor_token_probes.json"))
+                .unwrap();
+        let cases = root["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 59);
+        for case in cases {
+            let name = case["name"].as_str().unwrap();
+            for (line_key, op) in [("line2_w", "rpc_w"), ("line2_n", "rpc_n")] {
+                let line2 = case[line_key].as_str().unwrap();
+                let expected = case[op].as_str().unwrap();
+                let back = match frame_from_metadata_json(line2) {
+                    Ok(back) => back,
+                    Err(err) => {
+                        let msg = err.to_string();
+                        assert!(msg.starts_with("metadataJson: "), "{name} {op}: {msg}");
+                        assert_eq!(
+                            msg.contains("duplicate con_spec_minor key"),
+                            expected == "dup",
+                            "{name} {op}: {msg}"
+                        );
+                        assert!(matches!(expected, "dup" | "invalid"), "{name} {op}: {msg}");
+                        continue;
+                    }
+                };
+                let mut out = Vec::new();
+                let result = crate::writer::ConFrameWriter::new(&mut out).write_frame(&back);
+                match result {
+                    Ok(()) => {
+                        let text = String::from_utf8(out).unwrap();
+                        assert_eq!(text.lines().nth(1).unwrap(), expected, "{name} {op}");
+                    }
+                    Err(err) => {
+                        assert_eq!(expected, "units", "{name} {op}: {err}");
+                        assert!(err.to_string().contains("units.time"), "{name} {op}: {err}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn capnp_rejects_con_spec_minor_no_reader_accepts() {
+        let (plus_one, last_finite, overflow) = crate::parser::f64_max_minor_edge_digits();
+        let units = r#""units":{"length":"angstrom","energy":"eV","time":"fs"}"#;
+        let typed = [
+            "-1".to_string(),
+            "-0".to_string(),
+            "1.5".to_string(),
+            "1.0".to_string(),
+            "0.0".to_string(),
+            "1e0".to_string(),
+            "1e20".to_string(),
+            "true".to_string(),
+            "false".to_string(),
+            "null".to_string(),
+            r#""1""#.to_string(),
+            "[1]".to_string(),
+            r#"{"a":1}"#.to_string(),
+            format!("-{plus_one}"),
+            format!("{plus_one}.0"),
+        ];
+        for token in &typed {
+            for key in [r#""con_spec_minor""#, r#""\u0063on_spec_minor""#] {
+                let line = format!(r#"{{"con_spec_version":3,{key}:{token},{units}}}"#);
+                let err = frame_from_metadata_json(&line).unwrap_err().to_string();
+                assert_eq!(
+                    err, "metadataJson: con_spec_minor must be a JSON integer >= 0",
+                    "{line}"
+                );
+                let text = format!(
+                    "gen\n{}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n\nH\nVelocities of Component 1\n0.1 0.0 0.0 0 0\n",
+                    line.replacen('}', r#"},"sections":["velocities"]"#, 1)
+                );
+                assert!(ConFrameIterator::new(&text).next().unwrap().is_err());
+            }
+        }
+        let out_of_range = ["1e309".to_string(), "1E400".to_string(), overflow.clone()];
+        for token in &out_of_range {
+            let line = format!(r#"{{"con_spec_version":3,"con_spec_minor":{token},{units}}}"#);
+            let err = frame_from_metadata_json(&line).unwrap_err().to_string();
+            assert!(
+                err.starts_with("metadataJson: number out of range"),
+                "{err}"
+            );
+        }
+        let bad_grammar = ["00", "000", "01", "+1", ".5"];
+        for token in bad_grammar {
+            let line = format!(r#"{{"con_spec_version":3,"con_spec_minor":{token},{units}}}"#);
+            let err = frame_from_metadata_json(&line).unwrap_err().to_string();
+            assert!(err.starts_with("metadataJson: "), "{err}");
+        }
+        for token in [
+            "0",
+            "1",
+            "18446744073709551615",
+            plus_one.as_str(),
+            last_finite.as_str(),
+        ] {
+            let line = format!(r#"{{"con_spec_version":3,"con_spec_minor":{token},{units}}}"#);
+            let back = frame_from_metadata_json(&line).unwrap();
+            let mut out = Vec::new();
+            crate::writer::ConFrameWriter::new(&mut out)
+                .write_frame(&back)
+                .unwrap();
+            let written = String::from_utf8(out).unwrap();
+            assert!(
+                written.contains(&format!("\"con_spec_minor\":{token}")),
+                "{written}"
+            );
+            let reread = ConFrameIterator::new(&written).next().unwrap().unwrap();
+            assert_eq!(reread.header.con_spec_minor_str(), token);
+        }
+    }
 }

@@ -364,9 +364,15 @@ function read_con(path::String)
 
                 try
                     c_frame = unsafe_load(c_frame_ptr)
+                    n = Int(c_frame.num_atoms)
+                    charges = _atom_section(frame_handle, n, :charges, 1)
+                    spins = _atom_section(frame_handle, n, :spins, 1)
+                    magmoms = _atom_section(frame_handle, n, :magmoms, 3)
+                    displacements = _atom_section(frame_handle, n, :displacements, 3)
+                    spreads = _atom_section(frame_handle, n, :spreads, 3)
 
                     atoms = Atom[]
-                    for i in 1:c_frame.num_atoms
+                    for i in 1:n
                         c_atom = unsafe_load(c_frame.atoms, i)
                         push!(atoms, Atom(
                             c_atom.atomic_number,
@@ -378,7 +384,12 @@ function read_con(path::String)
                             c_atom.has_velocity,
                             c_atom.fx, c_atom.fy, c_atom.fz,
                             c_atom.has_forces,
-                            c_atom.energy, c_atom.has_energy,
+                            c_atom.energy, c_atom.has_energy;
+                            charge=_section_entry(charges, i),
+                            spin=_section_entry(spins, i),
+                            magmom=_section_entry(magmoms, i),
+                            displacement=_section_entry(displacements, i),
+                            spread=_section_entry(spreads, i),
                         ))
                     end
 
@@ -407,6 +418,25 @@ function read_con(path::String)
     return frames
 end
 
+# Values of one optional per-atom section in CON atom order, or nothing
+# when the frame lacks it. Checking first keeps SECTION_ABSENT off the
+# error channel that read_con leaves for its caller.
+function _atom_section(frame_handle::Ptr{Cvoid}, n::Int, name::Symbol, width::Int)
+    has = ccall(_lib_symbol(Symbol(:rkr_frame_has_, name)), Bool, (Ptr{Cvoid},), frame_handle)
+    (has && n > 0) || return nothing
+    buf = Vector{Float64}(undef, width * n)
+    status = ccall(
+        _lib_symbol(Symbol(:rkr_frame_copy_, name)),
+        Cint, (Ptr{Cvoid}, Ptr{Float64}, Csize_t),
+        frame_handle, buf, length(buf),
+    )
+    _check_status(status, "failed to copy $name")
+    return width == 1 ? buf : [(buf[3i - 2], buf[3i - 1], buf[3i]) for i in 1:n]
+end
+
+_section_entry(::Nothing, ::Int) = nothing
+_section_entry(values::AbstractVector, i::Int) = values[i]
+
 function _get_headers(frame_handle, is_prebox::Bool)
     lines = String[]
     for idx in 0:1
@@ -430,35 +460,41 @@ end
 
 Write frames to a .con file. The default numeric text round-trips binary64.
 `precision` is a fixed number of digits after the decimal.
+
+Every frame is built before `path` is opened, so a frame that cannot be
+built leaves an existing file untouched. A failed write or flush throws.
 """
 function write_con(path::String, frames::Vector{ConFrame}; precision::Union{Nothing,Integer}=nothing)
-    writer = if precision === nothing
-        ccall(_lib_symbol(:create_writer_from_path_c), Ptr{Cvoid}, (Cstring,), path)
-    else
-        ccall(
-            _lib_symbol(:create_writer_from_path_with_precision_c),
-            Ptr{Cvoid}, (Cstring, UInt8), path, UInt8(precision)
-        )
-    end
-    writer == C_NULL && _throw_last("failed to create writer for file: $path")
-
     handles = Ptr{Cvoid}[]
+    writer = C_NULL
     try
         for frame in frames
             push!(handles, _build_frame_handle(frame))
         end
+        writer = if precision === nothing
+            ccall(_lib_symbol(:create_writer_from_path_c), Ptr{Cvoid}, (Cstring,), path)
+        else
+            ccall(
+                _lib_symbol(:create_writer_from_path_with_precision_c),
+                Ptr{Cvoid}, (Cstring, UInt8), path, UInt8(precision)
+            )
+        end
+        writer == C_NULL && _throw_last("failed to create writer for file: $path")
         status = ccall(
             _lib_symbol(:rkr_writer_extend),
             Cint, (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Csize_t),
             writer, handles, length(handles)
         )
         _check_status(status, "failed to write frames")
+        # free_rkr_writer flushes too, but cannot report an error.
+        status = ccall(_lib_symbol(:rkr_writer_flush), Cint, (Ptr{Cvoid},), writer)
+        _check_status(status, "failed to flush frames to $path")
         return nothing
     finally
         for handle in handles
             handle != C_NULL && ccall(_lib_symbol(:free_rkr_frame), Cvoid, (Ptr{Cvoid},), handle)
         end
-        ccall(_lib_symbol(:free_rkr_writer), Cvoid, (Ptr{Cvoid},), writer)
+        writer != C_NULL && ccall(_lib_symbol(:free_rkr_writer), Cvoid, (Ptr{Cvoid},), writer)
     end
 end
 
@@ -541,7 +577,281 @@ function _ensure_natural_time(metadata_json::AbstractString)
         metadata_json[nextind(metadata_json, close):end]
 end
 
+const _DUPLICATE_CON_SPEC_MINOR = "duplicate con_spec_minor key"
+
+function _is_nonneg_decimal_int(token::AbstractString)
+    n = ncodeunits(token)
+    n == 0 && return false
+    b0 = codeunit(token, 1)
+    if b0 == UInt8('0')
+        return n == 1
+    end
+    UInt8('1') <= b0 <= UInt8('9') || return false
+    for i in 2:n
+        b = codeunit(token, i)
+        UInt8('0') <= b <= UInt8('9') || return false
+    end
+    return true
+end
+
+# Same gate as Rust `is_substitutable_huge_minor`: JSON integer grammar,
+# does not fit in UInt64, and parses as a finite binary64 value.
+# serde_json accepts an integer that rounds to a finite Float64, including
+# values above floatmax(Float64) below the half-ULP midpoint
+# floor(f64::MAX) + 2^970. The midpoint itself is rejected.
+function _substitutable_huge_minor(token::AbstractString)
+    _is_nonneg_decimal_int(token) || return false
+    tryparse(UInt64, token) !== nothing && return false
+    x = tryparse(Float64, token)
+    return x !== nothing && isfinite(x)
+end
+
+# Value of a con_spec_minor token the builder accepts, or nothing when the
+# builder rejects it (leading zeros, sign, fraction, exponent, non-number).
+function _minor_token_u64(token::AbstractString)
+    _is_nonneg_decimal_int(token) || return nothing
+    parsed = tryparse(UInt64, token)
+    parsed !== nothing && return parsed
+    return _substitutable_huge_minor(token) ? typemax(UInt64) : nothing
+end
+
+function _json_ws(b::UInt8)
+    return b == UInt8(' ') || b == UInt8('\t') || b == UInt8('\r') || b == UInt8('\n')
+end
+
+function _skip_json_ws(bytes::Vector{UInt8}, i::Int)
+    n = length(bytes)
+    while i <= n && _json_ws(bytes[i])
+        i += 1
+    end
+    return i
+end
+
+function _scan_json_string_end(bytes::Vector{UInt8}, start::Int)
+    (start <= length(bytes) && bytes[start] == UInt8('"')) || return nothing
+    i = start + 1
+    n = length(bytes)
+    escaped = false
+    while i <= n
+        b = bytes[i]
+        if escaped
+            escaped = false
+        elseif b == UInt8('\\')
+            escaped = true
+        elseif b == UInt8('"')
+            return i + 1
+        end
+        i += 1
+    end
+    return nothing
+end
+
+function _value_boundary(b::UInt8)
+    return _json_ws(b) || b == UInt8(',') || b == UInt8('}') || b == UInt8(']')
+end
+
+function _scan_json_value_end(bytes::Vector{UInt8}, start::Int)
+    start <= length(bytes) || return nothing
+    first = bytes[start]
+    if first == UInt8('"')
+        return _scan_json_string_end(bytes, start)
+    end
+    if first == UInt8('{') || first == UInt8('[')
+        depth = 0
+        i = start
+        n = length(bytes)
+        while i <= n
+            b = bytes[i]
+            if b == UInt8('"')
+                nxt = _scan_json_string_end(bytes, i)
+                nxt === nothing && return nothing
+                i = nxt
+                continue
+            elseif b == UInt8('{') || b == UInt8('[')
+                depth += 1
+            elseif b == UInt8('}') || b == UInt8(']')
+                depth -= 1
+                depth == 0 && return i + 1
+            end
+            i += 1
+        end
+        return nothing
+    end
+    i = start
+    n = length(bytes)
+    while i <= n && !_value_boundary(bytes[i])
+        i += 1
+    end
+    return i > start ? i : nothing
+end
+
+function _hex_nibble(b::UInt8)
+    if UInt8('0') <= b <= UInt8('9')
+        return Int(b - UInt8('0'))
+    elseif UInt8('a') <= b <= UInt8('f')
+        return Int(b - UInt8('a')) + 10
+    elseif UInt8('A') <= b <= UInt8('F')
+        return Int(b - UInt8('A')) + 10
+    end
+    return nothing
+end
+
+# Decode a quoted JSON key. Invalid escapes yield nothing and that field is
+# skipped, matching the Rust scanner.
+function _decode_json_key(raw::AbstractString)
+    n = ncodeunits(raw)
+    n < 2 && return nothing
+    codeunit(raw, 1) == UInt8('"') || return nothing
+    codeunit(raw, n) == UInt8('"') || return nothing
+    if !occursin('\\', raw)
+        return raw[nextind(raw, 1):prevind(raw, n)]
+    end
+    out = UInt8[]
+    i = 2
+    last = n - 1
+    while i <= last
+        b = codeunit(raw, i)
+        if b != UInt8('\\')
+            push!(out, b)
+            i += 1
+            continue
+        end
+        i += 1
+        i > last && return nothing
+        e = codeunit(raw, i)
+        if e == UInt8('"') || e == UInt8('\\') || e == UInt8('/')
+            push!(out, e)
+        elseif e == UInt8('b')
+            push!(out, 0x08)
+        elseif e == UInt8('f')
+            push!(out, 0x0c)
+        elseif e == UInt8('n')
+            push!(out, 0x0a)
+        elseif e == UInt8('r')
+            push!(out, 0x0d)
+        elseif e == UInt8('t')
+            push!(out, 0x09)
+        elseif e == UInt8('u')
+            i + 4 > last && return nothing
+            cp = 0
+            for k in 1:4
+                nib = _hex_nibble(codeunit(raw, i + k))
+                nib === nothing && return nothing
+                cp = cp * 16 + nib
+            end
+            i += 4
+            if 0xD800 <= cp <= 0xDBFF
+                nxt = i + 1
+                if nxt + 5 > last || codeunit(raw, nxt) != UInt8('\\') || codeunit(raw, nxt + 1) != UInt8('u')
+                    return nothing
+                end
+                lo = 0
+                for k in 2:5
+                    nib = _hex_nibble(codeunit(raw, nxt + k))
+                    nib === nothing && return nothing
+                    lo = lo * 16 + nib
+                end
+                0xDC00 <= lo <= 0xDFFF || return nothing
+                cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00)
+                i = nxt + 5
+            elseif 0xDC00 <= cp <= 0xDFFF
+                return nothing
+            end
+            append!(out, transcode(UInt8, string(Char(cp))))
+        else
+            return nothing
+        end
+        i += 1
+    end
+    return String(out)
+end
+
+# Byte ranges of the top-level `con_spec_minor` values, in order. A key
+# written with JSON escapes counts. Nested keys are ignored.
+function _top_level_minor_spans(json::AbstractString)
+    bytes = Vector{UInt8}(codeunits(json))
+    i = _skip_json_ws(bytes, 1)
+    spans = UnitRange{Int}[]
+    (i <= length(bytes) && bytes[i] == UInt8('{')) || return spans
+    i += 1
+    while true
+        i = _skip_json_ws(bytes, i)
+        if i > length(bytes) || bytes[i] == UInt8('}')
+            break
+        end
+        if bytes[i] == UInt8(',')
+            i += 1
+            i = _skip_json_ws(bytes, i)
+        end
+        if i > length(bytes) || bytes[i] != UInt8('"')
+            break
+        end
+        k_end = _scan_json_string_end(bytes, i)
+        k_end === nothing && break
+        raw_key = String(bytes[i:(k_end - 1)])
+        i = k_end
+        i = _skip_json_ws(bytes, i)
+        if i > length(bytes) || bytes[i] != UInt8(':')
+            break
+        end
+        i += 1
+        i = _skip_json_ws(bytes, i)
+        v_end = _scan_json_value_end(bytes, i)
+        v_end === nothing && break
+        if _decode_json_key(raw_key) == "con_spec_minor"
+            push!(spans, i:(v_end - 1))
+        end
+        i = v_end
+    end
+    return spans
+end
+
+# Raw top-level `con_spec_minor` value tokens, in order.
+function _top_level_minor_tokens(json::AbstractString)
+    units = codeunits(json)
+    return [String(units[span]) for span in _top_level_minor_spans(json)]
+end
+
+# Write a top-level con_spec_minor of 0 as 1. Nested keys keep their values.
+function _promote_zero_minor(metadata_json::AbstractString)
+    spans = _top_level_minor_spans(metadata_json)
+    length(spans) == 1 || return metadata_json
+    bytes = Vector{UInt8}(codeunits(metadata_json))
+    bytes[spans[1]] == UInt8['0'] || return metadata_json
+    bytes[first(spans[1])] = UInt8('1')
+    return String(bytes)
+end
+
+function _reject_duplicate_con_spec_minor(metadata_json::AbstractString)
+    if length(_top_level_minor_tokens(metadata_json)) > 1
+        error(_DUPLICATE_CON_SPEC_MINOR)
+    end
+    return nothing
+end
+
+const _INVALID_CON_SPEC_MINOR = "con_spec_minor must be a JSON integer >= 0"
+
+# For con_spec_minor: the value of the top-level key, which may be written
+# with JSON escapes. 0 when that key is absent (a nested key does not
+# count), typemax(UInt64) for an integer above it that serde_json accepts,
+# and an ErrorException for a
+# repeated key. Any top-level token the builder rejects throws ReadConError
+# code -3 (RKR_STATUS_INVALID_JSON): leading zeros, a sign, a fraction, an
+# exponent (1e0, 1e309, 1E400), a non-number, or an integer at or above
+# the half-ULP midpoint floor(f64::MAX) + 2^970.
 function _json_u64(metadata_json::AbstractString, key::AbstractString)
+    if key == "con_spec_minor"
+        tokens = _top_level_minor_tokens(metadata_json)
+        if length(tokens) > 1
+            error(_DUPLICATE_CON_SPEC_MINOR)
+        end
+        isempty(tokens) && return UInt64(0)
+        value = _minor_token_u64(tokens[1])
+        value === nothing && throw(ReadConError(
+            "con_spec_minor", Int32(-3), _INVALID_CON_SPEC_MINOR, UInt32(0), UInt64(0),
+        ))
+        return value
+    end
     m = match(Regex("\"$(key)\"\\s*:\\s*(\\d+)"), metadata_json)
     m === nothing && return UInt64(0)
     return parse(UInt64, m.captures[1])
@@ -554,6 +864,12 @@ function _legacy_velocity_units(frame::ConFrame)
     if !frame.has_velocities
         return metadata_json, false
     end
+    # Hand a token the builder rejects to it unchanged, so the write fails
+    # as it does in the other bindings instead of being rewritten to minor 1.
+    tokens = _top_level_minor_tokens(metadata_json)
+    if length(tokens) == 1 && _minor_token_u64(tokens[1]) === nothing
+        return metadata_json, false
+    end
     minor = _json_u64(metadata_json, "con_spec_minor")
     # Minor 1 and later name the time unit. Do not invent or replace it.
     if frame.spec_version >= 3 && minor >= 1
@@ -563,16 +879,10 @@ function _legacy_velocity_units(frame::ConFrame)
     # unit, and promote an explicit minor of 0 so that label is authoritative.
     # This matches Python's stamp_legacy_velocity_time.
     if frame.spec_version >= 3
-        stamped = if _units_object_bounds(metadata_json) !== nothing
-            _ensure_natural_time(metadata_json)
-        else
-            metadata_json
+        stamped = _promote_zero_minor(metadata_json)
+        if _units_object_bounds(stamped) !== nothing
+            stamped = _ensure_natural_time(stamped)
         end
-        stamped = replace(
-            stamped,
-            r"(\"con_spec_minor\"\s*:\s*)0+\b" => SubstitutionString("\\g<1>1"),
-            count=1,
-        )
         return stamped, _units_object_bounds(metadata_json) === nothing
     end
     if _units_declares_time(metadata_json)
@@ -585,6 +895,7 @@ function _legacy_velocity_units(frame::ConFrame)
 end
 
 function _build_frame_handle(frame::ConFrame)
+    _reject_duplicate_con_spec_minor(frame.metadata_json)
     cell = Float64[frame.cell...]
     angles = Float64[frame.angles...]
     builder = ccall(
@@ -721,6 +1032,27 @@ function _add_atom(builder::Ptr{Cvoid}, atom::Atom)
             builder, atom.energy,
         )
         _check_status(e_status, "failed to attach per-atom energy")
+    end
+
+    for (name, value) in (("charge", atom.charge), ("spin", atom.spin))
+        value === nothing && continue
+        status = ccall(
+            _lib_symbol(Symbol(:rkr_frame_builder_set_last_, name)),
+            Cint, (Ptr{Cvoid}, Float64), builder, value,
+        )
+        _check_status(status, "failed to attach per-atom $name")
+    end
+    for (name, value) in (
+        ("magmom", atom.magmom),
+        ("displacement", atom.displacement),
+        ("spread", atom.spread),
+    )
+        value === nothing && continue
+        status = ccall(
+            _lib_symbol(Symbol(:rkr_frame_builder_set_last_, name)),
+            Cint, (Ptr{Cvoid}, Ptr{Float64}), builder, Float64[value...],
+        )
+        _check_status(status, "failed to attach per-atom $name")
     end
 end
 
