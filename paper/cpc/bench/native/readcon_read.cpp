@@ -1,11 +1,11 @@
-// readcon-core 0.17.3 through its C++ header: read_all_frames(path, n_threads),
+// readcon-core through its C++ header: read_all_frames(path, n_threads),
 // then one record per frame of the output contract. Positions, velocities and
-// ids stay in the frame's binary64 and u64 columns, and ConFrame::pbc() gives
-// the periodic flags, periodic in all three directions when pbc is absent
-// (CON-cell.3). The 0.17.3 header has no column accessor for the atomic
-// numbers or the fixed flags, so both come from ConFrame::atoms(), the
-// per-atom list, and none for the cell matrix, so the frame's JSON metadata is
-// scanned for lattice_vectors, which wins over lines 3-4 (CON-cell.1).
+// ids stay in the frame's binary64 and u64 columns. The C++ header has no
+// column accessor for the atomic numbers or the fixed flags, so both come from
+// ConFrame::atoms(), the per-atom list, and none for the cell matrix or pbc
+// flags, so the frame's JSON metadata is scanned for lattice_vectors (which
+// wins over lines 3-4, CON-cell.1) and pbc (defaulting to periodic in all
+// three directions when absent, CON-cell.3).
 #include "protocol.hpp"
 #include "readcon-core.hpp"
 
@@ -66,6 +66,27 @@ std::array<double, 9> cell_of(const readcon::ConFrame &frame, const std::string 
     return m;
 }
 
+std::array<bool, 3> pbc_of(const std::string &json) {
+    std::array<bool, 3> flags{true, true, true};
+    const char *p = after_key(json, "\"pbc\":");
+    if (!p)
+        return flags;
+    for (bool &flag : flags) {
+        while (*p == '[' || *p == ',' || *p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+            ++p;
+        if (std::strncmp(p, "true", 4) == 0) {
+            flag = true;
+            p += 4;
+        } else if (std::strncmp(p, "false", 5) == 0) {
+            flag = false;
+            p += 5;
+        } else {
+            throw std::runtime_error("malformed pbc");
+        }
+    }
+    return flags;
+}
+
 Record record_of(const readcon::ConFrame &frame, bool moc) {
     Record r;
     r.positions = frame.xyz_f64(&r.n);
@@ -90,8 +111,9 @@ Record record_of(const readcon::ConFrame &frame, bool moc) {
     r.fixed.resize(r.n);
     for (std::size_t i = 0; i < r.n; ++i)
         r.fixed[i] = atoms[i].fixed_mask();
-    r.cell = cell_of(frame, frame.metadata_json());
-    r.pbc = frame.pbc();
+    const std::string meta = frame.metadata_json();
+    r.cell = cell_of(frame, meta);
+    r.pbc = pbc_of(meta);
     return r;
 }
 

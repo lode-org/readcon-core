@@ -58,7 +58,8 @@ jobs:
             chmod +x llvm.sh
             sudo ./llvm.sh ${{ matrix.llvm-version }}
             sudo apt-get update
-            sudo apt-get install --no-install-recommends -y clang-${{ matrix.llvm-version }}
+            sudo apt-get install --no-install-recommends -y \
+              clang-${{ matrix.llvm-version }} openmpi-bin libopenmpi-dev libclang-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -80,7 +81,7 @@ jobs:
         env:
           # Full non-CUDA feature set (chemfiles/metatensor/zstd/grammar/parallel).
           # PyO3/RPC/CUDA excluded from this report (see codecov.yml ignore + script).
-          READCON_COV_FEATURES: parallel,chemfiles-from-sources,zstd,grammar,metatensor
+          READCON_COV_FEATURES: capi,parallel,chemfiles-from-sources,zstd,grammar,metatensor
         run: |
           unset RUSTC_WRAPPER || true
           CAPNP_BIN="$(pixi r -e default bash -c 'dirname "$(command -v capnp)"')"
@@ -166,7 +167,7 @@ jobs:
           version: '1.10'
 
       - name: Build libreadcon_core
-        run: cargo build --release --features chemfiles-from-sources
+        run: cargo build --release --features capi,chemfiles-from-sources
 
       - name: Julia tests with Coverage.jl
         env:
@@ -220,7 +221,7 @@ jobs:
       - name: Build libreadcon_core (chemfiles)
         run: |
           for attempt in 1 2 3; do
-            if cargo build --release --features chemfiles-from-sources; then
+            if cargo build --release --features capi,chemfiles-from-sources; then
               break
             fi
             if [[ "$attempt" -eq 3 ]]; then

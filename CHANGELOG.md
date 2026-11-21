@@ -7,6 +7,36 @@ All notable changes to this project will be documented in this file. See [conven
 
 ## Unreleased
 
+### Breaking
+
+- **C ABI / Rust API:** default builds no longer compile `readcon_core::ffi`
+  or export any unmangled C ABI symbols (`rkr_*` as well as legacy
+  `create_writer_*_c`, `read_con_*_iterator`, `con_frame_iterator_*`, and
+  `free_*` entry points — previously `pub mod ffi` was compiled unconditionally
+  even though `capi = []` was off by default, causing duplicate-symbol link
+  clashes when two versions of `readcon-core` linked into one Rust binary).
+  Pure Rust `rlib` consumers are unaffected, and Python wheels remain unaffected
+  for Python callers (the extension module now exports only `PyInit_readcon`
+  with no C ABI symbols); C, C++, Fortran, Julia, and `cargo-c` consumers that
+  link `libreadcon_core` or import `readcon_core::ffi` must enable the `capi`
+  feature:
+  - **Cargo (direct / Rust / Julia / Fortran):** pass `--features capi` (for
+    example `cargo build --release --features capi`,
+    `cargo build --release --features capi,chemfiles`,
+    `cargo build --release --features capi,mpi`, or in `Cargo.toml`
+    `features = ["capi"]`; Fortran test script:
+    `READCON_FORTRAN_FEATURES=capi,chemfiles scripts/run_fortran_tests.sh`).
+  - **CMake:** `CMakeLists.txt` enables `capi` automatically for both shared
+    (`--features=capi,mimalloc-allocator`) and static
+    (`--features=capi,static_system_alloc`) targets (`cmake -S . -B build`,
+    optional extras via `-DREADCON_CORE_CARGO_FEATURES="chemfiles zstd"`).
+  - **Meson:** `scripts/meson_cargo_build.py` enables `capi` automatically for
+    both shared and static targets (`meson setup build`, optional extras via
+    `-Dcargo_features=chemfiles,zstd`).
+  - **cargo-c:** `cargo cbuild --release --features capi` /
+    `cargo cinstall --release --features capi --prefix=$PREFIX` (`cargo-c` also
+    enables the `capi` feature automatically when declared in `[features]`).
+
 ### Bugfixes
 
 - **Metadata / Python:** `con_spec_minor` integers above `u64::MAX` (within

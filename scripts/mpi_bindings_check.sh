@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # C++, Fortran and Python MPI bindings: sha256 against the serial path.
 # Usage: scripts/mpi_bindings_check.sh "LAUNCHER" LIBDIR WORKDIR [PYTHON]
-# Needs libreadcon_core built with --features mpi in LIBDIR, mpicxx,
+# Needs libreadcon_core built with --features capi,mpi in LIBDIR, mpicxx,
 # mpifort, and (optional) a PYTHON with readcon[mpi] and mpi4py.
 set -euo pipefail
 launch=$1

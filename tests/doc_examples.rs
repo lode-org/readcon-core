@@ -1,18 +1,25 @@
 //! Compile and run the C, C++, and Fortran examples, and the Rust spec query.
 
+#[cfg(feature = "capi")]
 use std::fs;
+#[cfg(feature = "capi")]
 use std::path::PathBuf;
+#[cfg(feature = "capi")]
 use std::process::Command;
 use std::sync::Mutex;
 
+#[cfg(feature = "capi")]
 include!("metatensor_link.rs");
 
+#[cfg(feature = "capi")]
 #[path = "common/plain_library.rs"]
 mod plain_library;
+#[cfg(feature = "capi")]
 use plain_library::library_dirs;
 
 static CWD: Mutex<()> = Mutex::new(());
 
+#[cfg(feature = "capi")]
 fn example_libraries() -> Option<Vec<PathBuf>> {
     let dirs = library_dirs();
     if cfg!(feature = "python") && dirs.is_empty() {
@@ -25,6 +32,7 @@ fn example_libraries() -> Option<Vec<PathBuf>> {
     Some(dirs)
 }
 
+#[cfg(feature = "capi")]
 fn gxx() -> String {
     // Coverage exports CXX=clang++, which promotes header warnings to
     // errors. The example is compiled with g++, the same driver as the
@@ -32,6 +40,7 @@ fn gxx() -> String {
     "g++".to_string()
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn c_and_cpp_examples_match_frames_by_atom_id() {
     let Some(dirs) = example_libraries() else {
@@ -61,6 +70,7 @@ fn c_and_cpp_examples_match_frames_by_atom_id() {
     assert!(run.success(), "documented C and C++ example failed");
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn fortran_add_atom_example_links() {
     let Some(dirs) = example_libraries() else {

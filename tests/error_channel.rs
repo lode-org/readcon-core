@@ -3,10 +3,13 @@
 #[path = "common/scratch.rs"]
 mod scratch_dir;
 
-use std::ffi::{CStr, CString};
+#[cfg(feature = "capi")]
+use std::ffi::CStr;
+use std::ffi::CString;
 use std::fs;
 use std::path::PathBuf;
 
+#[cfg(feature = "capi")]
 use readcon_core::ffi::{
     RKRStatus, con_frame_iterator_forward, con_frame_iterator_next, con_frame_iterator_skip,
     free_con_frame_iterator, free_rkr_frame, read_con_string_iterator, rkr_clear_error,
@@ -60,10 +63,12 @@ fn bad_count_frame() -> String {
     "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n".into()
 }
 
+#[cfg(feature = "capi")]
 fn two_frames_bad_second() -> String {
     format!("{}{}", one_atom("0 0 0 0 0"), bad_count_frame())
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn last_error_names_the_class_and_the_line() {
     rkr_clear_error();
@@ -90,6 +95,7 @@ fn last_error_names_the_class_and_the_line() {
     let _ = fs::remove_file(path_for("ok"));
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn a_signed_count_is_invalid_count() {
     rkr_clear_error();
@@ -104,10 +110,12 @@ fn a_signed_count_is_invalid_count() {
     let _ = fs::remove_file(path_for("neg"));
 }
 
+#[cfg(feature = "capi")]
 fn frame_with_box(box_line: &str) -> String {
     one_atom("0 0 0 0 0").replacen("10 10 10", box_line, 1)
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn a_non_finite_cell_names_its_field_and_frame_on_the_c_channel() {
     for (box_line, field, token) in [
@@ -133,6 +141,7 @@ fn a_non_finite_cell_names_its_field_and_frame_on_the_c_channel() {
     }
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn a_non_finite_cell_is_refused_by_the_c_builder() {
     let angles = [90.0f64; 3];
@@ -199,6 +208,7 @@ fn the_lowest_line_wins_at_every_thread_count() {
     }
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn parallel_workers_do_not_share_the_error_slot() {
     let a = one_atom("nan 0 0 0 0");
@@ -227,6 +237,7 @@ fn parallel_workers_do_not_share_the_error_slot() {
     let _ = fs::remove_file(path_for("thr-b"));
 }
 
+#[cfg(feature = "capi")]
 fn assert_later_frame(line: u32, frame: u64) {
     let err = unsafe { &*rkr_last_error() };
     assert_eq!(err.code, RKRStatus::RKR_STATUS_PARSE_ERROR as i32);
@@ -238,6 +249,7 @@ fn assert_later_frame(line: u32, frame: u64) {
 
 /// `con_frame_iterator_next`, `forward`, and `skip` record the frame that
 /// failed, not frame 0. The bad count is line 8 of frame 1, file line 20.
+#[cfg(feature = "capi")]
 #[test]
 fn c_iterator_next_forward_and_skip_locate_the_later_frame() {
     let text = two_frames_bad_second();
@@ -375,7 +387,7 @@ fn skip_failure_names_the_frame_that_failed() {
     let good = one_atom("0 0 0 0 0");
     let bad = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
     let text = format!("{good}{bad}{good}");
-    let path = write("skip-idx", &text);
+    let _path = write("skip-idx", &text);
     let err = read_nth_frame_located(path_for("skip-idx").as_path(), 4).unwrap_err();
     match err {
         LoadError::Parse(located) => {
@@ -384,12 +396,15 @@ fn skip_failure_names_the_frame_that_failed() {
         }
         other => panic!("expected a parse error, got {other}"),
     }
-    rkr_clear_error();
-    assert!(unsafe { rkr_read_nth_frame(path.as_ptr(), 4) }.is_null());
-    let stored = unsafe { &*rkr_last_error() };
-    assert_eq!(stored.frame_index, 1);
-    let message = unsafe { CStr::from_ptr(stored.message) }.to_string_lossy();
-    assert!(message.contains("InvalidCount"), "{message}");
+    #[cfg(feature = "capi")]
+    {
+        rkr_clear_error();
+        assert!(unsafe { rkr_read_nth_frame(_path.as_ptr(), 4) }.is_null());
+        let stored = unsafe { &*rkr_last_error() };
+        assert_eq!(stored.frame_index, 1);
+        let message = unsafe { CStr::from_ptr(stored.message) }.to_string_lossy();
+        assert!(message.contains("InvalidCount"), "{message}");
+    }
     let _ = fs::remove_file(path_for("skip-idx"));
 }
 

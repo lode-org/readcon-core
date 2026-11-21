@@ -13,7 +13,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn links_no_python(path: &Path, dynamic: bool) -> bool {
+fn is_capi_library(path: &Path, dynamic: bool) -> bool {
     let mut nm = Command::new("nm");
     if dynamic {
         nm.arg("-D");
@@ -23,20 +23,20 @@ fn links_no_python(path: &Path, dynamic: bool) -> bool {
         .output()
         .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
         .unwrap_or_default();
-    !listed.contains("PyExc_BaseException")
+    !listed.contains("PyExc_BaseException") && listed.contains("rkr_library_version")
 }
 
 fn plain_library(dir: &Path) -> bool {
     let so = dir.join("libreadcon_core.so");
     if so.is_file() {
-        return links_no_python(&so, true);
+        return is_capi_library(&so, true);
     }
     let dylib = dir.join("libreadcon_core.dylib");
     if dylib.is_file() {
-        return links_no_python(&dylib, true);
+        return is_capi_library(&dylib, true);
     }
     let archive = dir.join("libreadcon_core.a");
-    archive.is_file() && links_no_python(&archive, false)
+    archive.is_file() && is_capi_library(&archive, false)
 }
 
 fn push_plain(dirs: &mut Vec<PathBuf>, dir: &Path) {
@@ -113,6 +113,27 @@ mod plain_library_tests {
     use std::fs;
     use std::process::Command;
 
+    fn build_stub_archive(root: &std::path::Path, dest: &std::path::Path, body: &str) {
+        let source = root.join("stub.c");
+        fs::write(&source, body).unwrap();
+        let object = root.join("stub.o");
+        let cc = Command::new("cc")
+            .arg("-c")
+            .arg(&source)
+            .arg("-o")
+            .arg(&object)
+            .status()
+            .expect("cc");
+        assert!(cc.success());
+        let ar = Command::new("ar")
+            .arg("rcs")
+            .arg(dest)
+            .arg(&object)
+            .status()
+            .expect("ar");
+        assert!(ar.success());
+    }
+
     #[test]
     fn a_sibling_build_out_is_found_when_the_test_dir_is_empty() {
         let root = scratch_dir("sibling");
@@ -120,7 +141,11 @@ mod plain_library_tests {
         let lib_out = root.join("debug/build/readcon-core/lib-unit/out");
         fs::create_dir_all(&test_out).unwrap();
         fs::create_dir_all(&lib_out).unwrap();
-        fs::write(lib_out.join("libreadcon_core.a"), b"archive").unwrap();
+        build_stub_archive(
+            &root,
+            &lib_out.join("libreadcon_core.a"),
+            "const char *rkr_library_version(void) { return \"0.0.0\"; }\n",
+        );
         let binary = test_out.join("doc_examples-test");
         fs::write(&binary, b"bin").unwrap();
         let found = libraries_from(&binary, None);
@@ -132,34 +157,39 @@ mod plain_library_tests {
     }
 
     #[test]
+    fn an_archive_without_capi_is_skipped() {
+        let root = scratch_dir("nocapi");
+        let test_out = root.join("debug/build/readcon-core/test-unit/out");
+        let lib_out = root.join("debug/build/readcon-core/lib-unit/out");
+        fs::create_dir_all(&test_out).unwrap();
+        fs::create_dir_all(&lib_out).unwrap();
+        build_stub_archive(
+            &root,
+            &lib_out.join("libreadcon_core.a"),
+            "int readcon_rust_only(void) { return 1; }\n",
+        );
+        let binary = test_out.join("doc_examples-test");
+        fs::write(&binary, b"bin").unwrap();
+        let found = libraries_from(&binary, None);
+        assert!(
+            !found.iter().any(|dir| dir == &lib_out),
+            "lookup took the non-capi archive in {lib_out:?}"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn an_archive_that_links_python_is_skipped() {
         let root = scratch_dir("python");
         let test_out = root.join("debug/build/readcon-core/test-unit/out");
         let py_out = root.join("debug/build/readcon-core/py-unit/out");
         fs::create_dir_all(&test_out).unwrap();
         fs::create_dir_all(&py_out).unwrap();
-        let source = root.join("py.c");
-        fs::write(
-            &source,
-            "extern int PyExc_BaseException;\nint readcon_py(void) { return PyExc_BaseException; }\n",
-        )
-        .unwrap();
-        let object = root.join("py.o");
-        let cc = Command::new("cc")
-            .arg("-c")
-            .arg(&source)
-            .arg("-o")
-            .arg(&object)
-            .status()
-            .expect("cc");
-        assert!(cc.success());
-        let ar = Command::new("ar")
-            .arg("rcs")
-            .arg(py_out.join("libreadcon_core.a"))
-            .arg(&object)
-            .status()
-            .expect("ar");
-        assert!(ar.success());
+        build_stub_archive(
+            &root,
+            &py_out.join("libreadcon_core.a"),
+            "extern int PyExc_BaseException;\nconst char *rkr_library_version(void) { return \"0.0.0\"; }\nint readcon_py(void) { return PyExc_BaseException; }\n",
+        );
         let binary = test_out.join("doc_examples-test");
         fs::write(&binary, b"bin").unwrap();
         let found = libraries_from(&binary, None);

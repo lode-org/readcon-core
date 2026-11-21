@@ -144,8 +144,9 @@ Writers MUST NOT store angle arrays on disk in v0.13.
 
 * How to use the C API for selection
 
-Build =libreadcon_core= with =--features chemfiles= for real evaluation;
-without it, =rkr_has_chemfiles_support()= is 0 and =rkr_frame_select= returns
+Build =libreadcon_core= with =--features capi,chemfiles= for real evaluation;
+without =chemfiles= (a =--features capi= lean build),
+=rkr_has_chemfiles_support()= is 0 and =rkr_frame_select= returns
 =RKR_STATUS_SELECTION_ERROR=.
 
 #+begin_src c

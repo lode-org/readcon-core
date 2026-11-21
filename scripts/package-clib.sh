@@ -131,15 +131,17 @@ fi
 
 default_features() {
     case "$TARGET" in
-        *linux*) echo chemfiles-from-sources,parallel,mimalloc-allocator ;;
-        *apple*) echo chemfiles,parallel,mimalloc-allocator ;;
-        *windows*) echo parallel,mimalloc-allocator ;;
-        *) echo chemfiles,parallel,mimalloc-allocator ;;
+        *linux*) echo capi,chemfiles-from-sources,parallel,mimalloc-allocator ;;
+        *apple*) echo capi,chemfiles,parallel,mimalloc-allocator ;;
+        *windows*) echo capi,parallel,mimalloc-allocator ;;
+        *) echo capi,chemfiles,parallel,mimalloc-allocator ;;
     esac
 }
 
 if [[ -z "$FEATURES" ]]; then
     FEATURES="$(default_features)"
+elif [[ ",${FEATURES}," != *,capi,* ]]; then
+    FEATURES="capi,${FEATURES}"
 fi
 
 ARCHIVE_NAME="readcon-core-clib-${VERSION}-${TARGET}"

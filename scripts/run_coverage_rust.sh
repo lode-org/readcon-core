@@ -14,7 +14,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 OUT_JSON="${1:-rust_codecov.json}"
 OUT_LCOV="${2:-lcov.info}"
-FEATURES="${READCON_COV_FEATURES:-parallel,chemfiles,zstd,grammar,metatensor}"
+FEATURES="${READCON_COV_FEATURES:-capi,parallel,chemfiles,zstd,grammar,metatensor}"
 IGNORE='(/src/main\.rs|/src/cuda_array\.rs|/src/python\.rs|/src/rpc/|/src/chemfiles_selection\.rs$|/src/ffi\.rs$)'
 
 unset RUSTC_WRAPPER SCCACHE_GHA_ENABLED || true

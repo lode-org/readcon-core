@@ -1,7 +1,11 @@
 //! Behaviour that the line-coverage gate was missing on v0.23.2.
 
 use readcon_core::conbin::{QueueLimits, sum_mapped, sum_split_streams, write_from_con};
-use readcon_core::distrib::{block_owner, block_range, rkr_block_range};
+use readcon_core::distrib::block_owner;
+#[cfg(feature = "capi")]
+use readcon_core::distrib::block_range;
+#[cfg(feature = "capi")]
+use readcon_core::distrib::rkr_block_range;
 use readcon_core::iterators::{ConFrameIterator, release_parsed_frames};
 
 #[test]
@@ -23,6 +27,7 @@ fn block_owner_is_none_outside_the_partition() {
     assert_eq!(block_owner(10, 3, 0), Some(0));
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn block_range_c_abi_matches_the_rust_partition() {
     let mut start = 9u64;

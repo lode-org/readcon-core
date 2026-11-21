@@ -5,8 +5,8 @@
  * (typedef / incomplete struct) before readcon-core declares `rkr_*` that
  * take `mts_block_t *`. This is the sys-on-the-boundary include path.
  *
- * Link a readcon-core build with Cargo feature `metatensor` and libmetatensor.
- * After `cargo build --features metatensor`, see
+ * Link a readcon-core build with Cargo features `capi,metatensor` and libmetatensor.
+ * After `cargo build --features capi,metatensor`, see
  * `target/<profile>/readcon-metatensor.env` for INCLUDE and LIB_DIR.
  */
 #ifndef READCON_METATENSOR_H

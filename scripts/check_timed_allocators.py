@@ -113,7 +113,7 @@ def main() -> None:
         "--release",
         "--lib",
         "--features",
-        "benchmark",
+        "capi,benchmark",
     )
     shared = {
         Path(filename)
