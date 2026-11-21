@@ -422,10 +422,10 @@ end
         @test ReadCon._json_u64(
             "{\"con_spec_minor\":$three_hundred}", "con_spec_minor",
         ) == typemax(UInt64)
-        # An integer that neither fits in UInt64 nor parses as a finite Float64 stays 0.
-        @test ReadCon._json_u64(
+        # An integer that neither fits in UInt64 nor parses as a finite Float64 throws.
+        @test_throws ReadCon.ReadConError ReadCon._json_u64(
             "{\"con_spec_minor\":$four_hundred}", "con_spec_minor",
-        ) == UInt64(0)
+        )
         # floor(f64::MAX) = (2^53 - 1) * 2^971. serde_json accepts integers
         # through one less than the half-ULP step and rejects the next one.
         fmax = (BigInt(2)^53 - 1) << 971
@@ -438,9 +438,32 @@ end
         @test ReadCon._json_u64(
             "{\"con_spec_minor\":$last_finite}", "con_spec_minor",
         ) == typemax(UInt64)
-        @test ReadCon._json_u64(
+        @test_throws ReadCon.ReadConError ReadCon._json_u64(
             "{\"con_spec_minor\":$overflow}", "con_spec_minor",
-        ) == UInt64(0)
+        )
+        # Every token the builder rejects throws, as in the other bindings.
+        for token in (
+            "1e309", "1E400", "1.5", "01", "00", "000", "-1", "-0", "1.0",
+            "0.0", "1e0", "1e20", "true", "null", "\"1\"", "[1]", "{\"a\":1}",
+            "-" * plus1, plus1 * ".0", "0" * plus1, string(fmax + BigInt(2)^971),
+        )
+            err = try
+                ReadCon._json_u64("{\"con_spec_minor\":$token}", "con_spec_minor")
+                nothing
+            catch e
+                e
+            end
+            @test err isa ReadCon.ReadConError
+            @test err.code == -3
+            @test err.message == ReadCon._INVALID_CON_SPEC_MINOR
+            @test_throws ReadCon.ReadConError ReadCon._json_u64(
+                "{\"\\u0063on_spec_minor\":$token}", "con_spec_minor",
+            )
+        end
+        @test ReadCon._json_u64("{\"con_spec_minor\":0}", "con_spec_minor") == UInt64(0)
+        @test ReadCon._json_u64(
+            "{\"con_spec_minor\":18446744073709551615}", "con_spec_minor",
+        ) == typemax(UInt64)
         # Nested key is the first literal match when the top-level token is in range.
         @test ReadCon._json_u64(
             "{\"x\":{\"con_spec_minor\":2},\"con_spec_minor\":0}", "con_spec_minor",
