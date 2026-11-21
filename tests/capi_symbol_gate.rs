@@ -106,16 +106,8 @@ fn exported_symbols_for_features(features: &[&str]) -> BTreeSet<String> {
 }
 
 #[cfg(unix)]
-fn exported_symbols(lib: &Path) -> BTreeSet<String> {
-    let mut nm = Command::new("nm");
-    if cfg!(target_os = "macos") {
-        nm.args(["-gU"]);
-    } else {
-        nm.args(["-D", "--defined-only"]);
-    }
-    let output = nm.arg(lib).output().expect("nm");
-    assert!(output.status.success(), "nm failed on {}", lib.display());
-    String::from_utf8_lossy(&output.stdout)
+fn parse_nm_exported_symbols(stdout: &str, strip_macho_prefix: bool) -> BTreeSet<String> {
+    stdout
         .lines()
         .filter_map(|line| {
             let fields: Vec<&str> = line.split_whitespace().collect();
@@ -125,9 +117,30 @@ fn exported_symbols(lib: &Path) -> BTreeSet<String> {
                 _ => return None,
             };
             let trimmed = raw.split('@').next().unwrap_or(raw);
-            Some(trimmed.strip_prefix('_').unwrap_or(trimmed).to_string())
+            let normalized = if strip_macho_prefix {
+                trimmed.strip_prefix('_').unwrap_or(trimmed)
+            } else {
+                trimmed
+            };
+            Some(normalized.to_string())
         })
         .collect()
+}
+
+#[cfg(unix)]
+fn exported_symbols(lib: &Path) -> BTreeSet<String> {
+    let mut nm = Command::new("nm");
+    if cfg!(target_os = "macos") {
+        nm.args(["-gU"]);
+    } else {
+        nm.args(["-D", "--defined-only"]);
+    }
+    let output = nm.arg(lib).output().expect("nm");
+    assert!(output.status.success(), "nm failed on {}", lib.display());
+    parse_nm_exported_symbols(
+        &String::from_utf8_lossy(&output.stdout),
+        cfg!(target_os = "macos"),
+    )
 }
 
 #[cfg(unix)]
@@ -394,6 +407,64 @@ fn capi_cdylib_exports_exact_header_symbol_set() {
     );
 
     assert_eq!(capi_syms, declared);
+}
+
+#[cfg(unix)]
+#[test]
+fn nm_parser_strips_leading_underscore_only_on_macho() {
+    let sample = "\
+0000000000001000 T _rkr_library_version
+0000000000001010 T rkr_version@@READCON_1
+";
+
+    let elf_syms = parse_nm_exported_symbols(sample, false);
+    assert!(elf_syms.contains("_rkr_library_version"));
+    assert!(!elf_syms.contains("rkr_library_version"));
+    assert!(elf_syms.contains("rkr_version"));
+
+    let expected_elf: BTreeSet<String> = ["rkr_library_version", "rkr_version"]
+        .into_iter()
+        .map(String::from)
+        .collect();
+    assert_ne!(
+        elf_syms, expected_elf,
+        "ELF parser must not normalize stray _rkr_* into rkr_*"
+    );
+
+    let macho_syms = parse_nm_exported_symbols("0000000000001000 T _rkr_library_version\n", true);
+    let expected_macho: BTreeSet<String> =
+        ["rkr_library_version".to_string()].into_iter().collect();
+    assert_eq!(macho_syms, expected_macho);
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn elf_stray_leading_underscore_export_is_preserved() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let src = dir.path().join("stray.c");
+    let so = dir.path().join("libstray.so");
+    std::fs::write(&src, "void _rkr_library_version(void) {}\n").expect("write stray.c");
+    let output = Command::new("cc")
+        .args(["-shared", "-fPIC"])
+        .arg(&src)
+        .arg("-o")
+        .arg(&so)
+        .output()
+        .expect("cc -shared");
+    assert!(
+        output.status.success(),
+        "failed to compile test shared object:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let syms = exported_symbols(&so);
+    assert!(
+        syms.contains("_rkr_library_version"),
+        "expected stray _rkr_library_version in ELF exports: {syms:#?}"
+    );
+    assert!(
+        !syms.contains("rkr_library_version"),
+        "ELF export parser must not strip leading underscore from _rkr_library_version"
+    );
 }
 
 #[cfg(unix)]
