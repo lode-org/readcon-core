@@ -1357,7 +1357,7 @@
    "probes": [],
    "tests": [],
    "indep_reader": false,
-   "reason": "A SHOULD on the values a producer stores. CON-section.19 forbids a reader to reject a frame whose energy differs from the sum of its energies rows, and tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads such a frame."
+   "reason": "A SHOULD on the values a producer stores. CON-section.19 forbids a reader to reject a frame whose energy differs from the sum of its energies rows, and scripts/clause_coverage.py shows that no corpus file, probe or named test cites that clause."
   },
   {
    "id": "CON-section.19",
@@ -1367,7 +1367,7 @@
    "probes": [],
    "tests": [],
    "indep_reader": false,
-   "reason": "A reader must not reject a frame whose energy differs from the sum of its energies rows. tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads that frame, and its name does not spell this clause."
+   "reason": "A reader must not reject a frame whose energy differs from the sum of its energies rows. scripts/clause_coverage.py shows that no corpus file, probe or named test cites that clause."
   },
   {
    "id": "CON-section.20",

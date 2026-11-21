@@ -72,9 +72,8 @@ REASONS = {
     "CON-section.11": "A rule for revising the specification: adding a reserved section name needs no new major. "
     "It states nothing a reader or a writer does.",
     "CON-section.18": "A SHOULD on the values a producer stores. CON-section.19 forbids a reader to reject a frame "
-    "whose energy differs from the sum of its energies rows, and "
-    "tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads such "
-    "a frame.",
+    "whose energy differs from the sum of its energies rows, and scripts/clause_coverage.py shows "
+    "that no corpus file, probe or named test cites that clause.",
     "CON-file.6": "A writer rule against an extra blank line between frames. A reader still finds the next "
     "frame; no corpus file has that blank as its only fault.",
     "CON-header.1": "A MAY that leaves lines 5 and 6 empty. The reader accepts an empty line and a filled one, "
@@ -94,8 +93,7 @@ REASONS = {
     "CON-section.5": "The per-atom energy section name is energies. The parser looks up that name.",
     "CON-section.6": "atom_energies is not a section name. An unknown name is skipped with the unknown-section rule.",
     "CON-section.19": "A reader must not reject a frame whose energy differs from the sum of its energies rows. "
-    "tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads that frame, and "
-    "its name does not spell this clause.",
+    "scripts/clause_coverage.py shows that no corpus file, probe or named test cites that clause.",
     "CON-validate.2": "validate true must not relax a check that already applies. The flag only adds checks.",
     "CON-bonds.1": "bonds must not appear in sections. The named bonds probes are CON-bonds.2, a malformed bonds entry.",
     "CON-bonds.2": "scripts/indep_reader.py rejects a malformed bonds entry. The scan reads the corpus, the "
