@@ -8283,6 +8283,124 @@ Coordinates of Component 1
         unsafe { free_rkr_frame_builder(builder) };
     }
 
+    /// Probe cases shared with the Rust, RPC, Python, and Julia tests
+    /// (`tests/fixtures/minor_token_probes.json`).
+    #[test]
+    fn c_api_matches_minor_token_probe_table() {
+        let root: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/minor_token_probes.json"))
+                .unwrap();
+        let cases = root["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 59);
+        let dir = tempfile::tempdir().unwrap();
+        let last_message = || {
+            let err = unsafe { &*rkr_last_error() };
+            (
+                err.code,
+                unsafe { CStr::from_ptr(err.message) }
+                    .to_string_lossy()
+                    .into_owned(),
+            )
+        };
+        for case in cases {
+            let name = case["name"].as_str().unwrap();
+            for (line_key, op) in [("line2_w", "read_w"), ("line2_n", "read_n")] {
+                let line2 = case[line_key].as_str().unwrap();
+                let expected = case[op].as_str().unwrap();
+                let text = format!(
+                    "gen\n{},\"sections\":[\"velocities\"]}}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0.2 0.3 0 0\n",
+                    &line2[..line2.len() - 1]
+                );
+                let path = dir.path().join(format!("{op}.con"));
+                std::fs::write(&path, text).unwrap();
+                let c_path = CString::new(path.to_str().unwrap()).unwrap();
+                let frame = unsafe { rkr_read_first_frame(c_path.as_ptr()) };
+                if expected == "ok" {
+                    assert!(!frame.is_null(), "{name} {op}: {:?}", last_message());
+                    unsafe { free_rkr_frame(frame) };
+                    continue;
+                }
+                assert!(frame.is_null(), "{name} {op}");
+                let (code, msg) = last_message();
+                match expected {
+                    "dup" => {
+                        assert_eq!(code, RKRStatus::RKR_STATUS_INVALID_JSON as i32, "{name}");
+                        assert!(
+                            msg.contains("duplicate con_spec_minor key"),
+                            "{name}: {msg}"
+                        );
+                    }
+                    "invalid" => {
+                        assert_eq!(code, RKRStatus::RKR_STATUS_INVALID_JSON as i32, "{name}");
+                        assert!(!msg.contains("duplicate"), "{name}: {msg}");
+                    }
+                    "units" => {
+                        assert_eq!(code, RKRStatus::RKR_STATUS_PARSE_ERROR as i32, "{name}");
+                        assert!(msg.contains("InvalidUnits"), "{name}: {msg}");
+                    }
+                    other => panic!("{name}: unexpected tag {other}"),
+                }
+            }
+            for (line_key, op) in [("line2_w", "raw_w"), ("line2_n", "raw_n")] {
+                let line2 = case[line_key].as_str().unwrap();
+                let expected = case[op].as_str().unwrap();
+                let mut builder = test_builder_handle();
+                let json = c_string(line2);
+                let status = unsafe { rkr_frame_builder_set_metadata_json(builder, json.as_ptr()) };
+                if matches!(expected, "dup" | "invalid") {
+                    assert_eq!(status, RKRStatus::RKR_STATUS_INVALID_JSON, "{name} {op}");
+                    let (_, msg) = last_message();
+                    assert_eq!(
+                        msg.contains("duplicate con_spec_minor key"),
+                        expected == "dup",
+                        "{name} {op}: {msg}"
+                    );
+                    unsafe { free_rkr_frame_builder(builder) };
+                    continue;
+                }
+                assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS, "{name} {op}");
+                let sym = c_string("H");
+                let status = unsafe {
+                    rkr_frame_add_atom_with_velocity_fixed_mask(
+                        builder,
+                        sym.as_ptr(),
+                        0.0,
+                        0.0,
+                        0.0,
+                        false,
+                        false,
+                        false,
+                        0,
+                        1.0,
+                        0.1,
+                        0.2,
+                        0.3,
+                    )
+                };
+                assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS, "{name} {op}");
+                let built = unsafe { rkr_frame_builder_build(&mut builder) };
+                assert!(!built.is_null(), "{name} {op}");
+                let handles = [built as *const RKRConFrame];
+                let mut out_text: *mut c_char = ptr::null_mut();
+                let mut out_len = 0usize;
+                let status = unsafe {
+                    rkr_write_frames_to_string(handles.as_ptr(), 1, &mut out_text, &mut out_len)
+                };
+                if expected == "units" {
+                    assert_ne!(status, RKRStatus::RKR_STATUS_SUCCESS, "{name} {op}");
+                    let (_, msg) = last_message();
+                    assert!(msg.contains("units.time"), "{name} {op}: {msg}");
+                } else {
+                    assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS, "{name} {op}");
+                    let text = unsafe { CStr::from_ptr(out_text) }.to_string_lossy();
+                    assert_eq!(text.lines().nth(1).unwrap(), expected, "{name} {op}");
+                    unsafe { rkr_free_string(out_text) };
+                }
+                unsafe { free_rkr_frame(built) };
+            }
+        }
+    }
+
     #[test]
     fn c_api_binary64_half_ulp_minor_matches_rust() {
         let (plus_one, last_finite, overflow) = crate::parser::f64_max_minor_edge_digits();

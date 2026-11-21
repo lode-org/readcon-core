@@ -1,4 +1,5 @@
 using Test
+using TOML
 using ReadCon
 
 const TEST_DIR = joinpath(dirname(dirname(dirname(@__DIR__))), "resources", "test")
@@ -767,6 +768,90 @@ end
             @test line2_of(
                 "{\"con_spec_version\":3,\"x\":{\"con_spec_minor\":0},\"con_spec_minor\":0,$units}",
             ) == head * stamped_units * ",\"x\":{\"con_spec_minor\":0}}"
+        end
+    end
+
+    # Shared with the Rust, C, RPC, and Python tests. See
+    # tests/fixtures/generate_minor_token_probes.py.
+    @testset "con_spec_minor token probes" begin
+        probes = TOML.parsefile(joinpath(
+            dirname(dirname(dirname(@__DIR__))), "tests", "fixtures", "minor_token_probes.toml",
+        ))
+        cases = probes["cases"]
+        @test length(cases) == 59
+        body = "\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n" *
+            "\nH\nVelocities of Component 1\n0.1 0.2 0.3 0 0\n"
+        atom = Atom(
+            UInt64(1), 0.0, 0.0, 0.0, UInt64(0), 1.0,
+            false, (false, false, false),
+            0.1, 0.2, 0.3, true,
+            0.0, 0.0, 0.0, false,
+        )
+        function read_line2(line2::String)
+            ReadCon.clear_error()
+            return mktemp() do path, io
+                write(io, "gen\n" * line2[1:end-1] * ",\"sections\":[\"velocities\"]}" * body)
+                close(io)
+                read_con(path)
+            end
+        end
+        function written_line2(frames)
+            text = mktemp() do path, io
+                close(io)
+                write_con(path, frames)
+                read(path, String)
+            end
+            return String(split(text, '\n')[2])
+        end
+        constructed(line2::String) = ConFrame(
+            (10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom], true,
+            ("", ""), ("", ""), false, false, UInt32(3), line2,
+            nothing, nothing, nothing, nothing, nothing, nothing,
+        )
+        @testset "$(case["name"])" for case in cases
+            for (line2, expected) in ((case["line2_w"], case["read_w"]), (case["line2_n"], case["read_n"]))
+                frames = read_line2(line2)
+                if expected == "ok"
+                    @test length(frames) == 1
+                    continue
+                end
+                @test isempty(frames)
+                err = ReadCon.last_error()
+                @test err !== nothing
+                if expected == "dup"
+                    @test occursin("duplicate con_spec_minor key", err.message)
+                elseif expected == "invalid"
+                    @test err.code == -3
+                    @test !occursin("duplicate", err.message)
+                else
+                    @test occursin("InvalidUnits", err.message)
+                end
+            end
+            for (line2, expected) in ((case["line2_w"], case["binding_w"]), (case["line2_n"], case["binding_n"]))
+                frame = constructed(line2)
+                result = try
+                    written_line2([frame])
+                catch e
+                    e
+                end
+                if expected == "dup"
+                    @test result isa ErrorException
+                    @test occursin("duplicate con_spec_minor key", sprint(showerror, result))
+                elseif expected == "invalid"
+                    @test result isa ReadCon.ReadConError
+                    @test result isa ReadCon.ReadConError && result.code == -3
+                elseif expected == "units"
+                    @test result isa ReadCon.ReadConError
+                    @test result isa ReadCon.ReadConError && occursin("units.time", result.message)
+                else
+                    @test result == expected
+                end
+                @test frame.metadata_json == line2
+            end
+            if case["read_w"] == "ok"
+                frames = read_line2(case["line2_w"])
+                @test written_line2(frames) == case["binding_w"]
+            end
         end
     end
 

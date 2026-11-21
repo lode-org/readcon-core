@@ -616,6 +616,50 @@ mod tests {
         frame_from_reader(reader)
     }
 
+    /// Probe cases shared with the Rust, C, Python, and Julia tests
+    /// (`tests/fixtures/minor_token_probes.json`).
+    #[test]
+    fn capnp_matches_minor_token_probe_table() {
+        let root: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/minor_token_probes.json"))
+                .unwrap();
+        let cases = root["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 59);
+        for case in cases {
+            let name = case["name"].as_str().unwrap();
+            for (line_key, op) in [("line2_w", "rpc_w"), ("line2_n", "rpc_n")] {
+                let line2 = case[line_key].as_str().unwrap();
+                let expected = case[op].as_str().unwrap();
+                let back = match frame_from_metadata_json(line2) {
+                    Ok(back) => back,
+                    Err(err) => {
+                        let msg = err.to_string();
+                        assert!(msg.starts_with("metadataJson: "), "{name} {op}: {msg}");
+                        assert_eq!(
+                            msg.contains("duplicate con_spec_minor key"),
+                            expected == "dup",
+                            "{name} {op}: {msg}"
+                        );
+                        assert!(matches!(expected, "dup" | "invalid"), "{name} {op}: {msg}");
+                        continue;
+                    }
+                };
+                let mut out = Vec::new();
+                let result = crate::writer::ConFrameWriter::new(&mut out).write_frame(&back);
+                match result {
+                    Ok(()) => {
+                        let text = String::from_utf8(out).unwrap();
+                        assert_eq!(text.lines().nth(1).unwrap(), expected, "{name} {op}");
+                    }
+                    Err(err) => {
+                        assert_eq!(expected, "units", "{name} {op}: {err}");
+                        assert!(err.to_string().contains("units.time"), "{name} {op}: {err}");
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn capnp_rejects_con_spec_minor_no_reader_accepts() {
         let (plus_one, last_finite, overflow) = crate::parser::f64_max_minor_edge_digits();
