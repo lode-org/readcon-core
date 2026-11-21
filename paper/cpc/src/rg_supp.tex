@@ -282,7 +282,7 @@ The mutant differential reads edited copies of corpus files with readcon-core an
 A case takes one of the \mutantFiles{} files of the CON 3.1 corpus under \mutantMaxBytes{} bytes and makes one to three edits at random places: it inserts a token, deletes one to eight characters or replaces one character with a token.
 The tokens are whitespace and line ends, digits, signs and JSON punctuation, component headers, keys of line 2, element symbols and a whole velocity block, and the record lists them.
 \texttt{random.Random} draws the file, the edits and the tokens from the seed.
-Each of the \mutantSeeds{} seeds gives the same \mutantPerSeed{} cases on every run, and a check run reruns them.
+Each of the \mutantSeeds{} seeds gives the same \mutantPerSeed{} cases on every run, and a check run repeats them.
 The comparison covers the verdicts and the frame counts or error classes and leaves out the lines, since the exceptions of the readcon module carry none.
 The record still keeps the error line of each reader.
 Each group has a variant of the independent reader that follows readcon-core on one rule.
@@ -416,10 +416,10 @@ Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frame
 
 \FloatBarrier \section{Timing}\label{sec:supp-timing} The read performance of the main text rests on the measurements of Section~\ref{sec:host}, whose timing records are those of the reader exchange, the readcon-db ingest, the distributed read and the DLPack exchange.
 Each head-to-head arm reports how many frames match the reference and how many do not.
-A fair rerun times the OVITO 3.17.0 reader and the OVITO 3.17.0 writer, and the record has a loss column.
-A fair rerun of the MDAnalysis readers times each format of the trajectory-reader benchmark of MDAnalysis 2.11.0, namely XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, PDB and XYZ \cite{gowersMdanalysisTrajReader21102026}, keeps the fastest, and records what that format loses.
+A fair run times the OVITO 3.17.0 reader and the OVITO 3.17.0 writer, and the record has a loss column.
+A fair run of the MDAnalysis readers times each format of the trajectory-reader benchmark of MDAnalysis 2.11.0, namely XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, PDB and XYZ \cite{gowersMdanalysisTrajReader21102026}, keeps the fastest, and records what that format loses.
 The protein data bank row of Section~\ref{sec:h2h} stays the MDAnalysis 2.10.0 measurement.
-A fair rerun also times \texttt{cextxyz} and the ASE trajectory format, with a loss column.
+A fair run also times \texttt{cextxyz} and the ASE trajectory format, with a loss column.
 That column records no file version, no velocity time unit, and a mask and an identifier that come back only by column name or only by the ASE layout.
 We time the newer extended-XYZ reader extxyz-ng 0.0.2 beside libAtoms \texttt{extxyz}, with readcon on CON \cite{yuExtxyzNgV0022026,kermodeLibatomsExtxyzV0462026}.
 A time is the median of the runs of its cell \cite{hoeflerScientificBenchmarkingParallel2015}, and since each run is a new process, the repeats sample the variation between executions and within one \cite{kaliberaRigorousBenchmarkingReasonable2013}.
@@ -484,10 +484,10 @@ The regeneration script rewrites every table, figure and macro from the records 
 The number trace then traces every printed number to its record and writes a ledger of the record and the rule behind each one.
 
 The measurements are separate steps, each of which rewrites its own records.
-The measure mode of the regeneration script reruns the survey, the survey listing, the worked example of Listing~\ref{lst:frame}, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history before it formats.
+The measure mode of the regeneration script repeats the survey, the survey listing, the worked example of Listing~\ref{lst:frame}, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history before it formats.
 A further script runs the example program of Listing~\ref{lst:testrun} in a clone of the bundle.
-Each other measurement is a named task of the pixi environment of the paper, and the description of each task says what it reruns.
-The tasks rerun the eOn band, the wall times of Table~\ref{tab:restartfmt} and the sizes of Table~\ref{tab:sizes}; the timed files, the provenance record, the C++ programs and the timing, heap and Cachegrind records; the chemfiles builds, the head-to-head records and the records of the native readers; and, for the conformance records, the CON 3.1 corpus at each thread count, both corpora through the readcon module and through the serial capi build and the parallel build of the C library, the reader-path tests, the three readers of Table~\ref{tab:corpus-crosscheck}, the reader probes, the mutants of Section~\ref{sec:supp-corpus31} and the clause list.
+Each other measurement is a named task of the pixi environment of the paper, and the description of each task says what it measures.
+The tasks repeat the eOn band, the wall times of Table~\ref{tab:restartfmt} and the sizes of Table~\ref{tab:sizes}; the timed files, the provenance record, the C++ programs and the timing, heap and Cachegrind records; the chemfiles builds, the head-to-head records and the records of the native readers; and, for the conformance records, the CON 3.1 corpus at each thread count, both corpora through the readcon module and through the serial capi build and the parallel build of the C library, the reader-path tests, the three readers of Table~\ref{tab:corpus-crosscheck}, the reader probes, the mutants of Section~\ref{sec:supp-corpus31} and the clause list.
 The scripts of those tasks hold the command lines that they run for each cell, file or build, among them those of memray, Valgrind and cargo, and the environment variables that they read, with their defaults.
 The timing scripts run their cells in interleaved rounds, one untimed round and then the timed rounds, each round a new shuffle of the cells from a fixed seed and each run of a cell a new process, and each timing record keeps its seed and its number of rounds.
 The comparison of the earlier releases of CON 3.1 reads each of the four published wheels of Section~\ref{sec:supp-versions} in its own process and rewrites its record.
