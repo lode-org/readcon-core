@@ -364,9 +364,15 @@ function read_con(path::String)
 
                 try
                     c_frame = unsafe_load(c_frame_ptr)
+                    n = Int(c_frame.num_atoms)
+                    charges = _atom_section(frame_handle, n, :charges, 1)
+                    spins = _atom_section(frame_handle, n, :spins, 1)
+                    magmoms = _atom_section(frame_handle, n, :magmoms, 3)
+                    displacements = _atom_section(frame_handle, n, :displacements, 3)
+                    spreads = _atom_section(frame_handle, n, :spreads, 3)
 
                     atoms = Atom[]
-                    for i in 1:c_frame.num_atoms
+                    for i in 1:n
                         c_atom = unsafe_load(c_frame.atoms, i)
                         push!(atoms, Atom(
                             c_atom.atomic_number,
@@ -378,7 +384,12 @@ function read_con(path::String)
                             c_atom.has_velocity,
                             c_atom.fx, c_atom.fy, c_atom.fz,
                             c_atom.has_forces,
-                            c_atom.energy, c_atom.has_energy,
+                            c_atom.energy, c_atom.has_energy;
+                            charge=_section_entry(charges, i),
+                            spin=_section_entry(spins, i),
+                            magmom=_section_entry(magmoms, i),
+                            displacement=_section_entry(displacements, i),
+                            spread=_section_entry(spreads, i),
                         ))
                     end
 
@@ -407,6 +418,25 @@ function read_con(path::String)
     return frames
 end
 
+# Values of one optional per-atom section in CON atom order, or nothing
+# when the frame lacks it. Checking first keeps SECTION_ABSENT off the
+# error channel that read_con leaves for its caller.
+function _atom_section(frame_handle::Ptr{Cvoid}, n::Int, name::Symbol, width::Int)
+    has = ccall(_lib_symbol(Symbol(:rkr_frame_has_, name)), Bool, (Ptr{Cvoid},), frame_handle)
+    (has && n > 0) || return nothing
+    buf = Vector{Float64}(undef, width * n)
+    status = ccall(
+        _lib_symbol(Symbol(:rkr_frame_copy_, name)),
+        Cint, (Ptr{Cvoid}, Ptr{Float64}, Csize_t),
+        frame_handle, buf, length(buf),
+    )
+    _check_status(status, "failed to copy $name")
+    return width == 1 ? buf : [(buf[3i - 2], buf[3i - 1], buf[3i]) for i in 1:n]
+end
+
+_section_entry(::Nothing, ::Int) = nothing
+_section_entry(values::AbstractVector, i::Int) = values[i]
+
 function _get_headers(frame_handle, is_prebox::Bool)
     lines = String[]
     for idx in 0:1
@@ -430,35 +460,41 @@ end
 
 Write frames to a .con file. The default numeric text round-trips binary64.
 `precision` is a fixed number of digits after the decimal.
+
+Every frame is built before `path` is opened, so a frame that cannot be
+built leaves an existing file untouched. A failed write or flush throws.
 """
 function write_con(path::String, frames::Vector{ConFrame}; precision::Union{Nothing,Integer}=nothing)
-    writer = if precision === nothing
-        ccall(_lib_symbol(:create_writer_from_path_c), Ptr{Cvoid}, (Cstring,), path)
-    else
-        ccall(
-            _lib_symbol(:create_writer_from_path_with_precision_c),
-            Ptr{Cvoid}, (Cstring, UInt8), path, UInt8(precision)
-        )
-    end
-    writer == C_NULL && _throw_last("failed to create writer for file: $path")
-
     handles = Ptr{Cvoid}[]
+    writer = C_NULL
     try
         for frame in frames
             push!(handles, _build_frame_handle(frame))
         end
+        writer = if precision === nothing
+            ccall(_lib_symbol(:create_writer_from_path_c), Ptr{Cvoid}, (Cstring,), path)
+        else
+            ccall(
+                _lib_symbol(:create_writer_from_path_with_precision_c),
+                Ptr{Cvoid}, (Cstring, UInt8), path, UInt8(precision)
+            )
+        end
+        writer == C_NULL && _throw_last("failed to create writer for file: $path")
         status = ccall(
             _lib_symbol(:rkr_writer_extend),
             Cint, (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Csize_t),
             writer, handles, length(handles)
         )
         _check_status(status, "failed to write frames")
+        # free_rkr_writer flushes too, but cannot report an error.
+        status = ccall(_lib_symbol(:rkr_writer_flush), Cint, (Ptr{Cvoid},), writer)
+        _check_status(status, "failed to flush frames to $path")
         return nothing
     finally
         for handle in handles
             handle != C_NULL && ccall(_lib_symbol(:free_rkr_frame), Cvoid, (Ptr{Cvoid},), handle)
         end
-        ccall(_lib_symbol(:free_rkr_writer), Cvoid, (Ptr{Cvoid},), writer)
+        writer != C_NULL && ccall(_lib_symbol(:free_rkr_writer), Cvoid, (Ptr{Cvoid},), writer)
     end
 end
 
@@ -721,6 +757,27 @@ function _add_atom(builder::Ptr{Cvoid}, atom::Atom)
             builder, atom.energy,
         )
         _check_status(e_status, "failed to attach per-atom energy")
+    end
+
+    for (name, value) in (("charge", atom.charge), ("spin", atom.spin))
+        value === nothing && continue
+        status = ccall(
+            _lib_symbol(Symbol(:rkr_frame_builder_set_last_, name)),
+            Cint, (Ptr{Cvoid}, Float64), builder, value,
+        )
+        _check_status(status, "failed to attach per-atom $name")
+    end
+    for (name, value) in (
+        ("magmom", atom.magmom),
+        ("displacement", atom.displacement),
+        ("spread", atom.spread),
+    )
+        value === nothing && continue
+        status = ccall(
+            _lib_symbol(Symbol(:rkr_frame_builder_set_last_, name)),
+            Cint, (Ptr{Cvoid}, Ptr{Float64}), builder, Float64[value...],
+        )
+        _check_status(status, "failed to attach per-atom $name")
     end
 end
 
