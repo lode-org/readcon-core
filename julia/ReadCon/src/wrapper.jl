@@ -605,6 +605,15 @@ function _substitutable_huge_minor(token::AbstractString)
     return x !== nothing && isfinite(x)
 end
 
+# Value of a con_spec_minor token the builder accepts, or nothing when the
+# builder rejects it (leading zeros, sign, fraction, exponent, non-number).
+function _minor_token_u64(token::AbstractString)
+    _is_nonneg_decimal_int(token) || return nothing
+    parsed = tryparse(UInt64, token)
+    parsed !== nothing && return parsed
+    return _substitutable_huge_minor(token) ? typemax(UInt64) : nothing
+end
+
 function _json_ws(b::UInt8)
     return b == UInt8(' ') || b == UInt8('\t') || b == UInt8('\r') || b == UInt8('\n')
 end
@@ -841,6 +850,12 @@ end
 function _legacy_velocity_units(frame::ConFrame)
     metadata_json = frame.metadata_json
     if !frame.has_velocities
+        return metadata_json, false
+    end
+    # Hand a token the builder rejects to it unchanged, so the write fails
+    # as it does in the other bindings instead of being rewritten to minor 1.
+    tokens = _top_level_minor_tokens(metadata_json)
+    if length(tokens) == 1 && _minor_token_u64(tokens[1]) === nothing
         return metadata_json, false
     end
     minor = _json_u64(metadata_json, "con_spec_minor")
