@@ -89,6 +89,15 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- **Writer:** a repeat write of two or more frames no longer corrupts memory
+  when the text changed since the frames were priced. The price is keyed by
+  frame address. A store into `positions`, a replaced `positions` column, a
+  header edit, or a Python `read_con` list whose frames were taken out and
+  whose slots were reused by a later list kept the old lengths, and the
+  formatter then grew a buffer over the output mapping (a segfault, or
+  `realloc(): invalid pointer`). Each group is now spelled through a bounded
+  writer. A length that drifted retires the price and the write falls back to
+  the unpriced path, which produces the serial bytes.
 - **Metadata / Python:** `con_spec_minor` integers above `u64::MAX` (within
   `serde_json`'s finite `Number` range) are now preserved verbatim across
   native `ConFrameWriter`, C ABI, Cap'n Proto, and Python metadata rather than
