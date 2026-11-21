@@ -648,7 +648,25 @@ end
             e
         end
         @test over_write isa ReadCon.ReadConError
-        @test occursin("invalid JSON", over_write.message)
+        @test over_write.code == -3
+        @test occursin("number out of range at line 1 column 348", over_write.message)
+        for token in ("1e309", "1E400")
+            meta = "{\"con_spec_version\":3,\"con_spec_minor\":$token,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+            for velocities in (true, false)
+                err = try
+                    mktemp() do path, io
+                        close(io)
+                        write_con(path, [constructed(meta, velocities)])
+                    end
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa ReadCon.ReadConError
+                @test err.code == -3
+                @test occursin("number out of range", err.message)
+            end
+        end
     end
 
     @testset "write_con rejects a leading-zero con_spec_minor" begin

@@ -4134,13 +4134,14 @@ pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
         Ok(()) => note(RKRStatus::RKR_STATUS_SUCCESS),
         Err(err) => {
             let status = note(RKRStatus::RKR_STATUS_INVALID_JSON);
-            // Keep INVALID_JSON. Name the duplicate key; other JSON failures
-            // stay on the generic status text so their status codes do not move.
-            if err
-                .to_string()
-                .contains(crate::parser::DUPLICATE_CON_SPEC_MINOR)
+            // Keep INVALID_JSON. Name a duplicate key or an out-of-range
+            // number, as the reader does; other JSON failures stay on the
+            // generic status text.
+            let message = err.to_string();
+            if message.contains(crate::parser::DUPLICATE_CON_SPEC_MINOR)
+                || message.contains("number out of range")
             {
-                set_last_error(status as i32, &err.to_string(), err.line(), 0);
+                set_last_error(status as i32, &message, err.line(), 0);
             }
             status
         }
@@ -8383,6 +8384,27 @@ Coordinates of Component 1
         assert_eq!(status, RKRStatus::RKR_STATUS_INVALID_JSON);
         let err = unsafe { &*rkr_last_error() };
         assert_eq!(err.code, RKRStatus::RKR_STATUS_INVALID_JSON as i32);
+        let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert!(
+            msg.contains("number out of range at line 1 column 348"),
+            "{msg}"
+        );
+        for token in ["1e309", "1E400"] {
+            let json = c_string(&format!(
+                "{{\"con_spec_version\":3,\"con_spec_minor\":{token}}}"
+            ));
+            let status = unsafe { rkr_frame_builder_set_metadata_json(builder, json.as_ptr()) };
+            assert_eq!(status, RKRStatus::RKR_STATUS_INVALID_JSON, "{token}");
+            let err = unsafe { &*rkr_last_error() };
+            let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+            assert!(msg.contains("number out of range"), "{token}: {msg}");
+        }
+        let generic = c_string(r#"{"con_spec_version":3,"con_spec_minor":00}"#);
+        let status = unsafe { rkr_frame_builder_set_metadata_json(builder, generic.as_ptr()) };
+        assert_eq!(status, RKRStatus::RKR_STATUS_INVALID_JSON);
+        let err = unsafe { &*rkr_last_error() };
+        let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert_eq!(msg, "invalid JSON");
         unsafe { free_rkr_frame_builder(builder) };
     }
 
