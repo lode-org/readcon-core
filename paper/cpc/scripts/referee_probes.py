@@ -3185,9 +3185,9 @@ def c_iterator_two_frames_blank(tmp):
     "c-iterator/statuses",
     "round-3 report D, item 8; report J, item 14",
     "CON-error.1, CON-frame.2",
-    "an invalid file gives RKR_STATUS_PARSE_ERROR from con_frame_iterator_next_status after its legal frame, "
-    "with read_con's message and last status RKR_STATUS_PARSE_ERROR, and con_frame_iterator_next returns NULL "
-    "with that last status; a legal two-frame file and its gzip give SUCCESS, SUCCESS, RKR_STATUS_END_OF_FILE "
+    "an invalid file gives RKR_STATUS_PARSE_ERROR via con_frame_iterator_next and rkr_last_error after its "
+    "legal frame, with read_con's message and con_frame_iterator_next returning NULL with that status; a "
+    "legal two-frame file and its gzip give SUCCESS, SUCCESS, RKR_STATUS_INDEX_OUT_OF_BOUNDS at EOF "
     "and no message",
 )
 def c_iterator_statuses(tmp):
