@@ -330,9 +330,23 @@ class ReproducibleTarTest(unittest.TestCase):
                 if (Path(part) / "gtar").exists():
                     continue
                 parts.append(part)
-            self._assert_stable(
-                {"PATH": os.pathsep.join(parts), "REPRO_TAR_EXPECT": "bsd"}
-            )
+            self._assert_stable({"PATH": os.pathsep.join(parts)})
+
+    def test_installed_tar_and_gzip_are_not_used(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bindir = Path(tmp) / "bin"
+            bindir.mkdir()
+            for name in ("tar", "gtar", "gzip"):
+                command = bindir / name
+                command.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+                command.chmod(command.stat().st_mode | stat.S_IEXEC)
+            tree = Path(tmp) / "tree" / "pkg"
+            _fill(tree, "forward")
+            output = Path(tmp) / "archive.tar.gz"
+            parts = [str(bindir), *os.environ["PATH"].split(os.pathsep)]
+            done = _pack(tree, output, {"PATH": os.pathsep.join(parts)})
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertTrue(output.is_file())
 
     def _assert_stable(self, env: dict[str, str]) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -350,18 +364,13 @@ class ReproducibleTarTest(unittest.TestCase):
             members = _members(out_a)
             names = [item.name for item in members]
             self.assertEqual(names, sorted(names))
-            expect_root = env.get("REPRO_TAR_EXPECT") == "bsd"
             for item in members:
                 self.assertEqual(item.mtime, 1794454673)
                 self.assertEqual(item.uid, 0)
                 self.assertEqual(item.gid, 0)
                 self.assertEqual(item.pax_headers, {})
-                if expect_root:
-                    self.assertEqual(item.uname, "root")
-                    self.assertEqual(item.gname, "root")
-                else:
-                    self.assertEqual(item.uname, "")
-                    self.assertEqual(item.gname, "")
+                self.assertEqual(item.uname, "")
+                self.assertEqual(item.gname, "")
                 if item.isdir():
                     self.assertEqual(item.mode, 0o755)
                 else:

@@ -85,7 +85,7 @@ Elsevier%
 \input{figures/generated/library_macros}
 % A value from a macro printed to a fixed number of significant figures.
 \newcommand{\sigfig}[2]{\num[round-mode=figures,round-precision=#1]{#2}}
-\newcommand{\DOIPENDING}{The version DOI for the candidate commit is not minted.}
+\newcommand{\DOIPENDING}{The version DOI for this commit is not minted.}
 \newcommand{\rcAITool}{Cursor, routing between Claude Opus 5.5, GPT-5.6 Sol and Grok 4.7}
 % Import labels from the supplement without its \\bibcite entries (same keys in both aux files).
 % The supplement's captions contain generated macros, so those macros are defined first.
@@ -353,7 +353,7 @@ The velocities are in the unit named in the header, the natural unit of eOn,
 \label{eq:tau}
 \tau=\left(\frac{m_{\mathrm{u}}\,\text{\AA}^{2}}{\mathrm{eV}}\right)^{1/2}
 =\left(\frac{1.6605\times10^{-27}\,\mathrm{kg}\cdot 10^{-20}\,\mathrm{m}^{2}}{1.6022\times10^{-19}\,\mathrm{J}}\right)^{1/2}
-=\wkTimeFs\,\mathrm{fs},
+\approx\wkTimeFs\,\mathrm{fs},
 \end{equation}
 with the CODATA 2018 values of the atomic mass constant \(m_{\mathrm{u}}\) and the electronvolt \cite{tiesingaCodataRecommendedValues2021}.
 In that unit the frame has a kinetic energy \(\tfrac{1}{2}\sum_i m_i\lvert\mathbf{v}_i\rvert^2\) of \(\wkKinetic\,\mathrm{eV}\).
@@ -497,7 +497,7 @@ After that release, the development line of eOn writes velocity files with \text
 The tables of this paper use eOn~\eOneEonVersion{}.
 The reader keeps such a label without applying it, and a rewrite keeps the frame at its minor and with its label, so the next reader again applies the natural unit.
 
-Table~\ref{tab:versions} gives the history of the grammar.
+Table~\ref{tab:versions} lists each CON version, its date, the release that carries it and the change.
 A change to the text either decides, for every version, a case that the earlier text left open, or adds a requirement under a new minor that applies from that minor on.
 A later minor therefore never makes a reader reject a file that an earlier minor requires it to accept.
 Each accepted specification change includes corpus tests.
@@ -505,7 +505,7 @@ Each accepted specification change includes corpus tests.
 {\small
 \begin{longtable}{@{}lllp{0.44\linewidth}@{}}
 \caption{CON versions.
-A row with an unmarked date takes its version, date and change from the version history of the specification.
+A row with an unmarked date takes its version, date and change from the specification.
 Its release is the first readcon-core release whose specification lists that version with that date, and version 1 is the text eOn writes.
 A date marked (tag) is the tag date of a release that changed the text of a version without a new version number, and its row names the clauses that release changed.}
 \label{tab:versions}\\
@@ -525,6 +525,7 @@ Version & Date & Release & Change \\
 C++, Julia \cite{bezansonJuliaFreshApproach2017} and Fortran 2008 call its C interface, and Python calls the Rust core through PyO3 and receives NumPy arrays \cite{harrisArrayProgrammingNumpy2020}.
 eOn links readcon-core through the C++ wrapper, and its public release \eOneEonVersion{} embeds readcon-core \eOneEonReadcon, which writes CON 3.0 \cite{rohitgoswamiTheochemuieonV3602026}.
 chemfiles is built the same way, with one C++ core behind a C interface that its other languages call \cite{frauxChemfileschemfilesVersion01042023}.
+The readcon scan of a chemfiles frame walks each atom in the C++ string ABI of the chemfiles library it links, whether that library uses the old copy-on-write string or the cxx11 string.
 
 \begin{figure*}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/architecture.pdf} \caption{\textbf{One Rust core serves every language.}
 C, C++ (including eOn), Julia and Fortran call the core through the C interface, and Python calls it through PyO3.
@@ -620,7 +621,7 @@ That corpus has few files for the header, the sections and the units, so we wrot
 For each file, its manifest names the clauses that decide it and the outcome: the frame count and periodic flags of a legal file, or the error class and line of an illegal one.
 For \(\cthreeoneExplicit\) entries the outcome follows from the text of a clause, and the others record a reading where the text leaves the case open (Section~\ref*{sec:supp-corpus31}).
 All \(\cthreeoneMatch\) files return the outcome of their entry at one, two and eight threads and at the default.
-Both corpora also go through every read path of the Python module and the C library, in the default and the parallel build at each of those thread counts, and all \(\cpathsReads\) reads return the outcome that the manifests name (Table~\ref*{tab:corpus-paths}).
+Both corpora also go through every read path of the Python module and the C library, in the serial capi build and the parallel build at each of those thread counts, and all \(\cpathsReads\) reads return the outcome that the manifests name (Table~\ref*{tab:corpus-paths}).
 
 We also wrote an independent reader in \(\corpusIndepLines\) lines of Python that import nothing from readcon.
 It follows the clauses of the specification, and where a clause requires a rejection without naming its class, or no clause decides a case, it follows the reading of the corpus manifest.
@@ -738,36 +739,66 @@ Its kinetic energy is \(\velFixtureKe\,\mathrm{eV}\) in that unit and \(\velFixt
 After one velocity Verlet step of 1~fs \cite{swopeComputerSimulationMethod1982}, the misread positions differ from the declared ones by \(\velVerletRmsd\,\text{\AA}\) root mean square and by at most \(\velVerletMax\,\text{\AA}\) (Section~\ref*{sec:supp-velocity}).
 A \(\velSlabAtoms\)-atom slab drawn at \(\velSlabTemperature\,\mathrm{K}\) has a kinetic energy of \(\velSlabKe\,\mathrm{eV}\), and the misread gives \(\num{\velSlabKeFsNum}\,\mathrm{eV}\).
 
-\section{Read performance}\label{sec:performance} Each reader read one 100000-frame file six times on the host of this paper, in a fresh process for each sample.
+\section{Read performance}\label{sec:performance} Each reader read one synthetic file of 100000 frames six times on the host of this paper, in a fresh process for each sample.
+The coordinates are a modulo pattern, not a recorded trajectory.
 
-\begin{figure*}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/timing.pdf} \caption{Wall time of the all-frame CON readers on one 100000-frame file, six interleaved repeats.
+\begin{figure*}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/timing.pdf} \caption{Wall time on one synthetic CON file of 100000 frames of 32 copper atoms, six interleaved repeats.
+The tip bar is a coordinate array on all 8 cores.
+The release, main, ASE and eOn bars each build a full frame on one thread, and the readcon-db bar is coordinates from the store.
 The bar is the type 7 median.
 The repeats ran on the host of Section~\ref{sec:host}, with readcon-core at the commit named in Data availability.}
 \label{fig:timing} \end{figure*}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{Time of each CON reader divided by the time of readcon-core at the measured commit, six repeats.
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{Time of the main-branch full-frame read and of ASE, each divided by the time of release readcon-core, six repeats.
+Both build a full frame on one thread.
 The horizontal line is 1.
-A point above the line means that readcon-core is that many times as fast.}
+A point above the line means that the release read is that many times as fast.
+eOn is not in this figure, and the coordinate read on 8 cores is not in it either.}
 \label{fig:ratios} \end{figure}
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/memory.pdf} \caption{MiB added to the high-water mark by the read, after the import, six repeats.}
 \label{fig:memory} \end{figure}
 
-\FloatBarrier \section{Measurements on this host}\label{sec:host} We read one trajectory of 100000 frames of 32 copper atoms six times for each reader, with the readers interleaved and each sample in a fresh process.
+\FloatBarrier \section{Measurements on this host}\label{sec:host} We read one synthetic CON file of 100000 frames of 32 copper atoms six times for each reader, with the readers interleaved and each sample in a fresh process.
+The coordinates are the modulo pattern \texttt{((frame * 17 + atom * 3 + axis) \% 10000) / 1000}, written with the symbol Cu.
 Each library is imported before the clock starts.
 The host is an \texttt{x86\_64} machine with 8 cores whose processor reports itself as Intel Xeon Processor, and the timing record names the commit of readcon-core that Data availability gives.
 CON readers read the CON file, XYZ readers the XYZ file and HDF5 readers one HDF5 file; readcon reads neither XYZ nor HDF5.
 Memory is the high-water mark of the resident set (VmHWM) after the read minus that after the import.
 
 \subsection{Results}\label{sec:results}
-On the 100000-frame coordinate file, readcon-core at the measured commit completes the read in \rcTipMedian~s.
-That is \rcTipOverRelease{} times faster than release \rcReleaseVersion{} (\rcReleaseMedian~s) and \rcTipOverAse{} times faster than ASE \texttt{ase.io} (\rcAseMedian~s).
-It is \rcTipOverEon{} times faster than eOn 3.6.0 \texttt{loadcons} (\rcEonMedian~s).
-Calling the readcon parser through the eOn C++ API takes \rcApiMedian~s, and ingesting the same file into the readcon-db store takes \rcDbMedian~s, \rcTipOverDb{} times slower than the direct read.
-Every all-frame reader matches all 100000 frames with no failure.
-The read adds \rcTipMib~MiB to the resident memory of readcon-core, against \rcAseMib~MiB for ASE, \rcChemMib~MiB for chemfiles reading XYZ and \rcOvitoMib~MiB for OVITO reading XYZ.
+The measured commit calls \texttt{read\_positions} with no thread count.
+That call returns only a coordinate array, and Rayon uses all 8 cores of this host.
+Its median is \rcTipMedian~s.
+That median is not a like-for-like reader comparison.
 
-To initialize from the first frame alone, \texttt{Matter.con2matter} takes \rcMatterMedian~s and readcon takes \rcFirstMedian~s, with both matching 1 of 1 frame.
+Release \rcReleaseVersion{} calls \texttt{read\_con} with no thread count, which builds a full frame on the calling thread, in \rcReleaseMedian~s.
+The main-branch build does the same in \rcBaseMedian~s.
+ASE \texttt{ase.io} builds an Atoms object per frame on one thread, in \rcAseMedian~s.
+eOn 3.6.0 \texttt{loadcons} builds a frame per frame on one thread, in \rcEonMedian~s.
+Those four build a full frame on one thread.
+Their medians are the host log, not the like-for-like comparison.
+
+The eOn C++ row calls \texttt{read\_all\_frames} with no thread count, which builds full frames on the calling thread, and then builds a Matter for each frame.
+Its median is \rcApiMedian~s.
+The readcon-db row returns coordinates from the store.
+The ingest of the file is outside the clock, and the median of the store read is \rcDbMedian~s.
+Every all-frame reader matches all 100000 frames with no failure.
+The coordinate read adds \rcTipMib~MiB.
+The ASE full-frame read adds \rcAseMib~MiB, chemfiles reading XYZ adds \rcChemMib~MiB and OVITO reading XYZ adds \rcOvitoMib~MiB.
+
+To initialize from the first frame alone, \texttt{Matter.con2matter} takes \rcMatterMedian~s and \texttt{read\_first\_frame} takes \rcFirstMedian~s, with both matching 1 of 1 frame.
+The first builds a Matter and the second returns the first frame.
+
+\subsection{Like-for-like reads}\label{sec:like}
+The like-for-like record is \path{paper/cpc/bench-like-for-like/results/summary.csv}.
+One machine and one thread pinned to cpu 0.
+Every arm on an input matched the frame count, the atom count and the position checksum.
+The authors maintain both eOn and readcon, so this is an in-house comparison.
+Former is eOn's former Python reader, \path{eon/fileio.py}, on a full frame, the last version before eOn delegated CON parsing to readcon.
+Current eOn reads CON files through readcon.
+
+\input{figures/generated/like_section}
 
 \subsection{Same-file and nearest-native panel}\label{sec:h2h}
 The same-file comparison reads one CON file with readcon from C, Fortran and Python, with the eOn client and the eOn Python module, and with ASE through its eon format.
@@ -789,7 +820,8 @@ On that host, a fresh process reads one million atoms of CON in \hhfReadconConWa
 \input{figures/generated/format_h2h}
 
 The times for XYZ, HDF5 and the mapped binary coordinate file are in Section~\ref*{sec:supp-timing} of the supplementary material, as context for choosing a format.
-h5py reads the same frames in \rcHdfMedian~s, against \rcTipMedian~s for readcon, and the mapped binary file is read in \rcConbinMedian~s.
+h5py reads an HDF5 coordinate array in \rcHdfMedian~s, and the mapped binary file is read in \rcConbinMedian~s.
+The readcon coordinate median on the CON file is \rcTipMedian~s on 8 cores, so these three are not one comparison.
 
 \input{figures/generated/host_table}
 
@@ -832,9 +864,9 @@ The timing record of these launches and the record of a scatter run that takes t
 \label{fig:mpi-host} \end{figure}
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored} Figures~\ref{fig:fairness} to~\ref{fig:supp-neb} are drawn from the stored records of this paper (Data availability).
-The database and MPI figures come from earlier campaigns, not from the timed repeats on the host of this paper.
+The database and MPI figures come from the stored records named in Data availability, not from the timed repeats on the host of this paper.
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf} \caption{An earlier stored ratio of readcon-core wall time to the peer wall time.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf} \caption{A stored ratio of readcon-core wall time to the peer wall time.}
 \label{fig:fairness} \end{figure}
 
 \begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/layers.pdf} \caption{Frame rate of the full, field and coordinate Python reads at one and eight threads.}
@@ -846,19 +878,19 @@ The database and MPI figures come from earlier campaigns, not from the timed rep
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf} \caption{Image energies for the height-held POSCAR band and the uninterrupted band.}
 \label{fig:asemask} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf} \caption{Earlier stored MPI speedups.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf} \caption{Stored MPI speedups.}
 \label{fig:mpi-strong} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf} \caption{Earlier stored MPI ingest times.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf} \caption{A single 1-8 read-only ladder at 6 repetitions on one VM. Touch is drawn with open-only. Ranks is one read\_block on each rank, then a barrier. Dashed lines are public main ac4f4379 and solid lines are tip a2499ab6. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
 \label{fig:mpi-weak} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf} \caption{Earlier stored ingest rates.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf} \caption{Stored ingest rates.}
 \label{fig:db-throughput} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf} \caption{Earlier stored ingest bandwidth.}
+\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf} \caption{Stored ingest bandwidth.}
 \label{fig:db-bandwidth} \end{figure}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf} \caption{Earlier stored composition-query times.}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf} \caption{Stored composition-query times.}
 \label{fig:db-query} \end{figure}
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf} \caption{Allocated size of the stored 1000-frame copies.}
@@ -895,13 +927,14 @@ The specification and the conformance corpus of CON 3.1 belong to no single simu
 \FloatBarrier \section*{Data availability}\label{sec:data} The source code of readcon-core is developed at \url{https://github.com/lode-org/readcon-core}, and its releases are archived under the Zenodo concept record \cite{goswamiReadconcoreConConvel2026} \begin{center} \url{https://doi.org/10.5281/zenodo.18753567} \end{center} \DOIPENDING
 This paper describes readcon-core~\readconversion{}.
 The latest release tag is v\rcLatestTag{} at commit \texttt{\rcLatestTagCommit}.
-The deposited timing records name the candidate commit {\ttfamily\expandafter\seqsplit\expandafter{\readconcommit}}.
-That candidate is readcon-core~\rcMeasuredVersion{} and is not a release tag.
+The deposited timing records name the measured commit {\ttfamily\expandafter\seqsplit\expandafter{\readconcommit}}.
+That commit is readcon-core~\rcMeasuredVersion{} and is not a release tag.
 The supplementary material holds that commit with its whole history as the git bundle readcon-core.bundle, and the scripts, records and TeX sources of this paper as the archive paper-cpc.tar.gz.
-Rebuild the library from the candidate commit with \texttt{cargo build -{}-release}.
+Rebuild that commit with \texttt{cargo build -{}-release}, which builds the Rust library and the command-line program \texttt{readcon-core}.
+\texttt{-{}-features capi} adds the shared and static C libraries, and \texttt{-{}-features capi,zstd,parallel} adds compression and parallelism.
 
-Two earlier commits of the main branch carry parts of the measured reader: \texttt{\readconpbccommit} gives the Python binding one periodic flag per cell vector, and \texttt{\readconrcidxcommit} (pull request~\readconrcidxpr) adds the frame index.
-In a checkout of the candidate commit, \texttt{cargo build -{}-release} builds the Rust library, the shared and static C libraries and the command-line program \texttt{readcon-core}, and \texttt{-{}-features zstd,parallel} adds the two features.
+Two commits of the main branch carry parts of the measured reader: \texttt{\readconpbccommit} gives the Python binding one periodic flag per cell vector, and \texttt{\readconrcidxcommit} (pull request~\readconrcidxpr) adds the frame index.
+In a checkout of that commit, \texttt{cargo build -{}-release} builds the Rust library and the command-line program \texttt{readcon-core}, \texttt{-{}-features capi} adds the shared and static C libraries, and \texttt{-{}-features capi,zstd,parallel} adds compression and parallelism.
 \texttt{meson setup build} and \texttt{meson compile -C build} build the C libraries with their headers and a pkg-config file, and \texttt{python3 -m pip install .} builds and installs the Python module with both features.
 Cargo, pip and conda fetch the dependencies that the lock files of the library and of the paper environment pin, and the getting-started page of the documentation lists the CMake, Julia and Fortran commands \cite{readconDocsInstall}.
 readcon-core is distributed under the Massachusetts Institute of Technology (MIT) license, and the repository also carries the CON reader of eOn as a reference under the BSD 3-clause license of the eOn Development Team, which no build uses.

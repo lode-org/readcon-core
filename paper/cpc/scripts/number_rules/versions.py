@@ -135,6 +135,6 @@ RULES = [
         grep(READER_EXCHANGE, r"^eon_version (\S+)$"),
         READER_EXCHANGE,
         "eon_version of the timed eon.fileio.loadcons arm",
-        (rf"{DOC}~times faster than eOn 3\.6\.0 \\texttt\{{loadcons\}}",),
+        (rf"{DOC}~eOn 3\.6\.0 \\texttt\{{loadcons\}}",),
     ),
 ]

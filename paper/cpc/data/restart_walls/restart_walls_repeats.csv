@@ -1,0 +1,78 @@
+route,round,steps,converged,force_calls,wall_s
+extended XYZ (ASE),0,60,True,36,1.007925
+"POSCAR (ASE), FixScaled z",0,60,True,36,0.961389
+uninterrupted,0,60,True,61,1.619689
+"CON 3.1, six decimals",0,60,True,36,0.951852
+"H5MD (h5py), private mask dataset",0,60,True,36,0.956575
+"ASE trajectory, ids in tags",0,60,True,36,0.981158
+"CON 3.1, shortest round trip",0,60,True,36,0.958054
+"POSCAR (ASE), FixScaled z",1,60,True,36,0.970747
+"H5MD (h5py), private mask dataset",1,60,True,36,0.963252
+uninterrupted,1,60,True,61,1.608097
+"ASE trajectory, ids in tags",1,60,True,36,0.950735
+extended XYZ (ASE),1,60,True,36,1.014832
+"CON 3.1, shortest round trip",1,60,True,36,0.945805
+"CON 3.1, six decimals",1,60,True,36,0.950217
+uninterrupted,2,60,True,61,1.606136
+"CON 3.1, shortest round trip",2,60,True,36,0.959117
+"POSCAR (ASE), FixScaled z",2,60,True,36,0.960060
+"H5MD (h5py), private mask dataset",2,60,True,36,0.952747
+"ASE trajectory, ids in tags",2,60,True,36,0.952665
+extended XYZ (ASE),2,60,True,36,1.003384
+"CON 3.1, six decimals",2,60,True,36,0.953167
+"H5MD (h5py), private mask dataset",3,60,True,36,0.951401
+"ASE trajectory, ids in tags",3,60,True,36,0.953945
+"CON 3.1, six decimals",3,60,True,36,0.966207
+uninterrupted,3,60,True,61,1.607331
+"CON 3.1, shortest round trip",3,60,True,36,0.956422
+"POSCAR (ASE), FixScaled z",3,60,True,36,0.965243
+extended XYZ (ASE),3,60,True,36,1.010112
+"H5MD (h5py), private mask dataset",4,60,True,36,0.952556
+"CON 3.1, six decimals",4,60,True,36,0.962933
+"ASE trajectory, ids in tags",4,60,True,36,0.949581
+"POSCAR (ASE), FixScaled z",4,60,True,36,0.961559
+uninterrupted,4,60,True,61,1.612493
+extended XYZ (ASE),4,60,True,36,1.002831
+"CON 3.1, shortest round trip",4,60,True,36,0.950641
+uninterrupted,5,60,True,61,1.601983
+"CON 3.1, shortest round trip",5,60,True,36,0.954924
+"H5MD (h5py), private mask dataset",5,60,True,36,0.946929
+extended XYZ (ASE),5,60,True,36,1.005481
+"POSCAR (ASE), FixScaled z",5,60,True,36,0.965003
+"CON 3.1, six decimals",5,60,True,36,0.949810
+"ASE trajectory, ids in tags",5,60,True,36,0.948986
+"ASE trajectory, ids in tags",6,60,True,36,0.949433
+"CON 3.1, shortest round trip",6,60,True,36,0.951193
+extended XYZ (ASE),6,60,True,36,1.003752
+"H5MD (h5py), private mask dataset",6,60,True,36,0.954972
+"POSCAR (ASE), FixScaled z",6,60,True,36,0.966494
+uninterrupted,6,60,True,61,1.606760
+"CON 3.1, six decimals",6,60,True,36,0.956916
+uninterrupted,7,60,True,61,1.632763
+"H5MD (h5py), private mask dataset",7,60,True,36,0.953181
+"CON 3.1, shortest round trip",7,60,True,36,0.975082
+extended XYZ (ASE),7,60,True,36,1.007726
+"CON 3.1, six decimals",7,60,True,36,0.948428
+"ASE trajectory, ids in tags",7,60,True,36,0.974271
+"POSCAR (ASE), FixScaled z",7,60,True,36,0.963787
+"POSCAR (ASE), FixScaled z",8,60,True,36,0.977108
+"CON 3.1, six decimals",8,60,True,36,0.961318
+"CON 3.1, shortest round trip",8,60,True,36,0.951016
+uninterrupted,8,60,True,61,1.597490
+"ASE trajectory, ids in tags",8,60,True,36,0.949542
+"H5MD (h5py), private mask dataset",8,60,True,36,0.950624
+extended XYZ (ASE),8,60,True,36,1.008251
+"POSCAR (ASE), FixScaled z",9,60,True,36,0.954326
+"H5MD (h5py), private mask dataset",9,60,True,36,0.949744
+uninterrupted,9,60,True,61,1.611770
+"CON 3.1, shortest round trip",9,60,True,36,0.969871
+extended XYZ (ASE),9,60,True,36,1.010692
+"CON 3.1, six decimals",9,60,True,36,0.955662
+"ASE trajectory, ids in tags",9,60,True,36,0.949920
+"CON 3.1, shortest round trip",10,60,True,36,0.955321
+uninterrupted,10,60,True,61,1.612653
+"H5MD (h5py), private mask dataset",10,60,True,36,0.963316
+extended XYZ (ASE),10,60,True,36,1.026826
+"ASE trajectory, ids in tags",10,60,True,36,0.956996
+"POSCAR (ASE), FixScaled z",10,60,True,36,1.019174
+"CON 3.1, six decimals",10,60,True,36,0.976548

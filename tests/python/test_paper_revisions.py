@@ -68,7 +68,7 @@ def test_measurement_exemption_requires_a_record_directory() -> None:
 def test_named_commits_and_tags_exist() -> None:
     macros = _macros()
     assert macros["readconversion"] == "0.17.3"
-    assert macros["readconcommitrole"] == "candidate commit"
+    assert macros["readconcommitrole"] == "measured commit"
     assert macros["readconversion"] == macros["rcMeasuredVersion"]
     assert "v0.17.4" not in (CPC / "release.tex").read_text(encoding="utf-8")
     if not _tags():
@@ -188,6 +188,10 @@ MEASUREMENT_RECORDS = frozenset(
         "paper/cpc/src/figures/generated/version_map.tex",
         # Names the readcon-core version of the library digest most of those records name.
         "paper/cpc/src/figures/generated/library_macros.tex",
+        # The like-for-like harness names the revisions it measured.
+        # Origin does not have those commits, so this clone cannot resolve them.
+        "paper/cpc/bench-like-for-like/README.md",
+        "paper/cpc/bench-like-for-like/pins.json",
         # The readcon-db db31 campaign records, copied verbatim from
         # lode-org/readcon-db ff1210e3. Each names the measured readcon-db
         # commit a584a288 and the commits it was compared against, not a tag
@@ -360,7 +364,7 @@ def test_measured_commit_matches_its_cargo_and_spec() -> None:
     assert spec.returncode == 0
     assert spec.stdout.strip().startswith(macros["rcMeasuredSpecBlob"])
     assert macros["rcMeasuredVersion"] == macros["readconversion"]
-    assert macros["readconcommitrole"] == "candidate commit"
+    assert macros["readconcommitrole"] == "measured commit"
 
 
 def test_recorded_tags_match_git() -> None:

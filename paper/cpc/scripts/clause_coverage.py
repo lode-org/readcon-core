@@ -18,9 +18,9 @@ names the id. A clause that no corpus file, probe or test names has its reason
 in REASONS; the script stops when such a clause has none, or when REASONS
 gives a reason for a clause that something names.
 
-    python paper/cpc/scripts/clause_coverage.py            # writes the versioned data/spec record
-    python paper/cpc/scripts/clause_coverage.py --check    # writes nothing; exits 1 if the record or the TeX differs
-    python paper/cpc/scripts/clause_coverage.py --macros   # writes only clauses_macros.tex, from the committed record
+    python paper/cpc/scripts/clause_coverage.py            # writes the recount; the stored versioned record stays
+    python paper/cpc/scripts/clause_coverage.py --check    # writes nothing; exits 1 if the recount or the TeX differs
+    python paper/cpc/scripts/clause_coverage.py --macros   # writes only clauses_macros.tex, from the committed recount
 
 It also writes clauses_macros.tex, the counts the paper prints.
 """
@@ -48,8 +48,9 @@ INDEP = ROOT / "scripts" / "indep_reader.py"
 TEST_ROOTS = ("tests", "src")
 SKIP_DIRS = {"target", "build", "__pycache__"}
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
-SUPERSEDES = ROOT / "data" / "spec" / "clause_coverage.json"
-OUT = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}.json"
+# The versioned file is the stored measurement. A later count is a new file.
+SUPERSEDES = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}.json"
+OUT = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}-recount.json"
 MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)

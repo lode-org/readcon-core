@@ -316,7 +316,7 @@ RULES: list[Rule] = [
         int(grep(READERS_PY, r"^N_ATOMS = (\d+)")),
         READERS_PY,
         "N_ATOMS, the atom count of the host trajectory",
-        (f"{DOC}~32 copper atoms",),
+        (f"{DOC}~32 copper atoms", "figures/generated/host_table.tex"),
     ),
     Rule(
         "4000",

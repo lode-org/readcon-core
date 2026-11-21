@@ -106,17 +106,19 @@ FORMAT = [
     ["scripts/test_run.py", "--tables"],
     ["scripts/sinum.py"],
     ["scripts/gen_figures.py"],
-    # Figures the plotters below do not emit. Those plotters then rewrite
-    # the names they do own: timing, restart_formats, structures, velocity_mislabel.
+    # One plotter writes each figure name, so the order of these steps does not
+    # decide which figure the paper shows.
     ["scripts/plot_restored.py"],
     ["scripts/plot_union_extra.py"],
     ["scripts/plot_perf.py"],
     ["scripts/gen_spec_supp.py", "--as-is"],
     ["scripts/plot_figures.py"],
+    ["scripts/plot_restart_ruhi.py"],
     ["scripts/plot_restart_formats.py"],
     ["scripts/plot_structures.py"],
     ["scripts/plot_supp.py"],
     ["scripts/host_from_log.py"],
+    ["scripts/like_from_record.py"],
     ["scripts/db_from_log.py"],
     ["scripts/mpi_from_log.py"],
 ]
