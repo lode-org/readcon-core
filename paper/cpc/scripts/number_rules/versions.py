@@ -33,6 +33,7 @@ def _drift() -> dict:
 
 
 DOC = "rg_main.tex"
+SUPP = "rg_supp.tex"
 OPENERS = "data/failure/con_openers.json"
 DRIFT = "data/spec/version_drift.json"
 OPEN_NEITHER = (r"rg_supp.tex~open neither a version-1 CON file nor a CON 3.1 file",)
@@ -113,6 +114,6 @@ RULES = [
         grep(READER_EXCHANGE, r"^eon_version (\S+)$"),
         READER_EXCHANGE,
         "eon_version of the timed eon.fileio.loadcons arm",
-        (rf"{DOC}~eOn 3\.6\.0 \\texttt\{{loadcons\}}",),
+        (rf"{SUPP}~eOn 3\.6\.0 \\texttt\{{loadcons\}}",),
     ),
 ]

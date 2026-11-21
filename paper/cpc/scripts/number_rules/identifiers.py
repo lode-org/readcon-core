@@ -250,7 +250,7 @@ _RULES = [
         release("OVITO", "3.17.0")["date"],
         RELEASES,
         "date of the OVITO 3.17.0 release heading",
-        lines(r"OVITO 3\.17\.0, released", (MAIN,)),
+        lines(r"OVITO 3\.17\.0, released", (SUPP,)),
     ),
     Rule(
         "2.11.0",
@@ -264,14 +264,14 @@ _RULES = [
         release("ase-extxyz", "0.1.2")["version"],
         RELEASES,
         "ase-extxyz GitHub release",
-        lines(r"ase-extxyz package 0\.1\.2", (MAIN,)),
+        lines(r"ase-extxyz package 0\.1\.2", (SUPP,)),
     ),
     Rule(
         "2026-10-02",
         release("ase-extxyz", "0.1.2")["date"],
         RELEASES,
         "publication date of the ase-extxyz 0.1.2 GitHub release",
-        lines(r"ase-extxyz package 0\.1\.2, released", (MAIN,)),
+        lines(r"ase-extxyz package 0\.1\.2, released", (SUPP,)),
     ),
     Rule(
         "0.0.2",
@@ -314,7 +314,7 @@ _RULES = [
         numpy_type7(MPI_DRIVER),
         MPI_DRIVER,
         "numpy percentile method linear, Hyndman-Fan type 7",
-        (f"{GEN}mpi_host_table.tex", f"{MAIN}~Distributed read on this host"),
+        (f"{GEN}mpi_host_table.tex", f"{SUPP}~Distributed read on this host"),
     ),
     Rule(
         "7",
@@ -323,7 +323,7 @@ _RULES = [
         "quantile type of the host timing record",
         (
             f"{GEN}host_table.tex",
-            f"{MAIN}~The bar is the type 7 median\\.$",
+            f"{SUPP}~The bar is the type 7 median\\.$",
             f"{SUPP}~type 7 interquartile range",
         ),
     ),
@@ -349,21 +349,21 @@ _RULES = [
         str(jget("data/limiter-r15/provenance.json", "repeats")),
         "data/limiter-r15/provenance.json",
         "repeats of the limiter ladder",
-        lines(r"6 repetitions", (MAIN,)),
+        lines(r"6 repetitions", (SUPP,)),
     ),
     Rule(
         "1",
         str(jget("data/limiter-r15/limiter-r15.json", "ladder.0")),
         "data/limiter-r15/limiter-r15.json",
         "first width of the limiter ladder",
-        lines(r"1-8 read-only ladder", (MAIN,)),
+        lines(r"1-8 read-only ladder", (SUPP,)),
     ),
     Rule(
         "8",
         str(jget("data/limiter-r15/limiter-r15.json", "ladder.3")),
         "data/limiter-r15/limiter-r15.json",
         "last width of the limiter ladder",
-        lines(r"1-8 read-only ladder", (MAIN,)),
+        lines(r"1-8 read-only ladder", (SUPP,)),
     ),
     Rule(
         "5",
@@ -386,7 +386,7 @@ _RULES = [
             str(r),
             MPI_LOG,
             "rank count of a launch in the MPI record",
-            lines(r"at 1, 2, 4 and 8 ranks", (MAIN,)),
+            lines(r"at 1, 2, 4 and 8 ranks", (SUPP,)),
         )
         for r in mpi_ranks
     ),
@@ -416,14 +416,14 @@ _RULES = [
         fair_insert("n_atoms"),
         FAIR_DB,
         "n_atoms of every fair paper40x8 insert row",
-        lines(r"fair store comparison ingests", (MAIN,)),
+        lines(r"fair store comparison ingests", (SUPP,)),
     ),
     Rule(
         "2",
         fair_insert("span_s"),
         FAIR_DB,
         "span_s of every fair paper40x8 insert row",
-        lines(r"fair store comparison ingests", (MAIN,)),
+        lines(r"fair store comparison ingests", (SUPP,)),
     ),
     Rule(
         "4",
@@ -437,7 +437,7 @@ _RULES = [
         stage_mib(),
         PYTHON_RS,
         "STAGE_VALUES doubles of 8 bytes, in MiB",
-        lines(r"copying them in runs of about \\\(4\\\) MiB", (MAIN,)),
+        lines(r"copying them in runs of about \\\(4\\\) MiB", (SUPP,)),
     ),
     *(
         Rule(
