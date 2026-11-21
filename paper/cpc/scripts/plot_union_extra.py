@@ -243,14 +243,15 @@ CON_ARMS = (
 )
 CON_LABELS = {
     "readcon_tip": "readcon tip, coordinates, 8 cores",
-    "readcon_v0173": "readcon release, full frames, 1 thread",
-    "readcon_base": "readcon main, full frames, 1 thread",
+    "readcon_v0173": "readcon release, full frames, 8 cores",
+    "readcon_base": "readcon main, full frames, 8 cores",
     "ase_eon": "ASE Atoms, 1 thread",
     "eon_py": "eOn loadcons, 1 thread",
     "readcon_db": "readcon-db positions",
 }
-# Full frames on the calling thread. The tip arm is coordinates on every
-# core, and readcon-db is a store read, so neither is a ratio against these.
+# Full frames. The release and main arms parse on the global Rayon pool, and
+# ASE on one thread. The tip arm is coordinates on every core, and readcon-db
+# is a store read, so neither is a ratio against these.
 # eOn stays off this ratio plot. The points are the main-branch read and ASE.
 LIKE_ARMS = (
     "readcon_base",
@@ -259,7 +260,7 @@ LIKE_ARMS = (
 
 
 def ratios(theme) -> None:
-    """Full-frame, one-thread CON readers over the release arm of the same file."""
+    """Full-frame CON readers over the release arm of the same file."""
     arms = _reader_samples()
     base = arms["readcon_v0173"]
     order = [name for name in LIKE_ARMS if name in arms]

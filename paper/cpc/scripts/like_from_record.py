@@ -380,13 +380,16 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
             lines.append("The tip and the release have the same median.")
         else:
             faster, slower = (
-                ("the release", "the tip") if release_s < tip_s else ("the tip", "the release")
+                ("the release", "the tip")
+                if release_s < tip_s
+                else ("the tip", "the release")
             )
             gap = (abs(tip_s - release_s) / max(tip_s, release_s) * 100).quantize(
                 Decimal("0.1"), rounding=ROUND_HALF_EVEN
             )
             lines.append(
-                f"On that read, {faster} takes {gap}\\,\\% less time than {slower}, "
+                f"On the full-frame read of \\texttt{{{tex_name(primary)}}} on one thread, "
+                f"{faster} takes {gap}\\,\\% less time than {slower}, "
                 f"{show_time(str(min(tip_s, release_s)))} against "
                 f"{show_time(str(max(tip_s, release_s)))}."
             )

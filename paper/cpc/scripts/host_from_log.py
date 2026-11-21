@@ -228,10 +228,11 @@ def main() -> int:
             "The coordinates are a modulo pattern, not a recorded trajectory. "
             "Six fresh processes, type 7 median. "
             "readcon, tip returns only coordinates and uses Rayon on all 8 cores. "
-            "readcon-core at the release and readcon, main each build a full frame on one thread. "
+            "readcon-core at the release and readcon, main each build a full frame, and with no "
+            "thread count both parse this file on the global Rayon pool, on all 8 cores. "
             "ASE builds an Atoms object per frame on one thread. "
             "eOn loadcons builds a frame per frame on one thread. "
-            "The eOn C++ row builds full frames on one thread and then a Matter for each frame. "
+            "The eOn C++ row reads full frames with no thread count and then builds a Matter for each frame. "
             "readcon-db returns coordinates from the store; the ingest is outside the clock. "
             "The last two rows are first-frame reads of the same file: "
             "readcon returns the first frame, and eOn builds a Matter from it.",
