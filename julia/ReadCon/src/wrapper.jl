@@ -765,12 +765,13 @@ function _decode_json_key(raw::AbstractString)
     return String(out)
 end
 
-# Raw top-level `con_spec_minor` value tokens, in order. Nested keys are ignored.
-function _top_level_minor_tokens(json::AbstractString)
+# Byte ranges of the top-level `con_spec_minor` values, in order. A key
+# written with JSON escapes counts. Nested keys are ignored.
+function _top_level_minor_spans(json::AbstractString)
     bytes = Vector{UInt8}(codeunits(json))
     i = _skip_json_ws(bytes, 1)
-    tokens = String[]
-    (i <= length(bytes) && bytes[i] == UInt8('{')) || return tokens
+    spans = UnitRange{Int}[]
+    (i <= length(bytes) && bytes[i] == UInt8('{')) || return spans
     i += 1
     while true
         i = _skip_json_ws(bytes, i)
@@ -796,30 +797,28 @@ function _top_level_minor_tokens(json::AbstractString)
         i = _skip_json_ws(bytes, i)
         v_end = _scan_json_value_end(bytes, i)
         v_end === nothing && break
-        raw_val = String(bytes[i:(v_end - 1)])
         if _decode_json_key(raw_key) == "con_spec_minor"
-            push!(tokens, raw_val)
+            push!(spans, i:(v_end - 1))
         end
         i = v_end
     end
-    return tokens
+    return spans
 end
 
-# Rust `base_minor_from_line`: first literal `"con_spec_minor"` anywhere,
-# then the following digits, or 0 when they do not fit in UInt64.
-function _base_minor_u64(metadata_json::AbstractString)
-    key = "\"con_spec_minor\""
-    at = findfirst(key, metadata_json)
-    at === nothing && return UInt64(0)
-    rest = metadata_json[nextind(metadata_json, last(at)):end]
-    rest = lstrip(rest)
-    if startswith(rest, ':')
-        rest = lstrip(rest[nextind(rest, 1):end])
-    end
-    end_at = findfirst(c -> !('0' <= c <= '9'), rest)
-    digits = end_at === nothing ? rest : rest[begin:prevind(rest, end_at)]
-    parsed = tryparse(UInt64, digits)
-    return parsed === nothing ? UInt64(0) : parsed
+# Raw top-level `con_spec_minor` value tokens, in order.
+function _top_level_minor_tokens(json::AbstractString)
+    units = codeunits(json)
+    return [String(units[span]) for span in _top_level_minor_spans(json)]
+end
+
+# Write a top-level con_spec_minor of 0 as 1. Nested keys keep their values.
+function _promote_zero_minor(metadata_json::AbstractString)
+    spans = _top_level_minor_spans(metadata_json)
+    length(spans) == 1 || return metadata_json
+    bytes = Vector{UInt8}(codeunits(metadata_json))
+    bytes[spans[1]] == UInt8['0'] || return metadata_json
+    bytes[first(spans[1])] = UInt8('1')
+    return String(bytes)
 end
 
 function _reject_duplicate_con_spec_minor(metadata_json::AbstractString)
@@ -831,8 +830,10 @@ end
 
 const _INVALID_CON_SPEC_MINOR = "con_spec_minor must be a JSON integer >= 0"
 
-# For con_spec_minor: 0 when the key is absent, typemax(UInt64) for an
-# integer above it that serde_json accepts, and an ErrorException for a
+# For con_spec_minor: the value of the top-level key, which may be written
+# with JSON escapes. 0 when that key is absent (a nested key does not
+# count), typemax(UInt64) for an integer above it that serde_json accepts,
+# and an ErrorException for a
 # repeated key. Any top-level token the builder rejects throws ReadConError
 # code -3 (RKR_STATUS_INVALID_JSON): leading zeros, a sign, a fraction, an
 # exponent (1e0, 1e309, 1E400), a non-number, or an integer at or above
@@ -843,13 +844,12 @@ function _json_u64(metadata_json::AbstractString, key::AbstractString)
         if length(tokens) > 1
             error(_DUPLICATE_CON_SPEC_MINOR)
         end
-        if !isempty(tokens)
-            _minor_token_u64(tokens[1]) === nothing && throw(ReadConError(
-                "con_spec_minor", Int32(-3), _INVALID_CON_SPEC_MINOR, UInt32(0), UInt64(0),
-            ))
-            _substitutable_huge_minor(tokens[1]) && return typemax(UInt64)
-        end
-        return _base_minor_u64(metadata_json)
+        isempty(tokens) && return UInt64(0)
+        value = _minor_token_u64(tokens[1])
+        value === nothing && throw(ReadConError(
+            "con_spec_minor", Int32(-3), _INVALID_CON_SPEC_MINOR, UInt32(0), UInt64(0),
+        ))
+        return value
     end
     m = match(Regex("\"$(key)\"\\s*:\\s*(\\d+)"), metadata_json)
     m === nothing && return UInt64(0)
@@ -878,16 +878,10 @@ function _legacy_velocity_units(frame::ConFrame)
     # unit, and promote an explicit minor of 0 so that label is authoritative.
     # This matches Python's stamp_legacy_velocity_time.
     if frame.spec_version >= 3
-        stamped = if _units_object_bounds(metadata_json) !== nothing
-            _ensure_natural_time(metadata_json)
-        else
-            metadata_json
+        stamped = _promote_zero_minor(metadata_json)
+        if _units_object_bounds(stamped) !== nothing
+            stamped = _ensure_natural_time(stamped)
         end
-        stamped = replace(
-            stamped,
-            r"(\"con_spec_minor\"\s*:\s*)0+\b" => SubstitutionString("\\g<1>1"),
-            count=1,
-        )
         return stamped, _units_object_bounds(metadata_json) === nothing
     end
     if _units_declares_time(metadata_json)
