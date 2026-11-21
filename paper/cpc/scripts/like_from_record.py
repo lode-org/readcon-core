@@ -374,7 +374,22 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
             f"{cell_value(synthetic_ase, 'ratio')} times as fast as ASE."
         )
     if release is not None:
-        lines.append("The tip and the release are comparable.")
+        tip_s = Decimal(tip["median_s"])
+        release_s = Decimal(release["median_s"])
+        if tip_s == release_s:
+            lines.append("The tip and the release have the same median.")
+        else:
+            faster, slower = (
+                ("the release", "the tip") if release_s < tip_s else ("the tip", "the release")
+            )
+            gap = (abs(tip_s - release_s) / max(tip_s, release_s) * 100).quantize(
+                Decimal("0.1"), rounding=ROUND_HALF_EVEN
+            )
+            lines.append(
+                f"On that read, {faster} takes {gap}\\,\\% less time than {slower}, "
+                f"{show_time(str(min(tip_s, release_s)))} against "
+                f"{show_time(str(max(tip_s, release_s)))}."
+            )
     one = pick(rows, "readcon_positions_1", "coords-only", "1", "cuh2_band")
     many = (
         next(
