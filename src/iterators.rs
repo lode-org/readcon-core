@@ -28,6 +28,9 @@ pub struct MemchrLines<'a> {
     /// 1-based index of the last line produced by [`Self::read_one`], including
     /// a line rejected as UTF-8. 0 before that.
     line_no: u32,
+    /// Whether hitting end-of-file has already incremented `line_no` to the
+    /// first missing line (`total_lines + 1`).
+    eof_counted: bool,
 }
 
 impl<'a> MemchrLines<'a> {
@@ -54,6 +57,7 @@ impl<'a> MemchrLines<'a> {
             newlines: None,
             index_line: 0,
             line_no: 0,
+            eof_counted: false,
         }
     }
 
@@ -68,7 +72,14 @@ impl<'a> MemchrLines<'a> {
         if self.newlines.is_some() {
             return self.read_one_indexed();
         }
-        if self.utf8_bad || self.pos >= self.bytes.len() {
+        if self.utf8_bad {
+            return None;
+        }
+        if self.pos >= self.bytes.len() {
+            if !self.eof_counted {
+                self.eof_counted = true;
+                self.line_no = self.line_no.saturating_add(1);
+            }
             return None;
         }
         let rest = &self.bytes[self.pos..];
@@ -157,7 +168,14 @@ impl<'a> MemchrLines<'a> {
     /// the line are the same slice `memchr` would return, including a line
     /// whose body crosses a chunk boundary: only the `\n` is indexed.
     fn read_one_indexed(&mut self) -> Option<&'a str> {
-        if self.utf8_bad || self.pos >= self.bytes.len() {
+        if self.utf8_bad {
+            return None;
+        }
+        if self.pos >= self.bytes.len() {
+            if !self.eof_counted {
+                self.eof_counted = true;
+                self.line_no = self.line_no.saturating_add(1);
+            }
             return None;
         }
         let len = self.bytes.len();
@@ -239,7 +257,12 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
         }
         // The failing row is this line even when the numeric scan returns Err
         // before the cursor moves.
-        self.line_no = self.line_no.saturating_add(1);
+        if !self.eof_counted {
+            self.line_no = self.line_no.saturating_add(1);
+            if self.pos >= self.bytes.len() {
+                self.eof_counted = true;
+            }
+        }
         let (row, pos) =
             crate::parser::parse_coord_row_at(self.bytes, self.pos, spec_version, default_id)?;
         self.pos = pos;
@@ -290,8 +313,14 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
             return crate::parser::parse_vector_row_at(p.as_bytes(), 0, spec_version)
                 .map(|(row, _)| row);
         }
-        // Name the failing row, the same way a coordinate row does.
-        self.line_no = self.line_no.saturating_add(1);
+        // The failing row is this line even when the numeric scan returns
+        // Err before the cursor moves. Count the first missing EOF line once.
+        if !self.eof_counted {
+            self.line_no = self.line_no.saturating_add(1);
+            if self.pos >= self.bytes.len() {
+                self.eof_counted = true;
+            }
+        }
         let (row, pos) = crate::parser::parse_vector_row_at(self.bytes, self.pos, spec_version)?;
         self.pos = pos;
         Ok(row)
@@ -634,6 +663,10 @@ impl<'a> ConFrameIterator<'a> {
                 }
                 None => {
                     if rest.is_empty() {
+                        if !self.lines.eof_counted {
+                            self.lines.eof_counted = true;
+                            self.lines.line_no = self.lines.line_no.saturating_add(1);
+                        }
                         return Err(error::ParseError::IncompleteFrame);
                     }
                     self.lines.pos = self.lines.bytes.len();
@@ -672,6 +705,10 @@ impl<'a> ConFrameIterator<'a> {
             return Ok(());
         }
         if rest.is_empty() {
+            if !self.lines.eof_counted {
+                self.lines.eof_counted = true;
+                self.lines.line_no = self.lines.line_no.saturating_add(1);
+            }
             return Err(error::ParseError::IncompleteFrame);
         }
         let has_tail = rest.last().copied() != Some(b'\n');
@@ -684,6 +721,10 @@ impl<'a> ConFrameIterator<'a> {
         if counted >= n {
             Ok(())
         } else {
+            if !self.lines.eof_counted {
+                self.lines.eof_counted = true;
+                self.lines.line_no = self.lines.line_no.saturating_add(1);
+            }
             Err(error::ParseError::IncompleteFrame)
         }
     }
@@ -760,7 +801,8 @@ impl<'a> ConFrameIterator<'a> {
             }
             IndexStep::Missing(line_no) => {
                 self.lines.index_line = line_no;
-                self.lines.line_no = u32::try_from(line_no).unwrap_or(u32::MAX);
+                self.lines.eof_counted = true;
+                self.lines.line_no = u32::try_from(line_no.saturating_add(1)).unwrap_or(u32::MAX);
                 Err(error::ParseError::IncompleteFrame)
             }
             IndexStep::Landed(line_no, pos) => {
@@ -771,7 +813,8 @@ impl<'a> ConFrameIterator<'a> {
             }
             IndexStep::Short(line_no, pos) => {
                 self.lines.index_line = line_no;
-                self.lines.line_no = u32::try_from(line_no).unwrap_or(u32::MAX);
+                self.lines.eof_counted = true;
+                self.lines.line_no = u32::try_from(line_no.saturating_add(1)).unwrap_or(u32::MAX);
                 self.lines.pos = pos;
                 Err(error::ParseError::IncompleteFrame)
             }
@@ -866,9 +909,9 @@ impl<'a> ConFrameIterator<'a> {
 
     /// Skip the sections [`crate::parser::parse_declared_sections`] would read.
     ///
-    /// A blank symbol is a symbol line for every section except the legacy
-    /// velocity probe. An undeclared block after `sections: []` is the next
-    /// frame, not a section this frame owns.
+    /// A blank symbol line fails CON-section.4 for every declared section.
+    /// An undeclared block after `sections: []` is the next frame, not a
+    /// section this frame owns.
     fn skip_declared_sections(
         &mut self,
         header: &types::FrameHeader,
@@ -878,22 +921,6 @@ impl<'a> ConFrameIterator<'a> {
             return self.skip_legacy_velocity(header, end);
         }
         for name in &header.sections {
-            if name == crate::types::SECTION_VELOCITIES {
-                // Same probe as `parse_velocity_section`: a blank symbol
-                // does not open the block, so the section is missing.
-                let opens = match self.at_blank_separator() {
-                    Some(true) => {
-                        let rest = &self.lines.bytes[self.lines.pos..];
-                        split_raw_line(rest).is_some_and(|(_, after)| blank_opens_section(after))
-                    }
-                    _ => false,
-                };
-                if !opens {
-                    return Err(error::ParseError::IncompleteSection(name.clone()));
-                }
-                self.consume_section_block(header, name, "Velocities of Component", true, end)?;
-                continue;
-            }
             if let Some(prefix) = crate::parser::reserved_section_label_prefix(name) {
                 if self.at_blank_separator() != Some(true) {
                     return Err(error::ParseError::IncompleteSection(name.clone()));
@@ -1109,6 +1136,7 @@ impl<'a> ConFrameIterator<'a> {
             self.lines.line_no,
             self.lines.index_line,
             self.lines.utf8_bad,
+            self.lines.eof_counted,
         );
         // The header parse is the same one `next` uses, so a declared
         // `sections` list, including an empty one, is known before the
@@ -1121,6 +1149,7 @@ impl<'a> ConFrameIterator<'a> {
                 self.lines.line_no = saved.1;
                 self.lines.index_line = saved.2;
                 self.lines.utf8_bad = saved.3;
+                self.lines.eof_counted = saved.4;
                 self.lines.clear_peek();
                 return self.forward_fast_to(end);
             }
