@@ -1215,17 +1215,20 @@ impl PyConFrame {
             return Ok(FrameSymbols::of_parsed(py, frame));
         }
         let atoms = self.atoms.bind(py);
-        let mut names: Vec<(String, usize)> = Vec::new();
-        for item in atoms.iter() {
-            let atom = item.cast::<PyAtomDatum>().map_err(|_| {
-                PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
-            })?;
-            let atom = atom.borrow();
-            match names.last_mut() {
-                Some((last, count)) if *last == atom.symbol => *count += 1,
-                _ => names.push((atom.symbol.clone(), 1usize)),
+        let names = pyo3::sync::critical_section::with_critical_section(atoms.as_any(), || {
+            let mut names: Vec<(String, usize)> = Vec::new();
+            for item in atoms.iter() {
+                let atom = item.cast::<PyAtomDatum>().map_err(|_| {
+                    PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
+                })?;
+                let atom = atom.borrow();
+                match names.last_mut() {
+                    Some((last, count)) if *last == atom.symbol => *count += 1,
+                    _ => names.push((atom.symbol.clone(), 1usize)),
+                }
             }
-        }
+            PyResult::Ok(names)
+        })?;
         Ok(FrameSymbols::from_runs(
             py,
             names.iter().map(|(name, count)| (name.as_str(), *count)),
@@ -1699,7 +1702,12 @@ impl PyConFrame {
 
     fn atom_count(&self, py: Python<'_>) -> usize {
         if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
-            return self.atoms.bind(py).len();
+            // pyo3 reads `ob_size` with a plain load. Another thread's
+            // append stores it inside the list's critical section.
+            let list = self.atoms.bind(py);
+            return pyo3::sync::critical_section::with_critical_section(list.as_any(), || {
+                list.len()
+            });
         }
         if self.n_atoms > 0 {
             return self.n_atoms;
@@ -1924,15 +1932,16 @@ impl PyConFrame {
 
     fn py_atoms(&self, py: Python<'_>) -> PyResult<Vec<PyAtomDatum>> {
         self.ensure_atoms(py)?;
-        self.atoms
-            .bind(py)
-            .iter()
-            .map(|item| {
-                item.extract::<PyAtomDatum>().map_err(|_| {
-                    PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
+        let list = self.atoms.bind(py);
+        pyo3::sync::critical_section::with_critical_section(list.as_any(), || {
+            list.iter()
+                .map(|item| {
+                    item.extract::<PyAtomDatum>().map_err(|_| {
+                        PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
+                    })
                 })
-            })
-            .collect()
+                .collect()
+        })
     }
 
     fn meta<'py>(&self, py: Python<'py>) -> PyResult<&Bound<'py, PyDict>> {
