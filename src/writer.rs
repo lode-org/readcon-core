@@ -5320,6 +5320,9 @@ fn place_packed(
 ) -> Result<(), WriteError> {
     let total: u64 = lengths.iter().map(|len| *len as u64).sum();
     allocate_len(file, total).map_err(WriteError::Io)?;
+    if file.metadata().map_err(WriteError::Io)?.len() > total {
+        file.set_len(total).map_err(WriteError::Io)?;
+    }
     if total == 0 {
         return Ok(());
     }
@@ -5813,6 +5816,9 @@ fn store_disjoint_parts(file: &File, parts: &[Vec<u8>]) -> io::Result<()> {
         total += part.len() as u64;
     }
     allocate_len(file, total)?;
+    if file.metadata()?.len() > total {
+        file.set_len(total)?;
+    }
     if total == 0 {
         return Ok(());
     }
