@@ -1738,13 +1738,22 @@ impl PyConFrame {
         if let Some(frame) = this.parsed_frame() {
             return Ok(FrameSymbols::of_parsed(py, frame));
         }
-        let mut names: Vec<(String, usize)> = Vec::new();
-        for atom in this.snapshot_atoms(py) {
-            match names.last_mut() {
-                Some((last, count)) if *last == atom.symbol => *count += 1,
-                _ => names.push((atom.symbol, 1usize)),
+        let atoms = this.atoms.bind(py);
+        let names = pyo3::sync::critical_section::with_critical_section(atoms.as_any(), || {
+            let mut names: Vec<(String, usize)> = Vec::new();
+            for item in atoms.iter() {
+                let atom = atom_datum(&item).unwrap_or_else(|| {
+                    Err(PyTypeError::new_err(
+                        "ConFrame atom cache must hold readcon.Atom objects",
+                    ))
+                })?;
+                match names.last_mut() {
+                    Some((last, count)) if *last == atom.symbol => *count += 1,
+                    _ => names.push((atom.symbol, 1usize)),
+                }
             }
-        }
+            PyResult::Ok(names)
+        })?;
         Ok(FrameSymbols::from_runs(
             py,
             names.iter().map(|(name, count)| (name.as_str(), *count)),
@@ -2302,7 +2311,12 @@ impl PyConFrame {
 
     fn atom_count(&self, py: Python<'_>) -> usize {
         if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
-            return self.atoms.bind(py).len();
+            // pyo3 reads `ob_size` with a plain load. Another thread's
+            // append stores it inside the list's critical section.
+            let list = self.atoms.bind(py);
+            return pyo3::sync::critical_section::with_critical_section(list.as_any(), || {
+                list.len()
+            });
         }
         if self.n_atoms > 0 {
             return self.n_atoms;
@@ -2537,17 +2551,18 @@ impl PyConFrame {
 
     fn py_atoms(&self, py: Python<'_>) -> PyResult<Vec<PyAtomDatum>> {
         self.ensure_atoms(py)?;
-        self.atoms
-            .bind(py)
-            .iter()
-            .map(|item| {
-                atom_datum(&item).unwrap_or_else(|| {
-                    Err(PyTypeError::new_err(
-                        "ConFrame atom cache must hold readcon.Atom objects",
-                    ))
+        let list = self.atoms.bind(py);
+        pyo3::sync::critical_section::with_critical_section(list.as_any(), || {
+            list.iter()
+                .map(|item| {
+                    atom_datum(&item).unwrap_or_else(|| {
+                        Err(PyTypeError::new_err(
+                            "ConFrame atom cache must hold readcon.Atom objects",
+                        ))
+                    })
                 })
-            })
-            .collect()
+                .collect()
+        })
     }
 
     fn meta<'py>(&self, py: Python<'py>) -> PyResult<&Bound<'py, PyDict>> {
