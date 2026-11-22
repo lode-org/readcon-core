@@ -301,8 +301,8 @@ Types
     ``frame.atoms`` is an ``AtomSequence`` whose indexing and iteration expose
     the existing Python ``Atom`` projection used by earlier releases. Parsed
     column access does not materialize those objects; first access to
-    ``frame.atoms`` does. Its assignment, deletion, ``append()``, ``insert()``
-    and ``extend()`` methods mutate the owning frame and preserve CON
+    ``frame.atoms`` does. Its assignment, deletion, ``append()``, ``pop()``,
+    ``insert()`` and ``extend()`` methods mutate the owning frame and preserve CON
     type-group order; an ``Atom`` already taken from ``frame.atoms`` that
     was not replaced or deleted stays part of the frame. A direct frame
     slice is an independent ``ConFrame``.
@@ -343,6 +343,29 @@ It ignores file text, metadata, atom ids, and other sections.
     are read-only views of the parsed columns: no copy, and ``.copy()`` gives
     a writeable array. ``symbols`` (a ``FrameSymbols``) gives every atom's
     symbol as interned runs, without building ``atoms``.
+    atomic\_numbers(), fixed\_mask\_array().
+    ``atoms_materialized`` is false until ``.atoms`` is built.
+    ``atoms_fill_count`` counts that build. The array getters above do
+    not increment it. For a frame from a read, ``vel``, ``frc``,
+    ``mass_column`` and, until ``.atoms`` is used, the ``\*_array()`` methods
+    other than ``coords_array()`` are read-only zero-copy views of the parsed
+    float64 columns. Unsupported storage dtypes or gathered fallback paths
+    may allocate. A store raises ``ValueError``, ``setflags(write=True)``
+    fails, and ``.copy()`` gives a writeable array.
+    ``xyz`` is a writeable zero-copy coordinate view for a parsed frame, and
+    stores through it are visible to later writes.
+    ``symbols`` (a ``FrameSymbols``) gives every atom's symbol as interned
+    runs without building ``atoms``, and ``symbols()`` returns an object
+    array from those runs. Once ``.atoms`` exists, those getters,
+    ``composition_formula``, ``atomic_numbers``, and ``fixed_mask_array``
+    follow it, including an edit, a pop, an append, or an insert.
+    ``len`` and ``repr`` follow that list, including a frame from
+    ``from_ase``. ``write_con`` writes the list and a metadata edit made
+    before ``.atoms`` exists.
+    Constructed frames and structurally edited frames may return owned arrays.
+    Frames yielded by non-streaming ``iter_con`` expose the exact consumed
+    file substring through ``source_text`` / ``raw``. Batch reads, constructed
+    frames, streamed frames, slices, and mutated frames return ``None``.
     The constructor and ``from_ase()`` raise ``readcon.NonFiniteValue`` (a
     ``ValueError``) for a cell length or angle that is NaN or infinite, and
     for a ``lattice_vectors`` metadata matrix that holds one. The message names
@@ -366,6 +389,11 @@ It ignores file text, metadata, atom ids, and other sections.
     With ``stream=True``, the iterator raises ``OSError`` for a parse error or invalid UTF-8 (Unicode Transformation Format, 8-bit) when it reaches the bad frame, after the frames before it.
     An input or output error from the file or the decoder raises ``OSError`` with a message that starts with ``read error:``, after the frames in the bytes read before it.
     Setting both ``mmap`` and ``stream`` raises ``ValueError``.
+
+``readcon.iter_con_string(text)``
+    The same iterator over CON text
+    the caller already holds. Each frame's array getters read the parsed
+    columns, as they do for ``iter_con`` and ``read_con_string``.
 
 ``readcon.symbol_to_atomic_number(symbol)``
     Atomic number for a
@@ -412,11 +440,17 @@ CUDA). Legacy
 
     frame = readcon.read_first_frame("trajectory.con")
 
+    atom_ids = frame.atom_ids_array()     # read-only uint64 view
+    assert atom_ids.flags.writeable is False
+    symbols = frame.symbols()             # object array, one str per species
+    atomic_numbers = frame.atomic_numbers()  # uint64 copy from the type table
+    fixed = frame.fixed_mask_array()      # uint8 (N, 3) copy; 1 means held
+    assert frame.atoms_materialized is False
+
     coords = frame.coords_array()         # ndarray (N, 3); inspect .dtype
     forces = frame.forces_array()         # Optional; None if absent
     velocities = frame.velocities_array()
     energies = frame.energies_array()     # Optional shape (N,)
-    atom_ids = frame.atom_ids_array()     # typically uint64
 
     # Zero-copy hand-off into torch via DLPack (dtype follows the tensor).
     coords_torch = torch.from_dlpack(coords)
