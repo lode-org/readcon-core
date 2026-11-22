@@ -160,6 +160,33 @@ def test_tampered_neb_dat_and_truncated_manifest_fail(tmp_path) -> None:
         module.check_outputs(copy)
 
 
+def test_clean_claisen_copy_has_no_unlisted_files(tmp_path, monkeypatch) -> None:
+    module = _load()
+    checker = _load_checker()
+    copy = _copy_claisen(tmp_path, module.DATA)
+    monkeypatch.setenv("CLAISEN_DATA", str(copy))
+    assert "outputs match" in module.check_outputs(copy)
+    assert "outputs match" in checker.script_check(
+        "run_claisen_order.py", "Claisen outputs"
+    )
+
+
+@pytest.mark.parametrize(
+    "rel", ["unlisted-extra.txt", "identity/unlisted-extra.txt", ".hidden"]
+)
+def test_unlisted_claisen_file_fails_output_check(tmp_path, monkeypatch, rel) -> None:
+    module = _load()
+    checker = _load_checker()
+    copy = _copy_claisen(tmp_path, module.DATA)
+    monkeypatch.setenv("CLAISEN_DATA", str(copy))
+    (copy / rel).write_text("not a recorded output\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match=f"{rel} is not listed"):
+        module.check_outputs(copy)
+    with pytest.raises(checker.Failed, match=rel):
+        checker.script_check("run_claisen_order.py", "Claisen outputs")
+
+
 def test_stage_refuses_to_overwrite_divergent_outputs(tmp_path) -> None:
     module = _load()
     copy = _copy_claisen(tmp_path / "committed", module.DATA)
