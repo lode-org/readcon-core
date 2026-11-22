@@ -231,12 +231,28 @@ def coord_table(rows: list[dict[str, str]]) -> str:
     ]
     header = " & ".join(header_cells) + r" \\"
     body = []
-    for arm, name in keys:
+    if readcon_only:
+        names = []
+        for _arm, name in keys:
+            if name not in names:
+                names.append(name)
+        groups = [(sorted(arms), name) for name in names]
+    else:
+        groups = [([arm], name) for arm, name in keys]
+    for group_arms, name in groups:
         cells = [tex_name(name)]
         if not readcon_only:
-            cells.append(tex_name(arm))
+            cells.append(tex_name(group_arms[0]))
         for thread in threads:
-            row = pick(rows, arm, "coords-only", thread, name)
+            row = next(
+                (
+                    found
+                    for arm in group_arms
+                    if (found := pick(rows, arm, "coords-only", thread, name))
+                    is not None
+                ),
+                None,
+            )
             cells.append("" if row is None else show_time(row["median_s"]))
         body.append(" & ".join(cells) + r" \\")
     return "\n".join(
@@ -322,46 +338,39 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
         if former_name is not None
         else None
     )
-    versions = [f"the tip is readcon-core {version_of(tip)}"]
+    versions = f"The tip is readcon-core {version_of(tip)}"
     if release is not None:
-        versions.append(f"the release is readcon-core {version_of(release)}")
+        versions += f" and the release readcon-core {version_of(release)}"
+    extras = []
     if ase is not None:
-        versions.append(f"ASE is {version_of(ase)}")
-    if len(versions) == 1:
-        joined = versions[0]
-    elif len(versions) == 2:
-        joined = " and ".join(versions)
-    else:
-        joined = ", ".join(versions[:-1]) + ", and " + versions[-1]
-    lines.append(joined[:1].upper() + joined[1:] + ".")
+        extras.append(f"ASE is {version_of(ase)}")
     if former is not None:
-        lines.append(
-            f"The eOn commit \\texttt{{{short_commit(former)}}} is that former reader."
+        extras.append(
+            f"the former reader is eOn commit \\texttt{{{short_commit(former)}}}"
         )
+    lines.append(versions + ("; " + ", and ".join(extras) if extras else "") + ".")
     if primary == "al_eam_md":
         temp = temperature_k()
         temp_text = f" at {temp}~K" if temp else ""
         lines.append(
-            f"The primary input is \\texttt{{{tex_name(primary)}}}, "
-            "simulation output of an EAM molecular-dynamics run of "
-            f"face-centered cubic aluminum from rgpot{temp_text}."
-        )
-        lines.append("It is not published data.")
-        lines.append(
-            "That row is a full-frame read on one thread, "
-            f"{tip['n_frames']} frames of {tip['n_atoms']} atoms, "
+            f"The primary input, \\texttt{{{tex_name(primary)}}}, is unpublished "
+            "output of an embedded-atom molecular-dynamics run of face-centered cubic "
+            f"aluminum from rgpot{temp_text}, read whole on one thread, "
+            f"{tip['n_frames']} frames of {tip['n_atoms']} atoms "
             f"with {tip['n']} repetitions."
         )
+    on_primary = []
     if ase is not None and primary == "al_eam_md" and ase.get("ratio_over_tip"):
-        lines.append(
-            "On a full-frame read of that trajectory, readcon is "
-            f"{cell_value(ase, 'ratio')} times as fast as ASE."
+        on_primary.append(
+            f"readcon is {cell_value(ase, 'ratio')} times as fast as ASE"
         )
     if former is not None and primary == "al_eam_md" and former.get("ratio_over_tip"):
-        lines.append(
-            "On a full-frame read of that trajectory, eOn's former Python reader, "
-            f"eon/fileio.py, takes {cell_value(former, 'ratio')} times the tip median."
+        on_primary.append(
+            f"\\path{{eon/fileio.py}} takes {cell_value(former, 'ratio')} times "
+            "as long as the tip"
         )
+    if on_primary:
+        lines.append("On that trajectory " + ", and ".join(on_primary) + ".")
     lines.extend(svn_sentences(rows))
     synthetic_ase = pick(rows, "ase", "full-frame", "1", "synthetic")
     if (
@@ -370,7 +379,7 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
         and synthetic_ase.get("ratio_over_tip")
     ):
         lines.append(
-            "On a full-frame read of the large synthetic file, readcon is "
+            "On the large synthetic file readcon is "
             f"{cell_value(synthetic_ase, 'ratio')} times as fast as ASE."
         )
     if release is not None:
@@ -388,8 +397,7 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
                 Decimal("0.1"), rounding=ROUND_HALF_EVEN
             )
             lines.append(
-                f"On the full-frame read of \\texttt{{{tex_name(primary)}}} on one thread, "
-                f"{faster} takes {gap}\\,\\% less time than {slower}, "
+                f"On that trajectory {faster} takes {gap}\\,\\% less time than {slower}, "
                 f"{show_time(str(min(tip_s, release_s)))} against "
                 f"{show_time(str(max(tip_s, release_s)))}."
             )
@@ -426,8 +434,8 @@ def main() -> int:
         "",
         full_table(rows),
         "",
-        "Table~\\ref{tab:like-coords} is the coordinate-only median.",
-        "Those times are not ratios, and they are not a column of Table~\\ref{tab:like}.",
+        "Table~\\ref{tab:like-coords} gives the coordinate-only medians "
+        "at one and eight threads.",
         "",
         coord_table(rows),
         "",
