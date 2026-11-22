@@ -90,6 +90,7 @@ RULE_MODULES = (
     "versions",
     "readcon_db",
     "identifiers",
+    "claisen",
 )
 # Format steps that write PDFs, which no number is traced from.
 _FORMAT_SKIP = frozenset({"scripts/gen_figures.py"})
