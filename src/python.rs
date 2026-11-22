@@ -879,7 +879,8 @@ impl PyConFrame {
         })
     }
 
-    /// Live sequence of atom views. The same store as `frame[i]`.
+    /// Sequence of this frame's `Atom` projection. Its structural edits
+    /// rebuild the frame; `frame[i]` is the live view of the store.
     #[getter]
     fn atoms(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PyAtomSeq>> {
         slf.borrow(py).ensure_atoms(py)?;

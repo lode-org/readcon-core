@@ -31,6 +31,9 @@ struct AtomSnap {
     magmom: Option<[f64; 3]>,
     displacement: Option<[f64; 3]>,
     spread: Option<[f64; 3]>,
+    /// Index in this frame's cached `Atom` list the snapshot was read from.
+    /// A rebuild keeps that object, so a held `frame.atoms[i]` stays attached.
+    origin: Option<usize>,
 }
 
 fn snap_from_datum(atom: &PyAtomDatum) -> AtomSnap {
@@ -95,6 +98,7 @@ fn snap_from_datum(atom: &PyAtomDatum) -> AtomSnap {
         magmom,
         displacement,
         spread,
+        origin: None,
     }
 }
 
@@ -230,6 +234,7 @@ fn snap_from_frame(frame: &ConFrame, index: usize) -> AtomSnap {
         magmom: row_opt(&frame.magmoms, index, n).or_else(|| atom.magmom()),
         displacement: row_opt(&frame.displacements, index, n).or_else(|| atom.displacement()),
         spread: row_opt(&frame.spreads, index, n).or_else(|| atom.spread()),
+        origin: None,
     }
 }
 
@@ -293,7 +298,7 @@ fn try_build_grouped(
     postbox: &[String; 2],
     metadata: BTreeMap<String, Value>,
     snaps: &[AtomSnap],
-) -> Result<ConFrame, ParseError> {
+) -> Result<(ConFrame, Vec<usize>), ParseError> {
     let mut builder = ConFrameBuilder::new(cell, angles);
     builder
         .prebox_header(prebox[0].as_str())
@@ -334,9 +339,9 @@ fn try_build_grouped(
             builder.with_spread(s);
         }
     }
-    let mut frame = builder.build()?;
+    let (mut frame, order) = builder.build_with_permutation()?;
     frame.sync_atom_data_from_arrays();
-    Ok(frame)
+    Ok((frame, order))
 }
 
 fn build_ungrouped(
@@ -534,10 +539,24 @@ fn frame_for_storage(
     metadata: BTreeMap<String, Value>,
     snaps: &[AtomSnap],
 ) -> PyResult<ConFrame> {
+    frame_for_storage_with_order(cell, angles, prebox, postbox, metadata, snaps)
+        .map(|(frame, _order)| frame)
+}
+
+/// The stored frame and `order[i]`, the stored index of `snaps[i]`.
+fn frame_for_storage_with_order(
+    cell: [f64; 3],
+    angles: [f64; 3],
+    prebox: &[String; 2],
+    postbox: &[String; 2],
+    metadata: BTreeMap<String, Value>,
+    snaps: &[AtomSnap],
+) -> PyResult<(ConFrame, Vec<usize>)> {
     match try_build_grouped(cell, angles, prebox, postbox, metadata.clone(), snaps) {
-        Ok(frame) => Ok(frame),
-        Err(ParseError::MassMismatch { .. }) => Ok(build_ungrouped(
-            cell, angles, prebox, postbox, metadata, snaps,
+        Ok(built) => Ok(built),
+        Err(ParseError::MassMismatch { .. }) => Ok((
+            build_ungrouped(cell, angles, prebox, postbox, metadata, snaps),
+            (0..snaps.len()).collect(),
         )),
         Err(e) => Err(PyValueError::new_err(e.to_string())),
     }
@@ -610,8 +629,15 @@ impl PyConFrame {
     }
 
     fn snapshot_atoms(&self, py: Python<'_>) -> Vec<AtomSnap> {
+        let cached = self.atoms_ready.load(std::sync::atomic::Ordering::Acquire);
         (0..self.n_atoms())
-            .map(|i| self.snap_unchecked(py, i))
+            .map(|i| {
+                let mut snap = self.snap_unchecked(py, i);
+                if cached {
+                    snap.origin = Some(i);
+                }
+                snap
+            })
             .collect()
     }
 
@@ -692,7 +718,7 @@ impl PyConFrame {
 
     fn replace_atoms(&mut self, py: Python<'_>, snaps: Vec<AtomSnap>) -> PyResult<()> {
         let meta = self.metadata_map(py)?;
-        let inner = frame_for_storage(
+        let (inner, order) = frame_for_storage_with_order(
             self.cell,
             self.angles,
             &self.prebox_header,
@@ -701,6 +727,30 @@ impl PyConFrame {
             &snaps,
         )?;
         let stored_snaps = snaps_from_frame(&inner);
+        let old_atoms = self.atoms.bind(py).clone();
+        let mut kept: Vec<Option<usize>> = vec![None; stored_snaps.len()];
+        let mut claimed = vec![false; old_atoms.len()];
+        for (snap, &at) in snaps.iter().zip(&order) {
+            if let Some(origin) = snap.origin
+                && origin < claimed.len()
+                && !claimed[origin]
+            {
+                claimed[origin] = true;
+                kept[at] = Some(origin);
+            }
+        }
+        let atoms = PyList::empty(py);
+        for (stored, origin) in stored_snaps.iter().zip(kept) {
+            let datum = datum_from_snap(stored);
+            match origin {
+                Some(origin) => {
+                    let item = old_atoms.get_item(origin)?;
+                    *item.cast::<PyAtomDatum>()?.try_borrow_mut()? = datum;
+                    atoms.append(item)?;
+                }
+                None => atoms.append(Py::new(py, datum)?)?,
+            }
+        }
         self.n_atoms = inner.atom_data.len();
         self.inner = Some(inner);
         self.slab = None;
@@ -708,8 +758,7 @@ impl PyConFrame {
         self.store = None;
         self.columns = pyo3::sync::PyOnceLock::new();
         self.xyz_owned = None;
-        let atoms: Vec<PyAtomDatum> = stored_snaps.iter().map(datum_from_snap).collect();
-        self.atoms = py_atoms_to_list(py, &atoms)?;
+        self.atoms = atoms.unbind();
         self.atoms_ready
             .store(true, std::sync::atomic::Ordering::Release);
         self.note_mutated();
@@ -1558,7 +1607,7 @@ impl PyAtomIter {
     }
 }
 
-/// Live sequence of atom views. Mutations update the owning frame.
+/// `frame.atoms`: the `Atom` projection. Mutations update the owning frame.
 #[pyclass(name = "AtomSequence", unsendable)]
 struct PyAtomSeq {
     frame: Py<PyConFrame>,

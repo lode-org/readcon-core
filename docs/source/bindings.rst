@@ -303,7 +303,9 @@ Types
     column access does not materialize those objects; first access to
     ``frame.atoms`` does. Its assignment, deletion, ``append()``, ``insert()``
     and ``extend()`` methods mutate the owning frame and preserve CON
-    type-group order. A direct frame slice is an independent ``ConFrame``.
+    type-group order; an ``Atom`` already taken from ``frame.atoms`` that
+    was not replaced or deleted stays part of the frame. A direct frame
+    slice is an independent ``ConFrame``.
 
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and
