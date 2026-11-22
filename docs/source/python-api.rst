@@ -149,7 +149,9 @@ made before ``.atoms`` exists. ``symbols`` is a ``FrameSymbols`` of
 interned runs and ``symbols()`` returns an object array from those
 runs. ``atomic_numbers`` and ``fixed_mask_array`` are copies: Z is
 derived, and the per-axis flags live on each atom rather than in a
-numeric column. None of these build ``.atoms``.
+numeric column. None of these array getters, ``len``, ``repr``, or
+``has_velocities`` build ``.atoms``; indexing, iterating, or reading
+``.atoms`` or ``index_projection`` does.
 
 .. code:: python
 
