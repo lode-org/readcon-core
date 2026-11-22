@@ -1019,7 +1019,13 @@ def check_conformance() -> str:
     ]
     version = (ROOT.parents[1] / "VERSION").read_text().strip()
     spec_blob8 = subprocess.run(
-        ["git", "-C", str(REPO), "hash-object", str(REPO / "docs" / "orgmode" / "spec.org")],
+        [
+            "git",
+            "-C",
+            str(REPO),
+            "hash-object",
+            str(REPO / "docs" / "orgmode" / "spec.org"),
+        ],
         capture_output=True,
         text=True,
         check=True,

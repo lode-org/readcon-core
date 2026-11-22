@@ -63,7 +63,9 @@ def _default_paths() -> tuple[Path, Path]:
     if by_blob.is_file():
         return base, by_blob
     if base.is_file():
-        existing = json.loads(base.read_text(encoding="utf-8")).get("spec", {}).get("sha256")
+        existing = (
+            json.loads(base.read_text(encoding="utf-8")).get("spec", {}).get("sha256")
+        )
         if existing != hashlib.sha256(SPEC.read_bytes()).hexdigest():
             return base, by_blob
         return ROOT / "data" / "spec" / "clause_coverage.json", base
