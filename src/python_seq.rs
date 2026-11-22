@@ -1617,6 +1617,18 @@ impl PyAtomSeq {
         frame.replace_atoms(py, snaps)
     }
 
+    #[pyo3(signature = (index = -1))]
+    fn pop(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
+        let mut frame = exclusive(self.frame.bind(py))?;
+        frame.ensure_atoms(py)?;
+        let index = frame.normalize_index(index)?;
+        let popped = frame.atoms.bind(py).get_item(index)?.unbind();
+        let mut snaps = frame.snapshot_atoms(py);
+        snaps.remove(index);
+        frame.replace_atoms(py, snaps)?;
+        Ok(popped)
+    }
+
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         Ok(format!("AtomSequence(n={})", self.frame.borrow(py).n_atoms()))
     }
