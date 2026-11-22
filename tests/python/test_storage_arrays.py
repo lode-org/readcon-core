@@ -767,6 +767,114 @@ def test_atom_list_race_keeps_frame_consistent_and_writable() -> None:
     assert len(final) == 5
 
 
+_RACE_PRELUDE = f"""
+import gc, threading, time
+import readcon
+
+frame = readcon.read_con({str(CORPUS / "tiny_cuh2_vel_forces.con")!r}, n_threads=1)[0]
+he = [
+    readcon.Atom("He", 2.0, 2.0, 2.0, atom_id=2000 + i, vx=2.0, vy=2.0, vz=2.0)
+    for i in range(6)
+]
+"""
+
+
+def _run_race_script(body: str) -> str:
+    """Run in a child so a deadlock fails the test instead of hanging it."""
+    import subprocess
+
+    try:
+        done = subprocess.run(
+            [sys.executable, "-c", _RACE_PRELUDE + body],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail("atom list race script deadlocked")
+    assert done.returncode == 0, done.stderr
+    return done.stdout
+
+
+def test_atom_list_race_writer_does_not_stall_the_interpreter() -> None:
+    """Caller code a writer runs must not hold the writer lock: another
+    writer blocked on it would starve the GIL handoff or a free-threaded
+    stop-the-world, and a nested write would block on itself."""
+    out = _run_race_script(
+        """
+entered = threading.Event()
+
+def gen():
+    yield he[0]
+    entered.set()
+    time.sleep(0.3)
+    gc.collect()
+    yield he[1]
+
+def nested():
+    yield he[2]
+    live.pop()
+    yield he[3]
+
+with readcon._atom_list_race(frame) as live:
+    def other():
+        entered.wait()
+        live.append(he[5])
+
+    t = threading.Thread(target=other)
+    t.start()
+    live.replace(gen())
+    t.join()
+    live.replace(nested())
+    assert [a.atom_id for a in frame.atoms] == [2002, 2003]
+assert len(frame) == len(frame.atoms) == 2
+print("ok")
+"""
+    )
+    assert out.strip() == "ok"
+
+
+def test_atom_list_race_refuses_writes_after_exit() -> None:
+    """A write still consuming its iterable when the context closes must be
+    refused, and closing must not wait on that iterable."""
+    out = _run_race_script(
+        """
+started, closed = threading.Event(), threading.Event()
+errors = []
+
+def gen():
+    yield he[0]
+    started.set()
+    closed.wait()
+    yield he[1]
+
+live = readcon._atom_list_race(frame)
+with live:
+    live.replace(he[2:5])
+
+    def late():
+        try:
+            live.replace(gen())
+        except RuntimeError as err:
+            errors.append(str(err))
+
+    t = threading.Thread(target=late)
+    t.start()
+    started.wait()
+closed.set()
+t.join()
+assert errors == ["atom list race handle is not active"], errors
+assert [a.atom_id for a in frame.atoms] == [2002, 2003, 2004]
+assert len(frame) == 3
+again = readcon.read_con_string(readcon.write_con_string([frame]))[0]
+assert again.atom_ids_array().tolist() == [2002, 2003, 2004]
+print("ok")
+"""
+    )
+    assert out.strip() == "ok"
+
+
 @pytest.mark.skipif(
     not _free_threaded(),
     reason="needs a free-threaded interpreter",
