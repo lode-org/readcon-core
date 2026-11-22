@@ -15,6 +15,17 @@ RECORD_PATHS=(
     bench/h2h/versions.json
 )
 
+# Derived ledger. figure_reads.json is the figure-step open list, rewritten
+# when the figures are regenerated. It is not a measurement record.
+derived_ledger() {
+    case "$1" in
+        paper/cpc/data/figure_reads.json)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
 if [[ "$(git -C "$ROOT" rev-parse "$BASE:$VERSIONS")" != "$EXPECTED_VERSIONS_BLOB" ]]; then
     echo "$BASE has an unexpected $VERSIONS blob" >&2
     exit 1
@@ -38,6 +49,9 @@ while read -r commit; do
 
     while read -r status path; do
         [[ -z "$status" ]] && continue
+        if derived_ledger "$path"; then
+            continue
+        fi
         case "$status" in
             A)
                 tip_blob="$(git -C "$ROOT" rev-parse "$TIP:$path")"

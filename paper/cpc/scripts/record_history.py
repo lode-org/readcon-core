@@ -23,6 +23,8 @@ PREFIXES = (
 # The versioned coverage file is the recount of the sources. Replacing it records
 # the current tests. The superseded clause_coverage.json stays byte-identical.
 RECOUNT = "paper/cpc/data/spec/clause_coverage-"
+# The figure-step open list. It is rewritten when the figures are regenerated.
+FIGURE_READS = "paper/cpc/data/figure_reads.json"
 
 
 def deleted_lines(text: str) -> list[str]:
@@ -39,7 +41,7 @@ def deleted_lines(text: str) -> list[str]:
         removed, path = parts[1], parts[2]
         if not removed.isdigit() or int(removed) == 0:
             continue
-        if path.startswith(RECOUNT):
+        if path == FIGURE_READS or path.startswith(RECOUNT):
             continue
         if any(path.startswith(prefix) for prefix in PREFIXES):
             bad.append(f"{commit} deletes {removed} lines of {path}")
