@@ -1741,7 +1741,7 @@ impl PyConFrame {
         let atoms = this.atoms.bind(py);
         let names = {
             let mut names: Vec<(String, usize)> = Vec::new();
-            for atom in read_atom_list(&atoms)? {
+            for atom in read_atom_list(atoms)? {
                 match names.last_mut() {
                     Some((last, count)) if *last == atom.symbol => *count += 1,
                     _ => names.push((atom.symbol, 1usize)),
@@ -2546,7 +2546,7 @@ impl PyConFrame {
 
     fn py_atoms(&self, py: Python<'_>) -> PyResult<Vec<PyAtomDatum>> {
         self.ensure_atoms(py)?;
-        read_atom_list(&self.atoms.bind(py))
+        read_atom_list(self.atoms.bind(py))
     }
 }
 

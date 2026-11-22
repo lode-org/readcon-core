@@ -659,7 +659,7 @@ impl PyConFrame {
     fn snapshot_atoms(&self, py: Python<'_>) -> Vec<AtomSnap> {
         if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
             let list = self.atoms.bind(py);
-            return match read_atom_list(&list) {
+            return match read_atom_list(list) {
                 Ok(datums) => datums
                     .into_iter()
                     .enumerate()
@@ -1960,7 +1960,7 @@ impl PyAtomListRace {
         let incoming_mass = datum.mass.unwrap_or(0.0);
         let _write = self.write_guard(py)?;
         let frame = self.frame.borrow(py);
-        for existing in read_atom_list(&frame.atoms.bind(py))? {
+        for existing in read_atom_list(frame.atoms.bind(py))? {
             if existing.atom_id == datum.atom_id {
                 return Err(PyValueError::new_err(format!(
                     "duplicate atom_id {} in race list",
