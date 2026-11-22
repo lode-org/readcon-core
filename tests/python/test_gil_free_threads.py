@@ -353,6 +353,56 @@ def test_write_columns_copies_a_frozen_readonly_slab(tmp_path: Path) -> None:
     _rejecting_stores(slab, body)
 
 
+class _ShrinkOnLookup(str):
+    """A dict key whose first comparison shrinks `array` in place.
+
+    The lookup runs Python code inside the call, at a fixed point, so the
+    store lands between two steps of the copy every time.
+    """
+
+    def __new__(cls, text: str, array):
+        key = super().__new__(cls, text)
+        key.array = array
+        key.fired = False
+        return key
+
+    __hash__ = str.__hash__
+
+    def __eq__(self, other: object) -> bool:
+        if not self.fired:
+            self.fired = True
+            self.array.resize((1, 1, 3), refcheck=False)
+        return str.__eq__(self, other)
+
+
+def test_write_columns_rereads_a_column_shrunk_after_capture(tmp_path: Path) -> None:
+    """write_columns takes `fixed`, then looks up `velocities`.
+
+    A store between the two that reallocates `fixed` must not leave the copy
+    reading the old buffer: the copy loads from the live array and refuses
+    one that no longer holds the frames.
+    """
+    import numpy as np
+    import readcon
+
+    shape = (8, 64)
+    fixed = np.zeros((*shape, 3))
+    key = _ShrinkOnLookup("velocities", fixed)
+    columns = {
+        "positions": np.zeros((*shape, 3)),
+        "masses": np.full(shape, 63.546),
+        "cell": np.tile([10.0, 10.0, 10.0, 90.0, 90.0, 90.0], (shape[0], 1)),
+        "fixed": fixed,
+        key: np.zeros((*shape, 3)),
+    }
+    out = tmp_path / "shrunk.con"
+    with pytest.raises(ValueError, match="^column$"):
+        readcon.write_columns(str(out), columns)
+    assert key.fired
+    assert fixed.shape == (1, 1, 3)
+    assert not out.exists()
+
+
 def test_write_columns_accepts_readonly_positions(tmp_path: Path) -> None:
     import numpy as np
     import readcon
