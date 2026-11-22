@@ -207,19 +207,20 @@ allow_exact = {
     # it from Cargo.toml, and the Snakemake rule cargo_version runs that.
     "paper/cpc/src/cargo_version.tex",
 }
-# gen_spec_supp.py records a measured release-preparation tree in a
-# version-named file. An unmeasured release is pending, not a reason to
-# manufacture a placeholder record.
-spec_measurement = f"paper/cpc/data/spec/spec-measurement-{version}.json"
-if (root / spec_measurement).is_file():
-    allow_exact.add(spec_measurement)
-else:
-    print(f"PENDING: {spec_measurement} has not been measured")
-clause_coverage = f"paper/cpc/data/spec/clause_coverage-{version}.json"
-if (root / clause_coverage).is_file():
-    allow_exact.add(clause_coverage)
-else:
-    print(f"PENDING: {clause_coverage} has not been measured")
+# These records are append-only. A corrected measurement adds an -rN
+# revision instead of rewriting the first version-named record.
+for stem in ("spec-measurement", "clause_coverage"):
+    records = sorted(
+        (root / "paper/cpc/data/spec").glob(
+            f"{stem}-{version}*.json"
+        )
+    )
+    if records:
+        allow_exact.update(
+            path.relative_to(root).as_posix() for path in records
+        )
+    else:
+        print(f"PENDING: {stem}-{version}.json has not been measured")
 # Measured campaigns keep the package version they were timed with.
 # A later release must not rewrite that field to VERSION.
 recorded_results = {
