@@ -656,15 +656,20 @@ impl PyConFrame {
     }
 
     fn snapshot_atoms(&self, py: Python<'_>) -> Vec<AtomSnap> {
-        let cached = self.atoms_ready.load(std::sync::atomic::Ordering::Acquire);
+        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            let list = self.atoms.bind(py);
+            return pyo3::sync::critical_section::with_critical_section(list.as_any(), || {
+                (0..list.len())
+                    .map(|i| {
+                        let mut snap = self.snap_unchecked(py, i);
+                        snap.origin = Some(i);
+                        snap
+                    })
+                    .collect()
+            });
+        }
         (0..self.n_atoms())
-            .map(|i| {
-                let mut snap = self.snap_unchecked(py, i);
-                if cached {
-                    snap.origin = Some(i);
-                }
-                snap
-            })
+            .map(|i| self.store_snap_unchecked(i))
             .collect()
     }
 
@@ -1648,7 +1653,7 @@ struct PyAtomSeq {
 #[pymethods]
 impl PyAtomSeq {
     fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
-        Ok(shared(self.frame.bind(py))?.n_atoms())
+        Ok(shared(self.frame.bind(py))?.atom_count(py))
     }
 
     fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyIterator>> {
@@ -1754,7 +1759,12 @@ impl PyAtomSeq {
     fn pop(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
         let mut frame = exclusive(self.frame.bind(py))?;
         frame.ensure_atoms(py)?;
-        let index = frame.normalize_index(index)?;
+        let n = frame.atom_count(py) as isize;
+        let i = if index < 0 { index + n } else { index };
+        if i < 0 || i >= n {
+            return Err(PyIndexError::new_err("ConFrame index out of range"));
+        }
+        let index = i as usize;
         let popped = frame.atoms.bind(py).get_item(index)?.unbind();
         let mut snaps = frame.snapshot_atoms(py);
         snaps.remove(index);
@@ -1762,20 +1772,208 @@ impl PyAtomSeq {
         Ok(popped)
     }
 
-    /// Debug-only list access for the free-threaded race regression.
-    #[cfg(debug_assertions)]
-    #[getter]
-    fn _race_list(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
-        let frame = self.frame.borrow(py);
-        frame.ensure_atoms(py)?;
-        Ok(frame.atoms.clone_ref(py))
-    }
-
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         Ok(format!(
             "AtomSequence(n={})",
-            shared(self.frame.bind(py))?.n_atoms()
+            shared(self.frame.bind(py))?.atom_count(py)
         ))
+    }
+}
+
+const RACE_READY: u8 = 0;
+const RACE_ACTIVE: u8 = 1;
+const RACE_CLOSED: u8 = 2;
+
+fn validate_race_atom_spread(atom: &PyAtomDatum) -> PyResult<()> {
+    if atom.has_spread() {
+        let row = [
+            atom.sx.unwrap_or(0.0),
+            atom.sy.unwrap_or(0.0),
+            atom.sz.unwrap_or(0.0),
+        ];
+        if !row.iter().all(|v| v.is_finite() && *v >= 0.0) {
+            return Err(PyValueError::new_err(
+                "spread components must be finite and non-negative",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_race_atoms(atoms: &[PyAtomDatum]) -> PyResult<()> {
+    let mut seen_ids = std::collections::HashSet::with_capacity(atoms.len());
+    let mut species_masses: std::collections::HashMap<&str, f64> = std::collections::HashMap::new();
+    for atom in atoms {
+        validate_race_atom_spread(atom)?;
+        if !seen_ids.insert(atom.atom_id) {
+            return Err(PyValueError::new_err(format!(
+                "duplicate atom_id {} in race list",
+                atom.atom_id
+            )));
+        }
+        let mass = atom.mass.unwrap_or(0.0);
+        match species_masses.get(atom.symbol.as_str()) {
+            Some(&first) => {
+                if (mass - first).abs() > ConFrameBuilder::TYPE_MASS_ABS_TOL {
+                    return Err(PyValueError::new_err(format!(
+                        "atoms of type {} have inconsistent masses",
+                        atom.symbol
+                    )));
+                }
+            }
+            None => {
+                species_masses.insert(atom.symbol.as_str(), mass);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Scoped, validated handle for racing in-place atom-list mutations against
+/// concurrent frame readers on free-threaded builds.
+#[pyclass(name = "_AtomListRace")]
+struct PyAtomListRace {
+    frame: Py<PyConFrame>,
+    state: std::sync::atomic::AtomicU8,
+}
+
+impl PyAtomListRace {
+    fn ensure_active(&self) -> PyResult<()> {
+        if self.state.load(std::sync::atomic::Ordering::Acquire) != RACE_ACTIVE {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "atom list race handle is not active",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[pymethods]
+impl PyAtomListRace {
+    fn __enter__<'py>(slf: Bound<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        {
+            let this = slf.borrow();
+            this.state
+                .compare_exchange(
+                    RACE_READY,
+                    RACE_ACTIVE,
+                    std::sync::atomic::Ordering::AcqRel,
+                    std::sync::atomic::Ordering::Acquire,
+                )
+                .map_err(|_| {
+                    pyo3::exceptions::PyRuntimeError::new_err(
+                        "atom list race handle cannot be re-entered",
+                    )
+                })?;
+            if let Err(err) = this.frame.borrow(py).ensure_atoms(py) {
+                this.state
+                    .store(RACE_CLOSED, std::sync::atomic::Ordering::Release);
+                return Err(err);
+            }
+        }
+        Ok(slf)
+    }
+
+    #[pyo3(signature = (_exc_type=None, _exc_val=None, _exc_tb=None))]
+    fn __exit__(
+        &self,
+        py: Python<'_>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_val: Option<&Bound<'_, PyAny>>,
+        _exc_tb: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<bool> {
+        let prev = self
+            .state
+            .swap(RACE_CLOSED, std::sync::atomic::Ordering::AcqRel);
+        if prev == RACE_ACTIVE {
+            let mut frame = self.frame.borrow_mut(py);
+            let snaps = frame.snapshot_atoms(py);
+            frame.replace_atoms(py, snaps)?;
+        }
+        Ok(false)
+    }
+
+    fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
+        self.ensure_active()?;
+        Ok(self.frame.borrow(py).atom_count(py))
+    }
+
+    fn replace(&self, py: Python<'_>, atoms: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.ensure_active()?;
+        let mut datums = Vec::new();
+        let fresh = PyList::empty(py);
+        for item in atoms.try_iter()? {
+            let item = item?;
+            let datum = item
+                .cast::<PyAtomDatum>()
+                .map_err(|_| {
+                    PyTypeError::new_err("ConFrame atom cache must hold readcon.Atom objects")
+                })?
+                .borrow()
+                .clone();
+            datums.push(datum);
+            fresh.append(item)?;
+        }
+        validate_race_atoms(&datums)?;
+        let frame = self.frame.borrow(py);
+        let list = frame.atoms.bind(py);
+        list.as_any()
+            .set_item(PySlice::new(py, 0, isize::MAX, 1), &fresh)?;
+        Ok(())
+    }
+
+    fn append(&self, py: Python<'_>, atom: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.ensure_active()?;
+        let datum = atom
+            .cast::<PyAtomDatum>()
+            .map_err(|_| PyTypeError::new_err("ConFrame atom cache must hold readcon.Atom objects"))?
+            .borrow()
+            .clone();
+        validate_race_atom_spread(&datum)?;
+        let incoming_mass = datum.mass.unwrap_or(0.0);
+        let frame = self.frame.borrow(py);
+        let list = frame.atoms.bind(py);
+        pyo3::sync::critical_section::with_critical_section(list.as_any(), || -> PyResult<()> {
+            for item in list.iter() {
+                let existing = item
+                    .cast::<PyAtomDatum>()
+                    .map_err(|_| {
+                        PyTypeError::new_err("ConFrame atom cache must hold readcon.Atom objects")
+                    })?
+                    .borrow();
+                if existing.atom_id == datum.atom_id {
+                    return Err(PyValueError::new_err(format!(
+                        "duplicate atom_id {} in race list",
+                        datum.atom_id
+                    )));
+                }
+                if existing.symbol == datum.symbol {
+                    let first = existing.mass.unwrap_or(0.0);
+                    if (incoming_mass - first).abs() > ConFrameBuilder::TYPE_MASS_ABS_TOL {
+                        return Err(PyValueError::new_err(format!(
+                            "atoms of type {} have inconsistent masses",
+                            datum.symbol
+                        )));
+                    }
+                }
+            }
+            list.append(atom)
+        })
+    }
+
+    fn pop(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.ensure_active()?;
+        let frame = self.frame.borrow(py);
+        Ok(frame.atoms.bind(py).as_any().call_method0("pop")?.unbind())
+    }
+}
+
+#[pyfunction]
+fn _atom_list_race(frame: Py<PyConFrame>) -> PyAtomListRace {
+    PyAtomListRace {
+        frame,
+        state: std::sync::atomic::AtomicU8::new(RACE_READY),
     }
 }
 
