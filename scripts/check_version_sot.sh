@@ -239,6 +239,7 @@ recorded_results = {
     "bench/fidelity/results/timing.json",
     "bench/h2h/versions.json",
     "paper/cpc/data/spec/version_drift.json",
+    "paper/cpc/data/spec/corpus_recount.json",
 }
 skip_dirs = {
     ".git",
