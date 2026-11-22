@@ -381,6 +381,41 @@ for rel in sorted(recorded_results):
         if not named_path.is_file():
             die(f"{rel} names {named}, which is absent")
         else:
+            if len(source_commits) != 1 or not re.fullmatch(
+                r"[0-9a-f]{40}", source_commits[0]
+            ):
+                die(
+                    f"{rel} names {named} and must record one 40-char source_commit, "
+                    f"found {source_commits}"
+                )
+            else:
+                record_commit = source_commits[0]
+                touched = subprocess.run(
+                    [
+                        "git",
+                        "diff-tree",
+                        "--no-commit-id",
+                        "--name-only",
+                        "-r",
+                        "--root",
+                        record_commit,
+                        "--",
+                        named,
+                    ],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                )
+                if touched.returncode != 0 or named not in touched.stdout.splitlines():
+                    die(f"{rel} source_commit {record_commit} did not store {named}")
+                stored = subprocess.run(
+                    ["git", "cat-file", "blob", f"{record_commit}:{named}"],
+                    cwd=root,
+                    capture_output=True,
+                )
+                if stored.returncode != 0 or stored.stdout != named_path.read_bytes():
+                    die(f"{named} does not match {record_commit}:{named}")
+
             named_versions = []
 
             def collect(node, into=named_versions):

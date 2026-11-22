@@ -146,6 +146,54 @@ def test_claisen_build_record_must_match_its_source_commit():
     assert "paper/cpc/data/claisen/readcon-build.json" in output
     assert "9.9.9" in output
 
+    # A commit with the same VERSION that did not store results.json must fail.
+    unrelated = subprocess.check_output(
+        ["git", "rev-parse", "af7f800603ac"], cwd=ROOT, text=True
+    ).strip()
+    tampered = json.loads(original)
+    tampered["source_commit"] = unrelated
+    record.write_text(json.dumps(tampered, indent=2) + "\n", encoding="utf-8")
+    try:
+        result = subprocess.run(
+            ["bash", str(gate)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        record.write_text(original, encoding="utf-8")
+    assert result.returncode != 0, (
+        "gate accepted a source_commit that did not store the campaign"
+    )
+    output = result.stdout + result.stderr
+    assert "paper/cpc/data/claisen/readcon-build.json" in output
+    assert unrelated in output
+
+    # An earlier commit that wrote a different results.json blob must also fail.
+    earlier = subprocess.check_output(
+        ["git", "rev-parse", "79dc499454a1"], cwd=ROOT, text=True
+    ).strip()
+    tampered = json.loads(original)
+    tampered["source_commit"] = earlier
+    record.write_text(json.dumps(tampered, indent=2) + "\n", encoding="utf-8")
+    try:
+        result = subprocess.run(
+            ["bash", str(gate)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        record.write_text(original, encoding="utf-8")
+    assert result.returncode != 0, (
+        "gate accepted a source_commit whose stored campaign blob differs"
+    )
+    output = result.stdout + result.stderr
+    assert "paper/cpc/data/claisen/results.json" in output
+    assert earlier in output
+
 
 def test_claisen_campaign_version_must_match_the_build_record():
     gate = ROOT / "scripts" / "check_version_sot.sh"
