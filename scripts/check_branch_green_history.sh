@@ -79,7 +79,11 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 sys.path.insert(0, str(Path(sys.argv[2]) / "scripts"))
-from spec_measurement_schema import MeasurementSchemaError, measured_commit
+from spec_measurement_schema import (
+    MeasurementSchemaError,
+    measured_commit,
+    resolve_measurement,
+)
 
 version = (root / "VERSION").read_text().strip()
 directory = root / "paper/cpc/data/spec"
@@ -107,9 +111,12 @@ path = max(paths, key=revision)
 record = json.loads(path.read_text())
 relpath = path.resolve().relative_to(root.resolve()).as_posix()
 try:
-    commit = measured_commit(record, relpath)
+    chosen, record = resolve_measurement(records, relpath)
+    commit = measured_commit(record, chosen)
 except MeasurementSchemaError as exc:
     raise SystemExit(str(exc)) from None
+if chosen != relpath:
+    print(f"OK: {relpath} superseded by {chosen}")
 if commit is None:
     print(f"OK: {path.name} uses legacy schema without measured_at.commit")
     raise SystemExit(0)
@@ -122,14 +129,15 @@ def git(*args: str) -> str:
         raise SystemExit(done.stderr)
     return done.stdout.strip()
 
+name = Path(chosen).name
 if git("show", f"{commit}:VERSION") != record["tree"]["release"]:
-    raise SystemExit(f"{path.name} does not match {commit}:VERSION")
+    raise SystemExit(f"{name} does not match {commit}:VERSION")
 if git("rev-parse", f"{commit}:{record['spec']}") != record["tree"]["spec_blob"]:
-    raise SystemExit(f"{path.name} does not match {commit}:{record['spec']}")
+    raise SystemExit(f"{name} does not match {commit}:{record['spec']}")
 release_tag = f"v{record['tree']['release']}"
 if record["tree"]["tagged"] or release_tag in {entry["tag"] for entry in record["tags"]}:
-    raise SystemExit(f"{path.name} falsely claims the pending {release_tag} tag")
-print(f"OK: {path.name} records untagged measurement commit {commit}")
+    raise SystemExit(f"{name} falsely claims the pending {release_tag} tag")
+print(f"OK: {name} records untagged measurement commit {commit}")
 PY
 
     if [[ "${READCON_HISTORY_RECORDS_ONLY:-0}" == "1" ]]; then
