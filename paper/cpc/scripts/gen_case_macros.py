@@ -344,7 +344,7 @@ def main() -> None:
                 "eOne",
                 "evidence/results/e1_restart.json, evidence/results/e1_restart_lbfgs_control.json",
             ),
-            ("band", f"{BANDS}/*.npz"),
+            ("band", BANDS),
             ("survey", "data/failure/matrix.json"),
             ("drift", "data/failure/drift_extxyz.json, data/failure/drift_extxyz.csv"),
         ):
