@@ -1355,7 +1355,8 @@ impl PyConFrame {
                 Some((last, count)) if *last == atom.symbol => *count += 1,
                 _ => names.push((atom.symbol.clone(), 1usize)),
             }
-        }
+            PyResult::Ok(names)
+        })?;
         Ok(FrameSymbols::from_runs(
             py,
             names.iter().map(|(name, count)| (name.as_str(), *count)),
@@ -1903,7 +1904,12 @@ impl PyConFrame {
 
     fn atom_count(&self, py: Python<'_>) -> usize {
         if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
-            return self.atoms.bind(py).len();
+            // pyo3 reads `ob_size` with a plain load. Another thread's
+            // append stores it inside the list's critical section.
+            let list = self.atoms.bind(py);
+            return pyo3::sync::critical_section::with_critical_section(list.as_any(), || {
+                list.len()
+            });
         }
         if self.n_atoms > 0 {
             return self.n_atoms;
@@ -2112,8 +2118,8 @@ impl PyConFrame {
                 item.extract::<PyAtomDatum>().map_err(|_| {
                     PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
                 })
-            })
-            .collect()
+                .collect()
+        })
     }
 
     fn meta<'py>(&self, py: Python<'py>) -> PyResult<&Bound<'py, PyDict>> {
