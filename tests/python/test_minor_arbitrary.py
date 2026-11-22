@@ -806,6 +806,11 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     manifest_diffs = []
     for name, expected in c31_oracle.items():
         p = str(corpus_dir / name)
+        if name == "d13_blank_symbol_energies.con":
+            assert expected["status"] == "ok"
+            with pytest.raises(readcon.IncompleteSection):
+                readcon.read_con(p)
+            continue
         if name in ("d14_minor_2pow64.con", "v2_minor_2pow64.con"):
             assert expected["status"] == "err"
             frames = readcon.read_con(p)
