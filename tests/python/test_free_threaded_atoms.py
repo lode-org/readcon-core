@@ -11,7 +11,7 @@ import threading
 
 import pytest
 
-pytestmark = pytest.mark.skipif(
+requires_free_threaded = pytest.mark.skipif(
     sysconfig.get_config_var("Py_GIL_DISABLED") != 1,
     reason="requires a free-threaded interpreter",
 )
@@ -119,6 +119,7 @@ def _write(shared: Shared, worker: int, step: int) -> None:
         frame.atoms[i] = shared.held
 
 
+@requires_free_threaded
 def test_shared_frame_atoms_never_fail_under_threads() -> None:
     shared = Shared()
     barrier = threading.Barrier(N_WORKERS)
@@ -149,3 +150,104 @@ def test_shared_frame_atoms_never_fail_under_threads() -> None:
     for i in range(N_ATOMS):
         assert frame.atoms[i] is frame.atoms[i]
         assert frame[i].x == frame.atoms[i].x
+
+
+@requires_free_threaded
+def test_select_functions_wait_for_concurrent_writes() -> None:
+    import readcon
+
+    shared = Shared()
+    frame = shared.frame
+    stop = threading.Event()
+    failures: list[BaseException] = []
+    lock = threading.Lock()
+
+    def writer() -> None:
+        step = 0
+        try:
+            while not stop.is_set():
+                frame[step % N_ATOMS].symbol = SYMBOLS[step % 2]
+                step += 1
+        except BaseException as err:  # noqa: BLE001
+            with lock:
+                failures.append(err)
+
+    def reader(fn_name: str) -> None:
+        fn = getattr(readcon, fn_name)
+        try:
+            for _ in range(N_ROUNDS):
+                try:
+                    fn(frame, "all")
+                except NotImplementedError:
+                    pass
+                except RuntimeError as err:
+                    if "borrowed" in str(err).lower():
+                        raise
+        except BaseException as err:  # noqa: BLE001
+            with lock:
+                failures.append(err)
+
+    wt = threading.Thread(target=writer)
+    readers = [
+        threading.Thread(target=reader, args=(name,))
+        for name in ("select_on_frame", "select_atom_indices")
+    ]
+    wt.start()
+    for rt in readers:
+        rt.start()
+    for rt in readers:
+        rt.join(timeout=60.0)
+    stop.set()
+    wt.join(timeout=60.0)
+    assert not any(t.is_alive() for t in [wt, *readers]), "a worker hung"
+    assert not failures, [f"{type(err).__name__}: {err}" for err in failures[:5]]
+
+
+def test_same_thread_reentry_raises_runtime_error() -> None:
+    import readcon
+
+    frame = Shared().frame
+    seen: list[tuple[str, str]] = []
+
+    class MutateOnFloat:
+        def __float__(self) -> float:
+            try:
+                frame.set_energy(1.0)
+            except BaseException as err:  # noqa: BLE001
+                seen.append((type(err).__name__, str(err)))
+                raise
+            return 1.0
+
+    class ReadOnFloat:
+        def __float__(self) -> float:
+            try:
+                _ = frame.cell
+            except BaseException as err:  # noqa: BLE001
+                seen.append((type(err).__name__, str(err)))
+                raise
+            return 1.0
+
+    # Shared -> exclusive reentry via frame.energy propagates RuntimeError.
+    frame.metadata["energy"] = MutateOnFloat()
+    with pytest.raises(RuntimeError, match="borrowed"):
+        _ = frame.energy
+    assert seen[-1][0] == "RuntimeError"
+
+    # Exclusive -> shared and exclusive -> exclusive via set_metadata.
+    seen.clear()
+    with pytest.raises(ValueError):
+        frame.metadata = {"k": ReadOnFloat()}
+    assert seen == [("RuntimeError", "Already mutably borrowed")]
+
+    seen.clear()
+    with pytest.raises(ValueError):
+        frame.metadata = {"k": MutateOnFloat()}
+    assert seen == [("RuntimeError", "Already borrowed")]
+
+    # Shared -> exclusive via module-level select functions must fail fast, not spin.
+    frame.metadata["trigger"] = MutateOnFloat()
+    for fn in (readcon.select_on_frame, readcon.select_atom_indices):
+        seen.clear()
+        with pytest.raises(ValueError):
+            fn(frame, "all")
+        assert seen == [("RuntimeError", "Already borrowed")]

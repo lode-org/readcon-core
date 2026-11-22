@@ -1779,8 +1779,7 @@ impl PyConFrame {
     ///
     /// Requires a chemfiles-linked build (``readcon-chemfiles`` / ``--features chemfiles``).
     fn select(slf: &Bound<'_, Self>, py: Python<'_>, selection: &str) -> PyResult<Py<PyAny>> {
-        let this = shared(slf)?;
-        select_on_frame(py, &this, selection)
+        select_on_frame(py, slf, selection)
     }
 
     /// Atom-context chemfiles selection → sorted unique ``atom_data`` indices.
@@ -1789,8 +1788,7 @@ impl PyConFrame {
         py: Python<'_>,
         selection: &str,
     ) -> PyResult<Vec<usize>> {
-        let this = shared(slf)?;
-        select_atom_indices(py, &this, selection)
+        select_atom_indices(py, slf, selection)
     }
 
     /// Write this frame to a CON path (single-frame convenience).
@@ -9049,9 +9047,13 @@ fn read_chemfiles_memory(
 /// - `matches`: list[list[int]] each inner list has 1-4 atom indices
 /// - `primary_indices`: list[int] first atom of each match
 #[pyfunction]
-fn select_on_frame(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyResult<Py<PyAny>> {
+fn select_on_frame(
+    py: Python<'_>,
+    frame: &Bound<'_, PyConFrame>,
+    selection: &str,
+) -> PyResult<Py<PyAny>> {
     use crate::chemfiles_selection::evaluate_selection_on_con_frame;
-    let rust_frame = frame.to_con_frame(py)?;
+    let rust_frame = shared(frame)?.to_con_frame(py)?;
     let selection_owned = selection.to_owned();
     let result = py
         .detach(|| evaluate_selection_on_con_frame(&selection_owned, &rust_frame))
@@ -9065,11 +9067,11 @@ fn select_on_frame(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyRes
 #[pyfunction]
 fn select_atom_indices(
     py: Python<'_>,
-    frame: &PyConFrame,
+    frame: &Bound<'_, PyConFrame>,
     selection: &str,
 ) -> PyResult<Vec<usize>> {
     use crate::chemfiles_selection::select_atom_indices as rust_select;
-    let rust_frame = frame.to_con_frame(py)?;
+    let rust_frame = shared(frame)?.to_con_frame(py)?;
     let selection_owned = selection.to_owned();
     py.detach(|| rust_select(&selection_owned, &rust_frame))
         .map_err(chemfiles_err_to_py)
