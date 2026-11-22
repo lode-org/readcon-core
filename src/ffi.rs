@@ -2534,6 +2534,59 @@ pub unsafe extern "C" fn rkr_frame_builder_set_last_spread(
     builder.with_spread(d);
     note(RKRStatus::RKR_STATUS_SUCCESS)
 }
+/// Attaches a partial charge to the most recently added atom on a
+/// builder. No-op if no atom has been added yet.
+///
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_last_charge(
+    builder_handle: *mut RKRConFrameBuilder,
+    charge: f64,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.with_charge(charge);
+    note(RKRStatus::RKR_STATUS_SUCCESS)
+}
+/// Attaches a spin scalar to the most recently added atom on a builder.
+/// No-op if no atom has been added yet.
+///
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_last_spin(
+    builder_handle: *mut RKRConFrameBuilder,
+    spin: f64,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.with_spin(spin);
+    note(RKRStatus::RKR_STATUS_SUCCESS)
+}
+/// Attaches a magnetic moment vector to the most recently added atom on
+/// a builder. No-op if no atom has been added yet.
+///
+/// # Safety
+/// builder_handle must be valid. magmom must point to 3 contiguous f64
+/// values.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_last_magmom(
+    builder_handle: *mut RKRConFrameBuilder,
+    magmom: *const f64,
+) -> RKRStatus {
+    if builder_handle.is_null() || magmom.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    let m = unsafe { [*magmom, *magmom.add(1), *magmom.add(2)] };
+    builder.with_magmom(m);
+    note(RKRStatus::RKR_STATUS_SUCCESS)
+}
 /// Attaches a per-atom energy to the most recently added atom on a
 /// builder. No-op if no atom has been added yet.
 ///
@@ -4079,7 +4132,19 @@ pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
     };
     match builder.set_metadata_json(metadata_json) {
         Ok(()) => note(RKRStatus::RKR_STATUS_SUCCESS),
-        Err(_) => note(RKRStatus::RKR_STATUS_INVALID_JSON),
+        Err(err) => {
+            let status = note(RKRStatus::RKR_STATUS_INVALID_JSON);
+            // Keep INVALID_JSON. Name a duplicate key or an out-of-range
+            // number, as the reader does; other JSON failures stay on the
+            // generic status text.
+            let message = err.to_string();
+            if message.contains(crate::parser::DUPLICATE_CON_SPEC_MINOR)
+                || message.contains("number out of range")
+            {
+                set_last_error(status as i32, &message, err.line(), 0);
+            }
+            status
+        }
     }
 }
 /// Sets the units object on an existing frame builder.
@@ -5344,6 +5409,45 @@ pub unsafe extern "C" fn rkr_frame_spreads_view(
     fill_array2_view(frame_handle, out, |f| &f.spreads, true)
 }
 
+/// True when the frame carries a `"charges"` section. False for a
+/// NULL handle.
+///
+/// # Safety
+/// `frame_handle` is NULL or a valid frame handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_has_charges(frame_handle: *const RKRConFrame) -> bool {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.has_charges(),
+        None => false,
+    }
+}
+
+/// True when the frame carries a `"spins"` section. False for a NULL
+/// handle.
+///
+/// # Safety
+/// `frame_handle` is NULL or a valid frame handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_has_spins(frame_handle: *const RKRConFrame) -> bool {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.has_spins(),
+        None => false,
+    }
+}
+
+/// True when the frame carries a `"magmoms"` section. False for a NULL
+/// handle.
+///
+/// # Safety
+/// `frame_handle` is NULL or a valid frame handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_has_magmoms(frame_handle: *const RKRConFrame) -> bool {
+    match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(f) => f.has_magmoms(),
+        None => false,
+    }
+}
+
 /// Borrow per-atom energies, or `SECTION_ABSENT`.
 /// # Safety
 ///
@@ -5681,6 +5785,43 @@ pub unsafe extern "C" fn rkr_frame_copy_spreads(
     out_len: usize,
 ) -> RKRStatus {
     copy_array2_f64(frame_handle, out, out_len, |f| &f.spreads, true)
+}
+/// Copy per-atom charges into `out` (length >= `N`), or `SECTION_ABSENT`.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_charges(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    copy_array1_f64(frame_handle, out, out_len, |f| &f.charges, true)
+}
+/// Copy per-atom spins into `out` (length >= `N`), or `SECTION_ABSENT`.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_spins(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    copy_array1_f64(frame_handle, out, out_len, |f| &f.spins, true)
+}
+/// Copy magnetic moments into row-major `out` (length >= `3 * N`), or
+/// `SECTION_ABSENT`.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle; `out` must hold `out_len` f64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_copy_magmoms(
+    frame_handle: *const RKRConFrame,
+    out: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    copy_array2_f64(frame_handle, out, out_len, |f| &f.magmoms, true)
 }
 /// # Safety
 ///
@@ -8110,6 +8251,279 @@ Coordinates of Component 1
             assert!(saw_energy, "{rel}");
             unsafe { free_rkr_frame_array(arr, n) };
         }
+    }
+
+    #[test]
+    fn c_api_rejects_duplicate_con_spec_minor() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dup.con");
+        let text = concat!(
+            "gen\n",
+            r#"{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"}}"#,
+            "\n10 10 10\n90 90 90\n\n\n0\n\n\n"
+        );
+        std::fs::write(&path, text).unwrap();
+        let c_path = CString::new(path.to_str().unwrap()).unwrap();
+        let frame = unsafe { rkr_read_first_frame(c_path.as_ptr()) };
+        assert!(frame.is_null());
+        let err = unsafe { &*rkr_last_error() };
+        assert_eq!(err.code, RKRStatus::RKR_STATUS_INVALID_JSON as i32);
+        let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert!(msg.contains("duplicate con_spec_minor key"), "{msg}");
+
+        let builder = test_builder_handle();
+        let dup = c_string(
+            r#"{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"}}"#,
+        );
+        let status = unsafe { rkr_frame_builder_set_metadata_json(builder, dup.as_ptr()) };
+        assert_eq!(status, RKRStatus::RKR_STATUS_INVALID_JSON);
+        let err = unsafe { &*rkr_last_error() };
+        let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert!(msg.contains("duplicate con_spec_minor key"), "{msg}");
+        unsafe { free_rkr_frame_builder(builder) };
+    }
+
+    /// Probe cases shared with the Rust, RPC, Python, and Julia tests
+    /// (`tests/fixtures/minor_token_probes.json`).
+    #[test]
+    fn c_api_matches_minor_token_probe_table() {
+        let root: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/minor_token_probes.json"))
+                .unwrap();
+        let cases = root["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 59);
+        let dir = tempfile::tempdir().unwrap();
+        let last_message = || {
+            let err = unsafe { &*rkr_last_error() };
+            (
+                err.code,
+                unsafe { CStr::from_ptr(err.message) }
+                    .to_string_lossy()
+                    .into_owned(),
+            )
+        };
+        for case in cases {
+            let name = case["name"].as_str().unwrap();
+            for (line_key, op) in [("line2_w", "read_w"), ("line2_n", "read_n")] {
+                let line2 = case[line_key].as_str().unwrap();
+                let expected = case[op].as_str().unwrap();
+                let text = format!(
+                    "gen\n{},\"sections\":[\"velocities\"]}}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0.2 0.3 0 0\n",
+                    &line2[..line2.len() - 1]
+                );
+                let path = dir.path().join(format!("{op}.con"));
+                std::fs::write(&path, text).unwrap();
+                let c_path = CString::new(path.to_str().unwrap()).unwrap();
+                let frame = unsafe { rkr_read_first_frame(c_path.as_ptr()) };
+                if expected == "ok" {
+                    assert!(!frame.is_null(), "{name} {op}: {:?}", last_message());
+                    unsafe { free_rkr_frame(frame) };
+                    continue;
+                }
+                assert!(frame.is_null(), "{name} {op}");
+                let (code, msg) = last_message();
+                match expected {
+                    "dup" => {
+                        assert_eq!(code, RKRStatus::RKR_STATUS_INVALID_JSON as i32, "{name}");
+                        assert!(
+                            msg.contains("duplicate con_spec_minor key"),
+                            "{name}: {msg}"
+                        );
+                    }
+                    "invalid" => {
+                        assert_eq!(code, RKRStatus::RKR_STATUS_INVALID_JSON as i32, "{name}");
+                        assert!(!msg.contains("duplicate"), "{name}: {msg}");
+                    }
+                    "units" => {
+                        assert_eq!(code, RKRStatus::RKR_STATUS_PARSE_ERROR as i32, "{name}");
+                        assert!(msg.contains("InvalidUnits"), "{name}: {msg}");
+                    }
+                    other => panic!("{name}: unexpected tag {other}"),
+                }
+            }
+            for (line_key, op) in [("line2_w", "raw_w"), ("line2_n", "raw_n")] {
+                let line2 = case[line_key].as_str().unwrap();
+                let expected = case[op].as_str().unwrap();
+                let mut builder = test_builder_handle();
+                let json = c_string(line2);
+                let status = unsafe { rkr_frame_builder_set_metadata_json(builder, json.as_ptr()) };
+                if matches!(expected, "dup" | "invalid") {
+                    assert_eq!(status, RKRStatus::RKR_STATUS_INVALID_JSON, "{name} {op}");
+                    let (_, msg) = last_message();
+                    assert_eq!(
+                        msg.contains("duplicate con_spec_minor key"),
+                        expected == "dup",
+                        "{name} {op}: {msg}"
+                    );
+                    unsafe { free_rkr_frame_builder(builder) };
+                    continue;
+                }
+                assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS, "{name} {op}");
+                let sym = c_string("H");
+                let status = unsafe {
+                    rkr_frame_add_atom_with_velocity_fixed_mask(
+                        builder,
+                        sym.as_ptr(),
+                        0.0,
+                        0.0,
+                        0.0,
+                        false,
+                        false,
+                        false,
+                        0,
+                        1.0,
+                        0.1,
+                        0.2,
+                        0.3,
+                    )
+                };
+                assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS, "{name} {op}");
+                let built = unsafe { rkr_frame_builder_build(&mut builder) };
+                assert!(!built.is_null(), "{name} {op}");
+                let handles = [built as *const RKRConFrame];
+                let mut out_text: *mut c_char = ptr::null_mut();
+                let mut out_len = 0usize;
+                let status = unsafe {
+                    rkr_write_frames_to_string(handles.as_ptr(), 1, &mut out_text, &mut out_len)
+                };
+                if expected == "units" {
+                    assert_ne!(status, RKRStatus::RKR_STATUS_SUCCESS, "{name} {op}");
+                    let (_, msg) = last_message();
+                    assert!(msg.contains("units.time"), "{name} {op}: {msg}");
+                } else {
+                    assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS, "{name} {op}");
+                    let text = unsafe { CStr::from_ptr(out_text) }.to_string_lossy();
+                    assert_eq!(text.lines().nth(1).unwrap(), expected, "{name} {op}");
+                    unsafe { rkr_free_string(out_text) };
+                }
+                unsafe { free_rkr_frame(built) };
+            }
+        }
+    }
+
+    #[test]
+    fn c_api_binary64_half_ulp_minor_matches_rust() {
+        let (plus_one, last_finite, overflow) = crate::parser::f64_max_minor_edge_digits();
+        let dir = tempfile::tempdir().unwrap();
+        for digits in [&plus_one, &last_finite] {
+            let with_time = format!(
+                "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{digits},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}},\"sections\":[\"velocities\"]}}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0 0 0 0\n"
+            );
+            let path = dir.path().join(format!("ok-{}.con", digits.len()));
+            std::fs::write(&path, with_time).unwrap();
+            let c_path = CString::new(path.to_str().unwrap()).unwrap();
+            let frame = unsafe { rkr_read_first_frame(c_path.as_ptr()) };
+            assert!(!frame.is_null(), "{digits}");
+            let meta_ptr = unsafe { rkr_frame_metadata_json(frame) };
+            let meta = unsafe { CStr::from_ptr(meta_ptr) }.to_string_lossy();
+            assert!(
+                meta.contains(&format!("\"con_spec_minor\":{digits}")),
+                "{meta}"
+            );
+            assert!(meta.contains("\"time\":\"fs\""), "{meta}");
+            let rewritten = unsafe { rkr_frame_binding_rewrite(frame) };
+            assert!(!rewritten.is_null(), "{digits}");
+            let rw_ptr = unsafe { rkr_frame_metadata_json(rewritten) };
+            let rewritten_meta = unsafe { CStr::from_ptr(rw_ptr) }.to_string_lossy();
+            assert!(
+                rewritten_meta.contains(&format!("\"con_spec_minor\":{digits}")),
+                "{rewritten_meta}"
+            );
+            assert!(
+                rewritten_meta.contains("\"time\":\"fs\""),
+                "{rewritten_meta}"
+            );
+            unsafe {
+                rkr_free_string(rw_ptr);
+                free_rkr_frame(rewritten);
+                rkr_free_string(meta_ptr);
+                free_rkr_frame(frame);
+            }
+
+            let no_time = format!(
+                "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{digits},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}},\"sections\":[\"velocities\"]}}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0 0 0 0\n"
+            );
+            let path = dir
+                .path()
+                .join(format!("units-{}.con", &digits[digits.len() - 4..]));
+            std::fs::write(&path, no_time).unwrap();
+            let c_path = CString::new(path.to_str().unwrap()).unwrap();
+            let frame = unsafe { rkr_read_first_frame(c_path.as_ptr()) };
+            assert!(frame.is_null(), "{digits}");
+            let err = unsafe { &*rkr_last_error() };
+            assert_eq!(err.code, RKRStatus::RKR_STATUS_PARSE_ERROR as i32);
+            let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+            assert!(msg.contains("InvalidUnits"), "{digits}: {msg}");
+
+            let mut builder = test_builder_handle();
+            let json = c_string(&format!(
+                "{{\"con_spec_version\":3,\"con_spec_minor\":{digits},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}}}"
+            ));
+            let status = unsafe { rkr_frame_builder_set_metadata_json(builder, json.as_ptr()) };
+            assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS, "{digits}");
+            let sym = c_string("H");
+            assert_eq!(
+                unsafe { rkr_frame_add_atom(builder, sym.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.0) },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            let built = unsafe { rkr_frame_builder_build(&mut builder) };
+            assert!(!built.is_null(), "{digits}");
+            let built_json = unsafe { rkr_frame_metadata_json(built) };
+            let built_str = unsafe { CStr::from_ptr(built_json) }.to_string_lossy();
+            assert!(
+                built_str.contains(&format!("\"con_spec_minor\":{digits}")),
+                "{built_str}"
+            );
+            assert!(built_str.contains("\"time\":\"fs\""), "{built_str}");
+            unsafe {
+                rkr_free_string(built_json);
+                free_rkr_frame(built);
+            }
+        }
+
+        let over = format!(
+            "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{overflow},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}}}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n"
+        );
+        let path = dir.path().join("overflow.con");
+        std::fs::write(&path, over).unwrap();
+        let c_path = CString::new(path.to_str().unwrap()).unwrap();
+        let frame = unsafe { rkr_read_first_frame(c_path.as_ptr()) };
+        assert!(frame.is_null());
+        let err = unsafe { &*rkr_last_error() };
+        assert_eq!(err.code, RKRStatus::RKR_STATUS_INVALID_JSON as i32);
+        let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert!(msg.contains("number out of range"), "{msg}");
+
+        let builder = test_builder_handle();
+        let json = c_string(&format!(
+            "{{\"con_spec_version\":3,\"con_spec_minor\":{overflow}}}"
+        ));
+        let status = unsafe { rkr_frame_builder_set_metadata_json(builder, json.as_ptr()) };
+        assert_eq!(status, RKRStatus::RKR_STATUS_INVALID_JSON);
+        let err = unsafe { &*rkr_last_error() };
+        assert_eq!(err.code, RKRStatus::RKR_STATUS_INVALID_JSON as i32);
+        let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert!(
+            msg.contains("number out of range at line 1 column 348"),
+            "{msg}"
+        );
+        for token in ["1e309", "1E400"] {
+            let json = c_string(&format!(
+                "{{\"con_spec_version\":3,\"con_spec_minor\":{token}}}"
+            ));
+            let status = unsafe { rkr_frame_builder_set_metadata_json(builder, json.as_ptr()) };
+            assert_eq!(status, RKRStatus::RKR_STATUS_INVALID_JSON, "{token}");
+            let err = unsafe { &*rkr_last_error() };
+            let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+            assert!(msg.contains("number out of range"), "{token}: {msg}");
+        }
+        let generic = c_string(r#"{"con_spec_version":3,"con_spec_minor":00}"#);
+        let status = unsafe { rkr_frame_builder_set_metadata_json(builder, generic.as_ptr()) };
+        assert_eq!(status, RKRStatus::RKR_STATUS_INVALID_JSON);
+        let err = unsafe { &*rkr_last_error() };
+        let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert_eq!(msg, "invalid JSON");
+        unsafe { free_rkr_frame_builder(builder) };
     }
 
     #[test]

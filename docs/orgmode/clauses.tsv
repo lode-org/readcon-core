@@ -31,6 +31,7 @@ CON-line2.10	MUST	A missing =con_spec_minor=, or an explicit 0, MUST mean minor 
 CON-line2.11	MUST	=sections=, when present, MUST be an array of strings.
 CON-line2.12	MUST	=validate=, when present, MUST be a boolean.
 CON-line2.13	MUST	Reserved keys MUST use the types in this document.
+CON-line2.14	MUST NOT	A line 2 object MUST NOT repeat the =con_spec_minor= key.
 CON-cell.1	MUST	When =lattice_vectors= is present, readers MUST prefer it over lines 3-4.
 CON-cell.2	MUST	A writer that emits =lattice_vectors= MUST write lines 3-4 consistent with that matrix at the precision the writer is using.
 CON-cell.3	MUST	A missing =pbc= key MUST be read as periodic in all three directions.

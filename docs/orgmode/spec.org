@@ -103,6 +103,7 @@ Metadata is line 2. Line numbers count from 1.
 - CON-line2.11 :: MUST :: =sections=, when present, MUST be an array of strings.
 - CON-line2.12 :: MUST :: =validate=, when present, MUST be a boolean.
 - CON-line2.13 :: MUST :: Reserved keys MUST use the types in this document.
+- CON-line2.14 :: MUST NOT :: A line 2 object MUST NOT repeat the =con_spec_minor= key.
 
 ** Cell
 :PROPERTIES:

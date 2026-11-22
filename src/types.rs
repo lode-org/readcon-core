@@ -599,12 +599,20 @@ fn extract_minor_from_value(value: &serde_json::Value) -> (u64, Option<Box<str>>
     }
 }
 
+/// In-range top-level `con_spec_minor`, the first one when it is repeated.
+///
+/// CON-line2.10 says a missing minor is 0. A nested object, an array
+/// element, or a dotted name is not that field, so the minor stays
+/// missing. The bytes skipped around the key are ASCII whitespace, the
+/// set the fast path skips. `1.5` yields 1, and a token that does not
+/// fit in `u64` yields 0. [`minor_from_line`] handles a last huge token
+/// before this runs.
 fn base_minor_from_line(line: &str) -> u64 {
-    let key = "\"con_spec_minor\"";
-    let Some(at) = line.find(key) else {
+    let trimmed = line.trim();
+    let Some(at) = crate::parser::top_level_first_minor_key_end(trimmed) else {
         return 0;
     };
-    let rest = line[at + key.len()..].trim_start();
+    let rest = trimmed[at..].trim_start();
     let rest = rest.strip_prefix(':').unwrap_or(rest).trim_start();
     let end = rest
         .find(|c: char| !c.is_ascii_digit())
@@ -6046,6 +6054,36 @@ mod tests {
             Some(&serde_json::Value::String("test".to_string()))
         );
         assert!(frame.header.sections.is_empty());
+    }
+
+    #[test]
+    fn test_builder_set_metadata_json_accepts_validate_without_sections() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder
+            .set_metadata_json(r#"{"con_spec_version":2,"validate":true}"#)
+            .unwrap();
+        builder
+            .add_atom("Cu", 0.0, 0.0, 0.0, [false, false, false], 0, 63.546)
+            .with_charge(0.5);
+        let frame = builder.build().unwrap();
+        let mut buf = Vec::new();
+        crate::writer::ConFrameWriter::new(&mut buf)
+            .write_frame(&frame)
+            .unwrap();
+        let text = String::from_utf8(buf).unwrap();
+        assert!(text.contains(r#""sections":["charges"]"#), "{text}");
+        assert!(text.contains(r#""validate":true"#), "{text}");
+        let reread: Vec<_> = crate::iterators::ConFrameIterator::new(&text)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(reread[0].atom_data[0].charge(), Some(0.5));
+
+        let mut bad = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        assert!(bad.set_metadata_json(r#"{"validate":1}"#).is_err());
+        assert!(
+            bad.set_metadata_json(r#"{"validate":true,"sections":"charges"}"#)
+                .is_err()
+        );
     }
 
     #[test]
