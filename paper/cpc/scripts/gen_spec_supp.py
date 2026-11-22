@@ -1009,12 +1009,24 @@ def postprocess(tex: str) -> str:
 
 
 def pandoc_version() -> str:
-    out = subprocess.run(
-        [*PANDOC, "--version"], capture_output=True, text=True, check=True
-    ).stdout
+    # paper/cpc/pixi.toml pins pandoc == 3.13. A different binary must not
+    # rewrite the fragment. The comparison stays a literal so number_rules
+    # can read the version.
+    try:
+        out = subprocess.run(
+            [*PANDOC, "--version"], capture_output=True, text=True, check=True
+        ).stdout
+    except FileNotFoundError:
+        raise SystemExit(
+            "pandoc is not on PATH; the fragment is written with pandoc 3.13 "
+            "(paper/cpc/pixi.toml pins pandoc == 3.13)"
+        ) from None
     first = out.splitlines()[0]
     if first != "pandoc 3.13":
-        raise SystemExit(f"{first} on PATH; the fragment is written with pandoc 3.13")
+        raise SystemExit(
+            f"{first} on PATH; the fragment is written with pandoc 3.13 "
+            "(paper/cpc/pixi.toml pins pandoc == 3.13)"
+        )
     return first
 
 
