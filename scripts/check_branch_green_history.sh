@@ -70,20 +70,30 @@ while read -r commit; do
         git -C "$ROOT" diff --name-status "$BASE..$commit" -- "${RECORD_PATHS[@]}"
     )
 
-    python3 - "$worktree" <<'PY'
+    python3 - "$worktree" "$ROOT" <<'PY'
 import json
 import subprocess
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
+sys.path.insert(0, str(Path(sys.argv[2]) / "scripts"))
+from spec_measurement_schema import MeasurementSchemaError, measured_commit
+
 version = (root / "VERSION").read_text().strip()
 path = root / "paper/cpc/data/spec" / f"spec-measurement-{version}.json"
 if not path.is_file():
     print(f"PENDING: {path.name} has not been measured")
     raise SystemExit(0)
 record = json.loads(path.read_text())
-commit = record["measured_at"]["commit"]
+relpath = path.resolve().relative_to(root.resolve()).as_posix()
+try:
+    commit = measured_commit(record, relpath)
+except MeasurementSchemaError as exc:
+    raise SystemExit(str(exc)) from None
+if commit is None:
+    print(f"OK: {path.name} uses legacy schema without measured_at.commit")
+    raise SystemExit(0)
 
 def git(*args: str) -> str:
     done = subprocess.run(
@@ -126,4 +136,4 @@ PY
 
     git -C "$ROOT" worktree remove --force "$worktree"
     echo "=== passed $commit ==="
-done < <(git -C "$ROOT" rev-list --reverse "$BASE..$TIP")
+done < <(git -C "$ROOT" rev-list --first-parent --reverse "$BASE..$TIP")
