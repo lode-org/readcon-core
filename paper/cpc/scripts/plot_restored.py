@@ -600,18 +600,6 @@ def landscapes() -> None:
     ax.legend(frameon=False, fontsize=7)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    save(fig, "restart_formats")
-    fig, ax = plt.subplots(figsize=(7.0, 3.4))
-    for (label, path), color in zip(pairs, CYCLE):
-        energy = band_energy(path)
-        ax.plot(
-            range(len(energy)), energy - energy[0], marker="o", color=color, label=label
-        )
-    ax.set_xlabel("image")
-    ax.set_ylabel("energy above the first image (eV)")
-    ax.legend(frameon=False, fontsize=7)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
     save(fig, "neb_multiples")
     mask_pairs = [
         ("held", bands / "POSCAR__ASE___FixScaled_z.npz"),

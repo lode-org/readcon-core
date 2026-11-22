@@ -552,6 +552,10 @@ The chemfiles row copies each frame out of the trajectory iterator, and that cop
 \input{figures/generated/sizes_table}
 \input{figures/generated/format_context}
 
+Table~\ref{tab:format-h2h} gives every reader and format of the cross-format campaign that Figure~\ref{fig:pareto} of the main text plots, with the cold read, the peak resident set, the fields that each format drops, the trajectory and the rows that a reader cannot open.
+
+\input{figures/generated/format_h2h}
+
 \FloatBarrier \section{Python bindings and thread safety}\label{sec:supp-threads}
 The PyO3 module declares that it does not need the global interpreter lock (\texttt{gil\_used = false}).
 Continuous integration runs the tests on free-threaded Python \texttt{3.13t} and \texttt{3.14t}, and on the standard builds.

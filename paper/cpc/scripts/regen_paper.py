@@ -115,6 +115,7 @@ FORMAT = [
     ["scripts/plot_figures.py"],
     ["scripts/plot_restart_ruhi.py"],
     ["scripts/plot_restart_formats.py"],
+    ["scripts/plot_format_pareto.py"],
     ["scripts/plot_structures.py"],
     ["scripts/plot_supp.py"],
     ["scripts/host_from_log.py"],
