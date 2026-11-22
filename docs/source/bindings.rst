@@ -308,6 +308,11 @@ Types
     build\_atom\_id\_index() (v0.10.0+), coords\_array() (v0.10.0+),
     velocities\_array() (v0.10.0+), forces\_array() (v0.10.0+),
     energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+).
+    For a frame from a read, ``vel``, ``frc``, ``mass_column`` and, until
+    ``.atoms`` is used, the ``\*_array()`` methods other than ``coords_array()``
+    are read-only views of the parsed columns: no copy, and ``.copy()`` gives
+    a writeable array. ``symbols`` (a ``FrameSymbols``) gives every atom's
+    symbol as interned runs, without building ``atoms``.
     The constructor and ``from_ase()`` raise ``readcon.NonFiniteValue`` (a
     ``ValueError``) for a cell length or angle that is NaN or infinite, and
     for a ``lattice_vectors`` metadata matrix that holds one. The message names
@@ -962,6 +967,11 @@ require host ``real64`` solely because CON text uses binary64. Use the bits fiel
 Absent optional sections return ``RKR_STATUS_SECTION_ABSENT``. Builder exports are
 owned clones, not live views of internal storage. Frame ``copy_*`` helpers still
 take ``double*`` for hosts that already use f64; prefer DLPack when interoperating.
+
+Release each tensor exactly once, through ``rkr_dlpack_delete``,
+``bd%dlpack_delete`` or the tensor's own ``deleter``, and never touch it again.
+The deleter frees the ``DLManagedTensorVersioned`` it is given, so a second call
+on the same tensor is a use-after-free; the DLPack contract allows one call.
 
 Compression formats
 -------------------

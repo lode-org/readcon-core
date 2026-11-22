@@ -7,6 +7,86 @@ All notable changes to this project will be documented in this file. See [conven
 
 ## Unreleased
 
+### Breaking
+
+- **Rust API:** `array::Array::as_dlpack` on `Arc<RwLock<ArrayD<T>>>`
+  returns a read-only tensor over the array's buffer instead of a copy, and
+  holds a read lock until the tensor is deleted. Meanwhile `try_write`
+  fails and `write` blocks; `write` on a thread that still holds a live
+  tensor blocks forever. While a writer waits, std's `RwLock` admits no new
+  reader, so a new export returns an error until the writer is done.
+  Exporting while a writer holds the lock is an error, as before. Delete
+  each tensor once: its deleter frees the tensor, so a second call is a
+  use-after-free.
+
+- **Python:** for a frame from a read, `vel`, `frc` and `mass_column` are
+  read-only NumPy views of the parsed columns instead of fresh writeable
+  copies. Until `frame.atoms` is first used, `velocities_array()`,
+  `forces_array()`, `displacements_array()`, `spreads_array()`,
+  `energies_array()` and `atom_ids_array()` return the same kind of view.
+  Each view's `base` is one `readcon._FrameColumns` object per frame that
+  shares the frame's columns, so no array is copied and no `Atom` object
+  is built; `has_velocities`, `has_forces`, `has_displacements` and
+  `has_spreads` likewise no longer build the atom list. A store into one of
+  these views raises `ValueError`; call `.copy()` for a writeable array.
+  Values and dtypes are unchanged. After `frame.atoms` has been built the
+  `*_array()` methods walk it and return writeable copies, as before, so
+  Atom edits still show up. `coords_array()` still returns a fresh copy.
+  DLPack: `np.from_dlpack(view)` and other DLPack 1.0 consumers import a
+  read-only view without a copy, but a consumer that calls `__dlpack__()`
+  without `max_version` gets NumPy's `BufferError` for a read-only array;
+  pass `view.copy()` to such a consumer.
+
+### Features
+
+- **C ABI:** `rkr_frame_{positions,velocities,forces,atom_energies}_dlpack_ex`
+  with float64 on the CPU (including NULL `opts`, and so the non-`_ex`
+  velocity, force and energy exports) return a read-only tensor over the
+  frame's column instead of a gathered copy, as `rkr_frame_positions_dlpack`
+  already did. The tensor stays valid after the frame is freed, and
+  `rkr_frame_positions_from_dlpack` copies a shared column before writing,
+  so an earlier tensor keeps its values. The tensor is not a snapshot for
+  Rust code that also edits the frame: the `AtomDatum` setters on a parsed
+  frame write the positions column in place, so the tensor shows the edit
+  and a reader on another thread races with it, while `set_energy`,
+  `set_velocity(None)` and `set_force(None)` leave the column, and so the
+  tensor, unchanged. Other dtypes and CUDA still copy, because they need a
+  cast or a device buffer.
+
+- **Python:** `read_con`, `read_con_string` and `read_all_frames` no longer
+  copy every frame's coordinates into one slab. Each frame keeps the buffer
+  its parse wrote, and those buffers move into one owner object per read
+  (`readcon._PositionStore`) without a copy. `frame.xyz` is a writeable
+  NumPy view of that buffer whose `base` is the owner, the same object for
+  every frame of the read, so a view stays valid after the list and the
+  frame are dropped. A store into `xyz` is still what a later write of the
+  frame sees. `ConFrameList.columns()` now builds its `positions` array on
+  the first call: a one-frame read returns the parse buffer as
+  `[1, N, 3]`, and a longer read packs the frames once and then serves
+  `xyz` from that array, as before. `read_first_frame` and
+  `read_nth_frame` move the parse buffer into `xyz` instead of copying a
+  clone of the frame. `read_con_phases()` keeps its keys; `slab_s` is now
+  the time to move the buffers into the owner and `release_s` is zero.
+  Builds with the `borrow-path-counts` feature export
+  `binding_copy_count()`, the number of per-atom buffers the binding had to
+  copy (for example a float32 column), for tests.
+- **Python:** a parsed frame builds its `metadata` dict on first use (the
+  `metadata` property, the `energy`-style getters, a setter or a write)
+  instead of when the frame object is made. It is still one live dict per
+  frame with the same contents.
+- **Python:** `ConFrame.symbols` returns the chemical symbol of every atom as
+  a `readcon.FrameSymbols`: one interned string per run of equal symbols,
+  so a parsed frame answers from its per-type counts without building the
+  `Atom` list or one string per atom. It behaves as a tuple of strings
+  (length, index, slice, iteration, equality with a list or tuple, hash,
+  pickle) and adds `tolist()`, `table()` (distinct symbols in order of first
+  use) and `ids()` (per-atom `uint32` index into `table()`). Once
+  `frame.atoms` has been built it reads the atoms, so an edited
+  `Atom.symbol` shows up.
+- **Python:** `read_con_string` parses the argument string's UTF-8 buffer
+  in place with the GIL released, instead of copying the whole text first.
+  Its `read_con_phases()` reports `open_mmap_s` as zero.
+
 ### Bugfixes
 
 - **Metadata / Python:** `con_spec_minor` integers above `u64::MAX` (within
@@ -20,6 +100,13 @@ All notable changes to this project will be documented in this file. See [conven
   `OSError` from `write_con_string` (`invalid units: minor >= 1 requires
   units.time when a velocities section is present`), matching the `minor >= 1`
   rule instead of silently clamping or rewriting the minor.
+- **metatensor:** the position, velocity, force and energy blocks label
+  samples with `atom_id`, and metatensor labels are `i32`. An id above
+  `i32::MAX` used to be cast with `as i32`, so `2^32` became label `0`, or
+  a row-index label when `0` was already taken. Such an id is now an error naming
+  the atom and the id (`MTS_INVALID_PARAMETER_ERROR` in Rust; the C ABI
+  block exports return `RKR_STATUS_INTERNAL_ERROR`, as for any other
+  metatensor error). Ids up to `i32::MAX` keep their labels.
 - Rust library builds no longer install mimalloc as the process-wide global
   allocator. The optional `mimalloc-allocator` feature is reserved for final
   readcon artifacts, and `default-features = false` removes both the mimalloc

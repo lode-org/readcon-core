@@ -150,13 +150,21 @@ pub fn frame_energies_block(frame: &ConFrame) -> Result<Option<TensorBlock>, met
     Ok(Some(TensorBlock::new(values, &samples, &[], &properties)?))
 }
 
+/// Sample labels from the atoms' `atom_id`. metatensor labels are `i32`, so
+/// an id above `i32::MAX` is an error rather than a wrapped label.
 fn build_atom_id_samples(frame: &ConFrame) -> Result<Labels, metatensor::Error> {
     let mut builder = LabelsBuilder::new(vec!["atom_id"]);
     // Prefer atom_id; fall back to row index if ids are non-unique (metatensor
     // rejects duplicate sample rows).
     let mut seen = std::collections::HashSet::new();
     for (i, atom) in frame.atom_data.iter().enumerate() {
-        let mut key = atom.atom_id as i32;
+        let mut key = i32::try_from(atom.atom_id).map_err(|_| metatensor::Error {
+            code: Some(mts_sys::MTS_INVALID_PARAMETER_ERROR),
+            message: format!(
+                "atom {i} has atom_id {}, which does not fit a metatensor i32 label",
+                atom.atom_id
+            ),
+        })?;
         if !seen.insert(key) {
             key = i as i32;
             while !seen.insert(key) {
@@ -189,6 +197,7 @@ impl ConFrame {
 mod tests {
     use super::*;
     use crate::types::ConFrameBuilder;
+    use metatensor::data::{DLDevice, DLPackVersion};
 
     fn small_frame() -> crate::types::ConFrame {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
@@ -237,6 +246,35 @@ mod tests {
         assert!(frame_energies_block(&frame).unwrap().is_none());
     }
 
+    fn frame_with_ids(ids: [u64; 2]) -> crate::types::ConFrame {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("Cu", 0.1, 0.2, 0.3, [false, false, false], ids[0], 63.546);
+        builder.add_atom("H", 1.1, 1.2, 1.3, [false, false, false], ids[1], 1.008);
+        builder.build().unwrap()
+    }
+
+    fn sample_ids(block: &TensorBlock) -> Vec<i32> {
+        block.samples().iter().map(|row| row[0].i32()).collect()
+    }
+
+    #[test]
+    fn atom_id_above_i32_max_is_an_error_not_a_wrapped_label() {
+        let frame = frame_with_ids([0, 1 << 32]);
+        assert_eq!(frame.atom_data[1].atom_id, 1 << 32);
+        let err = frame_positions_block(&frame).unwrap_err();
+        assert_eq!(err.code, Some(mts_sys::MTS_INVALID_PARAMETER_ERROR));
+        assert!(err.message.contains("4294967296"), "{}", err.message);
+        let wide = frame_with_ids([0, i32::MAX as u64 + 1]);
+        assert!(frame_positions_block(&wide).is_err());
+    }
+
+    #[test]
+    fn atom_ids_up_to_i32_max_are_the_sample_labels() {
+        let frame = frame_with_ids([7, i32::MAX as u64]);
+        let block = frame_positions_block(&frame).unwrap();
+        assert_eq!(sample_ids(&block), vec![7, i32::MAX]);
+    }
+
     #[test]
     fn tensor_block_into_raw_mts_round_trip_free_via_sys() {
         let frame = small_frame();
@@ -250,5 +288,112 @@ mod tests {
             mts_sys::MTS_SUCCESS
         );
         unsafe { mts_block_free_sys(ptr) };
+    }
+
+    fn parsed_frame() -> crate::types::ConFrame {
+        let text = "\
+PRE
+{\"con_spec_version\":2,\"sections\":[\"velocities\",\"forces\",\"energies\"]}
+10 10 10
+90 90 90
+0 0
+0 0 0
+1
+2
+1.0
+H
+Coordinates of Component 1
+0.1 0.2 0.3 0 0
+1.1 1.2 1.3 0 1
+
+H
+Velocities of Component 1
+1.0 0.0 0.0 0 0
+0.0 1.0 0.0 0 1
+
+H
+Forces of Component 1
+0.5 0.0 0.0 0 0
+0.0 0.5 0.0 0 1
+
+H
+Energies of Component 1
+-0.42 0 0
+0.13 0 1
+";
+        crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .unwrap()
+            .unwrap()
+    }
+
+    fn block_f64s(block: &TensorBlock) -> Vec<f64> {
+        let tensor = block
+            .values()
+            .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
+            .unwrap();
+        let len = tensor.shape().iter().product::<i64>() as usize;
+        let data = tensor.data_ptr::<f64>().unwrap();
+        unsafe { std::slice::from_raw_parts(data, len) }.to_vec()
+    }
+
+    fn all_blocks(frame: &crate::types::ConFrame) -> [TensorBlock; 4] {
+        [
+            frame_positions_block(frame).unwrap(),
+            frame_velocities_block(frame).unwrap().unwrap(),
+            frame_forces_block(frame).unwrap().unwrap(),
+            frame_energies_block(frame).unwrap().unwrap(),
+        ]
+    }
+
+    #[test]
+    fn blocks_keep_their_values_when_the_atoms_change() {
+        let mut frame = parsed_frame();
+        let blocks = all_blocks(&frame);
+        let before = blocks.each_ref().map(block_f64s);
+        let atom = &mut frame.atom_data[0];
+        atom.set_x(42.0);
+        atom.set_y(43.0);
+        atom.set_z(44.0);
+        atom.set_velocity(Some([7.0; 3]));
+        atom.set_force(Some([8.0; 3]));
+        atom.set_energy(Some(9.0));
+        assert_eq!(blocks.each_ref().map(block_f64s), before);
+    }
+
+    #[test]
+    fn blocks_built_after_atom_writes_hold_the_atom_values() {
+        let mut frame = parsed_frame();
+        frame.atom_data[0].set_x(42.0);
+        frame.atom_data[0].set_velocity(None);
+        frame.atom_data[1].set_force(None);
+        frame.atom_data[1].set_energy(Some(9.0));
+        let [positions, velocities, forces, energies] = all_blocks(&frame).map(|b| block_f64s(&b));
+        assert_eq!(positions, [42.0, 0.2, 0.3, 1.1, 1.2, 1.3]);
+        assert_eq!(velocities, [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]);
+        assert_eq!(forces, [0.5, 0.0, 0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(energies, [-0.42, 9.0]);
+    }
+
+    // Under ThreadSanitizer this reports a data race if a block's values
+    // share memory with the coordinates that `set_x` writes.
+    #[test]
+    fn reading_a_block_while_another_thread_moves_an_atom() {
+        let mut frame = parsed_frame();
+        let block = frame_positions_block(&frame).unwrap();
+        let before = block_f64s(&block);
+        std::thread::scope(|scope| {
+            let reader = scope.spawn(|| {
+                for _ in 0..1000 {
+                    assert_eq!(block_f64s(&block), before);
+                }
+            });
+            for step in 0..1000 {
+                frame.atom_data[0].set_x(f64::from(step));
+            }
+            reader.join().unwrap();
+        });
+        assert_eq!(frame.atom_data[0].x(), 999.0);
+        assert_eq!(block_f64s(&block), before);
     }
 }
