@@ -91,7 +91,12 @@ on the first call, and the frames then read that array. ``masses`` is ``(frames,
 is ``(frames, atoms, 3)``, with ``1.0`` where that axis is held. ``cell`` is
 ``(frames, 6)``, lengths then angles. ``velocities`` and ``forces`` are
 ``(frames, atoms, 3)`` when any frame carries that section, and ``None``
-otherwise. ``n_frames`` and ``n_atoms`` are the two sizes.
+otherwise. ``atom_ids`` and ``atomic_numbers`` are ``(frames, atoms)``
+``uint64`` copies of the id column and of Z looked up once per species.
+``symbols`` is an object array of that shape. Each species is one Python
+string, repeated by its count. ``n_frames`` and ``n_atoms`` are the two
+sizes. ``read_con_string`` returns this same list, so ``columns()`` on
+text the caller already holds carries those keys.
 
 Indexing ``frames[i]`` takes that frame out of the stored list.
 ``columns()`` then raises ``OSError``. Call ``columns()`` before any index.
@@ -110,6 +115,9 @@ file is formatted with the GIL released. There is no per-atom Python loop.
     assert cols["positions"] is stored.columns()["positions"]
     assert cols["positions"].shape == (1, 1, 3)
     assert cols["masses"][0, 0] == 1.0
+    assert int(cols["atom_ids"][0, 0]) == 1
+    assert int(cols["atomic_numbers"][0, 0]) == 1
+    assert cols["symbols"][0, 0] == "H"
     readcon.write_columns("from_columns.con", cols, symbol="H")
     written = readcon.read_positions("from_columns.con")
     assert written.shape == cols["positions"].shape
@@ -123,9 +131,42 @@ file is formatted with the GIL released. There is no per-atom Python loop.
 .. code:: python
 
    readcon.read_con_string(text)
+   readcon.iter_con_string(text)
 
 Parse CON text that the caller already holds. ``sys.stdin.read()`` is that
-text when the stream is plain CON.
+text when the stream is plain CON. ``iter_con_string`` yields one frame at
+a time. Until ``.atoms`` is built, ``atom_ids_array``, ``mass_column``,
+``vel``, ``frc``, ``velocities_array``, ``forces_array``,
+``displacements_array``, ``spreads_array``, and ``energies_array`` are
+read-only views of the parsed columns. A store raises
+``ValueError``. ``setflags(write=True)`` fails because the base
+exports no writable buffer. Once the list exists, those getters,
+``composition_formula``, ``symbols``, ``atomic_numbers``, and
+``fixed_mask_array`` follow it, including an edit, a pop, an append,
+or an insert. ``len`` and ``repr`` follow that list, including a frame
+from ``from_ase``. ``write_con`` writes the list and a metadata edit
+made before ``.atoms`` exists. ``symbols`` is a ``FrameSymbols`` of
+interned runs and ``symbols()`` returns an object array from those
+runs. ``atomic_numbers`` and ``fixed_mask_array`` are copies: Z is
+derived, and the per-axis flags live on each atom rather than in a
+numeric column. None of these build ``.atoms``.
+
+.. code:: python
+
+    import readcon
+
+    text = open("one.con", encoding="utf-8").read()
+    frame = next(readcon.iter_con_string(text))
+    assert frame.atoms_materialized is False
+    ids = frame.atom_ids_array()
+    assert ids.flags.writeable is False
+    assert int(ids[0]) == 1
+    assert list(frame.symbols()) == ["H"]
+    assert int(frame.atomic_numbers()[0]) == 1
+    assert frame.fixed_mask_array().shape == (1, 3)
+    assert frame.atoms_fill_count == 0
+    held = readcon.read_con_string(text)
+    assert int(held.columns()["atom_ids"][0, 0]) == 1
 
 ``write_con``
 -------------
