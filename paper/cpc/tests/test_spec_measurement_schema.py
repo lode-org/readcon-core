@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -109,3 +110,51 @@ def test_the_legacy_list_does_not_cover_the_current_record() -> None:
         assert path in str(exc)
         return
     raise AssertionError("the current record was treated as legacy")
+
+
+def test_the_current_chain_ends_at_an_ancestor_of_head() -> None:
+    module = _load()
+    version = (ROOT / "VERSION").read_text().strip()
+    spec_dir = ROOT / "paper" / "cpc" / "data" / "spec"
+    records = {
+        path.relative_to(ROOT).as_posix(): json.loads(path.read_text())
+        for path in spec_dir.glob(f"spec-measurement-{version}*.json")
+    }
+    stored = f"paper/cpc/data/spec/spec-measurement-{version}.json"
+    chosen, record = module.resolve_measurement(records, stored)
+    commit = module.measured_commit(record, chosen)
+    module.require_ancestor(ROOT, commit, chosen)
+    shown = subprocess.run(
+        ["git", "-C", str(ROOT), "show", f"{commit}:VERSION"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert shown.stdout.strip() == record["tree"]["release"]
+
+
+def test_a_commit_off_the_history_fails(tmp_path: Path) -> None:
+    module = _load()
+    who = ["-c", "user.name=t", "-c", "user.email=t@t"]
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(tmp_path), *who, *args],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    git("init", "-q")
+    git("commit", "-q", "--allow-empty", "-m", "base")
+    base = git("rev-parse", "HEAD")
+    tree = git("rev-parse", "HEAD^{tree}")
+    dangling = git("commit-tree", tree, "-p", base, "-m", "rewritten")
+    module.require_ancestor(tmp_path, base, "record.json")
+    for commit in (dangling, "0" * 40):
+        try:
+            module.require_ancestor(tmp_path, commit, "record.json")
+        except module.MeasurementSchemaError as exc:
+            assert commit in str(exc)
+            continue
+        raise AssertionError(f"{commit} off the history was accepted")

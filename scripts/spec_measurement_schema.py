@@ -7,6 +7,9 @@ legacy list is empty. A record that omits the field fails.
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 # Paths whose bytes predate measured_at. Empty: the stored record was
 # added with the field, and 8319e6043a35 later removed it.
 LEGACY_WITHOUT_MEASURED_AT: frozenset[str] = frozenset()
@@ -63,3 +66,22 @@ def measured_commit(record: dict, relpath: str) -> str | None:
     if not isinstance(commit, str) or not commit:
         raise MeasurementSchemaError(f"{relpath} has no measured_at.commit")
     return commit
+
+
+def require_ancestor(checkout: Path, commit: str, relpath: str) -> None:
+    """Fail unless ``commit`` is an ancestor of HEAD in ``checkout``.
+
+    An object that only a local clone holds, such as the parent of a
+    rewritten commit, resolves there and nowhere else.
+    """
+    done = subprocess.run(
+        ["git", "-C", str(checkout), "merge-base", "--is-ancestor", commit, "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if done.returncode:
+        raise MeasurementSchemaError(
+            f"{relpath} names measured_at.commit {commit}, "
+            "which is not an ancestor of this commit"
+        )
