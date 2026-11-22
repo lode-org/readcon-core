@@ -1224,7 +1224,7 @@ fn skip_field_ws(bytes: &[u8], mut i: usize) -> usize {
 
 fn token_on_line(bytes: &[u8], i: usize) -> String {
     let mut j = i;
-    while j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+    while j < bytes.len() && !is_field_ws(bytes[j]) && !at_row_end(bytes, j) {
         j += 1;
     }
     String::from_utf8_lossy(&bytes[i..j]).into_owned()
@@ -1234,11 +1234,11 @@ fn count_tokens_on_line(bytes: &[u8], mut i: usize) -> usize {
     let mut n = 0usize;
     loop {
         i = skip_field_ws(bytes, i);
-        if i >= bytes.len() || bytes[i] == b'\n' {
+        if at_row_end(bytes, i) {
             break;
         }
         n += 1;
-        while i < bytes.len() && !is_field_ws(bytes[i]) && bytes[i] != b'\n' {
+        while i < bytes.len() && !is_field_ws(bytes[i]) && !at_row_end(bytes, i) {
             i += 1;
         }
     }
@@ -1260,7 +1260,7 @@ fn utf8_or_number(bytes: &[u8], line_start: usize, i: usize) -> ParseError {
 
 #[inline(always)]
 fn parse_f64_at(bytes: &[u8], i: usize, line_start: usize) -> Result<(f64, usize), ParseError> {
-    if i >= bytes.len() || bytes[i] == b'\n' {
+    if at_row_end(bytes, i) {
         return Err(ParseError::InvalidVectorLength {
             expected: 5,
             found: 0,
@@ -1298,7 +1298,7 @@ fn parse_flag_at(
     i: usize,
     spec_version: u32,
 ) -> Result<([bool; 3], usize), ParseError> {
-    if i >= bytes.len() || bytes[i] == b'\n' {
+    if at_row_end(bytes, i) {
         return Err(ParseError::InvalidVectorLength {
             expected: 5,
             found: 3,
@@ -1343,7 +1343,7 @@ fn parse_flag_at(
 
 #[inline(always)]
 fn parse_id_at(bytes: &[u8], i: usize) -> Result<(u64, usize), ParseError> {
-    if i >= bytes.len() || bytes[i] == b'\n' || !bytes[i].is_ascii_digit() {
+    if at_row_end(bytes, i) || !bytes[i].is_ascii_digit() {
         return Err(ParseError::InvalidNumberFormat(format!(
             "invalid integer: {}",
             token_on_line(bytes, i)
@@ -2084,6 +2084,21 @@ fn json_u64(value: &Value) -> Option<u64> {
     value.as_u64()
 }
 
+/// CON-line2.4: the major is a JSON number, not a string. `3.0` and `3e0`
+/// are that number. A non-integer such as `3.5` is not a major.
+fn json_major_version(value: &Value) -> Option<u64> {
+    if let Some(n) = value.as_u64() {
+        return Some(n);
+    }
+    let n = value.as_f64()?;
+    // A major fits in u32. A float above that, including 2^64, is not one.
+    if n.is_finite() && n >= 0.0 && n <= u32::MAX as f64 && n.fract() == 0.0 {
+        Some(n as u64)
+    } else {
+        None
+    }
+}
+
 fn validate_section_arity_value(value: &Value) -> Result<(), ParseError> {
     let obj = value.as_object().ok_or_else(|| {
         metadata_json_error("section_arity must be an object mapping section names to integers")
@@ -2375,7 +2390,11 @@ fn validate_lattice_vectors_metadata(value: &Value) -> Result<(), ParseError> {
                 "lattice_vectors must be a 3x3 numeric array",
             ));
         };
-        if entries.len() != 3 || entries.iter().any(|entry| entry.as_f64().is_none()) {
+        if entries.len() != 3
+            || entries
+                .iter()
+                .any(|entry| !entry.as_f64().is_some_and(|n| n.is_finite()))
+        {
             return Err(metadata_json_error(
                 "lattice_vectors must be a 3x3 numeric array",
             ));
@@ -2917,11 +2936,17 @@ where
 pub fn parse_frame_header<'a>(
     lines: &mut impl Iterator<Item = &'a str>,
 ) -> Result<FrameHeader, ParseError> {
+    parse_frame_header_inner(lines)
+}
+
+pub(crate) fn parse_frame_header_inner<'a>(
+    lines: &mut impl Iterator<Item = &'a str>,
+) -> Result<FrameHeader, ParseError> {
     let prebox1 = lines
         .next()
         .ok_or(ParseError::IncompleteHeader)?
         .to_string();
-    // CON-file.2: U+FEFF at the start of any frame is rejected.
+    // CON-file.2: no frame may begin with U+FEFF.
     if prebox1.starts_with('\u{feff}') {
         return Err(ParseError::ValidationError(
             "frame begins with a byte-order mark".into(),
@@ -2959,7 +2984,7 @@ pub fn parse_frame_header<'a>(
         let ver_value = json_obj
             .get(meta::CON_SPEC_VERSION)
             .ok_or(ParseError::MissingSpecVersion)?;
-        let ver = json_u64(ver_value).ok_or_else(|| {
+        let ver = json_major_version(ver_value).ok_or_else(|| {
             ParseError::InvalidMetadataJson(
                 "con_spec_version must be a JSON integer, the major version".into(),
             )
@@ -3074,6 +3099,16 @@ pub fn parse_frame_header<'a>(
         if validate {
             validate_metadata_schema(json_obj)?;
         }
+
+        if ver < 3
+            && let Some(units) = json_obj.get(meta::UNITS)
+        {
+            crate::units::validate_present_unit_dimensions(units)?;
+        }
+        // Unknown names are line 2 (CON-section.7, CON-section.9, CON-error.4).
+        let minor =
+            crate::types::FrameMeta::from_shared(std::sync::Arc::from(trimmed)).spec_minor();
+        reject_unknown_sections(json_obj, &sections, minor)?;
         let has_declared_velocities =
             sections_declared && sections.iter().any(|name| name == SECTION_VELOCITIES);
         note_declared_velocities(has_declared_velocities);
@@ -3534,7 +3569,7 @@ where
     L: LineStream<'a> + Iterator<Item = &'a str>,
 {
     reset_sequential_plain();
-    let header = parse_frame_header(lines)?;
+    let header = parse_frame_header_inner(lines)?;
     // A count the unread input can hold stays in this function, on the same
     // reservation and `Arc` bump as before the bound existed. A count that
     // cannot fit is a separate cold function so it does not shape this loop.
@@ -3948,6 +3983,33 @@ mod symbol_share_tests {
     }
 }
 
+/// CON-section.7 and CON-section.9, reported on line 2 (CON-error.4).
+fn reject_unknown_sections(
+    obj: &serde_json::Map<String, Value>,
+    sections: &[String],
+    minor: u64,
+) -> Result<(), ParseError> {
+    let newer = minor > u64::from(crate::CON_SPEC_MINOR);
+    for name in sections {
+        if reserved_section_label_prefix(name).is_some() {
+            continue;
+        }
+        let skippable = newer && section_arity_known(obj, name);
+        if !skippable {
+            return Err(ParseError::UnknownSection(name.clone()));
+        }
+    }
+    Ok(())
+}
+
+fn section_arity_known(obj: &serde_json::Map<String, Value>, name: &str) -> bool {
+    obj.get(meta::SECTION_ARITY)
+        .and_then(|value| value.as_object())
+        .and_then(|map| map.get(name))
+        .and_then(|entry| entry.as_u64())
+        .is_some_and(|n| n >= 1)
+}
+
 fn validate_header_geometry(boxl: &[f64], angles: &[f64]) -> Result<(), ParseError> {
     if boxl
         .iter()
@@ -4199,6 +4261,37 @@ fn open_section<'a>(lines: &mut impl LineStream<'a>) -> Result<bool, ParseError>
     }
 }
 
+/// CON-validate.4. The symbol line is the line this error names.
+fn reject_symbol_mismatch(
+    section: &str,
+    type_idx: usize,
+    atom_idx: usize,
+    symbol: &str,
+    header: &FrameHeader,
+    atom_data: &[AtomDatum],
+    validate: bool,
+) -> Result<(), ParseError> {
+    if !validate || header.natms_per_type.get(type_idx).copied().unwrap_or(0) == 0 {
+        return Ok(());
+    }
+    let expected_symbol = atom_data
+        .get(atom_idx)
+        .map(|atom| atom.symbol.as_ref())
+        .ok_or_else(|| {
+            ParseError::ValidationError(format!(
+                "{section} component {} has no coordinate atom to validate against",
+                type_idx + 1
+            ))
+        })?;
+    if symbol != expected_symbol {
+        return Err(ParseError::ValidationError(format!(
+            "{section} component {} symbol mismatch: expected {expected_symbol}, found {symbol}",
+            type_idx + 1
+        )));
+    }
+    Ok(())
+}
+
 /// Attempts to parse an optional velocity section following coordinate blocks.
 ///
 /// In `.convel` files, after all coordinate blocks there is a blank separator line
@@ -4235,7 +4328,7 @@ pub fn parse_velocity_section<'a>(
     column.resize(n.saturating_mul(3), 0.0);
     let mut atom_idx: usize = 0;
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
-        // Symbol line
+        // Symbol line. A symbol mismatch is this line (CON-validate.4).
         let symbol = lines
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?
@@ -4251,7 +4344,7 @@ pub fn parse_velocity_section<'a>(
             )?;
         }
 
-        // "Velocities of Component N" line
+        // CON-section.15: the label is exactly "Velocities of Component N".
         let comp_line = lines
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?;
@@ -4322,6 +4415,9 @@ pub fn parse_force_section<'a>(
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_FORCES.into()))?
             .trim();
+        reject_symbol_mismatch(
+            "Forces", type_idx, atom_idx, symbol, header, atom_data, validate,
+        )?;
 
         let comp_line = lines
             .next_line()
@@ -4388,6 +4484,9 @@ pub fn parse_energy_section<'a>(
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_ENERGIES.into()))?
             .trim();
+        reject_symbol_mismatch(
+            "Energies", type_idx, atom_idx, symbol, header, atom_data, validate,
+        )?;
 
         let comp_line = lines
             .next_line()
@@ -4595,6 +4694,15 @@ fn parse_scalar_atom_section<'a>(
             .next_line()
             .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?
             .trim();
+        reject_symbol_mismatch(
+            component_label.trim_end_matches(" of Component").trim(),
+            type_idx,
+            atom_idx,
+            symbol,
+            header,
+            atom_data,
+            validate,
+        )?;
 
         let comp_line = lines
             .next_line()
@@ -4686,6 +4794,9 @@ fn parse_vector_named_section<'a>(
             .next_line()
             .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?
             .trim();
+        reject_symbol_mismatch(
+            label_kind, type_idx, atom_idx, symbol, header, atom_data, validate,
+        )?;
         let comp_line = lines
             .next_line()
             .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
@@ -6469,11 +6580,12 @@ Forces of Component 1
             "",
             "",
         ];
+        // -0 is the JSON number 0. Major 0 is UnsupportedVersion (CON-line2.5).
         assert_eq!(
             parse_frame_header(&mut neg_zero_major.iter().copied())
                 .unwrap_err()
                 .class_name(),
-            "InvalidMetadataJson"
+            "UnsupportedVersion"
         );
 
         // Value equality, -0 float preservation, frame_index:-0, section_arity:-0, 1e400/1e999.

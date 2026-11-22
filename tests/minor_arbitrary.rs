@@ -707,9 +707,10 @@ fn differential_base_oracle_from_committed_9aff911e_snapshot() {
 
     // 2. All 105 adversarial lines. The oracle file is the BASE 4093f911c4fe record
     //    and is not rewritten. Two standalone plain-valid huge minors (2^64+1,
-    //    40-digit) flip from BASE error to accepted. One unreserved overflow
-    //    is accepted by CON-line2.21. Six lines that repeat an object name
-    //    are rejected by CON-line2.23. The other 96 match BASE verbatim.
+    //    40-digit) flip from BASE error to accepted. Three lines that repeat
+    //    con_spec_minor are rejected. `con_spec_version: -0` is major 0
+    //    (CON-line2.4, CON-line2.5), so its class is UnsupportedVersion.
+    //    The other 99 match BASE verbatim.
     let adv = oracle["adversarial_lines"].as_array().unwrap();
     assert_eq!(adv.len(), 105);
     let plain_valid_2pow64_plus_1 =

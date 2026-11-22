@@ -536,6 +536,32 @@ pub fn validate_unit_for_quantity(quantity: &str, unit: &str) -> Result<(), Pars
     Ok(())
 }
 
+/// CON-units.2. A unit string that is present must have the matching
+/// dimension, in every version that carries it (CON-units.7).
+pub fn validate_present_unit_dimensions(units: &serde_json::Value) -> Result<(), ParseError> {
+    let obj = units
+        .as_object()
+        .ok_or_else(|| ParseError::InvalidUnits("units must be a JSON object".into()))?;
+    for (key, quantity) in [
+        ("length", "length"),
+        ("energy", "energy"),
+        ("mass", "mass"),
+        ("time", "time"),
+        ("velocity", "velocity"),
+        ("force", "force"),
+    ] {
+        let Some(value) = obj.get(key) else {
+            continue;
+        };
+        let text = value
+            .as_str()
+            .ok_or_else(|| ParseError::InvalidUnits(format!("units.{key} must be a string")))?;
+        validate_unit_for_quantity(quantity, text)
+            .map_err(|err| ParseError::InvalidUnits(format!("units.{key}: {err}")))?;
+    }
+    Ok(())
+}
+
 /// CON v3 requires `units` object with non-empty `length` and `energy` strings.
 pub fn validate_v3_units_metadata(units: &serde_json::Value) -> Result<(), ParseError> {
     validate_units_metadata_for_version(3, units)
