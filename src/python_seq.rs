@@ -1814,7 +1814,7 @@ impl PyAtomListRace {
         let incoming_mass = datum.mass.unwrap_or(0.0);
         let _write = self.write_guard(py)?;
         let frame = self.frame.borrow(py);
-        for existing in read_atom_list(&frame.atoms.bind(py))? {
+        for existing in read_atom_list(frame.atoms.bind(py))? {
             if existing.atom_id == datum.atom_id {
                 return Err(PyValueError::new_err(format!(
                     "duplicate atom_id {} in race list",
