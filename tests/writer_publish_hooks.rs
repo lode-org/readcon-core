@@ -140,6 +140,76 @@ fn a_killed_write_keeps_the_previous_file_or_a_complete_one() {
     );
 }
 
+fn scratch_names(dir: &std::path::Path) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with(".readcon-write-"))
+        .collect()
+}
+
+#[cfg(all(target_os = "linux", not(tsan_run)))]
+#[test]
+fn a_write_killed_while_linking_publishes_and_leaves_no_scratch() {
+    if std::env::var_os("READCON_LINK_CHILD").is_some() {
+        let path = PathBuf::from(std::env::var("READCON_LINK_PATH").expect("child path"));
+        let frame = wide_frame(2_000);
+        let _ = write_frame_refs_to_path(&path, &[&frame], 1, None, false, false);
+        std::process::exit(0);
+    }
+
+    use std::os::unix::process::ExitStatusExt;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("out.con");
+    let complete = dir.path().join("complete.con");
+    write_frame_refs_to_path(&complete, &[&wide_frame(2_000)], 1, None, false, false).unwrap();
+    let published = std::fs::read(&complete).unwrap();
+    std::fs::remove_file(&complete).unwrap();
+    let old = b"previous-complete\n".to_vec();
+    std::fs::write(&path, &old).unwrap();
+    let mut hook = PublishHookPipes::new();
+    let hook_env = hook.env_spec();
+    let exe = std::env::current_exe().expect("test binary");
+    let mut child = std::process::Command::new(exe)
+        .arg("a_write_killed_while_linking_publishes_and_leaves_no_scratch")
+        .arg("--exact")
+        .env("READCON_LINK_CHILD", "1")
+        .env("READCON_LINK_PATH", &path)
+        .env("READCON_TEST_LINK_HOOK", hook_env)
+        .spawn()
+        .expect("spawn child");
+    hook.close_parent_child_ends();
+    let mut byte = [0_u8];
+    let got = unsafe { libc::read(hook.ready_r, byte.as_mut_ptr().cast(), 1) };
+    if got != 1 {
+        // No O_TMPFILE here: the named scratch is renamed in-process and
+        // the link hook never runs.
+        assert!(child.wait().expect("wait child").success());
+        eprintln!("skipping: the store was not an unnamed file");
+        return;
+    }
+    let _ = child.kill();
+    let status = child.wait().expect("wait child");
+    assert!(
+        status.signal().is_some(),
+        "the write child finished before the kill; status {status:?}"
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while std::time::Instant::now() < deadline
+        && (std::fs::read(&path).unwrap() != published || !scratch_names(dir.path()).is_empty())
+    {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let left = scratch_names(dir.path());
+    assert!(left.is_empty(), "scratch left behind: {left:?}");
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        published,
+        "a publish already linking must finish after the kill"
+    );
+}
+
 #[test]
 fn a_killed_rewrite_leaves_the_published_file_whole() {
     if std::env::var_os("READCON_REWRITE_CHILD").is_some() {

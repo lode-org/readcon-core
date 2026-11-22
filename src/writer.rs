@@ -3787,27 +3787,82 @@ fn publish_unnamed(file: &File, dest: &Path) -> io::Result<()> {
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "scratch"))?;
         let dest_c = std::ffi::CString::new(dest.as_os_str().as_encoded_bytes())
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "dest"))?;
-        let linked = unsafe {
-            libc::linkat(
-                libc::AT_FDCWD,
-                proc.as_ptr(),
-                libc::AT_FDCWD,
-                scratch_c.as_ptr(),
-                libc::AT_SYMLINK_FOLLOW,
-            )
-        };
-        if linked != 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let renamed = unsafe { libc::rename(scratch_c.as_ptr(), dest_c.as_ptr()) };
-        if renamed != 0 {
-            let error = io::Error::last_os_error();
-            if scratch.exists() {
-                let _ = std::fs::remove_file(&scratch);
+        #[cfg(tsan_run)]
+        {
+            // TSan cannot safely continue in a child of this multithreaded
+            // CPython process: its inherited runtime exits with code 66.
+            // Exercise the same link-and-rename publication in the parent.
+            let linked = unsafe {
+                libc::linkat(
+                    libc::AT_FDCWD,
+                    proc.as_ptr(),
+                    libc::AT_FDCWD,
+                    scratch_c.as_ptr(),
+                    libc::AT_SYMLINK_FOLLOW,
+                )
+            };
+            if linked != 0 {
+                return Err(io::Error::last_os_error());
             }
-            return Err(error);
+            let _ = maybe_test_link_hook();
+            let renamed = unsafe { libc::rename(scratch_c.as_ptr(), dest_c.as_ptr()) };
+            if renamed != 0 {
+                let error = io::Error::last_os_error();
+                if scratch.exists() {
+                    let _ = std::fs::remove_file(&scratch);
+                }
+                return Err(error);
+            }
+            Ok(())
         }
-        Ok(())
+
+        #[cfg(not(tsan_run))]
+        {
+            // The child runs only async-signal-safe calls between `fork`
+            // and `_exit`.
+            let pid = unsafe { libc::fork() };
+            if pid < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            if pid == 0 {
+                let linked = unsafe {
+                    libc::linkat(
+                        libc::AT_FDCWD,
+                        proc.as_ptr(),
+                        libc::AT_FDCWD,
+                        scratch_c.as_ptr(),
+                        libc::AT_SYMLINK_FOLLOW,
+                    )
+                };
+                if linked != 0 {
+                    unsafe { libc::_exit(1) };
+                }
+                let renamed = unsafe { libc::rename(scratch_c.as_ptr(), dest_c.as_ptr()) };
+                unsafe { libc::_exit(if renamed == 0 { 0 } else { 1 }) };
+            }
+            let _ = maybe_test_link_hook();
+            let mut status = 0;
+            loop {
+                let waited = unsafe { libc::waitpid(pid, &mut status, 0) };
+                if waited >= 0 {
+                    break;
+                }
+                let err = io::Error::last_os_error();
+                if err.kind() != io::ErrorKind::Interrupted {
+                    return Err(err);
+                }
+            }
+            // The child has finished, so a leftover scratch is this publish's
+            // name and not a concurrent writer's.
+            let published = libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0;
+            if !published {
+                if scratch.exists() {
+                    let _ = std::fs::remove_file(&scratch);
+                }
+                return Err(io::Error::other("publish did not replace the destination"));
+            }
+            Ok(())
+        }
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -3929,7 +3984,26 @@ fn maybe_test_publish_hook_file(file: &File) -> io::Result<()> {
     file.set_len(0)?;
     file.write_all(b"readcon-test-partial-buffer\n")?;
     file.sync_all()?;
-    maybe_test_publish_hook_wait()
+    maybe_test_hook_wait(READCON_TEST_PUBLISH_HOOK_ENV)
+}
+
+#[cfg(unix)]
+#[cfg(any(test, feature = "test-hooks"))]
+const READCON_TEST_LINK_HOOK_ENV: &str = "READCON_TEST_LINK_HOOK";
+
+/// Pause the publishing process once the unnamed store is being linked,
+/// so a test can kill it inside the link-and-rename window.
+#[cfg(target_os = "linux")]
+#[cfg(any(test, feature = "test-hooks"))]
+fn maybe_test_link_hook() -> io::Result<()> {
+    maybe_test_hook_wait(READCON_TEST_LINK_HOOK_ENV)
+}
+
+#[cfg(target_os = "linux")]
+#[cfg(not(any(test, feature = "test-hooks")))]
+#[inline]
+fn maybe_test_link_hook() -> io::Result<()> {
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -3944,8 +4018,8 @@ fn maybe_test_publish_hook_path(staged: &Path) -> io::Result<()> {
 
 #[cfg(unix)]
 #[cfg(any(test, feature = "test-hooks"))]
-fn maybe_test_publish_hook_wait() -> io::Result<()> {
-    let spec = match std::env::var(READCON_TEST_PUBLISH_HOOK_ENV) {
+fn maybe_test_hook_wait(env: &str) -> io::Result<()> {
+    let spec = match std::env::var(env) {
         Ok(spec) => spec,
         Err(_) => return Ok(()),
     };
