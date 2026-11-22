@@ -85,6 +85,7 @@ FIGURES: dict[str, tuple[str, tuple[str, ...]]] = {
         (BANDS + "uninterrupted.npz", BANDS + "CON_3_1__shortest_round_trip.npz"),
     ),
     "velocity_mislabel": ("plot_restored", ("data/novel/velocity.json",)),
+    "claisen_order": ("plot_claisen_order", ("data/claisen/results.json",)),
 }
 
 # Names that no included figure uses, and the records their plotters read for them.
@@ -97,7 +98,6 @@ OTHER_FIGURES: dict[str, tuple[str, tuple[str, ...]]] = {
         "plot_restart_formats",
         (BANDS + "uninterrupted.npz", BANDS + "CON_3_1__shortest_round_trip.npz"),
     ),
-    "claisen_order": ("plot_claisen_order", ("data/claisen/results.json",)),
     "velocity_quiver": ("plot_supp", ("bench/results/velocity_case.json",)),
     "threads": ("plot_union_extra", ("bench/results/threads_summary.csv",)),
     "matrix": ("plot_union_extra", ("data/failure/matrix.csv",)),
