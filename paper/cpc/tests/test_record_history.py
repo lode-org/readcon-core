@@ -42,6 +42,19 @@ def test_the_coverage_recount_may_replace_its_count() -> None:
     ]
 
 
+def test_the_figure_ledger_may_be_replaced() -> None:
+    module = _load()
+    text = (
+        "commit aaaa\n"
+        "0\t4\tpaper/cpc/data/figure_reads.json\n"
+        "commit bbbb\n"
+        "0\t1\tpaper/cpc/data/trace/reads.json\n"
+    )
+    assert module.deleted_lines(text) == [
+        "bbbb deletes 1 lines of paper/cpc/data/trace/reads.json"
+    ]
+
+
 def test_an_added_record_line_is_kept() -> None:
     module = _load()
     text = "commit aaaa\n2\t0\tpaper/cpc/logs/mpi.log\n"
