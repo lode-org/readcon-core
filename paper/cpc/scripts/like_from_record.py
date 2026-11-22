@@ -172,7 +172,8 @@ def full_table(rows: list[dict[str, str]]) -> str:
     )
     if any(heading == "Former" for _arm, heading, _kind in columns):
         caption += (
-            "Former is eOn's former Python reader, eon/fileio.py, on a full frame, "
+            "Former is the last Python reader of eOn, the eon.fileio module, "
+            "on a full frame, "
             "before eOn adopted readcon. "
         )
     if any(heading == "SVN" for _arm, heading, _kind in columns):
@@ -362,7 +363,8 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
         on_primary.append(f"readcon is {cell_value(ase, 'ratio')} times as fast as ASE")
     if former is not None and primary == "al_eam_md" and former.get("ratio_over_tip"):
         on_primary.append(
-            f"\\path{{eon/fileio.py}} takes {cell_value(former, 'ratio')} times "
+            "the former eOn reader takes "
+            f"{cell_value(former, 'ratio')} times "
             "as long as the tip"
         )
     if on_primary:
