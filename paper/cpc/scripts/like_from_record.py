@@ -169,8 +169,6 @@ def full_table(rows: list[dict[str, str]]) -> str:
         "Full-frame reads on one thread. "
         "The tip column is the median time. "
         "Each other column is that arm's median divided by the tip. "
-        "Simulation output is not published data. "
-        "A synthetic input is not a recorded trajectory. "
     )
     if any(heading == "Former" for _arm, heading, _kind in columns):
         caption += (
