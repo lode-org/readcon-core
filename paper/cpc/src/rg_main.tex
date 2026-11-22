@@ -552,8 +552,7 @@ Section~\ref*{sec:host} of the supplementary material gives the host log of the 
 
 \subsection{Like-for-like reads}\label{sec:like}
 The like-for-like record is \path{paper/cpc/bench-like-for-like/results/summary.csv}, measured on one machine with one thread pinned to cpu 0, and every arm on an input matched the frame count, the atom count and the position checksum.
-The authors maintain both eOn and readcon, so this is an in-house comparison.
-Former is eOn's former Python reader, \path{eon/fileio.py}, on a full frame, the last version before eOn delegated CON parsing to readcon, and current eOn reads CON files through readcon.
+The authors maintain both eOn and readcon, so the comparison is in-house: the former reader is \path{eon/fileio.py}, the last Python reader before eOn delegated CON parsing to readcon, through which current eOn reads CON files.
 
 \input{figures/generated/like_section}
 
