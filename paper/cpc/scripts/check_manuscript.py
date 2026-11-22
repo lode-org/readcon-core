@@ -1418,6 +1418,10 @@ def main() -> int:
             lambda: script_check("gen_spec_supp.py", "specification text"),
         ),
         ("conformance records", check_conformance),
+        (
+            "Claisen outputs",
+            lambda: script_check("run_claisen_order.py", "Claisen outputs"),
+        ),
     ]
     passed, failed = [], []
     for name, check in checks:
