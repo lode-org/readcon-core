@@ -125,6 +125,21 @@ fn mixed_trajectory() -> Vec<u8> {
 }
 
 #[test]
+fn a_bom_on_a_later_frame_is_rejected_in_the_stream() {
+    let frame = std::fs::read(root().join("test/tiny_cuh2.con")).unwrap();
+    let mut bytes = frame.clone();
+    bytes.extend_from_slice("\u{feff}".as_bytes());
+    bytes.extend_from_slice(&frame);
+    let want = in_memory(&bytes);
+    assert!(
+        want.iter()
+            .any(|item| item.as_ref().is_err_and(|err| err.contains("byte-order"))),
+        "{want:?}"
+    );
+    assert_same("bom on frame 2", &bytes);
+}
+
+#[test]
 fn malformed_input_fails_where_the_in_memory_parse_fails() {
     let base = mixed_trajectory();
     assert!(in_memory(&base).iter().all(Result::is_ok));
