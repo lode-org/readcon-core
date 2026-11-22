@@ -4278,18 +4278,18 @@ pub fn parse_frame_header<'a>(
         sections,
         validate,
         sections_declared,
-        pbc_all_false,
+        pbc_marked,
         has_lattice,
     ) = if trimmed == "{\"con_spec_version\":2}"
     {
         // The line written by every stock trajectory. Same object the
         // JSON parser would build: major 2, no extra keys.
-        (2, Vec::new(), false, false, false, false)
+        (2, Vec::new(), false, false, [false; 3], false)
     } else if let Some(ver) = simple_metadata_version(trimmed) {
         // A header whose only keys are the spec version, an optional
         // minor, and a units object. Every byte is still read. Any
         // other key falls through to the general parser.
-        (ver, Vec::new(), false, false, false, false)
+        (ver, Vec::new(), false, false, [false; 3], false)
     } else if trimmed.starts_with('{') {
         let minor_spans = top_level_minor_spans(trimmed);
         if minor_spans.len() > 1 {
@@ -4345,7 +4345,7 @@ pub fn parse_frame_header<'a>(
         let mut sections: Vec<String> = Vec::new();
         let mut sections_declared = false;
         let mut validate = false;
-        let mut pbc_all_false = false;
+        let mut pbc_marked = [false; 3];
         let mut has_lattice = false;
         for (k, v) in json_obj.iter() {
             match k.as_str() {
@@ -4375,10 +4375,7 @@ pub fn parse_frame_header<'a>(
                 }
                 meta::PBC => {
                     validate_pbc_metadata(v)?;
-                    pbc_all_false = v.as_array().is_some_and(|values| {
-                        values.len() == 3
-                            && values.iter().all(|value| value.as_bool() == Some(false))
-                    });
+                    pbc_marked = crate::types::marked_periodic_axes(Some(v), false);
                 }
                 meta::ENERGY => validate_metadata_number(k, v)?,
                 meta::SECTION_ARITY => {
@@ -4435,12 +4432,12 @@ pub fn parse_frame_header<'a>(
             sections,
             validate,
             sections_declared,
-            pbc_all_false,
+            pbc_marked,
             has_lattice,
         )
     } else {
         // Legacy file: no JSON metadata line.
-        (1_u32, Vec::new(), false, false, false, false)
+        (1_u32, Vec::new(), false, false, [false; 3], false)
     };
     let prebox2 = prebox2_raw.to_string();
 
@@ -4448,11 +4445,12 @@ pub fn parse_frame_header<'a>(
     let angles_vec = parse_cell_line(lines.next().ok_or(ParseError::IncompleteHeader)?, "angles")?;
     let boxl: [f64; 3] = boxl_vec.as_slice().try_into().unwrap();
     let angles: [f64; 3] = angles_vec.as_slice().try_into().unwrap();
-    crate::types::validate_read_cell(
-        &boxl,
-        &angles,
-        pbc_all_false || has_lattice,
-    )?;
+    let marked_periodic = if has_lattice {
+        [false; 3]
+    } else {
+        pbc_marked
+    };
+    crate::types::validate_read_cell(&boxl, &angles, marked_periodic)?;
     let postbox1 = lines
         .next()
         .ok_or(ParseError::IncompleteHeader)?

@@ -864,7 +864,7 @@ fn peek_first_coord_line(bytes: &[u8]) -> Option<PeekedHeader> {
     skip_line(bytes, &mut pos).ok()?;
     let meta = read_line(bytes, &mut pos).ok()?;
     spec_version(meta).ok()?;
-    let allow_unset_cell = unspecified_cell_allowed(meta).ok()?;
+    let marked_periodic = marked_periodic_axes(meta).ok()?;
     let stock = stock_meta_line(meta);
     let box_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
     let boxl = parse_line_of_n_f64(box_line, 3).ok()?;
@@ -873,7 +873,7 @@ fn peek_first_coord_line(bytes: &[u8]) -> Option<PeekedHeader> {
     crate::types::validate_read_cell(
         &[boxl[0], boxl[1], boxl[2]],
         &[angles[0], angles[1], angles[2]],
-        allow_unset_cell,
+        marked_periodic,
     )
     .ok()?;
     skip_line(bytes, &mut pos).ok()?;
@@ -1558,7 +1558,7 @@ fn parse_one_frame(
     skip_line(bytes, pos)?;
     let meta = read_line(bytes, pos)?;
     let spec = spec_version(meta)?;
-    let allow_unset_cell = unspecified_cell_allowed(meta)?;
+    let marked_periodic = marked_periodic_axes(meta)?;
     let mut stock = stock_meta_line(meta);
     let box_line = utf8_line(read_line(bytes, pos)?)?;
     let boxl = parse_cell_line(box_line, "boxl")?;
@@ -1567,7 +1567,7 @@ fn parse_one_frame(
     crate::types::validate_read_cell(
         &[boxl[0], boxl[1], boxl[2]],
         &[angles[0], angles[1], angles[2]],
-        allow_unset_cell,
+        marked_periodic,
     )?;
     out.cells.extend_from_slice(&boxl);
     out.cells.extend_from_slice(&angles);
@@ -1708,23 +1708,20 @@ fn stock_meta_line(line: &[u8]) -> bool {
     line == STOCK_V2 || line == STOCK_V3
 }
 
-fn unspecified_cell_allowed(line: &[u8]) -> Result<bool, ParseError> {
+fn marked_periodic_axes(line: &[u8]) -> Result<[bool; 3], ParseError> {
     let line = trim_ascii(line);
     if !line.starts_with(b"{") {
-        return Ok(false);
+        return Ok([false; 3]);
     }
     let value: serde_json::Value = serde_json::from_slice(line)
         .map_err(|error| ParseError::InvalidMetadataJson(error.to_string()))?;
     let object = value
         .as_object()
         .ok_or_else(|| ParseError::InvalidMetadataJson("metadata must be an object".into()))?;
-    let pbc_all_false = object
-        .get("pbc")
-        .and_then(serde_json::Value::as_array)
-        .is_some_and(|pbc| {
-            pbc.len() == 3 && pbc.iter().all(|entry| entry.as_bool() == Some(false))
-        });
-    Ok(pbc_all_false || object.contains_key("lattice_vectors"))
+    Ok(crate::types::marked_periodic_axes(
+        object.get("pbc"),
+        object.contains_key("lattice_vectors"),
+    ))
 }
 
 fn zero_atom_tail(bytes: &[u8], pos: &mut usize) -> Result<(), ParseError> {

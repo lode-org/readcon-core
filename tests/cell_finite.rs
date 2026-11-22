@@ -241,31 +241,15 @@ fn all_read_modes_reject_negative_lengths() {
     assert_all_read_modes_reject(&frame_text("-1 10 10", "90 90 90", 1));
 }
 
-#[test]
-fn all_read_modes_require_explicit_nonperiodic_zero_cell() {
-    assert_all_read_modes_reject(&frame_text("0 0 0", "90 90 90", 1));
-    assert_all_read_modes_reject(&frame_text_with_meta(
-        r#"{"con_spec_version":2,"pbc":[true,true,true]}"#,
-        "0 0 0",
-        "90 90 90",
-        1,
-    ));
-
-    let text = frame_text_with_meta(
-        r#"{"con_spec_version":2,"pbc":[false,false,false]}"#,
-        "-0 0 -0",
-        "90 90 90",
-        1,
-    );
-    let frame = ConFrameIterator::new(&text).next().unwrap().unwrap();
-    assert_eq!(frame.header.boxl, [0.0; 3]);
+fn assert_all_read_modes_accept(text: &str) {
+    let frame = ConFrameIterator::new(text).next().unwrap().unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let path = write_text(&dir, "unset-cell.con", &text);
+    let path = write_text(&dir, "unset-cell.con", text);
     for workers in [None, Some(1), Some(2)] {
-        assert_eq!(
-            read_coord_columns(&path, workers).unwrap().cells,
-            [0.0, 0.0, 0.0, 90.0, 90.0, 90.0]
-        );
+        assert_eq!(read_all_frames_located(&path, workers).unwrap().len(), 1);
+        let mut cells = frame.header.boxl.to_vec();
+        cells.extend_from_slice(&frame.header.angles);
+        assert_eq!(read_coord_columns(&path, workers).unwrap().cells, cells);
         assert_eq!(
             read_positions_with_threads(&path, workers)
                 .unwrap()
@@ -273,6 +257,45 @@ fn all_read_modes_require_explicit_nonperiodic_zero_cell() {
             1
         );
     }
+    assert!(read_first_frame_located(&path).is_ok());
+    assert!(read_nth_frame_located(&path, 0).is_ok());
+}
+
+#[test]
+fn all_read_modes_refuse_zero_lengths_only_on_marked_periodic_axes() {
+    assert_all_read_modes_reject(&frame_text_with_meta(
+        r#"{"con_spec_version":2,"pbc":[true,true,true]}"#,
+        "0 0 0",
+        "90 90 90",
+        1,
+    ));
+    assert_all_read_modes_reject(&frame_text_with_meta(
+        r#"{"con_spec_version":2,"pbc":[false,false,true]}"#,
+        "10 10 0",
+        "90 90 90",
+        1,
+    ));
+    // CON 1 and 2 writers, ASE, and earlier readcon write zero lengths for
+    // a frame without a cell, with no pbc key.
+    assert_all_read_modes_accept(&frame_text("0 0 0", "90 90 90", 1));
+    assert_all_read_modes_accept(&frame_text("10 10 0", "90 90 60", 1));
+    assert_all_read_modes_accept(&frame_text_with_meta(
+        r#"{"con_spec_version":2,"pbc":[false,false,false]}"#,
+        "-0 0 -0",
+        "90 90 90",
+        1,
+    ));
+    assert_all_read_modes_accept(&frame_text_with_meta(
+        r#"{"con_spec_version":2,"pbc":[true,true,false]}"#,
+        "10 10 0",
+        "90 90 90",
+        1,
+    ));
+}
+
+#[test]
+fn all_read_modes_accept_a_flat_cell_on_the_triangle_boundary() {
+    assert_all_read_modes_accept(&frame_text("10 10 10", "60 60 120", 1));
 }
 
 #[test]

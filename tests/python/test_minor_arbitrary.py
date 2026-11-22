@@ -774,7 +774,6 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
         "gram_170_v2.con",
         "gram_170_v30.con",
         "gram_170_v31_validate.con",
-        "gram_60_60_120.con",
         "gram_60_60_120_1.con",
         "gram_60_60_120_1_validate.con",
     }

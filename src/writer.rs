@@ -5251,10 +5251,22 @@ fn written_box(frame: &ConFrame) -> ([f64; 3], [f64; 3]) {
     }
 }
 
-fn line34_unspecified_cell_allowed(frame: &ConFrame, boxl: &[f64; 3], angles: &[f64; 3]) -> bool {
-    boxl.iter().all(|length| *length == 0.0)
-        && *angles == [90.0, 90.0, 90.0]
-        && frame.header.pbc_effective() == [false, false, false]
+/// A written cell with a zero length leaves that axis unset, as
+/// [`crate::types::validate_read_cell`] reads it back. The reality check
+/// applies to a cell whose lengths are all positive.
+fn line34_unspecified_cell_allowed(frame: &ConFrame, boxl: &[f64; 3], _angles: &[f64; 3]) -> bool {
+    // A cell with every length set must not look up `pbc`: that lookup
+    // keeps the metadata map on the frame for the rest of a stream.
+    if !boxl.contains(&0.0) {
+        return false;
+    }
+    let marked = match frame.header.lattice_vectors() {
+        Some(_) => [false; 3],
+        None => frame.header.pbc().unwrap_or([false; 3]),
+    };
+    boxl.iter()
+        .zip(marked)
+        .all(|(length, periodic)| *length != 0.0 || !periodic)
 }
 
 /// Refuses, before any byte is formatted or file created, a frame whose
@@ -6801,6 +6813,18 @@ mod publish_on_every_host {
         write_frame_refs_to_path(&path, &frames, 1, None, false, false).unwrap();
         assert!(PUBLISH_FILE_SYNC_CALLS.load(Ordering::Relaxed) > file_before);
         assert!(PUBLISH_DIR_SYNC_CALLS.load(Ordering::Relaxed) > dir_before);
+    }
+
+    #[test]
+    fn path_writer_round_trips_a_zero_cell_without_pbc() {
+        let mut builder = ConFrameBuilder::new([0.0; 3], [90.0; 3]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+        let frame = builder.build().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("zero-cell.con");
+        write_frame_refs_to_path(&path, &[&frame], 1, None, false, false).unwrap();
+        let back = crate::iterators::read_all_frames(&path).unwrap();
+        assert_eq!(back[0].header.boxl, [0.0; 3]);
     }
 
     #[test]

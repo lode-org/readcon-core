@@ -818,4 +818,16 @@ mod tests {
         assert!(matches!(err, CorrespondenceError::SingularCell { .. }));
         assert!(err.to_string().contains("singular"));
     }
+
+    #[test]
+    fn a_nonperiodic_zero_cell_frame_is_an_error_not_a_panic() {
+        let mut builder = crate::types::ConFrameBuilder::new([0.0; 3], [90.0; 3]);
+        builder
+            .set_metadata_json(r#"{"pbc":[false,false,false]}"#)
+            .unwrap();
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+        let frame = builder.build().unwrap();
+        let err = minimum_image_displacements(&frame, &frame, IdentityCheck::Strict).unwrap_err();
+        assert!(matches!(err, CorrespondenceError::SingularCell { .. }));
+    }
 }

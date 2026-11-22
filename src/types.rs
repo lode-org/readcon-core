@@ -2733,28 +2733,53 @@ pub fn check_cell_reality(
     Ok(())
 }
 
+/// Axes the metadata marks periodic, for [`validate_read_cell`].
+///
+/// A `lattice_vectors` key decides the cell, so it marks no axis. A frame
+/// without a `pbc` array also marks none, preserving legacy unset axes.
+pub(crate) fn marked_periodic_axes(
+    pbc: Option<&serde_json::Value>,
+    has_lattice_vectors: bool,
+) -> [bool; 3] {
+    let mut marked = [false; 3];
+    if has_lattice_vectors {
+        return marked;
+    }
+    if let Some(pbc) = pbc.and_then(serde_json::Value::as_array)
+        && pbc.len() == 3
+    {
+        for (axis, entry) in marked.iter_mut().zip(pbc) {
+            *axis = entry.as_bool() == Some(true);
+        }
+    }
+    marked
+}
+
 /// Validate a cell read from lines 3 and 4.
 ///
-/// `allow_unset` admits the signed-zero/90-degree sentinel used by
-/// explicitly nonperiodic metadata and headers with `lattice_vectors`.
+/// A zero length leaves that axis unset. It is refused only on an axis
+/// `marked_periodic` names. A cell with every length positive must be real.
 pub(crate) fn validate_read_cell(
     lengths: &[f64; 3],
     angles_deg: &[f64; 3],
-    allow_unset: bool,
+    marked_periodic: [bool; 3],
 ) -> Result<(), ParseError> {
     if lengths.iter().any(|length| *length < 0.0) {
         return Err(ParseError::ValidationError(
             "cell lengths must be non-negative".to_string(),
         ));
     }
-    let all_zero = lengths.iter().all(|length| *length == 0.0);
-    if all_zero && *angles_deg == [90.0; 3] && allow_unset {
+    if lengths.contains(&0.0) {
+        if lengths
+            .iter()
+            .zip(marked_periodic)
+            .any(|(length, periodic)| *length == 0.0 && periodic)
+        {
+            return Err(ParseError::ValidationError(
+                "cell lengths must be positive".to_string(),
+            ));
+        }
         return Ok(());
-    }
-    if all_zero || lengths.contains(&0.0) {
-        return Err(ParseError::ValidationError(
-            "cell lengths must be positive".to_string(),
-        ));
     }
     check_cell_reality(lengths, angles_deg)
 }
@@ -5328,17 +5353,13 @@ impl ConFrameBuilder {
                 None => err,
             });
         }
-        let pbc_all_false = self
-            .metadata
-            .get(meta::PBC)
-            .and_then(serde_json::Value::as_array)
-            .is_some_and(|pbc| {
-                pbc.len() == 3 && pbc.iter().all(|entry| entry.as_bool() == Some(false))
-            });
         validate_read_cell(
             &self.cell,
             &self.angles,
-            pbc_all_false || self.metadata.contains_key(meta::LATTICE_VECTORS),
+            marked_periodic_axes(
+                self.metadata.get(meta::PBC),
+                self.metadata.contains_key(meta::LATTICE_VECTORS),
+            ),
         )?;
         let written_spec = match self.written_spec {
             0 => crate::CON_SPEC_VERSION,
@@ -7678,7 +7699,36 @@ mod tests {
 
     #[test]
     fn read_cell_validation_accepts_zero_length_unset_cell() {
-        validate_read_cell(&[-0.0, 0.0, -0.0], &[90.0; 3], true)
+        validate_read_cell(&[-0.0, 0.0, -0.0], &[90.0; 3], [false; 3])
             .expect("zero-length right-angle sentinel must stay valid");
+        validate_read_cell(
+            &[10.0, 10.0, 0.0],
+            &[90.0, 90.0, 60.0],
+            [true, true, false],
+        )
+        .expect("an unset nonperiodic axis must stay valid");
+        validate_read_cell(&[10.0, 10.0, 0.0], &[90.0; 3], [true; 3])
+            .expect_err("a zero length on a periodic axis is refused");
+    }
+
+    #[test]
+    fn builder_accepts_a_zero_cell_without_pbc() {
+        let mut builder = ConFrameBuilder::new([0.0; 3], [90.0; 3]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+        let frame = builder.build().unwrap();
+        assert_eq!(frame.header.cell_matrix(), [[0.0; 3]; 3]);
+    }
+
+    #[test]
+    fn flat_cells_on_the_triangle_boundary_are_real() {
+        for angles in [
+            [60.0, 60.0, 120.0],
+            [90.0, 45.0, 45.0],
+            [120.0, 120.0, 120.0],
+        ] {
+            check_cell_reality(&[10.0; 3], &angles).expect("flat cell");
+        }
+        check_cell_reality(&[10.0; 3], &[60.0, 60.0, 120.1])
+            .expect_err("past flat");
     }
 }
