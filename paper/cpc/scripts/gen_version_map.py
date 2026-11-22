@@ -136,6 +136,7 @@ RECORD_NAMES = (
         r"data/spec/mutant_differential\.json",
         "Specification campaign, mutant differential",
     ),
+    (r"data/spec/spec-measurement-[^/]+\.json", "Specification measurement"),
     (r"data/spec/version_drift\.json", "Specification campaign, version drift"),
     (r"data/survey_frame\.json", "Survey frame"),
     (r"src/figures/generated/survey_frame\.con", "Survey frame, CON text"),
@@ -623,6 +624,14 @@ def carrier(rel: str) -> tuple[str, str] | None:
             and data.get("tree_commit")
         ):
             return "commit", rel
+        if (
+            isinstance(data, dict)
+            and isinstance(data.get("measured_at"), dict)
+            and data["measured_at"].get("commit")
+            and isinstance(data.get("tree"), dict)
+            and data["tree"].get("release")
+        ):
+            return "measured_commit", rel
     start = path if path.is_dir() else path.parent
     for parent in (start, *start.parents):
         if parent == CPC or not parent.is_relative_to(CPC):
@@ -854,6 +863,16 @@ def build_of(kind: str, rel: str) -> Build | None:
         return Build(
             data["readcon_version"],
             provenance.library_digest_at(data["tree_commit"]),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+    if kind == "measured_commit":
+        return Build(
+            data["tree"]["release"],
+            provenance.library_digest_at(data["measured_at"]["commit"]),
             None,
             None,
             None,
