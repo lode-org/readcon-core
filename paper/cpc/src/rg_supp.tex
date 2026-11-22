@@ -449,7 +449,9 @@ Five movable images were interpolated with the constraints applied.
 The band uses the improved tangent with a climbing image, and each step adds \(0.02\,\text{\AA}^2/\mathrm{eV}\) times the projected force.
 The band is interrupted after step 25.
 Each route writes all seven images and reads them back with the reader the route names, keeping whatever constraints and periodicity that reader returns, and the resumed band runs to \(0.01\,\mathrm{eV/\text{\AA}}\) or the cap of \(\rfStepCap\) steps.
+Table~\ref{tab:restartfmt} gives each resumed band, and Section~\ref{sec:cases} of the main text discusses it.
 
+\input{figures/generated/restart_main}
 \input{figures/generated/restart_kernels}
 
 
@@ -542,6 +544,12 @@ We draw the resumed bands on the $(s, d)$ plane \cite{goswamiTwodimensionalRmsdP
 MDTraj is an analysis tool beside these readers \cite{mcgibbonMdtrajModernOpen2015}.
 Software is cited by version, following the principles for research software \cite{smithSoftwareCitationPrinciples2016}.
 The DLPack export of readcon-core is a dense tensor without labels, and labeled, block-sparse atomistic data are the subject of metatensor \cite{bigiMetatensorMetatomicFoundational2026}.
+Figure~\ref{fig:dlpack} shows the six repeats of the DLPack exchange of Section~\ref{sec:dlpack} of the main text.
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/dlpack.pdf} \caption{\textbf{A borrowed DLPack view costs \dlpackRatio{} times a copy of the same positions.}
+Six repeats on \dlpackAtoms{} atoms.
+The bar is the median and the whisker is the type 7 interquartile range.}
+\label{fig:dlpack} \end{figure}
 
 Table~\ref{tab:format-context} is context for choosing a format, and readcon reads neither XYZ nor HDF5.
 h5py reads an HDF5 coordinate array in \rcHdfMedian~s.

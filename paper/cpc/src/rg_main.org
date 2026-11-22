@@ -230,8 +230,7 @@ It holds the survey frame, a Pt(100) slab of two layers of four atoms with one a
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/structures.pdf} \caption{\textbf{The three geometries behind the measurements.}
 Left: the survey frame of Listing~\ref{lst:frame} and Table~\ref{tab:survey}, a Pt(100) slab with one adatom.
 Middle: the CuH\(_2\) slab used as a structure in the measurements.
-Right: the middle image of the uninterrupted climbing-image band of the EMT Pt(100) adatom hop of Section~\ref{sec:cases}.
-The colors are the Ruhi palette.}
+Right: the middle image of the uninterrupted climbing-image band of the EMT Pt(100) adatom hop of Section~\ref{sec:cases}.}
 \label{fig:structures} \end{figure}
 
 \begin{table}[tbp] \centering \footnotesize \caption{The lines of Listing~\ref{lst:frame} and the rule that reads each.}
@@ -432,6 +431,9 @@ C, C++ (including eOn), Julia and Fortran call the core through the C interface,
 An arrow runs from the caller to the code it calls.}
 \label{fig:architecture} \end{figure*}
 
+% snapper:off.
+\begin{algorithm}[!t] \footnotesize \caption{Read a CON file from a path, as readcon-core~\readconCargoVersion{} does.}
+\label{alg:parser} \begin{algorithmic}[1] \Require path; thread count \(P\), where absent, 0 or 1 selects the calling thread \Ensure frames in file order, or an error that names its line \State Read the first four bytes; on gzip magic, inflate every member into one buffer \State On zstd magic, inflate when built with zstd, else \textbf{error}: unsupported zstd input \If{\(P\ge2\)} \State Read a plain file shorter than \(B_{\mathrm{map}}\) whole, else memory-map it \State Walk the frame boundaries in one thread, skipping each frame by its counts \State Parse the frames with \Call{ParseFrame}{} in a pool of \(P\) threads, or frame after frame without the parallel feature \ElsIf{the input was compressed, or is a plain file within the whole-file limit} \State Read a plain file shorter than \(B_{\mathrm{map}}\) whole, else memory-map it \State Parse frame after frame with \Call{ParseFrame}{} \Else \State Parse frame after frame with \Call{ParseFrame}{} from a window that moves through the file \EndIf \Function{ParseFrame}{} \State \textbf{error} on a byte-order mark at the start of the file; line 2 is JSON when it starts with \texttt{\{}, else version 1 \State Check the header against Eq.~\eqref{eq:version}; keep unknown keys \State Read the cell; \textbf{error} when \(\hat\rho\le-\num{\wkWindow}\) in Eq.~\eqref{eq:cell} \State Read the type counts, the masses and the coordinate rows \State Round each decimal to the nearest binary64 value; \textbf{error} on a value that is not finite; check each mask against Eq.~\eqref{eq:mask} \If{line 2 has no \texttt{sections} key} \State Read a legacy velocity block when a blank line and a complete block follow \Else \For{each name in \texttt{sections}, in order} \State Read a reserved section, or count the rows of a later minor's section of declared width, else \textbf{error} \EndFor \EndIf \State \textbf{error} on a velocity section without \texttt{units.time} when \(M=3\) and \(\mu\ge 1\) \EndFunction \end{algorithmic} \end{algorithm} % snapper:on.
 Algorithm~\ref{alg:parser} is the path reader of readcon-core~\readconCargoVersion{}.
 Without an explicit count of two or more threads it parses on the calling thread.
 A plain file up to a fixed size is read whole, into memory below \(B_{\mathrm{map}}=\wkMmapBytes\) bytes and memory-mapped from there on, and a longer plain file is parsed from a window of a few mebibytes that moves through the text, so the text is never resident beside every finished frame.
@@ -439,9 +441,6 @@ A gzip or zstd file is inflated into one buffer and parsed frame after frame.
 With \(P\ge2\) threads the reader holds the whole text, finds the frame boundaries in one thread, since the start of each frame depends on the counts before it, then parses the frames in a pool of \(P\) threads and returns them in file order.
 Table~\ref*{tab:anchors} of the supplementary material gives the source lines of each step.
 
-% snapper:off.
-\begin{algorithm}[tbp] \footnotesize \caption{Read a CON file from a path, as readcon-core~\readconCargoVersion{} does.}
-\label{alg:parser} \begin{algorithmic}[1] \Require path; thread count \(P\), where absent, 0 or 1 selects the calling thread \Ensure frames in file order, or an error that names its line \State Read the first four bytes; on gzip magic, inflate every member into one buffer \State On zstd magic, inflate when built with zstd, else \textbf{error}: unsupported zstd input \If{\(P\ge2\)} \State Read a plain file shorter than \(B_{\mathrm{map}}\) whole, else memory-map it \State Walk the frame boundaries in one thread, skipping each frame by its counts \State Parse the frames with \Call{ParseFrame}{} in a pool of \(P\) threads, or frame after frame without the parallel feature \ElsIf{the input was compressed, or is a plain file within the whole-file limit} \State Read a plain file shorter than \(B_{\mathrm{map}}\) whole, else memory-map it \State Parse frame after frame with \Call{ParseFrame}{} \Else \State Parse frame after frame with \Call{ParseFrame}{} from a window that moves through the file \EndIf \Function{ParseFrame}{} \State \textbf{error} on a byte-order mark at the start of the file; line 2 is JSON when it starts with \texttt{\{}, else version 1 \State Check the header against Eq.~\eqref{eq:version}; keep unknown keys \State Read the cell; \textbf{error} when \(\hat\rho\le-\num{\wkWindow}\) in Eq.~\eqref{eq:cell} \State Read the type counts, the masses and the coordinate rows \State Round each decimal to the nearest binary64 value; \textbf{error} on a value that is not finite; check each mask against Eq.~\eqref{eq:mask} \If{line 2 has no \texttt{sections} key} \State Read a legacy velocity block when a blank line and a complete block follow \Else \For{each name in \texttt{sections}, in order} \State Read a reserved section, or count the rows of a later minor's section of declared width, else \textbf{error} \EndFor \EndIf \State \textbf{error} on a velocity section without \texttt{units.time} when \(M=3\) and \(\mu\ge 1\) \EndFunction \end{algorithmic} \end{algorithm} % snapper:on.
 One frame of \(N\) atoms costs \(\Theta(N)\) time and memory.
 For a text of \(B\) bytes, after inflation for a gzip or zstd file, the read costs a \(\Theta(B)\) parse, which a pool of \(P\) threads shares after one serial \(\Theta(B)\) boundary walk, and the frames it returns occupy \(\Theta(B)\) memory.
 A compressed file of \(C\) bytes is first inflated in \(\Theta(C+B)\) time.
@@ -471,12 +470,7 @@ An optional Cargo feature, off by default, also exports a frame to metatensor fr
 The measured exchange is a Rust program that calls \texttt{positions\_dlpack} on a \texttt{ConFrameBuilder} of \dlpackAtoms{} copper atoms and either sums the borrowed view in place or copies it into an owned buffer and sums the copy, in six repeats of each arm.
 The view takes a median of \dlpackViewUs{} microseconds and the copy a median of \dlpackCopyUs{} microseconds, so the view costs \dlpackRatio{} times the copy.
 A 95 percent bootstrap interval for that ratio, drawn from those six samples, is \dlpackRatioLo{} to \dlpackRatioHi{}, and the interval excludes 1.
-The type 7 interquartile ranges are \dlpackViewIqr{} microseconds and \dlpackCopyIqr{} microseconds, and Figure~\ref{fig:dlpack} shows the six repeats.
-
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/dlpack.pdf} \caption{\textbf{A borrowed DLPack view costs \dlpackRatio{} times a copy of the same positions.}
-Six repeats on \dlpackAtoms{} atoms.
-The bar is the median and the whisker is the type 7 interquartile range.}
-\label{fig:dlpack} \end{figure}
+The type 7 interquartile ranges are \dlpackViewIqr{} microseconds and \dlpackCopyIqr{} microseconds, and Figure~\ref*{fig:dlpack} of the supplementary material shows the six repeats.
 
 \section{Conformance}\label{sec:conformance} A specification settles a dispute between readers only when each reader can be tested against it, as JSONTestSuite did for JSON parsers with files that a parser must accept, must reject, or may treat as implementation-defined \cite{seriotParsingJsonMinefield2016}.
 The conformance corpus of readcon-core contains \(\corpusConfValid\) legal and \(\corpusConfInvalid\) illegal files (Table~\ref{tab:corpus} of the supplementary material), and its manifest names the error class of each illegal file.
@@ -518,7 +512,7 @@ The adatom hops between neighboring fourfold hollows along \(x\).
 With the slab fixed, the EMT force on the adatom at that height exceeds the band tolerance, so a file that drops the hold resumes a different relaxation.
 A climbing-image band of five movable images with the improved tangent \cite{henkelmanClimbingImageNudged2000,henkelmanImprovedTangentEstimate2000} converges under fixed-step steepest descent on the projected force, an optimizer that keeps no step history, so any difference after the restart comes from the file.
 Uninterrupted, the band converges in \(\rfStepsUnint\) steps and \(\rfCallsUnint\) force calls, with barrier \(\rfBarrierUnint\,\mathrm{eV}\) and \(\rfModesUnint\) free modes on the middle image.
-We interrupt it after \(K\) steps, write it, read it back and resume it to \(f_{\mathrm{band}}\), once per route of Table~\ref{tab:restartfmt}.
+We interrupt it after \(K\) steps, write it, read it back and resume it to \(f_{\mathrm{band}}\), once per route of Table~\ref*{tab:restartfmt} of the supplementary material.
 
 \begin{table}[tbp] \centering \small \caption{Parameters held fixed for the climbing-image case study.}
 \label{tab:params}
@@ -539,15 +533,10 @@ Symbol & Meaning & Configuration key & Value \\
 \end{tabular}
 \end{table}
 
-\input{figures/generated/restart_main}
-
-The shortest CON round trip changes no coordinate, and the resumed band matches the uninterrupted band bit for bit, with the same \(\rfStepsCon\) steps, \(\rfModesCon\) free modes on the middle image, and the same coordinates and energy on every image.
+The shortest CON round trip, the ASE trajectory with identifiers in tags and H5MD written and read with h5py change no coordinate, and each resumed band matches the uninterrupted band bit for bit, with the same \(\rfStepsCon\) steps and \(\rfModesCon\) free modes on the middle image.
 Every force evaluation builds its EMT calculators afresh, so a step depends on the positions alone.
-The ASE trajectory with identifiers in tags and H5MD written and read with h5py return the same row.
-POSCAR with the height held as FixScaled moves one coordinate by \(\num{\rfFileScaledNum}\,\text{\AA}\) and shifts the resumed barrier by \(\num{\rfDeScaledLoNum}\) to \(\num{\rfDeScaledHiNum}\,\mathrm{eV}\).
-Six decimals move the file by \(\num{\rfFileSixNum}\,\text{\AA}\) and the barrier by \(\num{\rfDeSixNum}\,\mathrm{eV}\), and extended XYZ written by ASE moves them by \(\num{\rfFileXyzNum}\,\text{\AA}\) and \(\num{\rfDeXyzNum}\,\mathrm{eV}\), all in the same step count.
-Over the images of the stored EMT bands in \path{paper/cpc/data/failure/bands}, the energies of the shortest CON round trip and the ASE trajectory equal those of the uninterrupted band, and six decimals, extended XYZ and FixScaled POSCAR differ from them by at most \(\num{\bandDeSix}\), \(\num{\bandDeXyz}\) and \(\num{\bandDeScaled}\,\mathrm{eV}\).
-Each shift is printed to the significant figures on which repeat runs with the linear-algebra builds of four host generations agree, or as their range when they do not (Section~\ref*{sec:supp-restart}).
+The other routes converge in the same step count from a file that has moved: six decimals move it by \(\num{\rfFileSixNum}\,\text{\AA}\), extended XYZ written by ASE by \(\num{\rfFileXyzNum}\,\text{\AA}\), and POSCAR with the height held as FixScaled by \(\num{\rfFileScaledNum}\,\text{\AA}\), each to the figures on which repeat runs with the linear-algebra builds of four host generations agree (Section~\ref*{sec:supp-restart}).
+On the stored bands in \path{paper/cpc/data/failure/bands}, no image energy of these three routes differs from the uninterrupted band by more than \(\num{\bandDeSix}\), \(\num{\bandDeXyz}\) and \(\num{\bandDeScaled}\,\mathrm{eV}\), in that order.
 Section~\ref*{sec:eon-band} of the supplementary material resumes a Morse band in the public eOn client in the same way.
 
 \subsection{The mask and the prefactor}\label{sec:prefactor} A barrier is one number, but the harmonic prefactor needs the free modes at the saddle.
@@ -557,7 +546,7 @@ In harmonic transition state theory the rate is \(k=\nu\exp(-\Delta E^\ddagger/k
 \nu=\frac{\prod_{i=1}^{n}\nu_i^{\mathrm{min}}}{\prod_{i=1}^{n-1}\nu_i^{\ddagger}},
 \end{equation}
 where the products run over the \(n\) free modes of the minimum and the \(n-1\) real modes of the saddle, so a mask that frees one more component adds a mode to each product and can also move the saddle itself.
-We wrote the endpoints of the same slab through each route and read them back before relaxing them, then converged a climbing-image band with the fast inertial relaxation engine (FIRE) \cite{bitzekStructuralRelaxationMade2006} and took the Hessian of the highest image.
+We wrote the endpoints of the same slab through each route and read them back before relaxing them under the constraints that the reader returns, then converged a climbing-image band with the fast inertial relaxation engine (FIRE) \cite{bitzekStructuralRelaxationMade2006} and took the Hessian of the highest image, after Newton steps on the free coordinates brought the endpoints to their minima and that image, where it has one imaginary mode, to its saddle.
 With the height held, the barrier is \(\eFiveBarrierHeld\,\mathrm{eV}\) on a path of \(\eFivePathHeld\,\text{\AA}\).
 The highest image has \(\eFiveModesHeld\) free modes, one imaginary mode of \(\eFiveImagHeld\,\mathrm{meV}\) with \(\eFiveWeightHeld\) of its weight on the lateral motion of the adatom, and a prefactor of \(\num{\eFivePrefactorHeldNum}\,\mathrm{Hz}\), which CON 3.1, the ASE trajectory, FixScaled POSCAR and h5py H5MD all return (Table~\ref{tab:prefactor-routes}).
 With the height free, which is the problem a reader solves when the file has lost the hold, the band crosses a saddle at \(\eFiveBarrierFree\,\mathrm{eV}\) with \(\eFiveModesFree\) free modes and a prefactor of \(\num{\eFivePrefactorFreeNum}\,\mathrm{Hz}\), \sigfig{2}{\eFivePrefactorRatioFree} times the held value.
@@ -587,9 +576,7 @@ On that host, a fresh process reads one million atoms of CON in \hhfReadconConWa
 \hhfFrontSentence{}
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/format_pareto.pdf} \caption{\textbf{Warm read time against file size.}
-One point per reader and format from the records of Table~\ref*{tab:format-h2h} in the supplementary material, one frame at each size.
-The coral steps join the points that no other point beats on both axes.
-Teal points are readcon, labeled by format; filled points keep every CON 3.1 field, and hollow points drop one or round the coordinates.
+One frame at each size, one point per reader and format, from the records of Table~\ref*{tab:format-h2h} in the supplementary material; the coral steps are the Pareto front.
 extxyz-ng, MDCompress and the MDAnalysis PDB reader past its five-digit atom serial cannot open these files and have no point.}
 \label{fig:pareto} \end{figure}
 
