@@ -222,6 +222,9 @@ if (root / spec_measured).is_file():
     allow_exact.add(spec_measured)
 else:
     print(f"PENDING: {spec_measured} has not been measured")
+# A later rerun writes -measured-<n>.json and supersedes the newest file.
+for later in sorted((root / "paper/cpc/data/spec").glob(f"spec-measurement-{version}-measured-*.json")):
+    allow_exact.add(later.relative_to(root).as_posix())
 clause_coverage = f"paper/cpc/data/spec/clause_coverage-{version}.json"
 if (root / clause_coverage).is_file():
     allow_exact.add(clause_coverage)
