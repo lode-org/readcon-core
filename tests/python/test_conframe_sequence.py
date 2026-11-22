@@ -247,6 +247,23 @@ class TestSequence:
         with pytest.raises(ValueError, match="inconsistent masses"):
             readcon.write_con_string([agreed])
 
+    def test_held_atoms_item_survives_structural_edit(self):
+        frame = readcon.read_first_frame(_resource("tiny_cuh2.con"))
+        held = frame.atoms[0]
+        other = frame.atoms[1]
+        frame.atoms.append(atom("H", 0.5, mass=frame[2].mass))
+        frame.atoms[2] = frame.atoms[2]
+        held.x = 42.0
+        other.x = 43.0
+        assert frame.atoms[0] is held
+        assert frame[0].x == 42.0
+        assert round_trip(frame)[0].x == 42.0
+        assert round_trip(frame)[1].x == 43.0
+        replaced = frame.atoms[3]
+        frame.atoms[3] = atom("H", 7.0, mass=frame[3].mass)
+        replaced.x = -1.0
+        assert round_trip(frame)[3].x == 7.0
+
     def test_view_index_follows_position_after_structural_edit(self):
         frame = make_frame(atom("H", 1.0, mass=1.0), atom("Cu", 2.0, mass=64.0))
         view = frame[1]

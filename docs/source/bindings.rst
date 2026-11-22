@@ -294,6 +294,18 @@ Types
     energy (v0.10.0+), has\_energy (v0.10.0+).
     Data fields are writable.
 
+``readcon.AtomView`` / ``readcon.AtomSequence``
+    ``frame[i]`` and direct frame iteration return live ``AtomView`` objects
+    backed by the frame's Rust columns. Assigning a view property updates both
+    the frame and an already-materialized compatibility atom projection.
+    ``frame.atoms`` is an ``AtomSequence`` whose indexing and iteration expose
+    the existing Python ``Atom`` projection used by earlier releases. Parsed
+    column access does not materialize those objects; first access to
+    ``frame.atoms`` does. Its assignment, deletion, ``append()``, ``insert()``
+    and ``extend()`` methods mutate the owning frame and preserve CON
+    type-group order; an ``Atom`` already taken from ``frame.atoms`` that
+    was not replaced or deleted stays part of the frame. A direct frame
+    slice is an independent ``ConFrame``.
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and
     optional headers and metadata (v0.4.0+).  Properties: cell, angles,
@@ -847,7 +859,7 @@ CMake FetchContent
     FetchContent_Declare(
       readcon-core
       URL https://github.com/lode-org/readcon-core/releases/download/v0.24.0/readcon-core-cxx-0.24.0.tar.gz
-      URL_HASH SHA256=bfae6f67cdea960c8c1d32a6a31e40377e3983219441216c6ebc779e8d0c834c
+      URL_HASH SHA256=00fdaa05ba56f7a334799a5bc26003656f4f0ec1a1006933c969ba06bbf74b06
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(my_app PRIVATE readcon-core::shared)
