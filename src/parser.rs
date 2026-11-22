@@ -925,7 +925,7 @@ pub fn parse_line_of_range_f64_stack(
         let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..])
             .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
         let next = i + consumed;
-        // Reject partial tokens like "1.2abc" (must end at whitespace or EOS).
+        // Reject partial tokens like "1.2abc" (must end at space/tab or EOS).
         if next != end {
             return Err(ParseError::InvalidNumberFormat(format!(
                 "invalid float: {token}"
@@ -980,7 +980,7 @@ pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError>
         return Ok(buf[..n].to_vec());
     }
     let mut values = Vec::with_capacity(n.min(max_tokens_on_line(line)));
-    for token in line.split_ascii_whitespace() {
+    for token in split_field_ws(line) {
         values.push(parse_finite_float_token(token)?);
     }
     if values.len() == n {
@@ -1002,12 +1002,10 @@ pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError>
 /// failing path only, and the frame is named by whoever knows its index.
 pub(crate) fn parse_cell_line(line: &str, name: &str) -> Result<Vec<f64>, ParseError> {
     parse_line_of_n_f64(line, 3).map_err(|error| match error {
-        ParseError::NonFiniteValue(token) => {
-            match line.split_ascii_whitespace().position(|t| t == token) {
-                Some(index) => ParseError::non_finite_cell(&format!("{name}[{index}]"), token),
-                None => ParseError::NonFiniteValue(token),
-            }
-        }
+        ParseError::NonFiniteValue(token) => match split_field_ws(line).position(|t| t == token) {
+            Some(index) => ParseError::non_finite_cell(&format!("{name}[{index}]"), token),
+            None => ParseError::NonFiniteValue(token),
+        },
         other => other,
     })
 }
@@ -1031,7 +1029,7 @@ pub fn parse_line_of_range_f64(
         return Ok(buf[..max].to_vec());
     }
     let mut values = Vec::with_capacity(max);
-    for token in line.split_ascii_whitespace() {
+    for token in split_field_ws(line) {
         values.push(parse_finite_float_token(token)?);
     }
     if values.len() < min || values.len() > max {
@@ -1177,6 +1175,10 @@ fn parse_vector_row(
 #[inline(always)]
 fn is_field_ws(b: u8) -> bool {
     matches!(b, b' ' | b'\t')
+}
+
+fn split_field_ws(line: &str) -> impl Iterator<Item = &str> {
+    line.split([' ', '\t']).filter(|token| !token.is_empty())
 }
 
 /// True at the end of a row: end of input, LF, or a CR that ends the line.
@@ -1575,7 +1577,7 @@ fn parse_scalar_section_row(
     let atom_id = parse_atom_id_token(id_tok)?;
     let i = skip_ascii_ws(bytes, i);
     if i < bytes.len() {
-        let found = 3 + line[i..].split_ascii_whitespace().count();
+        let found = 3 + split_field_ws(&line[i..]).count();
         return Err(ParseError::InvalidVectorLength { expected: 3, found });
     }
     Ok((value, fixed, atom_id))
@@ -1789,9 +1791,12 @@ fn skip_json_ws(bytes: &[u8], i: &mut usize) {
     }
 }
 
-/// Same ASCII whitespace as [`skip_ascii_ws`], including form feed.
+/// ASCII whitespace between line-2 JSON tokens, including form feed: the
+/// set `simple_metadata_version` skips. Row fields use [`is_field_ws`].
 fn skip_ascii_ws_mut(bytes: &[u8], i: &mut usize) {
-    *i = skip_ascii_ws(bytes, *i);
+    while *i < bytes.len() && bytes[*i].is_ascii_whitespace() {
+        *i += 1;
+    }
 }
 
 fn scan_json_string_end(bytes: &[u8], start: usize) -> Option<usize> {
@@ -2131,7 +2136,7 @@ fn validate_section_arity_value(value: &Value) -> Result<(), ParseError> {
 /// rejects a per-type count of 0 when the type count is 1 or more (D4).
 pub(crate) fn parse_count_line(line: &str, n: usize) -> Result<Vec<usize>, ParseError> {
     let mut values = Vec::with_capacity(n.min(max_tokens_on_line(line)));
-    for token in line.split_ascii_whitespace() {
+    for token in split_field_ws(line) {
         if token.is_empty() || !token.bytes().all(|b| b.is_ascii_digit()) {
             return Err(ParseError::InvalidCount(format!(
                 "count field is not an unsigned integer: {token}"
@@ -6966,9 +6971,9 @@ Forces of Component 1
         );
     }
 
-    /// The strict minor scanner does not treat form feed as JSON
-    /// whitespace, so the fast path leaves that minor absent. A decoded
-    /// top-level escape is still the reserved key.
+    /// ASCII whitespace between line-2 tokens includes a form feed, and
+    /// the fast path skips it. A decoded top-level escape is that key.
+    /// Major 3 keeps a frame that has velocities and no units.time.
     #[test]
     fn form_feed_and_escaped_top_level_minor_match_the_fast_path() {
         let ff = '\u{000c}';
@@ -6982,7 +6987,7 @@ Forces of Component 1
         ];
         for line in &minor_lines {
             let meta = crate::types::FrameMeta::from_line(line.as_str());
-            assert_eq!(meta.spec_minor(), 0, "{line:?}");
+            assert_eq!(meta.spec_minor(), 5, "{line:?}");
         }
         let escaped =
             crate::types::FrameMeta::from_line(r#"{"con_spec_version":2,"con_spec_\u006dinor":5}"#);
@@ -7001,7 +7006,7 @@ Forces of Component 1
             );
             let frames = crate::iterators::frames_from_text(&text, None)
                 .unwrap_or_else(|err| panic!("{line2:?}: {err}"));
-            assert_eq!(frames[0].header.metadata.spec_minor(), 0);
+            assert_eq!(frames[0].header.metadata.spec_minor(), 1, "{line2:?}");
         }
     }
     #[test]
@@ -7068,6 +7073,23 @@ Forces of Component 1
                 .unwrap()
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn form_feed_on_cell_or_count_line_is_not_separator_or_trailing_ws() {
+        let cell_ff = "pre\n{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\n10 10 10\n90 90 90\x0c\n\n\n0\n\n\n";
+        let err = crate::iterators::ConFrameIterator::new(cell_ff)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.class_name(), "InvalidNumberFormat", "{err}");
+
+        let count_ff = "pre\n{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\n10 10 10\n90 90 90\n\n\n1\x0c\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0\n";
+        let err = crate::iterators::ConFrameIterator::new(count_ff)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.class_name(), "InvalidCount", "{err}");
     }
 }
 
