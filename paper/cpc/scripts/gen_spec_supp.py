@@ -38,7 +38,10 @@ name its upcoming version before the tag exists; any other spec.org that no
 release tag ships stops the build. --measure writes a versioned specification
 measurement, preserving earlier records, with the version history and clause
 ids of spec.org at every release tag vX.Y.Z and, for a second text, what it
-changed in each section, from the git objects of this repository alone.
+changed in each section, from the git objects of this repository alone. When
+the versioned file already exists, --measure writes a new file that names it
+in supersedes and records measured_at.commit from git rev-parse HEAD. The
+stored file is not rewritten.
 --check exits 1 unless the three generated files are byte for byte what
 --as-is writes from spec.org.
 
@@ -49,7 +52,7 @@ holding '="', which org itself closes at that "=".
     gen_spec_supp.py --as-is            write figures/generated/spec_normative.tex, versions_table.tex and spec_macros.tex
     gen_spec_supp.py --check            compare those three files with what --as-is writes
     gen_spec_supp.py --as-is --compile  also compile spec_normative.tex with pdflatex in a test document
-    gen_spec_supp.py --measure          write a versioned specification measurement from the release tags
+    gen_spec_supp.py --measure          write a new measurement; an existing record stays and is named in supersedes
 """
 
 import argparse
@@ -783,15 +786,43 @@ def versions_record() -> dict:
 
 
 def measure() -> None:
+    """Write the specification measurement. An existing versioned file stays.
+
+    measured_at.commit is ``git rev-parse HEAD`` of this checkout. The
+    script writes it; nothing is filled in afterwards.
+    """
+    version = (ROOT / "VERSION").read_text().strip()
+    stored = SPEC_DATA / f"spec-measurement-{version}.json"
+    out = (
+        SPEC_DATA / f"spec-measurement-{version}-measured.json"
+        if stored.is_file()
+        else stored
+    )
+    if out == stored and stored.is_file():
+        raise SystemExit(f"refusing to rewrite {stored.relative_to(ROOT)}")
+    commit = git("rev-parse", "HEAD").stdout.strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise SystemExit("git rev-parse HEAD did not return a commit")
+    body = versions_record()
     versions = {
         "generator": "paper/cpc/scripts/gen_spec_supp.py --measure",
-        **versions_record(),
+        "measured_at": {"commit": commit},
+        **body,
     }
-    MEASUREMENT.parent.mkdir(parents=True, exist_ok=True)
-    MEASUREMENT.write_text(json.dumps(versions, indent=2) + "\n")
+    if stored.is_file():
+        versions = {
+            "generator": versions["generator"],
+            "supersedes": stored.relative_to(ROOT).as_posix(),
+            "measured_at": versions["measured_at"],
+            "spec": versions["spec"],
+            "tags": versions["tags"],
+            "tree": versions["tree"],
+        }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(versions, indent=2) + "\n")
     print(
-        f"wrote {MEASUREMENT.relative_to(ROOT)}: {len(versions['tags'])} tags, "
-        f"release {versions['tree']}"
+        f"wrote {out.relative_to(ROOT)}: {len(versions['tags'])} tags, "
+        f"release {versions['tree']}, measured_at.commit {commit}"
     )
 
 

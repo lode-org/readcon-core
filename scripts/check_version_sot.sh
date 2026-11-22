@@ -215,6 +215,13 @@ if (root / spec_measurement).is_file():
     allow_exact.add(spec_measurement)
 else:
     print(f"PENDING: {spec_measurement} has not been measured")
+# The measured file is the rerun of gen_spec_supp.py --measure. It names
+# the stored record in supersedes. The stored file stays byte-identical.
+spec_measured = f"paper/cpc/data/spec/spec-measurement-{version}-measured.json"
+if (root / spec_measured).is_file():
+    allow_exact.add(spec_measured)
+else:
+    print(f"PENDING: {spec_measured} has not been measured")
 clause_coverage = f"paper/cpc/data/spec/clause_coverage-{version}.json"
 if (root / clause_coverage).is_file():
     allow_exact.add(clause_coverage)
