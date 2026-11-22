@@ -1355,8 +1355,8 @@ impl PyConFrame {
                 Some((last, count)) if *last == atom.symbol => *count += 1,
                 _ => names.push((atom.symbol.clone(), 1usize)),
             }
-            PyResult::Ok(names)
-        })?;
+            names
+        };
         Ok(FrameSymbols::from_runs(
             py,
             names.iter().map(|(name, count)| (name.as_str(), *count)),
@@ -2121,7 +2121,35 @@ impl PyConFrame {
                 .collect()
         })
     }
+}
 
+/// Copy every atom while the list critical section stays the innermost lock.
+///
+/// `PyList::iter` and `get_item` lock the list again. On free-threaded 3.13
+/// that suspends the outer section, so one walk can see two writes. The
+/// unchecked load is valid only while this section is not re-entered.
+fn read_atom_list(list: &Bound<'_, PyList>) -> PyResult<Vec<PyAtomDatum>> {
+    pyo3::sync::critical_section::with_critical_section(list.as_any(), || {
+        let n = list.len();
+        let mut atoms = Vec::with_capacity(n);
+        for index in 0..n {
+            // SAFETY: `index < len` under this critical section, and the body
+            // does not lock `list` again. `Py_TYPE` and the pyclass borrow
+            // flag do not start a critical section.
+            let item = unsafe { list.get_item_unchecked(index) };
+            if !item.is_exact_instance_of::<PyAtomDatum>() {
+                return Err(PyTypeError::new_err(
+                    "ConFrame atom cache must hold readcon.Atom objects",
+                ));
+            }
+            let atom = unsafe { item.cast_unchecked::<PyAtomDatum>() };
+            atoms.push(atom.borrow().clone());
+        }
+        Ok(atoms)
+    })
+}
+
+impl PyConFrame {
     fn meta<'py>(&self, py: Python<'py>) -> PyResult<&Bound<'py, PyDict>> {
         let dict = self.metadata.get_or_try_init(py, || match &self.inner {
             Some(frame) => json_map_to_py_dict_with_minor(
