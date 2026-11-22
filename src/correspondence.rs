@@ -796,7 +796,7 @@ mod tests {
 
     #[test]
     fn orthogonal_wrap_uses_the_cell_matrix() {
-        let cell = cell_vectors([10.0, 12.0, 14.0], [90.0, 90.0, 90.0]).unwrap();
+        let cell = cell_vectors([10.0, 12.0, 14.0], [90.0, 90.0, 90.0]);
         let wrapped = minimum_image_delta(cell, [true, true, true], [9.0, 0.0, 0.0]).unwrap();
         close(wrapped, [-1.0, 0.0, 0.0]);
         let open = minimum_image_delta(cell, [false, true, true], [9.0, 9.0, 0.0]).unwrap();
@@ -805,7 +805,7 @@ mod tests {
 
     #[test]
     fn a_lattice_vector_wraps_to_zero() {
-        let cell = cell_vectors([10.0, 12.0, 14.0], [80.0, 90.0, 70.0]).unwrap();
+        let cell = cell_vectors([10.0, 12.0, 14.0], [80.0, 90.0, 70.0]);
         let along_a = minimum_image_delta(cell, [true, true, true], cell[0]).unwrap();
         close(along_a, [0.0, 0.0, 0.0]);
         let along_b = minimum_image_delta(cell, [true, true, true], cell[1]).unwrap();

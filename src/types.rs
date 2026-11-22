@@ -2793,6 +2793,7 @@ pub(crate) fn validate_read_cell(
 /// |c| * c_z)` where `c_z` is 0 inside the rounding window and the square
 /// root of the radicand otherwise. A radicand at or below `-CELL_CZ_ROUNDING`
 /// is not a real cell; callers that accept a frame use [`require_real_cell`].
+/// Use [`try_cell_vectors`] to reject such a cell.
 pub fn cell_vectors(lengths: [f64; 3], angles_deg: [f64; 3]) -> [[f64; 3]; 3] {
     let [a_len, b_len, c_len] = lengths;
     let alpha = angles_deg[0].to_radians();
@@ -2809,6 +2810,20 @@ pub fn cell_vectors(lengths: [f64; 3], angles_deg: [f64; 3]) -> [[f64; 3]; 3] {
         [b_len * cos_gamma, b_len * sin_gamma, 0.0],
         [c_len * cos_beta, c_len * cy, c_len * cz],
     ]
+}
+
+/// [`cell_vectors`] that rejects a cell that is not real.
+///
+/// # Errors
+///
+/// [`ParseError::ValidationError`] when the lengths and angles do not define
+/// a real 3D cell.
+pub fn try_cell_vectors(
+    lengths: [f64; 3],
+    angles_deg: [f64; 3],
+) -> Result<[[f64; 3]; 3], ParseError> {
+    check_cell_reality(&lengths, &angles_deg)?;
+    Ok(cell_vectors(lengths, angles_deg))
 }
 
 /// Decode a column-4 bitmask as a spec-2 value.
@@ -7693,6 +7708,15 @@ mod tests {
     #[test]
     fn check_cell_reality_rejects_impossible_angles() {
         let err = check_cell_reality(&[10.0, 10.0, 10.0], &[10.0, 10.0, 170.0]).unwrap_err();
+        assert!(matches!(err, ParseError::ValidationError(_)));
+        assert!(err.to_string().contains("real cell"));
+    }
+
+    #[test]
+    fn try_cell_vectors_rejects_non_real_cell_angles() {
+        let err =
+            try_cell_vectors([10.0, 10.0, 10.0], [10.0, 10.0, 170.0])
+                .unwrap_err();
         assert!(matches!(err, ParseError::ValidationError(_)));
         assert!(err.to_string().contains("real cell"));
     }
