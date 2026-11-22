@@ -75,6 +75,7 @@ MEASURE = [
     ["evidence/e5_prefactor.py"],
     ["scripts/velocity_case.py"],
     ["scripts/hcn_case.py"],
+    ["scripts/run_claisen_order.py"],
     ["scripts/gen_spec_supp.py", "--measure"],
 ]
 
@@ -117,6 +118,7 @@ FORMAT = [
     ["scripts/plot_restart_ruhi.py"],
     ["scripts/plot_restart_formats.py"],
     ["scripts/plot_format_pareto.py"],
+    ["scripts/plot_claisen_order.py"],
     ["scripts/plot_structures.py"],
     ["scripts/plot_supp.py"],
     ["scripts/host_from_log.py"],
