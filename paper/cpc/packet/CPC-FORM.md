@@ -45,7 +45,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 | Generative AI in writing | Declare in a section before the references if used in writing | GFA | Section "Declaration of generative AI and AI-assisted technologies in the manuscript preparation process", the last section before the references, in Elsevier's form. |
 | Data availability | Option C: deposit, cite and link data, plus a data statement at submission | GFA | Section "Data availability" names readcon-core 0.17.3, its measured commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, the digest `b49c0be7352a` of that commit's library, and says the records name the libraries they ran. The version map names each of those libraries. The git bundle is `readcon-core.bundle`. Links: https://github.com/lode-org/readcon-core, https://doi.org/10.5281/zenodo.18753567. |
 | References | Numbered, elsarticle-num, software cited with identifier | GFA | elsarticle-num; 77 references in the manuscript and 65 in the supplement; no undefined reference or citation in either pdfTeX log. |
-| Tables | Editable, no vertical rules | GFA | 9 tables; no tabular has a vertical rule. |
+| Tables | Editable, no vertical rules | GFA | 8 tables; no tabular has a vertical rule. |
 | Preprint | Sharing a preprint anywhere at any time is allowed, and a preprint is not prior publication | GFA, SHARE | The preprint is on arXiv. |
 
 ## Packet files
@@ -54,7 +54,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 |---|---|
 | `DIR/em-flat/` from `python3 paper/cpc/scripts/make_em_flat.py --out DIR` (TeX Live 2025) | `rg_main.tex` first, then `rg_main.bbl`, then every other file of the set, then the figure PDFs |
 | `paper/cpc/highlights.txt` | Highlights |
-| `paper/cpc/src/rg_supp.pdf` (90 pages, sha256 `de3402a7ecee856e001a2c3871dc98fa744295f31a3608bd680a36b104ec2a1f`) | Supplementary material |
+| `paper/cpc/src/rg_supp.pdf` (96 pages, sha256 `dd915977364a9a4904c05e04612342ce08dcee7dbcfe4003015a9268a0cae03a`) | Supplementary material |
 | `paper-cpc.tar.gz`, the directory `paper/cpc` (`paper/cpc/REPRO-ARCHIVE.md`) | Supplementary material |
 | `readcon-core.bundle` and `patches/` | Program files |
 | The author's cover letter | Cover letter |
@@ -65,7 +65,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 Data availability names readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, which
 `readcon-core.bundle` holds with its whole history, and links the concept record https://doi.org/10.5281/zenodo.18753567
 of readcon-core. This commit is not a release tag.
-`rg_main.pdf` has 43 pages, sha256 `c002d17a315e0f5d0057148ba82fbedd0e03d0f61ace507d53eb526ed537f901`.
+`rg_main.pdf` has 37 pages, sha256 `0f2a4d280fdf03c97b45e470073e12821c1203a96ce0df1747d3d47afc1c6add`.
 
 ## Form answers
 
