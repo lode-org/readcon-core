@@ -299,9 +299,7 @@ class TestSequence:
         frame = make_frame(atom("H", 1.0, mass=1.0), atom("Cu", 2.0, mass=64.0))
         held_h = frame.atoms[0]
         held_cu = frame.atoms[1]
-        frame.atoms.extend(
-            [atom("He", 8.0, mass=4.0), atom("H", 0.5, mass=1.0)]
-        )
+        frame.atoms.extend([atom("He", 8.0, mass=4.0), atom("H", 0.5, mass=1.0)])
         assert symbols(frame) == ["H", "H", "Cu", "He"]
         assert xs(frame) == [1.0, 0.5, 2.0, 8.0]
         assert held_h.x == 1.0
