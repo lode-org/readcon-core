@@ -623,7 +623,8 @@ impl PyConFrame {
         value: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
         if let Ok(index) = key.extract::<isize>() {
-            let snap = snap_from_bound(value)?;
+            let mut snap = snap_from_bound(value)?;
+            let cached = slf.borrow(py).cached_atom_index(py, value);
             let mut frame = slf.borrow_mut(py);
             let i = frame.normalize_index(index)?;
             let mut snaps = frame.snapshot_atoms();
@@ -631,7 +632,7 @@ impl PyConFrame {
             return frame.replace_atoms(py, snaps);
         }
         if let Ok(slice) = key.cast::<PySlice>() {
-            let incoming = snaps_from_iterable(value)?;
+            let incoming = snaps_for_assign(&slf, py, value)?;
             let mut frame = slf.borrow_mut(py);
             return frame.set_slice_snaps(py, slice, incoming);
         }

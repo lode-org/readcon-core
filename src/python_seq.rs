@@ -173,6 +173,33 @@ fn snaps_from_iterable(obj: &Bound<'_, PyAny>) -> PyResult<Vec<AtomSnap>> {
     Ok(out)
 }
 
+/// `snap_from_bound` leaves `origin` empty. Pair each snapshot with the
+/// index of `frame`'s cached `Atom` when the item is that object.
+fn snaps_for_assign(
+    frame: &Py<PyConFrame>,
+    py: Python<'_>,
+    obj: &Bound<'_, PyAny>,
+) -> PyResult<Vec<(AtomSnap, Option<usize>)>> {
+    let iter = PyIterator::from_object(obj)?;
+    let mut out = Vec::new();
+    for item in iter {
+        let item = item?;
+        let snap = snap_from_bound(&item)?;
+        let origin = frame.borrow(py).cached_atom_index(py, &item);
+        out.push((snap, origin));
+    }
+    Ok(out)
+}
+
+/// Keep `origin` when this assignment writes the cached `Atom` back into
+/// the slot it already occupies. A different slot, a new `Atom`, a view,
+/// or another frame's `Atom` stays empty.
+fn carry_own_slot(snap: &mut AtomSnap, origin: Option<usize>, dest: usize) {
+    if origin == Some(dest) {
+        snap.origin = Some(dest);
+    }
+}
+
 fn row_opt(arr: &FloatArray2, index: usize, n: usize) -> Option<[f64; 3]> {
     if n > 0 && arr.nrows() == n {
         Some(arr.as_f64_row(index))
@@ -955,7 +982,7 @@ impl PyConFrame {
         &mut self,
         py: Python<'_>,
         slice: &Bound<'_, PySlice>,
-        incoming: Vec<AtomSnap>,
+        mut incoming: Vec<(AtomSnap, Option<usize>)>,
     ) -> PyResult<()> {
         let indices = slice_indices(slice, self.n_atoms())?;
         if indices.step != 1 && incoming.len() != indices.slicelength {
@@ -968,12 +995,20 @@ impl PyConFrame {
         let mut snaps = self.snapshot_atoms();
         if indices.step == 1 {
             let start = indices.start as usize;
+            for (k, (snap, origin)) in incoming.iter_mut().enumerate() {
+                if k < indices.slicelength {
+                    carry_own_slot(snap, *origin, start + k);
+                }
+            }
             let end = start + indices.slicelength;
-            snaps.splice(start..end, incoming);
+            let snaps_only = incoming.into_iter().map(|(snap, _)| snap).collect::<Vec<_>>();
+            snaps.splice(start..end, snaps_only);
         } else {
             let mut i = indices.start;
-            for snap in incoming {
-                snaps[i as usize] = snap;
+            for (mut snap, origin) in incoming {
+                let dest = i as usize;
+                carry_own_slot(&mut snap, origin, dest);
+                snaps[dest] = snap;
                 i += indices.step;
             }
         }
@@ -1525,7 +1560,8 @@ impl PyAtomSeq {
     ) -> PyResult<()> {
         // Snapshot before borrow_mut so `atoms[i] = atoms[j]` can read a view.
         if let Ok(index) = key.extract::<isize>() {
-            let snap = snap_from_bound(value)?;
+            let mut snap = snap_from_bound(value)?;
+            let cached = self.frame.borrow(py).cached_atom_index(py, value);
             let mut frame = self.frame.borrow_mut(py);
             let i = frame.normalize_index(index)?;
             let mut snaps = frame.snapshot_atoms();
@@ -1533,7 +1569,7 @@ impl PyAtomSeq {
             return frame.replace_atoms(py, snaps);
         }
         if let Ok(slice) = key.cast::<PySlice>() {
-            let incoming = snaps_from_iterable(value)?;
+            let incoming = snaps_for_assign(&self.frame, py, value)?;
             let mut frame = self.frame.borrow_mut(py);
             return frame.set_slice_snaps(py, slice, incoming);
         }
