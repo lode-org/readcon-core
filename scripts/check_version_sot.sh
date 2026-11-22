@@ -238,6 +238,7 @@ recorded_results = {
     "bench/fidelity/results/fidelity.json",
     "bench/fidelity/results/timing.json",
     "bench/h2h/versions.json",
+    "paper/cpc/data/claisen/readcon-build.json",
     "paper/cpc/data/spec/version_drift.json",
     "paper/cpc/data/spec/corpus_recount.json",
 }
@@ -267,6 +268,21 @@ skip_prefixes = (
     # version_map.tex names the library that wrote it. That is a measurement.
     "paper/cpc/src/figures/generated/version_map.tex",
 )
+# The Claisen campaign records this package's version beside the Baker
+# geometry source_commit. That commit is not a readcon-core commit, so
+# the campaign file cannot itself satisfy the recorded-result walk. The
+# append-only build record names the commit that stored the campaign,
+# and the walk below requires the campaign's readcon version to be the
+# VERSION of that commit. Exempting the campaign without that check
+# would let the embedded version drift.
+measured_campaigns = set()
+for rel in sorted(recorded_results):
+    build_path = root / rel
+    if not build_path.is_file():
+        continue
+    named = json.loads(build_path.read_text(encoding="utf-8")).get("record")
+    if isinstance(named, str):
+        measured_campaigns.add(named)
 bad = []
 listed = subprocess.check_output(["git", "ls-files", "-z"])
 for raw in listed.split(b"\0"):
@@ -279,7 +295,12 @@ for raw in listed.split(b"\0"):
     parts = set(pathlib.PurePosixPath(rel).parts)
     if rel.startswith(skip_prefixes) or parts & skip_dirs or any(part in skip_dirs for part in parts):
         continue
-    if rel in allow_exact or rel in recorded_results or rel.startswith("docs/source/") and rel.endswith(".rst"):
+    if (
+        rel in allow_exact
+        or rel in recorded_results
+        or rel in measured_campaigns
+        or rel.startswith("docs/source/") and rel.endswith(".rst")
+    ):
         continue
     try:
         data = path.read_text(encoding="utf-8")
@@ -328,6 +349,7 @@ for rel in sorted(recorded_results):
         continue
     recorded = versions[0]
     commits = sorted(set(source_commits))
+    commits_ok = True
     if not commits:
         tagged = subprocess.run(
             ["git", "rev-parse", "--verify", f"refs/tags/v{recorded}^{{commit}}"],
@@ -337,6 +359,7 @@ for rel in sorted(recorded_results):
         )
         if tagged.returncode != 0:
             die(f"{rel} records readcon {recorded} but has no source_commit or v{recorded} tag")
+            commits_ok = False
             continue
         commits = [tagged.stdout.strip()]
     for commit in commits:
@@ -349,13 +372,41 @@ for rel in sorted(recorded_results):
         source_version = shown.stdout.strip()
         if shown.returncode != 0:
             die(f"{rel} source_commit {commit} has no readable VERSION")
+            commits_ok = False
         elif source_version != recorded:
             die(
                 f"{rel} records readcon {recorded}, but source_commit {commit} "
                 f"records VERSION {source_version!r}"
             )
+            commits_ok = False
         else:
             print(f"OK: {rel} records measured readcon {recorded} from {commit}")
+    named = payload.get("record")
+    if commits_ok and isinstance(named, str):
+        named_path = root / named
+        if not named_path.is_file():
+            die(f"{rel} names {named}, which is absent")
+        else:
+            named_versions = []
+
+            def collect(node, into=named_versions):
+                if isinstance(node, dict):
+                    for key in ("readcon", "readcon_version"):
+                        value = node.get(key)
+                        if isinstance(value, str) and measured.fullmatch(value):
+                            into.append(value)
+                    for child in node.values():
+                        collect(child)
+                elif isinstance(node, list):
+                    for child in node:
+                        collect(child)
+
+            collect(json.loads(named_path.read_text(encoding="utf-8")))
+            named_found = sorted(set(named_versions))
+            if named_found != [recorded]:
+                die(f"{named} must record readcon {recorded}, found {named_found}")
+            else:
+                print(f"OK: {named} records measured readcon {recorded} via {rel}")
 for rel in required:
     data = (root / rel).read_text(encoding="utf-8")
     if version not in data:
