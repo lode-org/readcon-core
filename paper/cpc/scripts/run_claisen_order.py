@@ -19,7 +19,8 @@ SHA-256 is not the digest ``data/claisen/results.json`` records stops
 the run. ``CLAISEN_XYZ`` may point at a copy of the Baker file;
 otherwise the committed copy under ``data/claisen/`` is used, and if
 that is absent the script downloads it. ``--check`` verifies every
-committed output against ``data/claisen/outputs.sha256``.
+committed output against ``data/claisen/outputs.sha256`` and fails on
+any file under ``data/claisen/`` that the manifest does not list.
 """
 
 from __future__ import annotations
@@ -42,6 +43,10 @@ DATA = Path(os.environ.get("CLAISEN_DATA", CPC / "data" / "claisen"))
 CACHE = Path(os.environ.get("CLAISEN_CACHE", "/tmp/claisen-src"))
 
 OUTPUTS_MANIFEST = "outputs.sha256"
+# The manifest cannot list itself and readcon-build.json is checked by
+# check_version_sot.sh; baker17_initial.xyz is pinned by XYZ_SHA256.
+UNHASHED_RECORDS = (OUTPUTS_MANIFEST, "readcon-build.json")
+XYZ_NAME = "baker17_initial.xyz"
 CLAISEN_OUTPUTS = (
     "PROVENANCE",
     "config.ini",
@@ -1112,7 +1117,15 @@ def check_outputs(data_dir: Path = DATA) -> str:
         found = sha256(target)
         if found != expected:
             bad.append(f"{rel} sha256 {found} does not match recorded {expected}")
-    xyz = data_dir / "baker17_initial.xyz"
+    covered = set(recorded) | {XYZ_NAME}
+    exempt = {name for name in UNHASHED_RECORDS if name not in recorded}
+    for path in sorted(data_dir.rglob("*")):
+        if path.is_dir() and not path.is_symlink():
+            continue
+        rel = path.relative_to(data_dir).as_posix()
+        if rel not in covered and rel not in exempt:
+            bad.append(f"{rel} is not listed in {OUTPUTS_MANIFEST}")
+    xyz = data_dir / XYZ_NAME
     if xyz.is_file():
         found_xyz = sha256(xyz)
         if found_xyz != XYZ_SHA256:
