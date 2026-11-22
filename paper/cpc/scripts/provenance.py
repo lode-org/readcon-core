@@ -46,7 +46,7 @@ def revisions(root: Path, stem: str, version: str) -> list[Path]:
         if not suffix:
             found.append((1, path))
             continue
-        match = re.fullmatch(r"-r([2-9][0-9]*)", suffix)
+        match = re.fullmatch(r"-r([2-9]|[1-9][0-9]+)", suffix)
         if match:
             found.append((int(match[1]), path))
     return [path for _, path in sorted(found)]
