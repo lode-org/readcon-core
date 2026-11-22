@@ -4661,7 +4661,10 @@ pub fn format_frame_refs_unstored(
     if heavy
         && let Some(lengths) = cached_packed_lengths(frames, workers, precision, canonical, bind)
     {
-        return format_packed_buffers(frames, &lengths, workers, precision, canonical, bind);
+        match format_packed_buffers(frames, &lengths, workers, precision, canonical, bind) {
+            Err(err) if is_packed_drift(&err) => invalidate_packed_lengths(),
+            result => return result,
+        }
     }
     format_pipeline_groups(frames, workers, precision, canonical, bind)
 }
@@ -4711,13 +4714,11 @@ fn format_packed_buffers(
     if cfg!(miri) {
         let mut parts = Vec::with_capacity(ranges.len());
         for &(start, end) in &ranges {
-            parts.push(format_group_bytes(
-                &frames[start..end],
-                1,
-                precision,
-                canonical,
-                bind,
-            )?);
+            let part = format_group_bytes(&frames[start..end], 1, precision, canonical, bind)?;
+            if part.len() != prefix[end] - prefix[start] {
+                return Err(packed_drift());
+            }
+            parts.push(part);
         }
         return Ok(parts);
     }
@@ -6981,6 +6982,53 @@ mod parallel_write_tests {
                 .unwrap_or_else(|err| err.into_inner())
                 .is_none()
         );
+    }
+
+    #[test]
+    fn format_group_into_detects_overrun_and_underrun_without_writing_past_slice() {
+        use crate::types::ConFrameBuilder;
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("Cu", 1.0, 2.0, 3.0, [false; 3], 0, 63.546);
+        let frame = builder.build().unwrap();
+        let refs = [&frame];
+        let exact = super::format_group_bytes(&refs, 1, None, false, true).unwrap();
+
+        let mut larger = vec![0xAAu8; exact.len() + 8];
+        let err = super::format_group_into(&refs, &mut larger, None, false, true).unwrap_err();
+        assert!(super::is_packed_drift(&err));
+
+        let mut smaller = vec![0xAAu8; exact.len() + 4];
+        let split = exact.len() - 3;
+        let (dest, guard) = smaller.split_at_mut(split);
+        let err = super::format_group_into(&refs, dest, None, false, true).unwrap_err();
+        assert!(super::is_packed_drift(&err));
+        assert!(guard.iter().all(|&b| b == 0xAA));
+    }
+
+    #[test]
+    fn format_packed_buffers_signals_drift_after_mutation() {
+        use crate::types::ConFrameBuilder;
+        let mut frames = Vec::new();
+        for _ in 0..4 {
+            let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+            builder.add_atom("Cu", 1.0, 2.0, 3.0, [false; 3], 0, 63.546);
+            frames.push(builder.build().unwrap());
+        }
+        let exact_len = super::format_group_bytes(&[&frames[0]], 1, None, false, false)
+            .unwrap()
+            .len();
+        let lengths = vec![exact_len; 4];
+        {
+            let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+            let parts =
+                super::format_packed_buffers(&refs, &lengths, 2, None, false, false).unwrap();
+            let combined: Vec<u8> = parts.into_iter().flatten().collect();
+            assert_eq!(combined, super::write_frames_to_vec(&frames).unwrap());
+        }
+        frames[0].positions.f64_mut_slice().unwrap()[0] = 1.2345678901234567e22;
+        let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+        let err = super::format_packed_buffers(&refs, &lengths, 2, None, false, false).unwrap_err();
+        assert!(super::is_packed_drift(&err));
     }
 }
 
