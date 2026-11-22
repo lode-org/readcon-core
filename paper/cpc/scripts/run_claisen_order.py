@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Baker 17 Claisen: the NEB answer follows the atom correspondence.
 
-Two OCI-NEB bands with PET-MAD-S v1.1.0 in eOn 3.6.0. The identity band
-keeps the Baker atom order. The second band reorders the product by the
-IRA geometric match. Endpoints are not re-minimised. The script also
-records the permutation a CON 3.1 round trip and a POSCAR round trip
-induce on the product.
+Two climbing-image NEB bands with PET-MAD-S v1.1.0 in eOn 3.6.0. The
+identity band keeps the Baker atom order. The second band reorders the
+product by the IRA geometric match computed on the Baker geometries.
+Both endpoints are minimised first. The unminimised bands stay under
+``data/claisen/unminimised``. The script also records the permutation a
+CON 3.1 round trip and a POSCAR round trip induce on the product.
 
     python paper/cpc/scripts/run_claisen_order.py
 
@@ -56,8 +57,15 @@ CELL = 25.0
 IMAGES = 16
 SPRING = 5.0
 FMAX = 0.05
-MAX_MOVE = 0.08
-MAX_ITERATIONS = int(os.environ.get("CLAISEN_MAX_ITERATIONS", "500"))
+MAX_MOVE = 0.05
+MIN_FMAX = 0.01
+MIN_MOVE = 0.08
+STAGE1_ITERATIONS = 800
+STAGE2_IMAGES = 24
+STAGE2_INSERT = 4
+STAGE2_MOVE = 0.008
+STAGE2_ITERATIONS = int(os.environ.get("CLAISEN_MAX_ITERATIONS", "3000"))
+MAX_ITERATIONS = STAGE1_ITERATIONS
 # Linear interpolation drives O through C4 (0.05 A, band stuck near 220 eV).
 # IDPP builds the initial path from the same atom correspondence the band then optimises.
 INITIALIZER = "idpp"
@@ -328,7 +336,18 @@ def poscar_round_trip(atoms, *, sort: bool) -> dict:
     }
 
 
-def neb_config(model: Path) -> str:
+def neb_config(
+    model: Path,
+    *,
+    images: int = IMAGES,
+    iterations: int = STAGE1_ITERATIONS,
+    max_move: float = MAX_MOVE,
+    ci_mmf: bool = True,
+    initializer: str = INITIALIZER,
+    initial_path: Path | None = None,
+) -> str:
+    path_line = f"initial_path_in = {initial_path}\n" if initial_path else ""
+    mmf = "true" if ci_mmf else "false"
     return f"""[Main]
 job = nudged_elastic_band
 random_seed = 1
@@ -342,25 +361,214 @@ device = cpu
 deterministic = true
 
 [Nudged Elastic Band]
-images = {IMAGES}
+images = {images}
 spring = {SPRING}
 climbing_image_method = true
 climbing_image_converged_only = false
-ci_mmf = true
+ci_mmf = {mmf}
 minimize_endpoints = false
 converged_force = {FMAX}
-max_iterations = {MAX_ITERATIONS}
-initializer = {INITIALIZER}
-opt_method = lbfgs
-max_move = {MAX_MOVE}
+max_iterations = {iterations}
+initializer = {initializer}
+{path_line}opt_method = lbfgs
+max_move = {max_move}
 
 [Optimizer]
 opt_method = lbfgs
 convergence_metric = max_atom
 converged_force = {FMAX}
-max_iterations = {MAX_ITERATIONS}
-max_move = {MAX_MOVE}
+max_iterations = {iterations}
+max_move = {max_move}
 """
+
+
+def minimiser_config(model: Path) -> str:
+    return f"""[Main]
+job = minimization
+random_seed = 1
+
+[Potential]
+potential = metatomic
+
+[Metatomic]
+model_path = {model}
+device = cpu
+deterministic = true
+
+[Optimizer]
+opt_method = lbfgs
+convergence_metric = max_atom
+converged_force = {MIN_FMAX}
+max_iterations = 2000
+max_move = {MIN_MOVE}
+"""
+
+
+def point_config(model: Path) -> str:
+    return f"""[Main]
+job = point
+
+[Potential]
+potential = metatomic
+
+[Metatomic]
+model_path = {model}
+device = cpu
+deterministic = true
+"""
+
+
+def kabsch_rmsd(reference: np.ndarray, candidate: np.ndarray) -> tuple[float, float]:
+    """RMSD of candidate onto reference after removing translation and rotation."""
+    left = reference - reference.mean(axis=0)
+    right = candidate - candidate.mean(axis=0)
+    covariance = right.T @ left
+    unitary, _, vt = np.linalg.svd(covariance)
+    rotation = vt.T @ unitary.T
+    if np.linalg.det(rotation) < 0:
+        vt[-1] *= -1
+        rotation = vt.T @ unitary.T
+    delta = right @ rotation - left
+    return float(np.sqrt(np.mean(np.sum(delta * delta, axis=1)))), float(
+        np.max(np.linalg.norm(delta, axis=1))
+    )
+
+
+def coords_by_id(frame) -> np.ndarray:
+    points = {
+        int(atom.atom_id): np.array([atom.x, atom.y, atom.z], dtype=float)
+        for atom in frame.atoms
+    }
+    return np.array([points[index] for index in range(len(points))])
+
+
+def atoms_in_baker_order(frame) -> list[tuple[str, np.ndarray, int]]:
+    ordered = sorted(frame.atoms, key=lambda atom: int(atom.atom_id))
+    return [
+        (
+            atom.symbol,
+            np.array([atom.x, atom.y, atom.z], dtype=float) - SHIFT,
+            int(atom.atom_id),
+        )
+        for atom in ordered
+    ]
+
+
+def minimise_con(binary: Path, model: Path, src: Path, work: Path) -> dict:
+    import readcon
+
+    if work.exists():
+        shutil.rmtree(work)
+    work.mkdir(parents=True)
+    shutil.copy(src, work / "pos.con")
+    point = work.parent / f"point_{src.stem}"
+    if point.exists():
+        shutil.rmtree(point)
+    point.mkdir()
+    shutil.copy(src, point / "pos.con")
+    run_client(binary, point, point_config(model))
+    before = parse_results(point / "results.dat")
+    run_client(binary, work, minimiser_config(model))
+    after_info = parse_results(work / "results.dat")
+    produced = work / "min.con"
+    if not produced.is_file():
+        raise SystemExit(f"minimisation wrote no min.con in {work}")
+    check = work.parent / f"point_min_{src.stem}"
+    if check.exists():
+        shutil.rmtree(check)
+    check.mkdir()
+    shutil.copy(produced, check / "pos.con")
+    run_client(binary, check, point_config(model))
+    after_point = parse_results(check / "results.dat")
+    start = readcon.read_con(str(src))[0]
+    end = readcon.read_con(str(produced))[0]
+    aligned, worst = kabsch_rmsd(coords_by_id(start), coords_by_id(end))
+    raw = coords_by_id(start) - coords_by_id(end)
+    return {
+        "termination": after_info.get("termination_reason_text"),
+        "force_calls": int(float(after_info.get("total_force_calls", "nan"))),
+        "fmax_eV_A": MIN_FMAX,
+        "opt_method": "lbfgs",
+        "max_move_A": MIN_MOVE,
+        "convergence_metric": "max_atom",
+        "baker_energy_eV": float(before["potential_energy"]),
+        "baker_max_force_eV_A": float(before["Max_Force"]),
+        "minimised_energy_eV": float(after_point["potential_energy"]),
+        "minimised_max_force_eV_A": float(after_point["Max_Force"]),
+        "energy_drop_eV": float(before["potential_energy"])
+        - float(after_point["potential_energy"]),
+        "rmsd_aligned_A": aligned,
+        "max_aligned_displacement_A": worst,
+        "rmsd_raw_A": float(np.sqrt(np.mean(np.sum(raw * raw, axis=1)))),
+        "distances_baker_A": {name: distance(start, *pair) for name, pair in PAIRS.items()},
+        "distances_minimised_A": {
+            name: distance(end, *pair) for name, pair in PAIRS.items()
+        },
+        "con": produced,
+    }
+
+
+def blend(left, right, fraction: float):
+    import readcon
+
+    other = {int(atom.atom_id): atom for atom in right.atoms}
+    atoms = []
+    for atom in left.atoms:
+        match = other[int(atom.atom_id)]
+        atoms.append(
+            readcon.Atom(
+                atom.symbol,
+                (1.0 - fraction) * float(atom.x) + fraction * float(match.x),
+                (1.0 - fraction) * float(atom.y) + fraction * float(match.y),
+                (1.0 - fraction) * float(atom.z) + fraction * float(match.z),
+                atom_id=int(atom.atom_id),
+                mass=float(atom.mass),
+            )
+        )
+    frame = readcon.ConFrame(cell=list(left.cell), angles=list(left.angles), atoms=atoms)
+    frame.metadata["pbc"] = [False, False, False]
+    return frame
+
+
+def densify(band_con: Path, dest: Path) -> Path:
+    """Put four images on each side of the highest image.
+
+    A 16-image band leaves the Claisen barrier between two images. The
+    climbing image then sits on one shoulder and the next image is already
+    in the product well. Linear interpolation of those two intervals gives
+    the 24-image path.
+    """
+    import readcon
+
+    frames = readcon.read_con(str(band_con))
+    table_path = band_con.with_name("neb.dat")
+    energies = [row["energy_eV"] for row in band_table(table_path)]
+    if len(energies) != len(frames):
+        raise SystemExit(
+            f"{band_con} has {len(frames)} frames and {table_path} has {len(energies)} rows"
+        )
+    highest = int(np.argmax(energies))
+    if highest <= 0 or highest + 1 >= len(frames):
+        raise SystemExit(f"highest image {highest} has no interval on both sides")
+    dense = []
+    extra = {highest - 1: STAGE2_INSERT, highest: STAGE2_INSERT}
+    for index, frame in enumerate(frames):
+        dense.append(frame)
+        count = extra.get(index, 0)
+        if count:
+            for step in range(1, count + 1):
+                dense.append(blend(frame, frames[index + 1], step / (count + 1)))
+    if len(dense) != STAGE2_IMAGES + 2:
+        raise SystemExit(f"densified path has {len(dense)} frames, expected {STAGE2_IMAGES + 2}")
+    dest.mkdir(parents=True, exist_ok=True)
+    names = []
+    for index, frame in enumerate(dense):
+        path = dest / f"img_{index:02d}.con"
+        readcon.write_con(str(path), [frame])
+        names.append(str(path.resolve()))
+    listing = dest / "list.txt"
+    listing.write_text("\n".join(names) + "\n", encoding="utf-8")
+    return listing
 
 
 def hessian_config(model: Path) -> str:
@@ -660,7 +868,130 @@ The checkpoint and the .pt are not stored in this directory.
 
 
 def portable_config() -> str:
-    return neb_config(Path("pet-mad-s-v1.1.0.pt"))
+    return neb_config(
+        Path("pet-mad-s-v1.1.0.pt"),
+        images=STAGE2_IMAGES,
+        iterations=STAGE2_ITERATIONS,
+        max_move=STAGE2_MOVE,
+        ci_mmf=False,
+        initializer="file",
+    )
+
+
+def archive_unminimised() -> dict:
+    dest = DATA / "unminimised"
+    marker = dest / "results.json"
+    if marker.is_file():
+        return json.loads(marker.read_text(encoding="utf-8"))
+    current = json.loads((DATA / "results.json").read_text(encoding="utf-8"))
+    dest.mkdir(parents=True, exist_ok=True)
+    for name in ("identity", "ira"):
+        src = DATA / name
+        target = dest / name
+        if src.is_dir() and not target.exists():
+            shutil.copytree(src, target)
+    archived = {
+        "neb": current["neb"],
+        "identity": current["identity"],
+        "ira_reordered": current["ira_reordered"],
+        "note": "OCI-NEB on the Baker geometries, endpoints not minimised, 16 images, 500 iterations.",
+    }
+    marker.write_text(json.dumps(archived, indent=2) + "\n", encoding="utf-8")
+    return archived
+
+
+def run_band(
+    binary: Path,
+    model: Path,
+    scratch: Path,
+    name: str,
+    reactant: Path,
+    product: Path,
+) -> dict:
+    stage1 = scratch / f"{name}_stage1"
+    if stage1.exists():
+        shutil.rmtree(stage1)
+    stage1.mkdir(parents=True)
+    shutil.copy(reactant, stage1 / "reactant.con")
+    shutil.copy(product, stage1 / "product.con")
+    print(f"neb {name} stage1 16 images lbfgs max_move {MAX_MOVE}", flush=True)
+    text1 = run_client(
+        binary,
+        stage1,
+        neb_config(model, images=IMAGES, iterations=STAGE1_ITERATIONS, max_move=MAX_MOVE, ci_mmf=True),
+    )
+    first = analyse_band(stage1, text1)
+    print(
+        f"  {first['termination']} barrier {first['barrier_eV']:.4f} "
+        f"image {first['highest_image']} force {first['final_max_atom_force_eV_A']}",
+        flush=True,
+    )
+    endpoint = first["highest_image"] in (0, len(first["band"]) - 1)
+    if (first["converged"] and first["final_max_atom_force_eV_A"] < FMAX) or endpoint:
+        first["stage"] = "16-image IDPP"
+        first["stage1"] = {
+            "images": IMAGES,
+            "max_move_A": MAX_MOVE,
+            "max_iterations": STAGE1_ITERATIONS,
+            "ci_mmf": True,
+            "iterations_run": len(first["iterations"]),
+            "densify": "skipped" if endpoint else "not required",
+        }
+        first["_work"] = stage1
+        first["_text"] = text1
+        return first
+    listing = densify(stage1 / "neb.con", scratch / f"{name}_path24")
+    stage2 = scratch / f"{name}_stage2"
+    if stage2.exists():
+        shutil.rmtree(stage2)
+    stage2.mkdir(parents=True)
+    shutil.copy(reactant, stage2 / "reactant.con")
+    shutil.copy(product, stage2 / "product.con")
+    print(
+        f"neb {name} stage2 24 images lbfgs max_move {STAGE2_MOVE} ci_mmf false",
+        flush=True,
+    )
+    text2 = run_client(
+        binary,
+        stage2,
+        neb_config(
+            model,
+            images=STAGE2_IMAGES,
+            iterations=STAGE2_ITERATIONS,
+            max_move=STAGE2_MOVE,
+            ci_mmf=False,
+            initializer="file",
+            initial_path=listing,
+        ),
+    )
+    second = analyse_band(stage2, text2)
+    print(
+        f"  {second['termination']} barrier {second['barrier_eV']:.4f} "
+        f"image {second['highest_image']} force {second['final_max_atom_force_eV_A']}",
+        flush=True,
+    )
+    second["stage"] = "24-image refinement of the 16-image band"
+    second["_work"] = stage2
+    second["_text"] = text2
+    second["stage1"] = {
+        "images": IMAGES,
+        "max_move_A": MAX_MOVE,
+        "max_iterations": STAGE1_ITERATIONS,
+        "ci_mmf": True,
+        "initializer": INITIALIZER,
+        "termination": first["termination"],
+        "converged": first["converged"],
+        "barrier_eV": first["barrier_eV"],
+        "highest_image": first["highest_image"],
+        "final_max_atom_force_eV_A": first["final_max_atom_force_eV_A"],
+        "min_logged_max_atom_force_eV_A": first["min_logged_max_atom_force_eV_A"],
+        "min_logged_at_iteration": first["min_logged_at_iteration"],
+        "distances_A": first["distances_A"],
+        "connected_components": first["connected_components"],
+        "band": first["band"],
+        "iterations": first["iterations"],
+    }
+    return second
 
 
 def jsonable(value):
@@ -677,6 +1008,7 @@ def main() -> None:
     import readcon
 
     DATA.mkdir(parents=True, exist_ok=True)
+    archived = archive_unminimised()
     xyz = ensure_xyz()
     model = ensure_model()
     binary = eon_binary()
@@ -697,30 +1029,44 @@ def main() -> None:
         "poscar_ase_sort_true_grouped_by_element": poscar_round_trip(product, sort=True),
     }
 
-    runs = {}
     scratch = Path(os.environ.get("CLAISEN_SCRATCH", "/tmp/claisen-run"))
     if scratch.exists():
         shutil.rmtree(scratch)
+    scratch.mkdir(parents=True)
+    print("minimise reactant", flush=True)
+    reactant_min = minimise_con(binary, model, DATA / "reactant.con", scratch / "min_reactant")
+    print("minimise product", flush=True)
+    product_min = minimise_con(binary, model, DATA / "product.con", scratch / "min_product")
+    reactant_atoms = atoms_in_baker_order(readcon.read_con(str(reactant_min["con"]))[0])
+    product_atoms = atoms_in_baker_order(readcon.read_con(str(product_min["con"]))[0])
+    shutil.copy(reactant_min["con"], DATA / "reactant_min.con")
+    shutil.copy(product_min["con"], DATA / "product_min.con")
+    write_endpoint(DATA / "product_ira_min.con", apply_perm(product_atoms, perm), shift=SHIFT)
+    ira_minimised = ira_permutation(reactant_atoms, product_atoms)
+    ira_minimised["same_permutation_as_baker_geometries"] = (
+        ira_minimised["permutation_product_into_reactant_slots"] == perm
+    )
+    for record in (reactant_min, product_min):
+        record.pop("con", None)
+
+    runs = {}
     for name, product_file in (
-        ("identity", DATA / "product.con"),
-        ("ira", DATA / "product_ira.con"),
+        ("identity", DATA / "product_min.con"),
+        ("ira", DATA / "product_ira_min.con"),
     ):
-        work = scratch / name
-        work.mkdir(parents=True)
-        shutil.copy(DATA / "reactant.con", work / "reactant.con")
-        shutil.copy(product_file, work / "product.con")
-        print(f"neb {name}", flush=True)
-        text = run_client(binary, work, neb_config(model))
-        band = analyse_band(work, text)
-        print(
-            f"  {band['termination']} barrier {band['barrier_eV']:.4f} "
-            f"image {band['highest_image']} "
-            f"force {band['final_max_atom_force_eV_A']}",
-            flush=True,
+        band = run_band(
+            binary,
+            model,
+            scratch,
+            name,
+            DATA / "reactant_min.con",
+            product_file,
         )
         print(f"hessian {name}", flush=True)
-        band["hessian"] = hessian_on(binary, model, band["_ts"], scratch / f"{name}_hess")
-        trim(work, DATA / name, text)
+        band["hessian"] = hessian_on(
+            binary, model, band["_ts"], scratch / f"{name}_hess"
+        )
+        trim(band["_work"], DATA / name, band["_text"])
         write_ts(band["_ts"], DATA / name / "ts.con")
         written = readcon.read_con(str(DATA / name / "ts.con"))[0]
         band["ts_geometry"] = geometry(written)
@@ -729,6 +1075,9 @@ def main() -> None:
         }
         band["connected_components"] = components(written)
         runs[name] = band
+
+    old_band = archived["identity"]["band"]
+    old_high = archived["identity"]["highest_image"]
 
     payload = {
         "case": "Baker TS set entry 17",
@@ -760,24 +1109,53 @@ def main() -> None:
             "same_shift_on_both_endpoints": True,
         },
         "neb": {
-            "method": "OCI-NEB",
-            "images": IMAGES,
+            "method": "climbing-image NEB",
             "spring_eV_A2": SPRING,
             "climbing_image_method": True,
             "climbing_image_converged_only": False,
-            "ci_mmf": True,
             "minimize_endpoints": False,
-            "initializer": INITIALIZER,
-            "initializer_note": "A linear initial path puts O on C4 and the band stays near 220 eV. IDPP uses the endpoint atom order and is the path both bands start from.",
-            "opt_method": "lbfgs",
+            "endpoints": "minimised separately, then held fixed",
             "convergence_metric": "max_atom",
             "converged_force_eV_A": FMAX,
-            "max_iterations": MAX_ITERATIONS,
-            "max_move_A": MAX_MOVE,
             "random_seed": 1,
+            "stage1": {
+                "images": IMAGES,
+                "initializer": INITIALIZER,
+                "initializer_note": "A linear initial path puts O on C4 and the band stays near 220 eV. IDPP uses the endpoint atom order.",
+                "opt_method": "lbfgs",
+                "ci_mmf": True,
+                "max_iterations": STAGE1_ITERATIONS,
+                "max_move_A": MAX_MOVE,
+            },
+            "stage2": {
+                "images": STAGE2_IMAGES,
+                "initializer": "file",
+                "construction": "four linearly interpolated images in the interval before the highest image and four in the interval after it",
+                "opt_method": "lbfgs",
+                "ci_mmf": False,
+                "max_iterations": STAGE2_ITERATIONS,
+                "max_move_A": STAGE2_MOVE,
+                "why": "On 16 images the barrier sits between two images, so the climbing image is not stationary. LBFGS with a 0.05 A cap reaches a max-atom force near 0.06 eV/A and then a 0.02 A step throws the force above 1 eV/A. A 0.008 A cap on the 24-image path stays on that shoulder.",
+            },
+        },
+        "endpoints": {
+            "reactant": jsonable(reactant_min),
+            "product": jsonable(product_min),
+            "ira_on_minimised_geometries": jsonable(ira_minimised),
+            "band_uses_permutation_from": "Baker geometries, not the minimised geometries",
         },
         "ira": ira,
         "round_trip": rounds,
+        "unminimised": archived,
+        "nonstationary_unminimised_ci": {
+            "highest_image": old_high,
+            "energy_eV": old_band[old_high]["energy_eV"],
+            "parallel_force_eV_A": old_band[old_high]["f_parallel_eV_A"],
+            "next_image": old_high + 1,
+            "next_image_energy_eV": old_band[old_high + 1]["energy_eV"],
+            "next_image_parallel_force_eV_A": old_band[old_high + 1]["f_parallel_eV_A"],
+            "explanation": "The highest image is not a stationary point. Its parallel force is almost the whole NEB force, so the image still sits on the slope. The next image is already in the product well, 0.85 eV lower, one angstrom further along the band. The discrete maximum is the shoulder before the barrier, which is why its Hessian has no mode below -50 cm^-1.",
+        },
         "identity": jsonable(runs["identity"]),
         "ira_reordered": jsonable(runs["ira"]),
         "earlier_run_2026_10_31": {
