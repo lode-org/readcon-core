@@ -359,9 +359,7 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
         )
     on_primary = []
     if ase is not None and primary == "al_eam_md" and ase.get("ratio_over_tip"):
-        on_primary.append(
-            f"readcon is {cell_value(ase, 'ratio')} times as fast as ASE"
-        )
+        on_primary.append(f"readcon is {cell_value(ase, 'ratio')} times as fast as ASE")
     if former is not None and primary == "al_eam_md" and former.get("ratio_over_tip"):
         on_primary.append(
             f"\\path{{eon/fileio.py}} takes {cell_value(former, 'ratio')} times "

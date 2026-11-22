@@ -25,7 +25,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import urllib.request
 from math import sqrt
 from pathlib import Path
@@ -150,7 +149,11 @@ def eon_binary() -> Path:
         path = Path(override)
     else:
         found = shutil.which("eonclient")
-        path = Path(found) if found else CPC / ".pixi" / "envs" / "eon" / "bin" / "eonclient"
+        path = (
+            Path(found)
+            if found
+            else CPC / ".pixi" / "envs" / "eon" / "bin" / "eonclient"
+        )
     if not path.is_file():
         raise SystemExit(
             "eOn 3.6.0 client is not installed "
@@ -170,9 +173,7 @@ def read_baker(path: Path) -> list[list[tuple[str, np.ndarray, int]]]:
         atoms = []
         for index, row in enumerate(lines[i + 2 : i + 16]):
             symbol, x, y, z = row.split()
-            atoms.append(
-                (symbol, np.array([float(x), float(y), float(z)]), index)
-            )
+            atoms.append((symbol, np.array([float(x), float(y), float(z)]), index))
         frames.append(atoms)
         i += 16
     if len(frames) != 2:
@@ -500,7 +501,9 @@ def minimise_con(binary: Path, model: Path, src: Path, work: Path) -> dict:
         "rmsd_aligned_A": aligned,
         "max_aligned_displacement_A": worst,
         "rmsd_raw_A": float(np.sqrt(np.mean(np.sum(raw * raw, axis=1)))),
-        "distances_baker_A": {name: distance(start, *pair) for name, pair in PAIRS.items()},
+        "distances_baker_A": {
+            name: distance(start, *pair) for name, pair in PAIRS.items()
+        },
         "distances_minimised_A": {
             name: distance(end, *pair) for name, pair in PAIRS.items()
         },
@@ -525,7 +528,9 @@ def blend(left, right, fraction: float):
                 mass=float(atom.mass),
             )
         )
-    frame = readcon.ConFrame(cell=list(left.cell), angles=list(left.angles), atoms=atoms)
+    frame = readcon.ConFrame(
+        cell=list(left.cell), angles=list(left.angles), atoms=atoms
+    )
     frame.metadata["pbc"] = [False, False, False]
     return frame
 
@@ -559,7 +564,9 @@ def densify(band_con: Path, dest: Path) -> Path:
             for step in range(1, count + 1):
                 dense.append(blend(frame, frames[index + 1], step / (count + 1)))
     if len(dense) != STAGE2_IMAGES + 2:
-        raise SystemExit(f"densified path has {len(dense)} frames, expected {STAGE2_IMAGES + 2}")
+        raise SystemExit(
+            f"densified path has {len(dense)} frames, expected {STAGE2_IMAGES + 2}"
+        )
     dest.mkdir(parents=True, exist_ok=True)
     names = []
     for index, frame in enumerate(dense):
@@ -734,9 +741,7 @@ def analyse_band(work: Path, text: str) -> dict:
     forces = {
         int(key.removeprefix("image").removesuffix("_force")): float(value)
         for key, value in info.items()
-        if key.startswith("image")
-        and key.endswith("_force")
-        and "projected" not in key
+        if key.startswith("image") and key.endswith("_force") and "projected" not in key
     }
     logged = [row["max_atom_force_eV_A"] for row in rows]
     best_at = int(np.argmin(logged))
@@ -918,7 +923,13 @@ def run_band(
     text1 = run_client(
         binary,
         stage1,
-        neb_config(model, images=IMAGES, iterations=STAGE1_ITERATIONS, max_move=MAX_MOVE, ci_mmf=True),
+        neb_config(
+            model,
+            images=IMAGES,
+            iterations=STAGE1_ITERATIONS,
+            max_move=MAX_MOVE,
+            ci_mmf=True,
+        ),
     )
     first = analyse_band(stage1, text1)
     print(
@@ -996,7 +1007,11 @@ def run_band(
 
 def jsonable(value):
     if isinstance(value, dict):
-        return {key: jsonable(item) for key, item in value.items() if not key.startswith("_")}
+        return {
+            key: jsonable(item)
+            for key, item in value.items()
+            if not key.startswith("_")
+        }
     if isinstance(value, list):
         return [jsonable(item) for item in value]
     if isinstance(value, float):
@@ -1026,7 +1041,9 @@ def main() -> None:
     rounds = {
         "con_3_1": con_round_trip(product),
         "poscar_ase_default_sort_false": poscar_round_trip(product, sort=False),
-        "poscar_ase_sort_true_grouped_by_element": poscar_round_trip(product, sort=True),
+        "poscar_ase_sort_true_grouped_by_element": poscar_round_trip(
+            product, sort=True
+        ),
     }
 
     scratch = Path(os.environ.get("CLAISEN_SCRATCH", "/tmp/claisen-run"))
@@ -1034,14 +1051,20 @@ def main() -> None:
         shutil.rmtree(scratch)
     scratch.mkdir(parents=True)
     print("minimise reactant", flush=True)
-    reactant_min = minimise_con(binary, model, DATA / "reactant.con", scratch / "min_reactant")
+    reactant_min = minimise_con(
+        binary, model, DATA / "reactant.con", scratch / "min_reactant"
+    )
     print("minimise product", flush=True)
-    product_min = minimise_con(binary, model, DATA / "product.con", scratch / "min_product")
+    product_min = minimise_con(
+        binary, model, DATA / "product.con", scratch / "min_product"
+    )
     reactant_atoms = atoms_in_baker_order(readcon.read_con(str(reactant_min["con"]))[0])
     product_atoms = atoms_in_baker_order(readcon.read_con(str(product_min["con"]))[0])
     shutil.copy(reactant_min["con"], DATA / "reactant_min.con")
     shutil.copy(product_min["con"], DATA / "product_min.con")
-    write_endpoint(DATA / "product_ira_min.con", apply_perm(product_atoms, perm), shift=SHIFT)
+    write_endpoint(
+        DATA / "product_ira_min.con", apply_perm(product_atoms, perm), shift=SHIFT
+    )
     ira_minimised = ira_permutation(reactant_atoms, product_atoms)
     ira_minimised["same_permutation_as_baker_geometries"] = (
         ira_minimised["permutation_product_into_reactant_slots"] == perm
