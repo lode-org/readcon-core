@@ -3,8 +3,7 @@
 //! `read_con` calls [`crate::iterators::read_all_frames_phased`]. The serial
 //! arm is [`crate::iterators::ConFrameIterator`] over the file bytes.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
 use crate::error::LocatedParseError;
 use crate::iterators::{ConFrameIterator, read_all_frames_phased};
@@ -129,62 +128,70 @@ fn show(verdict: &Verdict) -> String {
     }
 }
 
-fn generate_corpus(out: &Path) {
-    let script =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("paper/cpc/scripts/make_corpus31.py");
-    let status = Command::new("python3")
-        .arg(&script)
-        .arg("--out")
-        .arg(out)
-        .status()
-        .expect("python3");
-    assert!(status.success(), "make_corpus31.py failed");
-}
+#[cfg(test)]
+mod harness {
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
 
-/// The parallel scan and the serial iterator read the same sections.
-///
-/// The class is the scan. The line the specification names is checked
-/// once every arm reports that line.
-#[test]
-fn corpus31_thread_arms_agree() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    generate_corpus(dir.path());
-    let manifest_path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("paper/cpc/data/corpus31/manifest.toml");
-    let entries = parse_manifest(&std::fs::read_to_string(&manifest_path).unwrap());
-    assert_eq!(entries.len(), 143);
-    let mut arm_splits = Vec::new();
-    for entry in &entries {
-        let path = dir.path().join(&entry.file);
-        let bytes = crate::compression::read_bytes_owned(&path)
-            .unwrap_or_else(|err| panic!("{}: {err}", entry.file));
-        let arms = [
-            serial(bytes.as_slice()),
-            phased(&path, None),
-            phased(&path, Some(1)),
-            phased(&path, Some(2)),
-            phased(&path, Some(8)),
-        ];
-        let same = |arm: &Verdict| {
-            arm.accept == arms[0].accept
-                && arm.frames == arms[0].frames
-                && arm.error == arms[0].error
-        };
-        if arms.iter().any(|arm| !same(arm)) {
-            arm_splits.push(format!(
-                "{} serial={} auto={} t1={} t2={} t8={}",
-                entry.file,
-                show(&arms[0]),
-                show(&arms[1]),
-                show(&arms[2]),
-                show(&arms[3]),
-                show(&arms[4])
-            ));
-        }
+    use super::*;
+
+    fn generate_corpus(out: &Path) {
+        let script =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("paper/cpc/scripts/make_corpus31.py");
+        let status = Command::new("python3")
+            .arg(&script)
+            .arg("--out")
+            .arg(out)
+            .status()
+            .expect("python3");
+        assert!(status.success(), "make_corpus31.py failed");
     }
-    assert!(
-        arm_splits.is_empty(),
-        "thread arms disagree:\n{}",
-        arm_splits.join("\n")
-    );
+
+    /// The parallel scan and the serial iterator read the same sections.
+    ///
+    /// The class is the scan. The line the specification names is checked
+    /// once every arm reports that line.
+    #[test]
+    fn corpus31_thread_arms_agree() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        generate_corpus(dir.path());
+        let manifest_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("paper/cpc/data/corpus31/manifest.toml");
+        let entries = parse_manifest(&std::fs::read_to_string(&manifest_path).unwrap());
+        assert_eq!(entries.len(), 143);
+        let mut arm_splits = Vec::new();
+        for entry in &entries {
+            let path = dir.path().join(&entry.file);
+            let bytes = crate::compression::read_bytes_owned(&path)
+                .unwrap_or_else(|err| panic!("{}: {err}", entry.file));
+            let arms = [
+                serial(bytes.as_slice()),
+                phased(&path, None),
+                phased(&path, Some(1)),
+                phased(&path, Some(2)),
+                phased(&path, Some(8)),
+            ];
+            let same = |arm: &Verdict| {
+                arm.accept == arms[0].accept
+                    && arm.frames == arms[0].frames
+                    && arm.error == arms[0].error
+            };
+            if arms.iter().any(|arm| !same(arm)) {
+                arm_splits.push(format!(
+                    "{} serial={} auto={} t1={} t2={} t8={}",
+                    entry.file,
+                    show(&arms[0]),
+                    show(&arms[1]),
+                    show(&arms[2]),
+                    show(&arms[3]),
+                    show(&arms[4])
+                ));
+            }
+        }
+        assert!(
+            arm_splits.is_empty(),
+            "thread arms disagree:\n{}",
+            arm_splits.join("\n")
+        );
+    }
 }
