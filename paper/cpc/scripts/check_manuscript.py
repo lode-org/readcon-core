@@ -1075,7 +1075,7 @@ def check_conformance() -> str:
         "totals"
     ]
     version = (ROOT.parents[1] / "VERSION").read_text().strip()
-    coverage_record = f"clause_coverage-{version}-recount.json"
+    coverage_record = f"clause_coverage-{version}-sources.json"
     clauses = json.loads((ROOT / "data" / "spec" / coverage_record).read_text())[
         "totals"
     ]

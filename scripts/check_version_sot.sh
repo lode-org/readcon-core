@@ -225,6 +225,13 @@ if (root / clause_recount).is_file():
     allow_exact.add(clause_recount)
 else:
     print(f"PENDING: {clause_recount} has not been measured")
+# The sources file is the count clause_coverage.py writes. The recount stays
+# byte-identical because it embeds the hand-entered REASONS text.
+clause_sources = f"paper/cpc/data/spec/clause_coverage-{version}-sources.json"
+if (root / clause_sources).is_file():
+    allow_exact.add(clause_sources)
+else:
+    print(f"PENDING: {clause_sources} has not been measured")
 # The like-for-like rows, samples and summary name the build they measured.
 # A later release must not rewrite those fields.
 allow_exact.update({
