@@ -771,6 +771,9 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     con4_messages = {
         "v31_bom.con": bom,
         "v31_bom_later_frame.con": bom,
+        "v2_time_banana.con": "invalid units: units.time: CON validation failed: "
+        "unknown unit 'banana'; unit symbols are case-sensitive "
+        "(meV is milli, MeV is mega)",
         "v31_minor_string.con": "invalid JSON metadata on line 2: con_spec_minor "
         "must be a JSON integer >= 0 that fits in an unsigned 64-bit integer",
         "v31_validate_bad_label.convel": "CON validation failed: expected section "
@@ -856,7 +859,9 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
             assert str(exc_info.value) == message, name
     assert sorted(huge_minor_diffs) == ["d14_minor_2pow64.con", "v2_minor_2pow64.con"]
     assert sorted(con4_diffs) == sorted(con4_accepts)
-    assert len(manifest_diffs) == 26
+    # The spec-following reader matches the oracle except these
+    # coordinate-label files, which the manifest rejects.
+    assert len(manifest_diffs) == 3
 
 
 @pytest.mark.parametrize(

@@ -127,8 +127,8 @@
       "status": "err"
     },
     {
-      "error_class": "InvalidMetadataJson",
-      "error_message": "invalid JSON metadata on line 2: con_spec_version must be a JSON integer, the major version",
+      "error_class": "UnsupportedVersion",
+      "error_message": "unsupported con_spec_version: 0",
       "line2": "{\"con_spec_version\":-0}",
       "status": "err"
     },
@@ -733,14 +733,8 @@
       "status": "ok"
     },
     "f26_cell_10_10_170.con": {
-      "canonical_line2": "{\"con_spec_version\":2,\"sections\":[],\"validate\":true}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_version\":2,\"validate\":true}",
-          "spec_version": 2
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "CON validation failed: cell angles do not determine a real c vector"
     },
     "f27_minor1_no_ids.con": {
       "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
@@ -3217,44 +3211,20 @@
       "status": "ok"
     },
     "gram_170_v1.con": {
-      "canonical_line2": "0.0000 TIME",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_version\":1}",
-          "spec_version": 1
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "CON validation failed: cell angles do not determine a real c vector"
     },
     "gram_170_v2.con": {
-      "canonical_line2": "{\"con_spec_version\":2}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_version\":2}",
-          "spec_version": 2
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "CON validation failed: cell angles do not determine a real c vector"
     },
     "gram_170_v30.con": {
-      "canonical_line2": "{\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "CON validation failed: cell angles do not determine a real c vector"
     },
     "gram_170_v31_validate.con": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "CON validation failed: cell angles do not determine a real c vector"
     },
     "gram_60_60_119_9.con": {
       "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
@@ -3287,24 +3257,12 @@
       "status": "ok"
     },
     "gram_60_60_120_1.con": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "CON validation failed: cell angles do not determine a real c vector"
     },
     "gram_60_60_120_1_validate.con": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "CON validation failed: cell angles do not determine a real c vector"
     },
     "json_version_1.con": {
       "error_class": "Error",
@@ -3411,24 +3369,12 @@
       "status": "ok"
     },
     "v2_pbc_string.con": {
-      "canonical_line2": "{\"con_spec_version\":2,\"pbc\":\"bad\"}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_version\":2,\"pbc\":\"bad\"}",
-          "spec_version": 2
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "invalid JSON metadata on line 2: pbc must be a length-3 boolean array"
     },
     "v2_time_banana.con": {
-      "canonical_line2": null,
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_version\":2,\"units\":{\"time\":\"banana\"}}",
-          "spec_version": 2
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "invalid units: units.time: CON validation failed: unknown unit 'banana'"
     },
     "v30_convel_fs.convel": {
       "canonical_line2": "{\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
@@ -3476,9 +3422,17 @@
       "status": "err"
     },
     "v31_bom_later_frame.con": {
-      "error_class": "Error",
-      "error_message": "CON validation failed: file begins with a byte-order mark",
-      "status": "err"
+      "status": "ok",
+      "frames": [
+        {
+          "spec_version": 3,
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}"
+        },
+        {
+          "spec_version": 3,
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}"
+        }
+      ]
     },
     "v31_bonds_one_index.con": {
       "canonical_line2": "{\"bonds\":[[0]],\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
@@ -3526,14 +3480,8 @@
       "status": "ok"
     },
     "v31_cr_separator.con": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "invalid number format: invalid float: 2.5\r2.5"
     },
     "v31_crlf.con": {
       "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
@@ -3546,14 +3494,8 @@
       "status": "ok"
     },
     "v31_energy_string.con": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"energy\":\"-1.0\",\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"energy\":\"-1.0\",\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "invalid JSON metadata on line 2: energy must be a finite number"
     },
     "v31_float_forms.con": {
       "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
@@ -3566,14 +3508,8 @@
       "status": "ok"
     },
     "v31_form_feed_separator.con": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "invalid number format: invalid float: 0.0\f0.0"
     },
     "v31_gzip.con.gz": {
       "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
@@ -3684,64 +3620,28 @@
       "status": "ok"
     },
     "v31_label_velocities_0.convel": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "file ended unexpectedly while reading velocities section"
     },
     "v31_label_velocities_01.convel": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "file ended unexpectedly while reading velocities section"
     },
     "v31_label_velocities_1_xyz.convel": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "file ended unexpectedly while reading velocities section"
     },
     "v31_label_velocities_2.convel": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "file ended unexpectedly while reading velocities section"
     },
     "v31_label_velocities_no_index.convel": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "file ended unexpectedly while reading velocities section"
     },
     "v31_label_velocities_xyz.convel": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "file ended unexpectedly while reading velocities section"
     },
     "v31_lattice_ok.con": {
       "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"lattice_vectors\":[[10.0,0.0,0.0],[0.0,10.0,0.0],[0.0,0.0,10.0]],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
@@ -3754,24 +3654,12 @@
       "status": "ok"
     },
     "v31_lattice_string.con": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"lattice_vectors\":[[10.0,0.0,0.0],[0.0,10.0,0.0],[0.0,0.0,\"10.0\"]],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"lattice_vectors\":[[10.0,0.0,0.0],[0.0,10.0,0.0],[0.0,0.0,\"10.0\"]],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "invalid JSON metadata on line 2: lattice_vectors must be a 3x3 numeric array"
     },
     "v31_lattice_two_rows.con": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"lattice_vectors\":[[10.0,0.0,0.0],[0.0,10.0,0.0]],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"lattice_vectors\":[[10.0,0.0,0.0],[0.0,10.0,0.0]],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "invalid JSON metadata on line 2: lattice_vectors must be a 3x3 numeric array"
     },
     "v31_legacy_velocity_no_time.convel": {
       "error_class": "Error",
@@ -3854,14 +3742,8 @@
       "status": "err"
     },
     "v31_pbc_numbers.con": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[1,1,1],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[1,1,1],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "invalid JSON metadata on line 2: pbc must be a length-3 boolean array"
     },
     "v31_pbc_slab.con": {
       "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[true,true,false],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
@@ -3874,14 +3756,8 @@
       "status": "ok"
     },
     "v31_pbc_two.con": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[true,true],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"pbc\":[true,true],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "invalid JSON metadata on line 2: pbc must be a length-3 boolean array"
     },
     "v31_repeated_ids.con": {
       "canonical_line2": null,
@@ -3924,14 +3800,8 @@
       "status": "err"
     },
     "v31_trailing_ff.con": {
-      "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-      "frames": [
-        {
-          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
-          "spec_version": 3
-        }
-      ],
-      "status": "ok"
+      "status": "err",
+      "error_message": "invalid JSON metadata on line 2: trailing characters at line 1 column 125"
     },
     "v31_trailing_ws.con": {
       "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}",
@@ -4019,9 +3889,8 @@
       "status": "err"
     },
     "v31_validate_bad_label.convel": {
-      "error_class": "Error",
-      "error_message": "file ended unexpectedly while reading velocities section",
-      "status": "err"
+      "status": "err",
+      "error_message": "CON validation failed: expected section label \"Velocities of Component 1\", found \"Velocity of Component 1\""
     },
     "v31_validate_count_change.con": {
       "canonical_line2": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[],\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"},\"validate\":true}",
@@ -4097,14 +3966,22 @@
       "status": "err"
     },
     "v31_version_3e0.con": {
-      "error_class": "Error",
-      "error_message": "invalid JSON metadata on line 2: con_spec_version must be a JSON integer, the major version",
-      "status": "err"
+      "status": "ok",
+      "frames": [
+        {
+          "spec_version": 3,
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}"
+        }
+      ]
     },
     "v31_version_float.con": {
-      "error_class": "Error",
-      "error_message": "invalid JSON metadata on line 2: con_spec_version must be a JSON integer, the major version",
-      "status": "err"
+      "status": "ok",
+      "frames": [
+        {
+          "spec_version": 3,
+          "metadata_json": "{\"con_spec_minor\":1,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"mass\":\"amu\",\"time\":\"fs\"}}"
+        }
+      ]
     },
     "v31_version_string.con": {
       "error_class": "Error",

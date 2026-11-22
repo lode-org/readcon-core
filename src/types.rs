@@ -2718,7 +2718,7 @@ pub fn require_real_cell(angles_deg: [f64; 3]) -> Result<f64, ParseError> {
         Ok(if cz_sq < 0.0 { 0.0 } else { cz_sq.sqrt() })
     } else {
         Err(ParseError::ValidationError(
-            "cell angles have no real c vector".into(),
+            "cell angles do not determine a real c vector".into(),
         ))
     }
 }

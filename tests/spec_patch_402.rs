@@ -28,12 +28,20 @@ fn con_cell_7_column_readers_reject_impossible_angles() {
     fs::write(&path, periodic_frame("10 10 10", "10 10 170", "")).unwrap();
 
     let positions = read_positions_with_threads(&path, None).unwrap_err();
-    assert!(positions.to_string().contains("no real c vector"));
+    assert!(
+        positions
+            .to_string()
+            .contains("do not determine a real c vector")
+    );
     let coords = match read_coord_columns(&path, None) {
         Ok(_) => panic!("coordinate columns accepted the frame"),
         Err(err) => err,
     };
-    assert!(coords.to_string().contains("no real c vector"));
+    assert!(
+        coords
+            .to_string()
+            .contains("do not determine a real c vector")
+    );
 
     #[cfg(feature = "capi")]
     {

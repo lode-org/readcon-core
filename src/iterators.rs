@@ -891,14 +891,14 @@ impl<'a> ConFrameIterator<'a> {
                 if !opens {
                     return Err(error::ParseError::IncompleteSection(name.clone()));
                 }
-                self.consume_section_block(header, name, "Velocities of Component", false, end)?;
+                self.consume_section_block(header, name, "Velocities of Component", true, end)?;
                 continue;
             }
             if let Some(prefix) = crate::parser::reserved_section_label_prefix(name) {
                 if self.at_blank_separator() != Some(true) {
                     return Err(error::ParseError::IncompleteSection(name.clone()));
                 }
-                self.consume_section_block(header, name, prefix, false, end)?;
+                self.consume_section_block(header, name, prefix, true, end)?;
                 continue;
             }
             let newer = crate::parser::frame_minor(header) > u64::from(crate::CON_SPEC_MINOR);
@@ -1114,7 +1114,7 @@ impl<'a> ConFrameIterator<'a> {
         // `sections` list, including an empty one, is known before the
         // coordinate skip. Skipping those lines wholesale treated every
         // blank-plus-label tail as a section of this frame.
-        let header = match crate::parser::parse_frame_header(&mut self.lines) {
+        let header = match crate::parser::parse_frame_header_inner(&mut self.lines) {
             Ok(header) => header,
             Err(_) => {
                 self.lines.pos = saved.0;
