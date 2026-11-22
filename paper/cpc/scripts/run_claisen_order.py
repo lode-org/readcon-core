@@ -9,6 +9,8 @@ Both endpoints are minimised first. The unminimised bands stay under
 CON 3.1 round trip and a POSCAR round trip induce on the product.
 
     python paper/cpc/scripts/run_claisen_order.py
+    python paper/cpc/scripts/run_claisen_order.py --check
+    python paper/cpc/scripts/run_claisen_order.py --overwrite
 
 The checkpoint and the exported ``.pt`` are not written into the tree.
 Set ``CLAISEN_PT`` to an existing export, or ``CLAISEN_CKPT`` to a
@@ -16,11 +18,13 @@ checkpoint that ``mtt export`` can turn into one. Either file whose
 SHA-256 is not the digest ``data/claisen/results.json`` records stops
 the run. ``CLAISEN_XYZ`` may point at a copy of the Baker file;
 otherwise the committed copy under ``data/claisen/`` is used, and if
-that is absent the script downloads it.
+that is absent the script downloads it. ``--check`` verifies every
+committed output against ``data/claisen/outputs.sha256``.
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -34,8 +38,39 @@ from pathlib import Path
 import numpy as np
 
 CPC = Path(__file__).resolve().parents[1]
-DATA = CPC / "data" / "claisen"
+DATA = Path(os.environ.get("CLAISEN_DATA", CPC / "data" / "claisen"))
 CACHE = Path(os.environ.get("CLAISEN_CACHE", "/tmp/claisen-src"))
+
+OUTPUTS_MANIFEST = "outputs.sha256"
+CLAISEN_OUTPUTS = (
+    "PROVENANCE",
+    "config.ini",
+    "identity/band.con",
+    "identity/iterations.txt",
+    "identity/neb.dat",
+    "identity/ts.con",
+    "ira/band.con",
+    "ira/iterations.txt",
+    "ira/neb.dat",
+    "ira/ts.con",
+    "product.con",
+    "product_ira.con",
+    "product_ira_min.con",
+    "product_min.con",
+    "reactant.con",
+    "reactant_min.con",
+    "results.json",
+    "unminimised/identity/band.con",
+    "unminimised/identity/iterations.txt",
+    "unminimised/identity/neb.dat",
+    "unminimised/identity/ts.con",
+    "unminimised/ira/band.con",
+    "unminimised/ira/iterations.txt",
+    "unminimised/ira/neb.dat",
+    "unminimised/ira/ts.con",
+    "unminimised/results.json",
+)
+SHA256_LINE = re.compile(r"^([0-9a-f]{64})  (.+)$")
 
 XYZ_SHA256 = "35122ef230cdeea2031b8a1c1e706cf34930080805e00daac113adf9831ec269"
 CKPT_SHA256 = "8d5e1588c70f7a4998940e7b535ab84aeb42c0f2253c889d4af23a1a8c6fd553"
@@ -275,11 +310,11 @@ def apply_perm(atoms, perm: list[int]):
     return [atoms[index] for index in perm]
 
 
-def con_round_trip(atoms) -> dict:
+def con_round_trip(atoms, *, work: Path | None = None) -> dict:
     import readcon
 
     source = frame_from(atoms, shift=SHIFT, baker_ids=True)
-    blob = DATA / "_roundtrip_product.con"
+    blob = (work or DATA) / "_roundtrip_product.con"
     readcon.write_con(str(blob), [source])
     text = blob.read_text(encoding="utf-8")
     back = readcon.read_con(str(blob))[0]
@@ -302,7 +337,7 @@ def con_round_trip(atoms) -> dict:
     }
 
 
-def poscar_round_trip(atoms, *, sort: bool) -> dict:
+def poscar_round_trip(atoms, *, sort: bool, work: Path | None = None) -> dict:
     from ase import Atoms
     from ase.io import read as ase_read
     from ase.io import write as ase_write
@@ -315,7 +350,7 @@ def poscar_round_trip(atoms, *, sort: bool) -> dict:
         cell=[CELL, CELL, CELL],
         pbc=False,
     )
-    path = DATA / ("_roundtrip_sort.poscar" if sort else "_roundtrip.poscar")
+    path = (work or DATA) / ("_roundtrip_sort.poscar" if sort else "_roundtrip.poscar")
     ase_write(path, image, format="vasp", sort=sort, direct=False, vasp5=True)
     text = path.read_text(encoding="utf-8")
     back = ase_read(path, format="vasp")
@@ -1029,8 +1064,127 @@ def jsonable(value):
     return value
 
 
+def parse_outputs_manifest(manifest: Path) -> dict[str, str]:
+    if not manifest.is_file():
+        raise SystemExit(f"missing Claisen outputs manifest: {manifest}")
+    recorded: dict[str, str] = {}
+    for number, line in enumerate(
+        manifest.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        if not line.strip():
+            continue
+        match = SHA256_LINE.fullmatch(line)
+        if match is None:
+            raise SystemExit(f"{manifest}:{number}: malformed sha256 line: {line!r}")
+        digest, rel = match.groups()
+        if rel in recorded:
+            raise SystemExit(f"{manifest}:{number}: duplicate entry for {rel}")
+        recorded[rel] = digest
+    missing = [rel for rel in CLAISEN_OUTPUTS if rel not in recorded]
+    if missing:
+        raise SystemExit(
+            f"{manifest} omits required Claisen outputs: {', '.join(missing)}"
+        )
+    return recorded
+
+
+def write_outputs_manifest(data_dir: Path = DATA) -> Path:
+    lines = []
+    for rel in CLAISEN_OUTPUTS:
+        target = data_dir / rel
+        if not target.is_file():
+            raise SystemExit(f"cannot hash missing Claisen output: {target}")
+        lines.append(f"{sha256(target)}  {rel}")
+    manifest = data_dir / OUTPUTS_MANIFEST
+    manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return manifest
+
+
+def check_outputs(data_dir: Path = DATA) -> str:
+    manifest = data_dir / OUTPUTS_MANIFEST
+    recorded = parse_outputs_manifest(manifest)
+    bad = []
+    for rel, expected in recorded.items():
+        target = data_dir / rel
+        if not target.is_file():
+            bad.append(f"{rel} is missing (expected sha256 {expected})")
+            continue
+        found = sha256(target)
+        if found != expected:
+            bad.append(f"{rel} sha256 {found} does not match recorded {expected}")
+    xyz = data_dir / "baker17_initial.xyz"
+    if xyz.is_file():
+        found_xyz = sha256(xyz)
+        if found_xyz != XYZ_SHA256:
+            bad.append(
+                f"baker17_initial.xyz sha256 {found_xyz} does not match recorded {XYZ_SHA256}"
+            )
+    results_path = data_dir / "results.json"
+    if results_path.is_file():
+        record = json.loads(results_path.read_text(encoding="utf-8"))
+        for section, key, expected, label in (
+            ("potential", "checkpoint_sha256", CKPT_SHA256, "checkpoint"),
+            ("potential", "torchscript_sha256", PT_SHA256, "torchscript"),
+            ("geometry", "source_sha256", XYZ_SHA256, "Baker xyz"),
+        ):
+            found = record.get(section, {}).get(key)
+            if found != expected:
+                bad.append(
+                    f"results.json {section}.{key} {found!r} does not match {label} {expected}"
+                )
+    if bad:
+        raise SystemExit("\n".join(bad))
+    return f"{len(recorded)} Claisen outputs match {OUTPUTS_MANIFEST}"
+
+
+def stage_or_verify(
+    staged: Path, data_dir: Path = DATA, *, overwrite: bool = False
+) -> None:
+    manifest = data_dir / OUTPUTS_MANIFEST
+    produced = [
+        rel
+        for rel in CLAISEN_OUTPUTS
+        if not rel.startswith("unminimised/") and (staged / rel).is_file()
+    ]
+    if manifest.is_file() and not overwrite:
+        recorded = parse_outputs_manifest(manifest)
+        mismatches = [
+            f"{rel} sha256 {sha256(staged / rel)} differs from committed {recorded[rel]}"
+            for rel in produced
+            if sha256(staged / rel) != recorded[rel]
+        ]
+        if mismatches:
+            raise SystemExit(
+                "refusing to overwrite committed Claisen outputs whose digest differs "
+                "(pass --overwrite to replace them):\n" + "\n".join(mismatches)
+            )
+        check_outputs(data_dir)
+        return
+    for rel in produced:
+        dest = data_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(staged / rel, dest)
+    write_outputs_manifest(data_dir)
+
+
 def main() -> None:
     import readcon
+
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="verify committed Claisen outputs against outputs.sha256 and exit",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="replace committed Claisen outputs and update outputs.sha256",
+    )
+    args = parser.parse_args()
+    if args.check:
+        print(check_outputs(DATA))
+        return
 
     DATA.mkdir(parents=True, exist_ok=True)
     archived = archive_unminimised()
@@ -1042,38 +1196,43 @@ def main() -> None:
     perm = ira["permutation_product_into_reactant_slots"]
     product_ira = apply_perm(product, perm)
 
-    write_endpoint(DATA / "reactant.con", reactant, shift=SHIFT)
-    write_endpoint(DATA / "product.con", product, shift=SHIFT)
-    write_endpoint(DATA / "product_ira.con", product_ira, shift=SHIFT)
-    (DATA / "config.ini").write_text(portable_config(), encoding="utf-8")
-    (DATA / "PROVENANCE").write_text(provenance(model), encoding="utf-8")
-
-    rounds = {
-        "con_3_1": con_round_trip(product),
-        "poscar_ase_default_sort_false": poscar_round_trip(product, sort=False),
-        "poscar_ase_sort_true_grouped_by_element": poscar_round_trip(
-            product, sort=True
-        ),
-    }
-
     scratch = Path(os.environ.get("CLAISEN_SCRATCH", "/tmp/claisen-run"))
     if scratch.exists():
         shutil.rmtree(scratch)
     scratch.mkdir(parents=True)
+    staged = scratch / "outputs"
+    staged.mkdir(parents=True)
+
+    write_endpoint(staged / "reactant.con", reactant, shift=SHIFT)
+    write_endpoint(staged / "product.con", product, shift=SHIFT)
+    write_endpoint(staged / "product_ira.con", product_ira, shift=SHIFT)
+    (staged / "config.ini").write_text(portable_config(), encoding="utf-8")
+    (staged / "PROVENANCE").write_text(provenance(model), encoding="utf-8")
+
+    rounds = {
+        "con_3_1": con_round_trip(product, work=scratch),
+        "poscar_ase_default_sort_false": poscar_round_trip(
+            product, sort=False, work=scratch
+        ),
+        "poscar_ase_sort_true_grouped_by_element": poscar_round_trip(
+            product, sort=True, work=scratch
+        ),
+    }
+
     print("minimise reactant", flush=True)
     reactant_min = minimise_con(
-        binary, model, DATA / "reactant.con", scratch / "min_reactant"
+        binary, model, staged / "reactant.con", scratch / "min_reactant"
     )
     print("minimise product", flush=True)
     product_min = minimise_con(
-        binary, model, DATA / "product.con", scratch / "min_product"
+        binary, model, staged / "product.con", scratch / "min_product"
     )
     reactant_atoms = atoms_in_baker_order(readcon.read_con(str(reactant_min["con"]))[0])
     product_atoms = atoms_in_baker_order(readcon.read_con(str(product_min["con"]))[0])
-    shutil.copy(reactant_min["con"], DATA / "reactant_min.con")
-    shutil.copy(product_min["con"], DATA / "product_min.con")
+    shutil.copy(reactant_min["con"], staged / "reactant_min.con")
+    shutil.copy(product_min["con"], staged / "product_min.con")
     write_endpoint(
-        DATA / "product_ira_min.con", apply_perm(product_atoms, perm), shift=SHIFT
+        staged / "product_ira_min.con", apply_perm(product_atoms, perm), shift=SHIFT
     )
     ira_minimised = ira_permutation(reactant_atoms, product_atoms)
     ira_minimised["same_permutation_as_baker_geometries"] = (
@@ -1084,24 +1243,24 @@ def main() -> None:
 
     runs = {}
     for name, product_file in (
-        ("identity", DATA / "product_min.con"),
-        ("ira", DATA / "product_ira_min.con"),
+        ("identity", staged / "product_min.con"),
+        ("ira", staged / "product_ira_min.con"),
     ):
         band = run_band(
             binary,
             model,
             scratch,
             name,
-            DATA / "reactant_min.con",
+            staged / "reactant_min.con",
             product_file,
         )
         print(f"hessian {name}", flush=True)
         band["hessian"] = hessian_on(
             binary, model, band["_ts"], scratch / f"{name}_hess"
         )
-        trim(band["_work"], DATA / name, band["_text"])
-        write_ts(band["_ts"], DATA / name / "ts.con")
-        written = readcon.read_con(str(DATA / name / "ts.con"))[0]
+        trim(band["_work"], staged / name, band["_text"])
+        write_ts(band["_ts"], staged / name / "ts.con")
+        written = readcon.read_con(str(staged / name / "ts.con"))[0]
         band["ts_geometry"] = geometry(written)
         band["distances_A"] = {
             key: distance(written, *pair) for key, pair in PAIRS.items()
@@ -1212,11 +1371,12 @@ def main() -> None:
             },
         },
     }
-    (DATA / "results.json").write_text(
+    (staged / "results.json").write_text(
         json.dumps(payload, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(f"wrote {DATA / 'results.json'}", flush=True)
+    stage_or_verify(staged, DATA, overwrite=args.overwrite)
+    print(f"verified/wrote {DATA / 'results.json'}", flush=True)
 
 
 if __name__ == "__main__":
