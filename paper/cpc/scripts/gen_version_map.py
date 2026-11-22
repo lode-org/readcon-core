@@ -80,6 +80,8 @@ NO_BUILD = {
     "data/novel/fidelity.json",
     "data/novel/restart_diff.json",
     "data/novel/velocity.json",
+    # The Claisen band is an eOn and PET-MAD-S measurement. It names no readcon-core build.
+    "data/claisen/results.json",
     # Release metadata of eOn and of peer libraries, read from their upstream pages.
     "data/eon/readcon_pins.json",
     "data/peers/releases.json",

@@ -119,6 +119,7 @@ rule manuscript:
         "src/figures/generated/ase_mask.pdf",
         "src/figures/generated/bf_macros.tex",
         "src/figures/generated/case_macros.tex",
+        "src/figures/generated/claisen_order.pdf",
         "src/figures/generated/clauses_macros.tex",
         "src/figures/generated/corpus31_macros.tex",
         "src/figures/generated/corpus31_table.tex",
