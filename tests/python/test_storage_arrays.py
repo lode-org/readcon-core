@@ -9,7 +9,9 @@ must leave the atom cache empty. ``columns()`` stacks the identity fields.
 from __future__ import annotations
 
 import gc
+import random
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -635,3 +637,91 @@ def test_metadata_edit_is_written_before_atoms(tmp_path: Path) -> None:
     assert readcon.read_con(str(tmp_path / "listed.con"), n_threads=1)[
         0
     ].energy == pytest.approx(-999.5)
+
+
+def _one_species(readcon, symbol: str, n: int) -> list:
+    z = float(readcon.symbol_to_atomic_number(symbol))
+    return [
+        readcon.Atom(symbol, z, z, z, atom_id=int(z), vx=z, vy=z, vz=z)
+        for _ in range(n)
+    ]
+
+
+@pytest.mark.skipif(
+    not _free_threaded(),
+    reason="needs a free-threaded interpreter",
+)
+def test_free_threaded_reads_see_one_atom_list_state() -> None:
+    """Writers keep the list one species; a reader that sees two tore."""
+    import readcon
+
+    low, high = 48, 96
+    n_writers, n_readers, rounds = 2, 6, 400
+    pools = {name: _one_species(readcon, name, high) for name in ("He", "Li")}
+    frame = _fresh_vel_frame()
+    projection = frame.atoms
+    live = projection._race_list
+    live[:] = pools["He"][:low]
+    current = ["He"]
+    writer_lock = threading.Lock()
+    stop = threading.Event()
+    start = threading.Barrier(n_writers + n_readers)
+    seen: set[str] = set()
+
+    def write(seed: int) -> None:
+        rng = random.Random(seed)
+        start.wait()
+        while not stop.is_set():
+            # Writers serialize among themselves only. Readers take no
+            # lock, so each read races every write.
+            with writer_lock:
+                roll = rng.random()
+                if roll < 0.5:
+                    other = "Li" if current[0] == "He" else "He"
+                    live[:] = pools[other][: rng.randint(low, high)]
+                    current[0] = other
+                elif roll < 0.75 and len(live) < high:
+                    live.append(pools[current[0]][0])
+                elif len(live) > low:
+                    live.pop()
+
+    def uniform(name: str, values) -> str | None:
+        values = np.asarray(values)
+        if not low <= values.shape[0] <= high:
+            return f"{name}: {values.shape[0]} rows"
+        if np.unique(values).size != 1:
+            return f"{name}: mixed {np.unique(values).tolist()}"
+        return None
+
+    def read() -> list[str]:
+        start.wait()
+        torn: list[str] = []
+        for _ in range(rounds):
+            n = len(frame)
+            if not low <= n <= high:
+                torn.append(f"len: {n}")
+            symbols = list(frame.symbols())
+            seen.update(symbols)
+            checks = (
+                uniform("symbols", symbols),
+                uniform("atom_ids_array", frame.atom_ids_array()),
+                uniform("atomic_numbers", frame.atomic_numbers()),
+                uniform("coords_array", frame.coords_array()),
+                uniform("velocities_array", frame.velocities_array()),
+            )
+            torn.extend(check for check in checks if check is not None)
+        return torn
+
+    with ThreadPoolExecutor(max_workers=n_writers + n_readers) as pool:
+        writing = [pool.submit(write, seed) for seed in range(n_writers)]
+        try:
+            reading = [pool.submit(read) for _ in range(n_readers)]
+            torn = [entry for future in reading for entry in future.result()]
+        finally:
+            stop.set()
+        for future in writing:
+            future.result()
+
+    assert torn == [], f"{len(torn)} torn reads, first: {torn[:5]}"
+    assert seen == {"He", "Li"}
+    assert frame.atoms_fill_count == 1

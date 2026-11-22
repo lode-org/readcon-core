@@ -1629,6 +1629,15 @@ impl PyAtomSeq {
         Ok(popped)
     }
 
+    /// Debug-only list access for the free-threaded race regression.
+    #[cfg(debug_assertions)]
+    #[getter]
+    fn _race_list(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        let frame = self.frame.borrow(py);
+        frame.ensure_atoms(py)?;
+        Ok(frame.atoms.clone_ref(py))
+    }
+
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         Ok(format!("AtomSequence(n={})", self.frame.borrow(py).n_atoms()))
     }
