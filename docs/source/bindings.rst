@@ -41,7 +41,7 @@ task.
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Count frames (skip walk)                                            | ``iterators::count_frames``                    | ``readcon.count_frames``                                                    | n/a                                                                | ``count_frames``                                                 | ``rkr_count_frames``                                              | ``count_frames``                           |
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
-    | Coordinates on a loaded frame                                       | SoA on ``ConFrame``                            | ``frame.xyz`` (SoA copy); ``coords_array()`` walks ``.atoms``               | via frame fields                                                   | ``frame%xyz_ptr`` (zero-copy)                                    | ``rkr_frame_xyz_f64`` (zero-copy)                                 | ``xyz_f64()`` (zero-copy)                  |
+    | Coordinates on a loaded frame                                       | SoA on ``ConFrame``                            | ``frame.xyz`` (zero-copy on parsed frames); ``coords_array()`` ndarray      | via frame fields                                                   | ``frame%xyz_ptr`` (zero-copy)                                    | ``rkr_frame_xyz_f64`` (zero-copy)                                 | ``xyz_f64()`` (zero-copy)                  |
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Coordinate column                                                   | ``read_positions_with_threads``                | ``read_positions`` / ``read_coords``                                        | n/a                                                                | ``read_positions``                                               | ``rkr_read_positions`` / ``rkr_free_position_block``              | ``read_positions``                         |
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
@@ -251,7 +251,7 @@ Usage
         print(frame.cell)           # [f64, f64, f64]
         print(frame.angles)         # [f64, f64, f64]
         print(frame.has_velocities)
-        for atom in frame.atoms:
+        for atom in frame:           # live AtomView objects
             print(atom.symbol, atom.x, atom.y, atom.z, atom.mass)
             if atom.has_velocity:
                 print(atom.vx, atom.vy, atom.vz)
@@ -294,13 +294,25 @@ Types
     energy (v0.10.0+), has\_energy (v0.10.0+).
     Data fields are writable.
 
+``readcon.AtomView`` / ``readcon.AtomSequence``
+    ``frame[i]`` and direct frame iteration return live ``AtomView`` objects
+    backed by the frame's Rust columns. Assigning a view property updates both
+    the frame and an already-materialized compatibility atom projection.
+    ``frame.atoms`` is an ``AtomSequence`` whose indexing and iteration expose
+    the existing Python ``Atom`` projection used by earlier releases. Parsed
+    column access does not materialize those objects; first access to
+    ``frame.atoms`` does. Its assignment, deletion, ``append()``, ``insert()``
+    and ``extend()`` methods mutate the owning frame and preserve CON
+    type-group order. A direct frame slice is an independent ``ConFrame``.
+
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and
     optional headers and metadata (v0.4.0+).  Properties: cell, angles,
-    atoms (live list), has\_velocities, has\_forces, has\_energies
+    atoms (live ``AtomSequence``), has\_velocities, has\_forces, has\_energies
     (v0.10.0+), prebox\_header, postbox\_header, spec\_version (v0.6.0+),
     metadata (v0.6.0+, live dict of native JSON-compatible values),
-    energy, frame\_index, time, timestep, neb\_bead, neb\_band.
+    energy, frame\_index, time, timestep, neb\_bead, neb\_band,
+    ``source_text`` and its alias ``raw``.
     Methods: to\_ase(), from\_ase() (v0.4.0+), set\_metadata\_json(),
     set\_scalar\_metadata(), set\_string\_metadata(), set\_energy(),
     set\_frame\_index(), set\_time(), set\_timestep(), set\_neb\_bead(),
@@ -308,11 +320,18 @@ Types
     build\_atom\_id\_index() (v0.10.0+), coords\_array() (v0.10.0+),
     velocities\_array() (v0.10.0+), forces\_array() (v0.10.0+),
     energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+).
-    For a frame from a read, ``vel``, ``frc``, ``mass_column`` and, until
-    ``.atoms`` is used, the ``\*_array()`` methods other than ``coords_array()``
-    are read-only views of the parsed columns: no copy, and ``.copy()`` gives
-    a writeable array. ``symbols`` (a ``FrameSymbols``) gives every atom's
-    symbol as interned runs, without building ``atoms``.
+    For an unmodified parsed frame, ``vel``, ``frc``, ``mass_column`` and the
+    applicable ``\*_array()`` methods other than ``coords_array()`` are
+    read-only zero-copy views of parsed float64 columns; unsupported storage
+    dtypes or gathered fallback paths may allocate. ``.copy()`` gives a
+    writeable array. ``xyz`` is a writeable zero-copy coordinate view for a
+    parsed frame, and stores through it are visible to later writes.
+    Constructed frames and structurally edited frames may return owned arrays
+    instead. ``symbols`` (a ``FrameSymbols``) gives every atom's symbol as
+    interned runs without constructing per-atom Python objects.
+    Frames yielded by non-streaming ``iter_con`` expose the exact consumed
+    file substring through ``source_text`` / ``raw``. Batch reads, constructed
+    frames, streamed frames, slices, and mutated frames return ``None``.
     The constructor and ``from_ase()`` raise ``readcon.NonFiniteValue`` (a
     ``ValueError``) for a cell length or angle that is NaN or infinite, and
     for a ``lattice_vectors`` metadata matrix that holds one. The message names
