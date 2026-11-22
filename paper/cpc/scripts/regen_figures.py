@@ -12,6 +12,7 @@ from pathlib import Path
 
 import gen_figures
 import plot_figures as pf
+import plot_format_pareto
 import plot_restart_formats
 import plot_restart_ruhi
 import plot_restored
@@ -54,6 +55,7 @@ def main() -> int:
     run("gen_figures", gen_figures.main)
     run("structures_svg", plot_structures.main)
     run("restart_formats", plot_restart_formats.main)
+    run("format_pareto", plot_format_pareto.main)
     run("velocity", plot_supp.main)
     run("restart", plot_restart_ruhi.main)
     theme, settings = pf.house_style()

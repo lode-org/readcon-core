@@ -61,6 +61,7 @@ def test_plotters_write_included_figures(tmp_path: Path | None = None) -> None:
     perf = _load("plot_perf")
     structures = _load("plot_structures")
     restart = _load("plot_restart_formats")
+    pareto = _load("plot_format_pareto")
     ruhi = _load("plot_restart_ruhi")
     supp = _load("plot_supp")
     generated = _load("gen_figures")
@@ -72,6 +73,7 @@ def test_plotters_write_included_figures(tmp_path: Path | None = None) -> None:
         (perf, "OUT"),
         (structures, "OUT"),
         (ruhi, "OUT"),
+        (pareto, "OUT"),
         (generated, "OUT"),
         (mpi, "GEN"),
     ):
@@ -84,6 +86,7 @@ def test_plotters_write_included_figures(tmp_path: Path | None = None) -> None:
         ("plot_structures", structures.main),
         ("plot_restart_ruhi", ruhi.main),
         ("plot_restart_formats", restart.main),
+        ("plot_format_pareto", pareto.main),
         ("plot_supp", supp.main),
         ("gen_figures", generated.main),
         ("mpi_from_log", mpi.main),

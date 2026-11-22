@@ -535,19 +535,14 @@ Symbol & Meaning & Configuration key & Value \\
 
 \input{figures/generated/restart_main}
 
-The shortest CON round trip changes no coordinate, and the resumed band matches the uninterrupted band bit for bit, with the same \(\rfStepsCon\) steps, \(\rfModesCon\) free modes on the middle image, and the same coordinates and energy on every image (Figure~\ref{fig:restartfmt}).
+The shortest CON round trip changes no coordinate, and the resumed band matches the uninterrupted band bit for bit, with the same \(\rfStepsCon\) steps, \(\rfModesCon\) free modes on the middle image, and the same coordinates and energy on every image.
 Every force evaluation builds its EMT calculators afresh, so a step depends on the positions alone.
 The ASE trajectory with identifiers in tags and H5MD written and read with h5py return the same row.
 POSCAR with the height held as FixScaled moves one coordinate by \(\num{\rfFileScaledNum}\,\text{\AA}\) and shifts the resumed barrier by \(\num{\rfDeScaledLoNum}\) to \(\num{\rfDeScaledHiNum}\,\mathrm{eV}\).
 Six decimals move the file by \(\num{\rfFileSixNum}\,\text{\AA}\) and the barrier by \(\num{\rfDeSixNum}\,\mathrm{eV}\), and extended XYZ written by ASE moves them by \(\num{\rfFileXyzNum}\,\text{\AA}\) and \(\num{\rfDeXyzNum}\,\mathrm{eV}\), all in the same step count.
+Over the images of the stored EMT bands in \path{paper/cpc/data/failure/bands}, the energies of the shortest CON round trip and the ASE trajectory equal those of the uninterrupted band, and six decimals, extended XYZ and FixScaled POSCAR differ from them by at most \(\num{\bandDeSix}\), \(\num{\bandDeXyz}\) and \(\num{\bandDeScaled}\,\mathrm{eV}\).
 Each shift is printed to the significant figures on which repeat runs with the linear-algebra builds of four host generations agree, or as their range when they do not (Section~\ref*{sec:supp-restart}).
 Section~\ref*{sec:eon-band} of the supplementary material resumes a Morse band in the public eOn client in the same way.
-
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/restart_formats.pdf} \caption{\textbf{The CON 3.1 restart lies on the uninterrupted band.}
-Energy of each image above the first image, from the stored EMT bands.
-The uninterrupted band and the shortest CON 3.1 round trip overlie each other.
-Extended XYZ, six decimals and the ASE trajectory are drawn together.}
-\label{fig:restartfmt} \end{figure}
 
 \subsection{The mask and the prefactor}\label{sec:prefactor} A barrier is one number, but the harmonic prefactor needs the free modes at the saddle.
 In harmonic transition state theory the rate is \(k=\nu\exp(-\Delta E^\ddagger/k_{\mathrm{B}}T)\) with the Vineyard prefactor \cite{vineyardFrequencyFactorsIsotope1957}
@@ -579,12 +574,18 @@ The nearest-native panel reads different files that carry the same atoms and the
 NumPy reads an npy coordinate array, which has no cell, ASE, chemfiles and OVITO read extended XYZ, with the built-in reader of ASE in the ASE row, pymatgen \cite{ongPythonMaterialsGenomics2013} reads a POSCAR, and MDAnalysis reads a Protein Data Bank file with a crystal record.
 That Protein Data Bank row was measured with MDAnalysis 2.10.0.
 A row passes only when the atom count, the cell and the coordinates match, so the NumPy row fails the cell check.
-Table~\ref{tab:format-h2h} gives the per-format comparison of the cross-format campaign directory labeled v0.23.3, a directory name and not a release tag, measured with one commit on one host, \hhfHost{}, as the processor listing stored with that campaign reports it.
-readcon reads plain CON, binary CON and CON.zst, readcon-chemfiles has its own row, and for every reader the table gives the warm and cold median read, the peak resident set, the file size and the CON 3.1 fields that the format drops.
+Figure~\ref{fig:pareto} plots warm read time against file size for the cross-format campaign directory labeled v0.23.3, a directory name and not a release tag, measured with one commit on one host, \hhfHost{}, as the processor listing stored with that campaign reports it.
+readcon reads plain CON, binary CON and CON.zst, and Table~\ref*{tab:format-h2h} of the supplementary material gives, for every reader, the warm and cold median read, the peak resident set, the file size and the CON 3.1 fields that the format drops.
 Each median is the type-7 median of \hhfSamplesSubOneM{} samples below one million atoms and \hhfSamplesOneM{} at one million, each read in a fresh process on one thread.
 On that host, a fresh process reads one million atoms of CON in \hhfReadconConWarmOneM~s warm and \hhfReadconConColdOneM~s cold, from an \hhfReadconConBytesOneM-byte file, and peaks at \hhfReadconConPeakOneM~MiB, while the MDAnalysis mmCIF read of the same atoms takes \hhfMmcifWarmOneM~s and peaks at \hhfMmcifPeakOneM~MiB.
+\hhfFrontSentence{}
 
-\input{figures/generated/format_h2h}
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/format_pareto.pdf} \caption{\textbf{Warm read time against file size.}
+One point per reader and format from the records of Table~\ref*{tab:format-h2h} in the supplementary material, one frame at each size.
+The coral steps join the points that no other point beats on both axes.
+Teal points are readcon, labeled by format; filled points keep every CON 3.1 field, and hollow points drop one or round the coordinates.
+extxyz-ng, MDCompress and the MDAnalysis PDB reader past its five-digit atom serial cannot open these files and have no point.}
+\label{fig:pareto} \end{figure}
 
 Section~\ref*{sec:supp-readcon-db} of the supplementary material compares the companion campaign store readcon-db (\url{https://github.com/lode-org/readcon-db}) with the ASE database and gives the distributed read of a CON file over MPI ranks.
 
@@ -599,7 +600,7 @@ A computed barrier can be reproduced from a file only when every reader returns 
 CON 3.1 takes that route for the saddle-search checkpoint.
 H5MD and extended XYZ are the nearest formats, and the h5py and ASE routes of Section~\ref{sec:cases} carry all four fields through a convention added on top of each, but that convention lives in one reader again.
 The drift between published readcon-core wheels in Section~\ref{sec:conformance} is the same failure inside one project, and the corpus and the version rule of Eq.~\eqref{eq:version} contain it, since every case that a release decides enters the text and the corpus, and a later minor never makes a reader reject a file that an earlier minor requires it to accept.
-The cost is a text format, whose file sizes and read times Table~\ref{tab:format-h2h} gives beside those of the binary formats, and readcon-db keeps a shuffled, compressed cache for campaigns where storage matters.
+The cost is a text format, whose file sizes and read times Figure~\ref{fig:pareto} sets beside those of the binary formats, and readcon-db keeps a shuffled, compressed cache for campaigns where storage matters.
 
 \section{Conclusions}\label{sec:conclusions}
 A resumed saddle search repeats an interrupted run only when the checkpoint keeps the per-component constraints, the atom identifiers, the time unit of the velocities and the binary64 coordinates as written.

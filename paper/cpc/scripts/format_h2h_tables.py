@@ -24,7 +24,8 @@ are not read here; the one-million CON row is the recorded warm read.
 Outputs (``BENCH_GENERATED``, default ``src/figures/generated``):
 
 * ``format_h2h.tex``         Table ``tab:format-h2h``, one longtable grouped by structure;
-* ``format_h2h_macros.tex``  the machine line and the headline numbers the prose quotes.
+* ``format_h2h_macros.tex``  the machine line, the headline numbers the prose quotes and
+  the Pareto front of each structure that ``plot_format_pareto.py`` draws.
 
     python paper/cpc/scripts/format_h2h_tables.py
 """
@@ -416,6 +417,101 @@ def table() -> str:
     return HEADER + "\n".join(body) + "\n"
 
 
+# The structures of the Pareto figure, each with the words the prose uses for its size.
+PARETO_STRUCTURES = (
+    ("1k", "one thousand"),
+    ("100k", "one hundred thousand"),
+    ("1M", "one million"),
+)
+_SHOWN_FORMAT = {"CON (binary)": "binary CON", "CON (zstd)": "CON.zst"}
+
+
+def pareto_points(structure: str) -> list[dict]:
+    """One point per arm that read the file: warm median, file size, peak and losses.
+
+    An arm the reader cannot open has no warm median and is left out.  A point
+    is lossless when its Drops cell is ``none``, with no rounding residual.
+    """
+    dirs = dict(STRUCTURES)[structure]
+    rows = _reads(structure, dirs)
+    points = []
+    for arm, reader, fmt in ARMS:
+        caches = rows.get(arm)
+        if not caches:
+            continue
+        warm = caches.get("warm")
+        if warm is None or warm.get("median_s") is None:
+            continue
+        present = [r for r in (warm, caches.get("cold")) if r is not None]
+        sizes = [r["file_bytes"] for r in present if r.get("file_bytes") is not None]
+        peaks = [r["rss_bytes"] for r in present if r.get("rss_bytes") is not None]
+        points.append(
+            {
+                "arm": arm,
+                "reader": reader,
+                "format": _SHOWN_FORMAT.get(fmt, fmt),
+                "seconds": warm["median_s"],
+                "bytes": max(sizes),
+                "peak_bytes": max(peaks) if peaks else None,
+                "lossless": drops(present) == "none",
+            }
+        )
+    return points
+
+
+def pareto_front(points: list[dict]) -> list[dict]:
+    """The points that no other point beats on both warm time and file size, fastest first."""
+    front = [
+        p
+        for p in points
+        if not any(
+            q["seconds"] <= p["seconds"]
+            and q["bytes"] <= p["bytes"]
+            and (q["seconds"] < p["seconds"] or q["bytes"] < p["bytes"])
+            for q in points
+        )
+    ]
+    return sorted(front, key=lambda p: p["seconds"])
+
+
+def _listing(names: list[str]) -> str:
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def _by_size(label_of, joint: str) -> str:
+    """Group the sizes that share a label: ``A at one thousand atoms{joint}B at ...``."""
+    groups: dict[str, list[str]] = {}
+    for name, words in PARETO_STRUCTURES:
+        groups.setdefault(label_of(name), []).append(words)
+    return joint.join(
+        f"{label} at {_listing(sizes)} atoms" for label, sizes in groups.items()
+    )
+
+
+def _name(point: dict) -> str:
+    return f"{point['reader']} {point['format']}"
+
+
+def front_sentence() -> str:
+    """The front at each size and the fastest read, as the prose under the Pareto figure prints them."""
+    for name, _words in PARETO_STRUCTURES:
+        lossless = {p["reader"] for p in pareto_points(name) if p["lossless"]}
+        if lossless != {"readcon"}:
+            raise SystemExit(
+                f"{name}: readers that keep every CON 3.1 field are {sorted(lossless)}"
+            )
+    front = _by_size(
+        lambda s: _listing([_name(p) for p in pareto_front(pareto_points(s))]), ", and "
+    )
+    fastest = _by_size(
+        lambda s: _name(min(pareto_points(s), key=lambda p: p["seconds"])), " and "
+    )
+    return tex(
+        f"The front holds {front}. The fastest read is {fastest}. "
+        "Only the readcon points keep every CON 3.1 field."
+    )
+
+
 def _one_million_con() -> dict[str, dict]:
     rows = _reads("1M", ("1m",))
     return rows["readcon-con"]
@@ -469,6 +565,7 @@ def macros() -> str:
         ("hhfReadconConPeakOneM", _peak_mib(con)),
         ("hhfMmcifWarmOneM", sig(mmcif["warm"]["median_s"])),
         ("hhfMmcifPeakOneM", _peak_mib(mmcif)),
+        ("hhfFrontSentence", front_sentence()),
     ]
     names = [n for n, _ in pairs]
     if len(names) != len(set(names)):

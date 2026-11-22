@@ -6,6 +6,8 @@ Every value is read from a committed record:
 * ``data/failure/restart_formats.csv`` (Table ``tab:restartfmt``) and its record ``restart_formats.json``
   (the step cap and the host of the roundoff residues), and the reruns ``data/failure/restart_kernels/*.json``,
   whose agreement sets the figures of each residue,
+* ``data/failure/bands/*.npz`` (the stored band of each route and the uninterrupted band, whose
+  largest energy difference over the images the restart prose prints),
 * ``data/restart_walls/restart_walls.json`` (the runtime of the walls task and its host),
 * ``evidence/results/e1_restart.json`` and ``e1_restart_lbfgs_control.json`` (eOn Morse band),
 * ``data/failure/matrix.json`` (survey, with the row counts by pairing), ``data/failure/drift_extxyz.json`` and
@@ -27,6 +29,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "figures" / "generated" / "case_macros.tex"
 WALLS = "data/restart_walls/restart_walls.json"
+BANDS = "data/failure/bands"
+# The stored band of each resumed route, by the key its macros carry.
+BAND_ROUTES = (
+    ("Con", "CON_3_1__shortest_round_trip"),
+    ("Traj", "ASE_trajectory__ids_in_tags"),
+    ("Six", "CON_3_1__six_decimals"),
+    ("Xyz", "extended_XYZ__ASE"),
+    ("Scaled", "POSCAR__ASE___FixScaled_z"),
+)
 
 
 def sci(value: float, digits: int = 3) -> str:
@@ -123,6 +134,23 @@ def main() -> None:
             raise SystemExit(
                 f"{route} does not resume to the uninterrupted band bit for bit: {row}"
             )
+
+    # Largest energy difference over the images of each stored band from the uninterrupted band.
+    import numpy as np
+
+    bands = ROOT / BANDS
+    reference = np.load(bands / "uninterrupted.npz")["energies"]
+    for key, stem in BAND_ROUTES:
+        gap = float(
+            np.max(np.abs(np.load(bands / f"{stem}.npz")["energies"] - reference))
+        )
+        if key in ("Con", "Traj"):
+            if gap:
+                raise SystemExit(
+                    f"{stem} band differs from the uninterrupted band by {gap} eV"
+                )
+            continue
+        m[f"bandDe{key}"] = f"{gap:.1e}".replace("e-0", "e-")
 
     walls = json.loads((ROOT / WALLS).read_text())
     m["rfWallsTaskMin"] = str(round(walls["task_s"] / 60))
@@ -316,6 +344,7 @@ def main() -> None:
                 "eOne",
                 "evidence/results/e1_restart.json, evidence/results/e1_restart_lbfgs_control.json",
             ),
+            ("band", f"{BANDS}/*.npz"),
             ("survey", "data/failure/matrix.json"),
             ("drift", "data/failure/drift_extxyz.json, data/failure/drift_extxyz.csv"),
         ):
