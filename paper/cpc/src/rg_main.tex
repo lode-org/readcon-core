@@ -530,7 +530,7 @@ Symbol & Meaning & Configuration key & Value \\
 The shortest CON round trip, the ASE trajectory with identifiers in tags and H5MD written and read with h5py change no coordinate, and each resumed band matches the uninterrupted band bit for bit, with the same \(\rfStepsCon\) steps and \(\rfModesCon\) free modes on the middle image.
 Every force evaluation builds its EMT calculators afresh, so a step depends on the positions alone.
 The other routes converge in the same step count from a file that has moved: six decimals move it by \(\num{\rfFileSixNum}\,\text{\AA}\), extended XYZ written by ASE by \(\num{\rfFileXyzNum}\,\text{\AA}\), and POSCAR with the height held as FixScaled by \(\num{\rfFileScaledNum}\,\text{\AA}\), each to the figures on which repeat runs with the linear-algebra builds of four host generations agree (Section~\ref*{sec:supp-restart}).
-On the stored bands in \path{paper/cpc/data/failure/bands}, no image energy of these three routes differs from the uninterrupted band by more than \(\num{\bandDeSix}\), \(\num{\bandDeXyz}\) and \(\num{\bandDeScaled}\,\mathrm{eV}\), in that order.
+On the stored bands, no image energy of these three routes differs from the uninterrupted band by more than \(\num{\bandDeSix}\), \(\num{\bandDeXyz}\) and \(\num{\bandDeScaled}\,\mathrm{eV}\), in that order.
 Section~\ref*{sec:eon-band} of the supplementary material resumes a Morse band in the public eOn client in the same way.
 
 \subsection{The mask and the prefactor}\label{sec:prefactor} A barrier is one number, but the harmonic prefactor needs the free modes at the saddle.
@@ -565,8 +565,8 @@ The dotted bond in the Baker-order image is the C--C bond that forms.}
 Section~\ref*{sec:host} of the supplementary material gives the host log of the release, main-branch, ASE and eOn readers on one synthetic CON file, on an \texttt{x86\_64} machine with 8 cores.
 
 \subsection{Like-for-like reads}\label{sec:like}
-The like-for-like record is \path{paper/cpc/bench-like-for-like/results/summary.csv}, measured on one machine with one thread pinned to cpu 0, and every arm on an input matched the frame count, the atom count and the position checksum.
-The authors maintain both eOn and readcon, so the comparison is in-house: the former reader is \path{eon/fileio.py}, the last Python reader before eOn delegated CON parsing to readcon, through which current eOn reads CON files.
+The like-for-like panel was measured on one machine with one thread pinned to one core, and every arm on an input matched the frame count, the atom count and the position checksum.
+The authors maintain both eOn and readcon, so the comparison is in-house: the former reader is the \texttt{eon.fileio} module, the last Python reader before eOn delegated CON parsing to readcon, through which current eOn reads CON files.
 
 \input{figures/generated/like_section}
 
