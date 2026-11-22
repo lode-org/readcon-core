@@ -1018,7 +1018,18 @@ def check_conformance() -> str:
         "totals"
     ]
     version = (ROOT.parents[1] / "VERSION").read_text().strip()
-    coverage_record = f"clause_coverage-{version}.json"
+    spec_blob8 = subprocess.run(
+        ["git", "-C", str(REPO), "hash-object", str(REPO / "docs" / "orgmode" / "spec.org")],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()[:8]
+    blob_coverage = f"clause_coverage-{version}-{spec_blob8}.json"
+    coverage_record = (
+        blob_coverage
+        if (ROOT / "data" / "spec" / blob_coverage).is_file()
+        else f"clause_coverage-{version}.json"
+    )
     clauses = json.loads((ROOT / "data" / "spec" / coverage_record).read_text())[
         "totals"
     ]

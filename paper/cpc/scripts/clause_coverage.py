@@ -32,6 +32,7 @@ import ast
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -48,8 +49,28 @@ INDEP = ROOT / "scripts" / "indep_reader.py"
 TEST_ROOTS = ("tests", "src")
 SKIP_DIRS = {"target", "build", "__pycache__"}
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
-SUPERSEDES = ROOT / "data" / "spec" / "clause_coverage.json"
-OUT = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}.json"
+
+
+def _default_paths() -> tuple[Path, Path]:
+    base = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}.json"
+    blob8 = subprocess.run(
+        ["git", "-C", str(REPO), "hash-object", str(SPEC)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()[:8]
+    by_blob = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}-{blob8}.json"
+    if by_blob.is_file():
+        return base, by_blob
+    if base.is_file():
+        existing = json.loads(base.read_text(encoding="utf-8")).get("spec", {}).get("sha256")
+        if existing != hashlib.sha256(SPEC.read_bytes()).hexdigest():
+            return base, by_blob
+        return ROOT / "data" / "spec" / "clause_coverage.json", base
+    return ROOT / "data" / "spec" / "clause_coverage.json", base
+
+
+SUPERSEDES, OUT = _default_paths()
 MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)
@@ -341,7 +362,7 @@ def build() -> dict:
     }
 
 
-def macros(record: dict) -> str:
+def macros(record: dict, out: Path = OUT) -> str:
     t = record["totals"]
     values = {
         "clauseTotal": t["clauses"],
@@ -353,7 +374,7 @@ def macros(record: dict) -> str:
         "clauseTested": t["tests"],
     }
     return (
-        f"% Written by paper/cpc/scripts/clause_coverage.py from data/spec/{OUT.name}.\n"
+        f"% Written by paper/cpc/scripts/clause_coverage.py from data/spec/{out.name}.\n"
         + "".join(
             f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
         )
@@ -385,7 +406,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     if args.macros:
-        MACROS.write_text(macros(json.loads(args.out.read_text())))
+        MACROS.write_text(macros(json.loads(args.out.read_text()), args.out))
         print(f"wrote {provenance.portable(MACROS)}")
         return 0
     record = build()
@@ -398,7 +419,10 @@ def main() -> int:
     if args.check:
         stale = [
             path.name
-            for path, want in ((args.out, text(record)), (MACROS, macros(record)))
+            for path, want in (
+                (args.out, text(record)),
+                (MACROS, macros(record, args.out)),
+            )
             if not path.is_file() or path.read_text() != want
         ]
         if stale:
@@ -410,7 +434,7 @@ def main() -> int:
         print(f"{args.out.name} and {MACROS.name} match the sources")
         return 0
     args.out.write_text(text(record))
-    MACROS.write_text(macros(record))
+    MACROS.write_text(macros(record, args.out))
     print(f"wrote {provenance.portable(args.out)} and {provenance.portable(MACROS)}")
     return 0
 
