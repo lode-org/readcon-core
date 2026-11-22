@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use pyo3::exceptions::PyIndexError;
+use pyo3::sync::MutexExt;
 use pyo3::types::PySliceIndices;
 
 use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
@@ -1853,6 +1854,19 @@ impl PyAtomListRace {
         }
         Ok(())
     }
+
+    /// Take the writer lock without blocking the interpreter, then confirm
+    /// `__exit__` has not already resynced the frame.
+    ///
+    /// Nothing that can run caller code may happen while the guard is held.
+    fn write_guard(&self, py: Python<'_>) -> PyResult<std::sync::MutexGuard<'_, ()>> {
+        let guard = self
+            .write
+            .lock_py_attached(py)
+            .unwrap_or_else(|err| err.into_inner());
+        self.ensure_active()?;
+        Ok(guard)
+    }
 }
 
 #[pymethods]
@@ -1894,7 +1908,10 @@ impl PyAtomListRace {
             .state
             .swap(RACE_CLOSED, std::sync::atomic::Ordering::AcqRel);
         if prev == RACE_ACTIVE {
-            let _write = self.write.lock().unwrap_or_else(|err| err.into_inner());
+            let _write = self
+                .write
+                .lock_py_attached(py)
+                .unwrap_or_else(|err| err.into_inner());
             let mut frame = self.frame.borrow_mut(py);
             let snaps = frame.snapshot_atoms(py);
             frame.replace_atoms(py, snaps)?;
@@ -1909,7 +1926,6 @@ impl PyAtomListRace {
 
     fn replace(&self, py: Python<'_>, atoms: &Bound<'_, PyAny>) -> PyResult<()> {
         self.ensure_active()?;
-        let _write = self.write.lock().unwrap_or_else(|err| err.into_inner());
         let mut datums = Vec::new();
         let fresh = PyList::empty(py);
         for item in atoms.try_iter()? {
@@ -1925,6 +1941,7 @@ impl PyAtomListRace {
             fresh.append(item)?;
         }
         validate_race_atoms(&datums)?;
+        let _write = self.write_guard(py)?;
         let frame = self.frame.borrow(py);
         let list = frame.atoms.bind(py);
         list.as_any()
@@ -1934,7 +1951,6 @@ impl PyAtomListRace {
 
     fn append(&self, py: Python<'_>, atom: &Bound<'_, PyAny>) -> PyResult<()> {
         self.ensure_active()?;
-        let _write = self.write.lock().unwrap_or_else(|err| err.into_inner());
         let datum = atom
             .cast::<PyAtomDatum>()
             .map_err(|_| PyTypeError::new_err("ConFrame atom cache must hold readcon.Atom objects"))?
@@ -1942,6 +1958,7 @@ impl PyAtomListRace {
             .clone();
         validate_race_atom_spread(&datum)?;
         let incoming_mass = datum.mass.unwrap_or(0.0);
+        let _write = self.write_guard(py)?;
         let frame = self.frame.borrow(py);
         for existing in read_atom_list(&frame.atoms.bind(py))? {
             if existing.atom_id == datum.atom_id {
@@ -1965,7 +1982,7 @@ impl PyAtomListRace {
 
     fn pop(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         self.ensure_active()?;
-        let _write = self.write.lock().unwrap_or_else(|err| err.into_inner());
+        let _write = self.write_guard(py)?;
         let frame = self.frame.borrow(py);
         Ok(frame.atoms.bind(py).as_any().call_method0("pop")?.unbind())
     }
