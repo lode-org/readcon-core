@@ -641,10 +641,130 @@ def test_metadata_edit_is_written_before_atoms(tmp_path: Path) -> None:
 
 def _one_species(readcon, symbol: str, n: int) -> list:
     z = float(readcon.symbol_to_atomic_number(symbol))
+    base_id = int(z) * 1000
     return [
-        readcon.Atom(symbol, z, z, z, atom_id=int(z), vx=z, vy=z, vz=z)
-        for _ in range(n)
+        readcon.Atom(symbol, z, z, z, atom_id=base_id + i, vx=z, vy=z, vz=z)
+        for i in range(n)
     ]
+
+
+def test_atom_sequence_pop_semantics() -> None:
+    import readcon
+
+    frame = _fresh_vel_frame()
+    n0 = len(frame)
+    a0 = frame.atoms[0]
+    last = frame.atoms[-1]
+
+    popped = frame.atoms.pop()
+    assert popped is last
+    assert len(frame) == len(frame.atoms) == n0 - 1
+    assert frame.atoms[0] is a0
+
+    # The popped atom is detached from the frame.
+    popped.x = 777.0
+    assert not np.any(np.isclose(frame.coords_array()[:, 0], 777.0))
+    assert "777" not in readcon.write_con_string([frame])
+
+    # Earlier-held atoms stay attached to the frame.
+    a0.x = 123.5
+    assert frame[0].x == pytest.approx(123.5)
+    assert frame.coords_array()[0, 0] == pytest.approx(123.5)
+    back = readcon.read_con_string(readcon.write_con_string([frame]))[0]
+    assert back[0].x == pytest.approx(123.5)
+
+    first = frame.atoms.pop(0)
+    assert first is a0
+    assert len(frame) == len(frame.atoms) == n0 - 2
+
+    for bad in (len(frame), -(len(frame) + 1)):
+        with pytest.raises(IndexError):
+            frame.atoms.pop(bad)
+
+    while len(frame.atoms):
+        frame.atoms.pop()
+    assert len(frame) == 0
+    with pytest.raises(IndexError):
+        frame.atoms.pop()
+
+
+def test_atom_list_race_keeps_frame_consistent_and_writable() -> None:
+    import readcon
+
+    frame = _fresh_vel_frame()
+    assert not hasattr(frame.atoms, "_race_list")
+
+    he = _one_species(readcon, "He", 6)
+    with readcon._atom_list_race(frame) as live:
+        with pytest.raises(TypeError):
+            live.replace(["not-an-atom"])
+        with pytest.raises(TypeError):
+            live.append("not-an-atom")
+        with pytest.raises(ValueError):
+            live.replace([he[0], he[0]])
+        with pytest.raises(ValueError):
+            live.replace(
+                [
+                    readcon.Atom("He", 1.0, 2.0, 3.0, atom_id=10, mass=4.0),
+                    readcon.Atom("He", 4.0, 5.0, 6.0, atom_id=11, mass=5.0),
+                ]
+            )
+        with pytest.raises(ValueError):
+            live.replace(
+                [
+                    readcon.Atom(
+                        "He", 1.0, 2.0, 3.0, atom_id=10, sx=-1.0, sy=0.0, sz=0.0
+                    )
+                ]
+            )
+
+        live.replace(he[:5])
+        assert len(live) == len(frame) == len(frame.atoms) == 5
+        with pytest.raises(ValueError):
+            live.append(he[0])
+        with pytest.raises(ValueError):
+            live.append(readcon.Atom("He", 2.0, 2.0, 2.0, atom_id=2999, mass=5.0))
+        with pytest.raises(ValueError):
+            live.append(
+                readcon.Atom(
+                    "He", 2.0, 2.0, 2.0, atom_id=2998, sx=-0.5, sy=0.0, sz=0.0
+                )
+            )
+
+        live.append(he[5])
+        assert len(live) == len(frame) == len(frame.atoms) == 6
+        removed = live.pop()
+        assert removed is he[5]
+        assert len(live) == len(frame) == len(frame.atoms) == 5
+
+        during = readcon.read_con_string(readcon.write_con_string([frame]))[0]
+        assert len(during) == 5
+        assert during.atom_ids_array().tolist() == [a.atom_id for a in he[:5]]
+
+    with pytest.raises(RuntimeError):
+        live.replace(he[:2])
+    with pytest.raises(RuntimeError):
+        live.append(he[5])
+    with pytest.raises(RuntimeError):
+        live.pop()
+    with pytest.raises(RuntimeError):
+        len(live)
+    with pytest.raises(RuntimeError):
+        with live:
+            pass
+
+    assert len(frame) == len(frame.atoms) == 5
+    after = readcon.read_con_string(readcon.write_con_string([frame]))[0]
+    assert len(after) == 5
+    assert after.atom_ids_array().tolist() == [a.atom_id for a in he[:5]]
+
+    popped = frame.atoms.pop()
+    assert popped is he[4]
+    assert len(frame) == len(frame.atoms) == 4
+    frame.atoms.append(he[5])
+    assert len(frame) == len(frame.atoms) == 5
+    final = readcon.read_con_string(readcon.write_con_string([frame]))[0]
+    assert len(final) == 5
 
 
 @pytest.mark.skipif(
@@ -659,69 +779,72 @@ def test_free_threaded_reads_see_one_atom_list_state() -> None:
     n_writers, n_readers, rounds = 2, 6, 400
     pools = {name: _one_species(readcon, name, high) for name in ("He", "Li")}
     frame = _fresh_vel_frame()
-    projection = frame.atoms
-    live = projection._race_list
-    live[:] = pools["He"][:low]
     current = ["He"]
     writer_lock = threading.Lock()
     stop = threading.Event()
     start = threading.Barrier(n_writers + n_readers)
     seen: set[str] = set()
 
-    def write(seed: int) -> None:
-        rng = random.Random(seed)
-        start.wait()
-        while not stop.is_set():
-            # Writers serialize among themselves only. Readers take no
-            # lock, so each read races every write.
-            with writer_lock:
-                roll = rng.random()
-                if roll < 0.5:
-                    other = "Li" if current[0] == "He" else "He"
-                    live[:] = pools[other][: rng.randint(low, high)]
-                    current[0] = other
-                elif roll < 0.75 and len(live) < high:
-                    live.append(pools[current[0]][0])
-                elif len(live) > low:
-                    live.pop()
+    with readcon._atom_list_race(frame) as live:
+        live.replace(pools["He"][:low])
 
-    def uniform(name: str, values) -> str | None:
-        values = np.asarray(values)
-        if not low <= values.shape[0] <= high:
-            return f"{name}: {values.shape[0]} rows"
-        if np.unique(values).size != 1:
-            return f"{name}: mixed {np.unique(values).tolist()}"
-        return None
+        def write(seed: int) -> None:
+            rng = random.Random(seed)
+            start.wait()
+            while not stop.is_set():
+                # Writers serialize among themselves only. Readers take no
+                # lock, so each read races every write.
+                with writer_lock:
+                    roll = rng.random()
+                    if roll < 0.5:
+                        other = "Li" if current[0] == "He" else "He"
+                        live.replace(pools[other][: rng.randint(low, high)])
+                        current[0] = other
+                    elif roll < 0.75 and len(live) < high:
+                        live.append(pools[current[0]][len(live)])
+                    elif len(live) > low:
+                        live.pop()
 
-    def read() -> list[str]:
-        start.wait()
-        torn: list[str] = []
-        for _ in range(rounds):
-            n = len(frame)
-            if not low <= n <= high:
-                torn.append(f"len: {n}")
-            symbols = list(frame.symbols())
-            seen.update(symbols)
-            checks = (
-                uniform("symbols", symbols),
-                uniform("atom_ids_array", frame.atom_ids_array()),
-                uniform("atomic_numbers", frame.atomic_numbers()),
-                uniform("coords_array", frame.coords_array()),
-                uniform("velocities_array", frame.velocities_array()),
-            )
-            torn.extend(check for check in checks if check is not None)
-        return torn
+        def uniform(name: str, values) -> str | None:
+            values = np.asarray(values)
+            if not low <= values.shape[0] <= high:
+                return f"{name}: {values.shape[0]} rows"
+            if np.unique(values).size != 1:
+                return f"{name}: mixed {np.unique(values).tolist()}"
+            return None
 
-    with ThreadPoolExecutor(max_workers=n_writers + n_readers) as pool:
-        writing = [pool.submit(write, seed) for seed in range(n_writers)]
-        try:
-            reading = [pool.submit(read) for _ in range(n_readers)]
-            torn = [entry for future in reading for entry in future.result()]
-        finally:
-            stop.set()
-        for future in writing:
-            future.result()
+        def read() -> list[str]:
+            start.wait()
+            torn: list[str] = []
+            for _ in range(rounds):
+                n = len(frame)
+                if not low <= n <= high:
+                    torn.append(f"len: {n}")
+                symbols = list(frame.symbols())
+                seen.update(symbols)
+                checks = (
+                    uniform("symbols", symbols),
+                    uniform("atom_ids_array", frame.atom_ids_array() // 1000),
+                    uniform("atomic_numbers", frame.atomic_numbers()),
+                    uniform("coords_array", frame.coords_array()),
+                    uniform("velocities_array", frame.velocities_array()),
+                )
+                torn.extend(check for check in checks if check is not None)
+            return torn
+
+        with ThreadPoolExecutor(max_workers=n_writers + n_readers) as pool:
+            writing = [pool.submit(write, seed) for seed in range(n_writers)]
+            try:
+                reading = [pool.submit(read) for _ in range(n_readers)]
+                torn = [entry for future in reading for entry in future.result()]
+            finally:
+                stop.set()
+            for future in writing:
+                future.result()
 
     assert torn == [], f"{len(torn)} torn reads, first: {torn[:5]}"
     assert seen == {"He", "Li"}
     assert frame.atoms_fill_count == 1
+    assert len(frame) == len(frame.atoms)
+    roundtrip = readcon.read_con_string(readcon.write_con_string([frame]))[0]
+    assert len(roundtrip) == len(frame)
