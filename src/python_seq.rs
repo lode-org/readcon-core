@@ -831,6 +831,7 @@ impl PyConFrame {
             postbox_header: self.postbox_header.clone(),
             atoms: py_atoms_to_list(py, &atoms)?,
             atoms_ready: std::sync::atomic::AtomicBool::new(true),
+            atoms_fills: std::sync::atomic::AtomicUsize::new(0),
             atoms_init: std::sync::Mutex::new(()),
             spec_version: self.spec_version,
             metadata,
@@ -1747,6 +1748,18 @@ impl PyAtomSeq {
         let mut snaps = frame.snapshot_atoms(py);
         snaps.extend(extra);
         frame.replace_atoms(py, snaps)
+    }
+
+    #[pyo3(signature = (index = -1))]
+    fn pop(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
+        let mut frame = exclusive(self.frame.bind(py))?;
+        frame.ensure_atoms(py)?;
+        let index = frame.normalize_index(index)?;
+        let popped = frame.atoms.bind(py).get_item(index)?.unbind();
+        let mut snaps = frame.snapshot_atoms(py);
+        snaps.remove(index);
+        frame.replace_atoms(py, snaps)?;
+        Ok(popped)
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
