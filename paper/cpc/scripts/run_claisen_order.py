@@ -12,9 +12,11 @@ CON 3.1 round trip and a POSCAR round trip induce on the product.
 
 The checkpoint and the exported ``.pt`` are not written into the tree.
 Set ``CLAISEN_PT`` to an existing export, or ``CLAISEN_CKPT`` to a
-checkpoint that ``mtt export`` can turn into one. ``CLAISEN_XYZ`` may
-point at a copy of the Baker file; otherwise the committed copy under
-``data/claisen/`` is used, and if that is absent the script downloads it.
+checkpoint that ``mtt export`` can turn into one. Either file whose
+SHA-256 is not the digest ``data/claisen/results.json`` records stops
+the run. ``CLAISEN_XYZ`` may point at a copy of the Baker file;
+otherwise the committed copy under ``data/claisen/`` is used, and if
+that is absent the script downloads it.
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ CACHE = Path(os.environ.get("CLAISEN_CACHE", "/tmp/claisen-src"))
 
 XYZ_SHA256 = "35122ef230cdeea2031b8a1c1e706cf34930080805e00daac113adf9831ec269"
 CKPT_SHA256 = "8d5e1588c70f7a4998940e7b535ab84aeb42c0f2253c889d4af23a1a8c6fd553"
+PT_SHA256 = "d65f5d0599f3dbee0f14e6e47a85861910b833e6849d4d1abaaafdade12999b1"
 XYZ_URL = (
     "https://raw.githubusercontent.com/HaoZeke/nebmmf_repro/"
     "939c2d9beaf9a5b6af61eb10af90f06156e6b4e4/"
@@ -87,6 +90,14 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def require_sha256(path: Path, expected: str, what: str) -> None:
+    found = sha256(path)
+    if found != expected:
+        raise SystemExit(
+            f"{what} sha256 {found} does not match the recorded {expected}"
+        )
+
+
 def fetch(url: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     urllib.request.urlretrieve(url, dest)
@@ -116,18 +127,16 @@ def ensure_model() -> Path:
         path = Path(override)
         if not path.is_file():
             raise SystemExit(f"CLAISEN_PT is not a file: {path}")
+        require_sha256(path, PT_SHA256, "PET-MAD-S torchscript")
         return path
     exported = CACHE / "pet-mad-s-v1.1.0.pt"
     if exported.is_file():
+        require_sha256(exported, PT_SHA256, "PET-MAD-S torchscript")
         return exported
     ckpt = Path(os.environ.get("CLAISEN_CKPT", CACHE / "pet-mad-s-v1.1.0.ckpt"))
     if not ckpt.is_file():
         fetch(CKPT_URL, ckpt)
-    found = sha256(ckpt)
-    if found != CKPT_SHA256:
-        raise SystemExit(
-            f"PET-MAD-S checkpoint sha256 {found} does not match {CKPT_SHA256}"
-        )
+    require_sha256(ckpt, CKPT_SHA256, "PET-MAD-S checkpoint")
     mtt = shutil.which("mtt")
     if mtt is None:
         raise SystemExit(
@@ -140,6 +149,7 @@ def ensure_model() -> Path:
     )
     if not exported.is_file():
         raise SystemExit(f"mtt export wrote no {exported}")
+    require_sha256(exported, PT_SHA256, "PET-MAD-S torchscript")
     return exported
 
 
