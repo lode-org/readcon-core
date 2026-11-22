@@ -8,8 +8,10 @@ from numbers_lib import Rule, jget, load_json
 
 DOC = "rg_main.tex"
 REC = "data/claisen/results.json"
-HERE = (f"{DOC}~Baker transition-state set|band reaches a largest atomic force|"
-        "IRA shape matching|permuted onto the reactant|PET-MAD-S",)
+HERE = (
+    f"{DOC}~Baker transition-state set|band reaches a largest atomic force|"
+    "IRA shape matching|permuted onto the reactant|PET-MAD-S",
+)
 UNIT = (f"{DOC}~161i",)
 
 NEB = load_json(REC)["neb"]
@@ -31,8 +33,13 @@ if abs(_FREQ - 161) > 0.5:
     raise SystemExit(f"{REC}: imaginary frequency {_FREQ} does not round to 161")
 
 RULES: list[Rule] = [
-    Rule("17", int(re.search(r"entry (\d+)", jget(REC, "case")).group(1)), REC,
-         "Baker entry number in case", HERE),
+    Rule(
+        "17",
+        int(re.search(r"entry (\d+)", jget(REC, "case")).group(1)),
+        REC,
+        "Baker entry number in case",
+        HERE,
+    ),
     Rule("14", jget(REC, "atoms"), REC, "atoms", HERE),
     Rule("0.05", NEB["converged_force_eV_A"], REC, "neb.converged_force_eV_A", HERE),
     Rule("24", NEB["stage2"]["images"], REC, "neb.stage2.images", HERE),
@@ -40,13 +47,36 @@ RULES: list[Rule] = [
     Rule("0.631", jget(REC, "identity.barrier_eV"), REC, "identity.barrier_eV", HERE),
     # 161i is one token, so the scanner never emits 161. cm^{-1} is the printed -1.
     Rule("-1", -1, REC, "exponent of cm^{-1} beside the imaginary frequency", UNIT),
-    Rule("2.11", jget(REC, "ira.hausdorff_reported_A"), REC,
-         "ira.hausdorff_reported_A", HERE),
-    Rule("9.97", jget(REC, "ira_reordered.barrier_eV"), REC,
-         "ira_reordered.barrier_eV", HERE),
-    Rule("3000", NEB["stage2"]["max_iterations"], REC, "neb.stage2.max_iterations", HERE),
-    Rule("0.995", jget(REC, "ira_reordered.final_max_atom_force_eV_A"), REC,
-         "ira_reordered.final_max_atom_force_eV_A", HERE),
-    Rule("v1.1.0", jget(REC, "potential.version").lstrip("v"), REC, "potential.version", HERE),
+    Rule(
+        "2.11",
+        jget(REC, "ira.hausdorff_reported_A"),
+        REC,
+        "ira.hausdorff_reported_A",
+        HERE,
+    ),
+    Rule(
+        "9.97",
+        jget(REC, "ira_reordered.barrier_eV"),
+        REC,
+        "ira_reordered.barrier_eV",
+        HERE,
+    ),
+    Rule(
+        "3000", NEB["stage2"]["max_iterations"], REC, "neb.stage2.max_iterations", HERE
+    ),
+    Rule(
+        "0.995",
+        jget(REC, "ira_reordered.final_max_atom_force_eV_A"),
+        REC,
+        "ira_reordered.final_max_atom_force_eV_A",
+        HERE,
+    ),
+    Rule(
+        "v1.1.0",
+        jget(REC, "potential.version").lstrip("v"),
+        REC,
+        "potential.version",
+        HERE,
+    ),
     Rule("3.6.0", jget(REC, "engine.requested"), REC, "engine.requested", HERE),
 ]
