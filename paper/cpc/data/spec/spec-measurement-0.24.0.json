@@ -1,8 +1,5 @@
 {
   "generator": "paper/cpc/scripts/gen_spec_supp.py --measure",
-  "measured_at": {
-    "commit": "e8d5953f72838b43493a08ab3351631069f6281d"
-  },
   "spec": "docs/orgmode/spec.org",
   "tags": [
     {
@@ -2902,6 +2899,6 @@
   "tree": {
     "release": "0.24.0",
     "tagged": false,
-    "spec_blob": "206fca2f14b5aa476ad7231b029a3ec5bd428954"
+    "spec_blob": "a8f263a29d84a7fd65bc32004b98dcb859d34025"
   }
 }

@@ -4,8 +4,8 @@
  "script": "paper/cpc/scripts/clause_coverage.py",
  "spec": {
   "path": "docs/orgmode/spec.org",
-  "sha256": "ff86b93bfcbdf97e4ddf216a67891c3903ec9272dfe980b7f9978e4dbea6bcbd",
-  "clauses": 127
+  "sha256": "d1e9c54fc8bc4b92a28a8878de22bd502762197b300e9af5edfd0c39dde45cb3",
+  "clauses": 128
  },
  "sources": {
   "corpus31": {
@@ -34,11 +34,11 @@
     "tests",
     "src"
    ],
-   "files": 200,
-   "rust_tests": 893,
-   "python_tests": 511,
-   "naming": 36,
-   "clause_ids": 83,
+   "files": 203,
+   "rust_tests": 908,
+   "python_tests": 520,
+   "naming": 38,
+   "clause_ids": 85,
    "unknown_ids": []
   },
   "indep_reader": {
@@ -48,13 +48,13 @@
   }
  },
  "totals": {
-  "clauses": 127,
-  "covered": 104,
+  "clauses": 128,
+  "covered": 105,
   "corpus": 68,
   "corpus31": 68,
   "conformance": 0,
   "probes": 60,
-  "tests": 83,
+  "tests": 85,
   "indep_reader": 55,
   "uncovered": 23
  },
@@ -360,6 +360,7 @@
    "conformance": [],
    "probes": [],
    "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec",
     "tests/v31_conformance.rs::coordinates_and_masses_use_declared_units"
    ],
    "indep_reader": false
@@ -529,6 +530,7 @@
     "minor/later-minor-unknown-key-kept"
    ],
    "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec",
     "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
    ],
    "indep_reader": false
@@ -568,6 +570,7 @@
    "conformance": [],
    "probes": [],
    "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec",
     "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
    ],
    "indep_reader": false
@@ -621,6 +624,17 @@
    ],
    "tests": [],
    "indep_reader": true
+  },
+  {
+   "id": "CON-line2.14",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/minor_arbitrary.rs::in_range_minor_velocities_use_the_top_level_key"
+   ],
+   "indep_reader": false
   },
   {
    "id": "CON-cell.1",
@@ -1196,6 +1210,7 @@
     "minor/minor-1-section-arity"
    ],
    "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec",
     "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
    ],
    "indep_reader": true
@@ -1501,7 +1516,9 @@
     "acceptor/length-trailing-space",
     "units/compound-units"
    ],
-   "tests": [],
+   "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec"
+   ],
    "indep_reader": true
   },
   {
@@ -1679,6 +1696,7 @@
     "units/pre-3.1-minor-kept"
    ],
    "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec",
     "tests/v31_conformance.rs::velocity_time_follows_the_minor"
    ],
    "indep_reader": true
