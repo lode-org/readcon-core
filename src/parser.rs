@@ -1280,14 +1280,14 @@ fn parse_f64_at(bytes: &[u8], i: usize, line_start: usize) -> Result<(f64, usize
     })?;
     let next = i + consumed;
     let boundary = ends_field(bytes, next);
-    if !boundary || !val.is_finite() {
-        let token = token_on_line(bytes, i);
-        if is_nonfinite_spelling(&token) || !val.is_finite() {
-            return Err(ParseError::NonFiniteValue(token));
-        }
+    if !boundary {
         return Err(ParseError::InvalidNumberFormat(format!(
-            "invalid float: {token}"
+            "invalid float: {}",
+            token_on_line(bytes, i)
         )));
+    }
+    if !val.is_finite() {
+        return Err(ParseError::NonFiniteValue(token_on_line(bytes, i)));
     }
     Ok((val, next))
 }
@@ -1603,14 +1603,15 @@ fn parse_finite_at(line: &str, i: usize) -> Result<(f64, usize), ParseError> {
     })?;
     let next = i + consumed;
     let boundary = ends_field(bytes, next);
-    if !boundary || !val.is_finite() {
+    if !boundary {
         let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
-        if is_nonfinite_spelling(token) || !val.is_finite() {
-            return Err(ParseError::NonFiniteValue(token.to_string()));
-        }
         return Err(ParseError::InvalidNumberFormat(format!(
             "invalid float: {token}"
         )));
+    }
+    if !val.is_finite() {
+        let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
+        return Err(ParseError::NonFiniteValue(token.to_string()));
     }
     Ok((val, next))
 }
@@ -2203,6 +2204,56 @@ fn validate_metadata_integer(key: &str, value: &Value) -> Result<(), ParseError>
             "{key} must be a non-negative integer"
         )))
     }
+}
+
+/// Check the types of reserved metadata keys that apply in every mode (CON-line2.13).
+///
+/// `bonds` stays gated by `validate = true` (CON-bonds.2, CON-bonds.3), and
+/// `units` / `sections` / `con_spec_version` / `con_spec_minor` / `section_arity` /
+/// `validate` are validated by the caller or `validate_metadata_schema`.
+fn validate_reserved_key_types(
+    json_obj: &serde_json::Map<String, Value>,
+) -> Result<(), ParseError> {
+    for (key, value) in json_obj {
+        match key.as_str() {
+            meta::ENERGY
+            | meta::TIME
+            | meta::TIMESTEP
+            | meta::CONVERGENCE_FMAX
+            | meta::CONVERGENCE_ENERGY
+            | meta::FMAX => {
+                validate_metadata_number(key, value)?;
+                if value.as_f64().is_some_and(|n| !n.is_finite()) {
+                    return Err(metadata_json_error(format!(
+                        "{key} must be a finite number"
+                    )));
+                }
+            }
+            meta::FRAME_INDEX | meta::NEB_BEAD | meta::NEB_BAND => {
+                validate_metadata_integer(key, value)?;
+            }
+            meta::GENERATOR if !value.is_string() => {
+                return Err(metadata_json_error("generator must be a string"));
+            }
+            meta::POTENTIAL if !value.is_object() => {
+                return Err(metadata_json_error("potential must be an object"));
+            }
+            meta::POTENTIAL => {
+                if let Some(potential_type) = value.get("type")
+                    && !potential_type.is_string()
+                {
+                    return Err(metadata_json_error("potential.type must be a string"));
+                }
+            }
+            meta::PBC => validate_pbc_metadata(value)?,
+            meta::LATTICE_VECTORS => validate_lattice_vectors_metadata(value)?,
+            meta::CONVERGED if !value.is_boolean() => {
+                return Err(metadata_json_error("converged must be a boolean"));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// Validates a parsed metadata JSON object against the spec v2 schema.
@@ -3099,6 +3150,9 @@ pub(crate) fn parse_frame_header_inner<'a>(
         if validate {
             validate_metadata_schema(json_obj)?;
         }
+
+        // Reserved-key types apply in every mode (CON-line2.13).
+        validate_reserved_key_types(json_obj)?;
 
         if ver < 3
             && let Some(units) = json_obj.get(meta::UNITS)
@@ -6949,6 +7003,71 @@ Forces of Component 1
                 .unwrap_or_else(|err| panic!("{line2:?}: {err}"));
             assert_eq!(frames[0].header.metadata.spec_minor(), 0);
         }
+    }
+    #[test]
+    fn nonfinite_prefix_with_trailing_junk_is_invalid_number_format() {
+        let coord = "pre\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n-Inf{inity 0 0 0 0\n";
+        let err = crate::iterators::ConFrameIterator::new(coord)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.class_name(), "InvalidNumberFormat", "{err}");
+
+        let box_line = "pre\n{\"con_spec_version\":2}\n-Inf{inity 10 10\n90 90 90\n\n\n0\n\n\n";
+        let err = crate::iterators::ConFrameIterator::new(box_line)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.class_name(), "InvalidNumberFormat", "{err}");
+    }
+
+    #[test]
+    fn leading_space_or_tab_on_line2_is_trimmed_and_reserved_types_checked() {
+        let tabbed_valid = "pre\n\t{\"con_spec_version\":2}\n10 10 10\n90 90 90\n\n\n0\n\n\n";
+        let fr = crate::iterators::ConFrameIterator::new(tabbed_valid)
+            .next()
+            .unwrap()
+            .unwrap();
+        assert_eq!(fr.header.spec_version, 2);
+
+        let tabbed_bad = "pre\n\t{\"con_spec_version\":2,\"bad\":\n10 10 10\n90 90 90\n\n\n0\n\n\n";
+        let err = crate::iterators::ConFrameIterator::new(tabbed_bad)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.class_name(), "InvalidMetadataJson", "{err}");
+
+        for bad_meta in [
+            r#"{"con_spec_version":2,"time":"fs"}"#,
+            r#"{"con_spec_version":2,"timestep":"1.0"}"#,
+            r#"{"con_spec_version":2,"frame_index":-1}"#,
+            r#"{"con_spec_version":2,"neb_bead":"0"}"#,
+            r#"{"con_spec_version":2,"neb_band":1.5}"#,
+            r#"{"con_spec_version":2,"generator":123}"#,
+            r#"{"con_spec_version":2,"potential":"lj"}"#,
+            r#"{"con_spec_version":2,"potential":{"type":7}}"#,
+            r#"{"con_spec_version":2,"converged":"yes"}"#,
+            r#"{"con_spec_version":2,"fmax":"0.1"}"#,
+            r#"{"con_spec_version":2,"convergence_fmax":true}"#,
+            r#"{"con_spec_version":2,"convergence_energy":"0"}"#,
+        ] {
+            let text = format!("pre\n{bad_meta}\n10 10 10\n90 90 90\n\n\n0\n\n\n");
+            let err = crate::iterators::ConFrameIterator::new(&text)
+                .next()
+                .unwrap()
+                .unwrap_err();
+            assert_eq!(err.class_name(), "InvalidMetadataJson", "{bad_meta}: {err}");
+        }
+
+        // CON-bonds.3: unknown `bonds` shapes stay preserved when validate=false.
+        let bonds_open =
+            "pre\n{\"con_spec_version\":2,\"bonds\":\"legacy\"}\n10 10 10\n90 90 90\n\n\n0\n\n\n";
+        assert!(
+            crate::iterators::ConFrameIterator::new(bonds_open)
+                .next()
+                .unwrap()
+                .is_ok()
+        );
     }
 }
 
