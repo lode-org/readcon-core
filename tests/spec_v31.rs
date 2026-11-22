@@ -201,3 +201,26 @@ fn zero_atom_frame_parses() {
     assert!(frame.atom_data.is_empty());
     assert!(frame.header.sections.is_empty());
 }
+
+fn cell_frame(angles: &str, lattice: &str) -> String {
+    format!(
+        "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":1,\
+         \"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}},\"sections\":[]{lattice}}}\n\
+         10 10 10\n{angles}\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n"
+    )
+}
+
+#[test]
+fn nonreal_angles_are_rejected_only_without_lattice_vectors() {
+    let lattice = ",\"lattice_vectors\":[[10,0,0],[0,10,0],[0,0,10]]";
+    let err = ConFrameIterator::new(&cell_frame("170 170 170", ""))
+        .next()
+        .expect("a frame")
+        .expect_err("CON-cell.6 has no real c vector");
+    assert!(
+        matches!(err, readcon_core::error::ParseError::ValidationError(_)),
+        "{err:?}"
+    );
+    let frame = one_frame(&cell_frame("170 170 170", lattice));
+    assert_eq!(frame.atom_data.len(), 1);
+}
