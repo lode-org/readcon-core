@@ -1,4 +1,5 @@
-//! The cxx archive's changed members are library sources.
+//! The cxx archive's changed members are library sources, and the
+//! archive configures with Meson `-Dwith_tests=true`.
 //!
 //! A paper path that differs from the base archive still fails, because
 //! it is not a library source.
@@ -68,6 +69,7 @@ fn is_library_source(path: &str) -> bool {
         || path == "scripts/run_tsan_python_stress.sh"
         || path == "scripts/tsan_canary.py"
         || path == "scripts/tsan_python_launcher.c"
+        || path.starts_with("tests/c/")
         || path.starts_with("cmake/")
         || path.starts_with("examples/")
         || path.starts_with("third_party/")
@@ -205,8 +207,34 @@ fn changed_archive_members_are_library_sources() {
         dropped_library.is_empty(),
         "library sources missing from the package: {dropped_library:?}"
     );
+    assert!(
+        !head_files.contains_key("scripts/check_shared_library_identity.py"),
+        "the shared-library identity helper must stay out of the archive"
+    );
+    configure_with_tests(&head_tree, &scratch.join("meson-head"));
     drop(trees);
     let _ = fs::remove_dir_all(&scratch);
+}
+
+/// A Meson consumer of the archive can configure its tests.
+fn configure_with_tests(tree: &Path, build: &Path) {
+    if Command::new("meson").arg("--version").output().is_err() {
+        eprintln!("meson is not installed; skipping the -Dwith_tests=true configure");
+        return;
+    }
+    let output = Command::new("meson")
+        .arg("setup")
+        .arg(build)
+        .arg("-Dwith_tests=true")
+        .current_dir(tree)
+        .output()
+        .expect("meson setup");
+    assert!(
+        output.status.success(),
+        "meson setup -Dwith_tests=true failed on the archive:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 struct Worktrees {

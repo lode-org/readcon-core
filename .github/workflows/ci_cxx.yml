@@ -126,3 +126,13 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build/cmake-tarball --parallel
           ./build/cmake-tarball/c-main "$GITHUB_WORKSPACE/resources/test/tiny_multi_cuh2.con"
+          if tar -tzf "$TAR" | grep -E '(^|/)scripts/check_shared_library_identity\.py$'; then
+            echo "cxx tarball must not ship check_shared_library_identity.py" >&2
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/cxx-src"
+          tar -xzf "$TAR" -C "$RUNNER_TEMP/cxx-src"
+          SRC="$(find "$RUNNER_TEMP/cxx-src" -mindepth 1 -maxdepth 1 -type d)"
+          meson setup build/meson-tarball "$SRC" --buildtype=release -Dwith_tests=true
+          meson compile -C build/meson-tarball
+          meson test -C build/meson-tarball --no-rebuild --print-errorlogs

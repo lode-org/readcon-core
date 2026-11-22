@@ -9,6 +9,7 @@
 #     scripts/meson_cargo_build.py
 #     examples/c_api_sample.c examples/cpp_api_sample.cpp examples/meson.build
 #     resources/test/tiny_multi_cuh2.con
+#     tests/cmake-project/ tests/meson-wrap/ tests/c/
 #     LICENSE README.cxx.md
 #     [.cargo/config.toml + vendor/ when --vendor]
 #
@@ -251,6 +252,8 @@ find "$DEST" -type f -name '*.pyc' -delete
 mkdir -p "$DEST/tests"
 cp -a "$PACKAGE_ROOT/tests/cmake-project" "$DEST/tests/"
 cp -a "$PACKAGE_ROOT/tests/meson-wrap" "$DEST/tests/"
+# meson -Dwith_tests=true builds these C and C++ consumer tests.
+cp -a "$PACKAGE_ROOT/tests/c" "$DEST/tests/"
 
 # Sorted names, uid 0, SOURCE_DATE_EPOCH, and gzip -n. Two builds of one
 # tree share a digest. The wrap pin is not a member of this archive.

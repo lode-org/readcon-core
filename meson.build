@@ -154,20 +154,25 @@ if get_option('with_tests')
         dependencies: readcon_dep,
     )
     test('runtime-dependency', runtime_consumer, env: {'LD_LIBRARY_PATH': ''})
-    if host_machine.system() == 'linux'
+    # The cxx source archive ships the C and C++ consumer tests but neither
+    # this helper script nor the crate's own test tree.
+    _identity_script = 'scripts/check_shared_library_identity.py'
+    if host_machine.system() == 'linux' and fs.is_file(_identity_script)
         test(
             'shared-library-identity',
             _py,
-            args: [files('scripts/check_shared_library_identity.py'), readcon_cargo[0]],
+            args: [files(_identity_script), readcon_cargo[0]],
             depends: readcon_cargo,
         )
     endif
-    test(
-        'cargo-tests',
-        cargo_prog,
-        args: ['test', '--manifest-path', _msproot / 'Cargo.toml', '--locked'],
-        timeout: 300,
-    )
+    if fs.is_dir('tests/fixtures')
+        test(
+            'cargo-tests',
+            cargo_prog,
+            args: ['test', '--manifest-path', _msproot / 'Cargo.toml', '--locked'],
+            timeout: 300,
+        )
+    endif
     c_golden = executable(
         'test_conformance_goldens',
         files('tests/c/test_conformance_goldens.c'),
