@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Energy along the Baker 17 Claisen path, identity order and IRA order.
 
-Both bands are read from ``data/claisen/results.json``. The side panels are
-the highest image of each band.
+Both bands are the minimised-endpoint runs in ``data/claisen/results.json``.
+The side panels are the highest image of each band.
 
     python paper/cpc/scripts/plot_claisen_order.py
 """
