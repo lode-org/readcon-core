@@ -210,10 +210,15 @@ allow_exact = {
 # These records are append-only. A corrected measurement adds an -rN
 # revision instead of rewriting the first version-named record.
 for stem in ("spec-measurement", "clause_coverage"):
+    revision = re.compile(
+        rf"{stem}-{re.escape(version)}(-r([2-9]|[1-9][0-9]+))?\.json"
+    )
     records = sorted(
-        (root / "paper/cpc/data/spec").glob(
+        path
+        for path in (root / "paper/cpc/data/spec").glob(
             f"{stem}-{version}*.json"
         )
+        if revision.fullmatch(path.name)
     )
     if records:
         allow_exact.update(
