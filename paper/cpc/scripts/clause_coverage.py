@@ -48,8 +48,12 @@ INDEP = ROOT / "scripts" / "indep_reader.py"
 TEST_ROOTS = ("tests", "src")
 SKIP_DIRS = {"target", "build", "__pycache__"}
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
-SUPERSEDES = ROOT / "data" / "spec" / "clause_coverage.json"
-OUT = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}.json"
+SPEC_DATA = ROOT / "data" / "spec"
+RECORDS = provenance.revisions(SPEC_DATA, "clause_coverage", VERSION)
+OUT = provenance.latest_record(SPEC_DATA, "clause_coverage", VERSION)
+SUPERSEDES = SPEC_DATA / "clause_coverage.json"
+if len(RECORDS) > 1:
+    SUPERSEDES = RECORDS[-2]
 MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)

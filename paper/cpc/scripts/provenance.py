@@ -37,6 +37,29 @@ LIBRARY_PATHS = (
 )
 
 
+def revisions(root: Path, stem: str, version: str) -> list[Path]:
+    """Record revisions, oldest first."""
+    base = f"{stem}-{version}"
+    found: list[tuple[int, Path]] = []
+    for path in root.glob(f"{base}*.json"):
+        suffix = path.stem.removeprefix(base)
+        if not suffix:
+            found.append((1, path))
+            continue
+        match = re.fullmatch(r"-r([2-9][0-9]*)", suffix)
+        if match:
+            found.append((int(match[1]), path))
+    return [path for _, path in sorted(found)]
+
+
+def latest_record(root: Path, stem: str, version: str) -> Path:
+    """The newest append-only revision of a versioned JSON record."""
+    found = revisions(root, stem, version)
+    if not found:
+        return root / f"{stem}-{version}.json"
+    return found[-1]
+
+
 def _git(*args: str) -> str | None:
     try:
         out = subprocess.run(

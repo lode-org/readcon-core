@@ -59,14 +59,18 @@ RECORD_DIRS = ("data/", "evidence/", "bench/results/", "src/figures/generated/")
 DATA_SUFFIXES = {".json", ".csv", ".npz", ".h5", ".h5md", ".dat"}
 OUTPUT_KEYS = ("outputs", "csv")
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
+SPEC_DATA = CPC / "data" / "spec"
 # Records no readcon-core build writes: clauses copied from the specifications they cite, and the version
 # history that gen_spec_supp.py --measure reads from spec.org at each release tag.
 NO_BUILD = {
     "evidence/results/e4_cells.csv",
-    f"data/spec/spec-measurement-{VERSION}.json",
     "data/spec/versions.json",
     "data/spec/clause_coverage.json",
-    f"data/spec/clause_coverage-{VERSION}.json",
+    *{
+        path.relative_to(CPC).as_posix()
+        for stem in ("spec-measurement", "clause_coverage")
+        for path in SPEC_DATA.glob(f"{stem}-{VERSION}*.json")
+    },
     # Stored tables the restored figures draw. The database rows come from
     # readcon-db, and these files carry no readcon-core provenance block.
     "data/db/dedup.json",

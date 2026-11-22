@@ -62,6 +62,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import provenance
+
 
 _repo = next(
     _p for _p in Path(__file__).resolve().parents if (_p / "readcon_bench.py").is_file()
@@ -84,8 +86,15 @@ VERSIONS_OUT = PAPER_SRC / "figures" / "generated" / "versions_table.tex"
 MACROS_OUT = PAPER_SRC / "figures" / "generated" / "spec_macros.tex"
 SPEC_DATA = ROOT / "paper" / "cpc" / "data" / "spec"
 LEGACY_VERSIONS = SPEC_DATA / "versions.json"
-MEASUREMENT = SPEC_DATA / (
-    f"spec-measurement-{(ROOT / 'VERSION').read_text().strip()}.json"
+MEASUREMENTS = provenance.revisions(
+    SPEC_DATA,
+    "spec-measurement",
+    (ROOT / "VERSION").read_text().strip(),
+)
+MEASUREMENT = provenance.latest_record(
+    SPEC_DATA,
+    "spec-measurement",
+    (ROOT / "VERSION").read_text().strip(),
 )
 VERSIONS = MEASUREMENT if MEASUREMENT.is_file() else LEGACY_VERSIONS
 RELEASE = r"[0-9]+\.[0-9]+\.[0-9]+"
@@ -763,7 +772,9 @@ def versions_record() -> dict:
             previous, previous_org = entry, org
         entries.append(entry)
     release = package_version()
+    measured = git("rev-parse", "HEAD").stdout.strip()
     return {
+        "measured_at": {"commit": measured},
         "spec": spec,
         "tags": entries,
         "tree": {
@@ -775,8 +786,13 @@ def versions_record() -> dict:
 
 
 def measure() -> None:
+    previous = MEASUREMENTS[-2] if len(MEASUREMENTS) > 1 else None
+    supersedes = {}
+    if previous:
+        supersedes["supersedes"] = previous.relative_to(ROOT).as_posix()
     versions = {
         "generator": "paper/cpc/scripts/gen_spec_supp.py --measure",
+        **supersedes,
         **versions_record(),
     }
     MEASUREMENT.parent.mkdir(parents=True, exist_ok=True)

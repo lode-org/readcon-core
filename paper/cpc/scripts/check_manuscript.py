@@ -1018,10 +1018,11 @@ def check_conformance() -> str:
         "totals"
     ]
     version = (ROOT.parents[1] / "VERSION").read_text().strip()
-    coverage_record = f"clause_coverage-{version}.json"
-    clauses = json.loads((ROOT / "data" / "spec" / coverage_record).read_text())[
-        "totals"
-    ]
+    coverage_path = provenance.latest_record(
+        ROOT / "data" / "spec", "clause_coverage", version
+    )
+    coverage_record = coverage_path.name
+    clauses = json.loads(coverage_path.read_text())["totals"]
     mutants = json.loads(
         (ROOT / "data" / "spec" / "mutant_differential.json").read_text()
     )["totals"]

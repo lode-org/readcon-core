@@ -58,16 +58,28 @@ while read -r commit; do
 
     python3 - "$worktree" <<'PY'
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
 version = (root / "VERSION").read_text().strip()
-path = root / "paper/cpc/data/spec" / f"spec-measurement-{version}.json"
-if not path.is_file():
-    print(f"PENDING: {path.name} has not been measured")
+directory = root / "paper/cpc/data/spec"
+paths = list(directory.glob(f"spec-measurement-{version}*.json"))
+if not paths:
+    name = f"spec-measurement-{version}.json"
+    print(f"PENDING: {name} has not been measured")
     raise SystemExit(0)
+
+def revision(path: Path) -> int:
+    match = re.fullmatch(
+        rf"spec-measurement-{re.escape(version)}-r([2-9][0-9]*)",
+        path.stem,
+    )
+    return int(match[1]) if match else 1
+
+path = max(paths, key=revision)
 record = json.loads(path.read_text())
 commit = record["measured_at"]["commit"]
 

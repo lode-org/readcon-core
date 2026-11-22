@@ -175,9 +175,14 @@ MEASUREMENT_RECORDS = frozenset(
         "paper/cpc/data/sizes.json",
         "paper/cpc/data/restart_walls/restart_walls.json",
         "paper/cpc/data/spec/corpus_recount.json",
-        f"paper/cpc/data/spec/clause_coverage-{CURRENT_VERSION}.json",
         "paper/cpc/data/spec/mutant_differential.json",
-        f"paper/cpc/data/spec/spec-measurement-{CURRENT_VERSION}.json",
+        *(
+            path.relative_to(ROOT).as_posix()
+            for stem in ("clause_coverage", "spec-measurement")
+            for path in (ROOT / "paper/cpc/data/spec").glob(
+                f"{stem}-{CURRENT_VERSION}*.json"
+            )
+        ),
         "paper/cpc/data/spec/versions.json",
         "paper/cpc/data/survey_frame.json",
         "paper/cpc/data/worked_example.json",
