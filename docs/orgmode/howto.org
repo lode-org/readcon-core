@@ -579,9 +579,12 @@ for frame in frames:
 
 ** Column arrays
 
-=read_con= keeps one coordinate slab when every frame has the same atom
-count. =columns()= returns that slab as =positions= with no second copy,
-so a later call is the same array. =masses= is =(frames, atoms)=, =fixed=
+=read_con= keeps each frame's coordinates in the buffer the parse wrote.
+=frame.xyz= views that buffer, and every frame of one read has the same
+=base=, which owns the buffers. =columns()= returns the coordinates as one
+=positions= array, so a later call is the same array. A one-frame read
+returns its parse buffer; a longer read packs the frames once, on the
+first call, and the frames then read that array. =masses= is =(frames, atoms)=, =fixed=
 is =(frames, atoms, 3)= with =1.0= on a held axis, and =cell= is
 =(frames, 6)=. =velocities= and =forces= are present when any frame has
 that section. Indexing a frame takes it out of the list, and =columns()=

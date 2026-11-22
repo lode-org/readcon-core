@@ -3414,6 +3414,59 @@ fn export_f64_slice_as_dlpack(
     finish_dlpack_tensor(tensor, out_tensor)
 }
 
+fn wants_cpu_f64(opts: &RKRDlpackExportOptions) -> bool {
+    opts.device.device_type == rkr_dl_device_type::RKR_DL_CPU
+        && opts.dtype.code == rkr_dl_type_code::RKR_DL_FLOAT
+        && opts.dtype.bits == 64
+}
+
+/// Export a frame's `[n, 3]` column without copying it, when the caller asks
+/// for float64 on the CPU and the column is contiguous f64 with one row per
+/// atom. `None` leaves the caller to gather: a dtype cast or a device copy
+/// needs a new buffer anyway. The tensor is read-only and keeps the column
+/// alive, but it aliases the column rather than snapshotting it.
+/// `rkr_frame_positions_from_dlpack` copies a shared column before writing;
+/// the Rust `AtomDatum` setters do not, so on a parsed frame `set_x` writes
+/// into an exported positions column and races with a reader of the tensor.
+fn share_f64_rows(
+    column: &crate::storage_dtype::Array2Storage,
+    n: usize,
+    opts: &RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> Option<RKRStatus> {
+    match column {
+        crate::storage_dtype::Array2Storage::F64(a)
+            if wants_cpu_f64(opts) && a.dim() == (n, 3) && a.is_standard_layout() =>
+        {
+            Some(finish_dlpack_tensor(
+                dlpk::DLPackTensor::try_from(a.clone()),
+                out_tensor,
+            ))
+        }
+        _ => None,
+    }
+}
+
+/// [`share_f64_rows`] for a frame's `[n]` column.
+fn share_f64_column(
+    column: &crate::storage_dtype::Array1Storage,
+    n: usize,
+    opts: &RKRDlpackExportOptions,
+    out_tensor: *mut *mut RKRDLManagedTensorVersioned,
+) -> Option<RKRStatus> {
+    match column {
+        crate::storage_dtype::Array1Storage::F64(a)
+            if wants_cpu_f64(opts) && a.len() == n && a.is_standard_layout() =>
+        {
+            Some(finish_dlpack_tensor(
+                dlpk::DLPackTensor::try_from(a.clone()),
+                out_tensor,
+            ))
+        }
+        _ => None,
+    }
+}
+
 fn export_owned_array2_dlpack_opts(
     arr: &ndarray::ArcArray2<f64>,
     opts: &RKRDlpackExportOptions,
@@ -6105,6 +6158,10 @@ pub unsafe extern "C" fn rkr_frame_positions_dlpack_ex(
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
+    let n = frame.atom_data.len();
+    if let Some(status) = share_f64_rows(&frame.positions, n, &o, out_tensor) {
+        return status;
+    }
     let arr = frame_positions_arc(frame);
     export_owned_array2_dlpack_opts(&arr, &o, out_tensor)
 }
@@ -6147,6 +6204,9 @@ pub unsafe extern "C" fn rkr_frame_velocities_dlpack_ex(
         return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     let n = frame.atom_data.len();
+    if let Some(status) = share_f64_rows(&frame.velocities, n, &o, out_tensor) {
+        return status;
+    }
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
         let v = a.velocity().unwrap_or([0.0; 3]);
@@ -6195,6 +6255,9 @@ pub unsafe extern "C" fn rkr_frame_forces_dlpack_ex(
         return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
     let n = frame.atom_data.len();
+    if let Some(status) = share_f64_rows(&frame.forces, n, &o, out_tensor) {
+        return status;
+    }
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
         let f = a.force().unwrap_or([0.0; 3]);
@@ -6343,6 +6406,10 @@ pub unsafe extern "C" fn rkr_frame_atom_energies_dlpack_ex(
     };
     if !frame.has_energies() {
         return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
+    }
+    let n = frame.atom_data.len();
+    if let Some(status) = share_f64_column(&frame.atom_energies, n, &o, out_tensor) {
+        return status;
     }
     let data: Vec<f64> = frame
         .atom_data
