@@ -54,7 +54,7 @@ def host_line() -> str:
         for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines()
         if line.startswith("MemTotal")
     )
-    return f"{platform.node()} {cpu} {mem} {platform.platform()}"
+    return f"host {cpu} {mem} {platform.platform()}"
 
 
 def reference() -> np.ndarray:
