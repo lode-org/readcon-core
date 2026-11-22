@@ -341,12 +341,15 @@ def test_v4_blockers_and_duplicate_semantics_in_python():
             readcon.read_con_string(txt)
 
     # 4. Last-key -0, frame_index:-0, section_arity >= 2^64, and major overflow match BASE.
+    #    con_spec_version -0 is major 0 (CON-line2.4, CON-line2.5).
+    txt = 'gen\n{"con_spec_version":-0}\n10 10 10\n90 90 90\n\n\n0\n\n\n'
+    with pytest.raises(readcon.UnsupportedVersion):
+        readcon.read_con_string(txt)
     for line2 in (
         '{"con_spec_version":2,"sections":[],"validate":true,"frame_index":-0}',
         '{"con_spec_version":2,"section_arity":{"widgets":-0}}',
         f'{{"con_spec_version":2,"section_arity":{{"widgets":{TWO_POW_64}}}}}',
         f'{{"con_spec_version":3,"units":{{"length":"angstrom","energy":"eV"}},"section_arity":{{"velocities":{TWO_POW_64}}}}}',
-        '{"con_spec_version":-0}',
         f'{{"con_spec_version":{TWO_POW_64}}}',
         '{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":-0,"units":{"length":"angstrom","energy":"eV"}}',
         f'{{"con_spec_version":3,"con_spec_minor":{TWO_POW_64},"con_spec_minor":-0,"units":{{"length":"angstrom","energy":"eV"}}}}',
