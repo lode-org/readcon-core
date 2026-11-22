@@ -1634,7 +1634,7 @@ fn looks_like_nonfinite(bytes: &[u8], i: usize) -> bool {
 }
 
 /// Case-insensitive, after collapsing each run of spaces (CON-file.5, D17).
-fn labels_equal(found: &str, expected: &str) -> bool {
+pub(crate) fn labels_equal(found: &str, expected: &str) -> bool {
     let mut found_words = found.split_ascii_whitespace();
     let mut expected_words = expected.split_ascii_whitespace();
     loop {
@@ -1648,6 +1648,33 @@ fn labels_equal(found: &str, expected: &str) -> bool {
             _ => return false,
         }
     }
+}
+
+/// Label prefix of a reserved section, in the form the section parser checks.
+pub(crate) fn reserved_section_label_prefix(name: &str) -> Option<&'static str> {
+    match name {
+        crate::types::SECTION_VELOCITIES => Some("Velocities of Component"),
+        crate::types::SECTION_FORCES => Some("Forces of Component"),
+        crate::types::SECTION_ENERGIES => Some("Energies of Component"),
+        crate::types::SECTION_CHARGES => Some("Charges of Component"),
+        crate::types::SECTION_SPINS => Some("Spins of Component"),
+        crate::types::SECTION_MAGMOMS => Some("Magmoms of Component"),
+        crate::types::SECTION_DISPLACEMENTS => Some("Displacements of Component"),
+        crate::types::SECTION_SPREADS => Some("Spreads of Component"),
+        _ => None,
+    }
+}
+
+/// True when `line`, after the same folding, starts with every word of `prefix`.
+pub(crate) fn label_has_prefix(line: &str, prefix: &str) -> bool {
+    let mut found_words = line.split_ascii_whitespace();
+    for word in prefix.split_ascii_whitespace() {
+        match found_words.next() {
+            Some(got) if got.eq_ignore_ascii_case(word) => {}
+            _ => return false,
+        }
+    }
+    true
 }
 
 fn token_count(line: &str) -> usize {
@@ -4078,7 +4105,7 @@ fn validate_section_atom_identity(
 ///
 /// A blank line followed only by whitespace to EOF does not open a section
 /// (CON-frame.5). The lines stay in the stream.
-fn frame_minor(header: &FrameHeader) -> u64 {
+pub(crate) fn frame_minor(header: &FrameHeader) -> u64 {
     header.metadata.spec_minor()
 }
 
@@ -4097,7 +4124,7 @@ fn implemented_minor(spec_version: u32) -> u64 {
     }
 }
 
-fn section_row_arity(header: &FrameHeader, name: &str) -> Option<usize> {
+pub(crate) fn section_row_arity(header: &FrameHeader, name: &str) -> Option<usize> {
     let obj = header.metadata.get(meta::SECTION_ARITY)?.as_object()?;
     let n = obj.get(name)?.as_u64()?;
     if n >= 1 { Some(n as usize) } else { None }

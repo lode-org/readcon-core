@@ -468,9 +468,16 @@ class TestConFrameConstructor:
         bad = bytearray(frame * 5)
         bad[-40] = 0xFF
         path.write_bytes(bytes(bad))
+        # The byte is inside a decimal token, so the class is the number
+        # error at that line, the same error read_con reports. A whole-file
+        # UTF-8 failure would hide the line.
+        with pytest.raises(readcon.InvalidNumberFormat) as batch:
+            readcon.read_con(str(path))
         for mmap in (False, True):
-            with pytest.raises(readcon.InvalidNumberFormat, match="invalid float"):
+            with pytest.raises(readcon.InvalidNumberFormat) as raised:
                 list(readcon.iter_con(str(path), mmap=mmap))
+            assert raised.value.line == batch.value.line
+            assert str(raised.value) == str(batch.value)
 
     def test_iter_con_mmap_matches_the_default(self, tmp_path):
         with open(_resource("cuh2.con"), "rb") as fh:
