@@ -2792,8 +2792,8 @@ pub(crate) fn validate_read_cell(
 /// `c = (|c| cos beta, |c| (cos alpha - cos beta cos gamma) / sin gamma,
 /// |c| * c_z)` where `c_z` is 0 inside the rounding window and the square
 /// root of the radicand otherwise. A radicand at or below `-CELL_CZ_ROUNDING`
-/// is not a real cell; callers that accept a frame use [`require_real_cell`].
-/// Use [`try_cell_vectors`] to reject such a cell.
+/// is not a real cell, and leaves `c[2]` as `NaN`; callers that accept a frame
+/// use [`require_real_cell`]. Use [`try_cell_vectors`] to reject such a cell.
 pub fn cell_vectors(lengths: [f64; 3], angles_deg: [f64; 3]) -> [[f64; 3]; 3] {
     let [a_len, b_len, c_len] = lengths;
     let alpha = angles_deg[0].to_radians();
@@ -7751,8 +7751,63 @@ mod tests {
             [120.0, 120.0, 120.0],
         ] {
             check_cell_reality(&[10.0; 3], &angles).expect("flat cell");
+            let mat = cell_vectors([10.0; 3], angles);
+            assert!(
+                mat.iter().flatten().all(|v| v.is_finite()),
+                "flat cell {angles:?} must stay finite: {mat:?}"
+            );
+            assert!(
+                mat[2][2].abs() < 1e-6,
+                "flat cell {angles:?} has cz near 0, got {}",
+                mat[2][2]
+            );
+            let checked = try_cell_vectors([10.0; 3], angles).expect("flat cell");
+            assert_eq!(checked, mat);
         }
         check_cell_reality(&[10.0; 3], &[60.0, 60.0, 120.1])
             .expect_err("past flat");
+        let extreme =
+            try_cell_vectors([10.0; 3], [0.5, 0.5, 1.0]).expect("extreme flat cell");
+        assert!(extreme.iter().flatten().all(|v| v.is_finite()));
+        assert!(extreme[2][2].abs() < 1e-5);
+    }
+
+    #[test]
+    fn cell_vectors_returns_nan_for_impossible_angles() {
+        for angles in [
+            [10.0, 10.0, 170.0],
+            [170.0, 10.0, 10.0],
+            [10.0, 170.0, 10.0],
+            [60.0, 60.0, 120.1],
+            [130.0, 130.0, 130.0],
+            [60.0, 90.0, 0.0],
+        ] {
+            let mat = cell_vectors([10.0, 10.0, 10.0], angles);
+            assert!(
+                mat[2][2].is_nan(),
+                "impossible angles {angles:?} must leave cz as NaN, got {mat:?}"
+            );
+            let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+            builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+            let mut frame = builder.build().unwrap();
+            let err = frame.header.set_lattice_vectors(mat).unwrap_err();
+            assert!(matches!(err, ParseError::NonFiniteValue(_)));
+        }
+    }
+
+    #[test]
+    fn cell_matrix_returns_nan_for_impossible_header_angles() {
+        for lengths in [[10.0, 10.0, 10.0], [10.0, 10.0, 0.0]] {
+            let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+            builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+            let mut frame = builder.build().unwrap();
+            frame.header.boxl = lengths;
+            frame.header.angles = [10.0, 10.0, 170.0];
+            let mat = frame.header.cell_matrix();
+            assert!(
+                mat[2][2].is_nan(),
+                "header with {lengths:?} must leave cz as NaN, got {mat:?}"
+            );
+        }
     }
 }
