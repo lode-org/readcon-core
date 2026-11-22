@@ -121,3 +121,52 @@ def test_recorded_result_version_must_match_its_source_commit():
     output = result.stdout + result.stderr
     assert "bench/h2h/versions.json" in output
     assert "9.9.9" in output
+
+
+def test_claisen_build_record_must_match_its_source_commit():
+    gate = ROOT / "scripts" / "check_version_sot.sh"
+    record = ROOT / "paper" / "cpc" / "data" / "claisen" / "readcon-build.json"
+    original = record.read_text(encoding="utf-8")
+    payload = json.loads(original)
+    assert re.fullmatch(r"\d+\.\d+\.\d+", payload["readcon_version"])
+    payload["readcon_version"] = "9.9.9"
+    record.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    try:
+        result = subprocess.run(
+            ["bash", str(gate)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        record.write_text(original, encoding="utf-8")
+    assert result.returncode != 0, "gate passed an invented Claisen build version"
+    output = result.stdout + result.stderr
+    assert "paper/cpc/data/claisen/readcon-build.json" in output
+    assert "9.9.9" in output
+
+
+def test_claisen_campaign_version_must_match_the_build_record():
+    gate = ROOT / "scripts" / "check_version_sot.sh"
+    record = ROOT / "paper" / "cpc" / "data" / "claisen" / "results.json"
+    original = record.read_bytes()
+    payload = json.loads(original)
+    payload["software"]["readcon"] = "9.9.9"
+    record.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    try:
+        result = subprocess.run(
+            ["bash", str(gate)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        record.write_bytes(original)
+    assert result.returncode != 0, (
+        "gate passed a campaign version the build record does not name"
+    )
+    output = result.stdout + result.stderr
+    assert "paper/cpc/data/claisen/results.json" in output
+    assert "9.9.9" in output
