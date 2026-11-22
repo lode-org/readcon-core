@@ -784,6 +784,136 @@ impl<'a> ConFrameIterator<'a> {
         self.lines.next_line()
     }
 
+    /// A blank line, then only whitespace, is not a section (CON-frame.5).
+    fn at_blank_separator(&self) -> Option<bool> {
+        let rest = &self.lines.bytes[self.lines.pos..];
+        if rest.is_empty() {
+            return None;
+        }
+        let (line, after) = split_raw_line(rest)?;
+        if !is_blank_line(line) {
+            return Some(false);
+        }
+        if after.iter().all(|b| b.is_ascii_whitespace()) {
+            return None;
+        }
+        Some(true)
+    }
+
+    fn section_line<'b>(&'b mut self, name: &str) -> Result<&'b str, error::ParseError> {
+        match self.read_line_str() {
+            Some(line) => Ok(line),
+            None => Err(self
+                .lines
+                .prefer_utf8(error::ParseError::IncompleteSection(name.to_string()))),
+        }
+    }
+
+    /// Consume one section block the full parser would consume.
+    ///
+    /// `exact` selects [`crate::parser::labels_equal`] against
+    /// `{name} of Component N`. Otherwise the label is a prefix, which is
+    /// what the reserved-section parsers check.
+    fn consume_section_block(
+        &mut self,
+        header: &types::FrameHeader,
+        name: &str,
+        prefix: &str,
+        exact: bool,
+        end: Option<usize>,
+    ) -> Result<(), error::ParseError> {
+        let missing = || error::ParseError::IncompleteSection(name.to_string());
+        let blank = self.section_line(name)?;
+        if !blank.trim().is_empty() {
+            return Err(missing());
+        }
+        for (type_idx, &rows) in header.natms_per_type.iter().enumerate() {
+            let _symbol = self.section_line(name)?;
+            let label = self.section_line(name)?;
+            let ok = if exact {
+                let expected = format!("{name} of Component {}", type_idx + 1);
+                crate::parser::labels_equal(label, &expected)
+            } else {
+                crate::parser::label_has_prefix(label, prefix)
+            };
+            if !ok {
+                return Err(missing());
+            }
+            self.advance_lines_to(rows, end).map_err(|_| missing())?;
+        }
+        Ok(())
+    }
+
+    /// Legacy velocity block: only a blank that begins a velocity label.
+    /// Anything else is the next frame, left for the following skip.
+    fn skip_legacy_velocity(
+        &mut self,
+        header: &types::FrameHeader,
+        end: Option<usize>,
+    ) -> Result<(), error::ParseError> {
+        if self.at_blank_separator().is_none() {
+            return Ok(());
+        }
+        let rest = &self.lines.bytes[self.lines.pos..];
+        let Some((_, after)) = split_raw_line(rest) else {
+            return Ok(());
+        };
+        if !blank_opens_section(after) {
+            return Ok(());
+        }
+        self.consume_section_block(header, "velocities", "Velocities of Component", false, end)
+    }
+
+    /// Skip the sections [`crate::parser::parse_declared_sections`] would read.
+    ///
+    /// A blank symbol is a symbol line for every section except the legacy
+    /// velocity probe. An undeclared block after `sections: []` is the next
+    /// frame, not a section this frame owns.
+    fn skip_declared_sections(
+        &mut self,
+        header: &types::FrameHeader,
+        end: Option<usize>,
+    ) -> Result<(), error::ParseError> {
+        if !header.sections_declared && header.sections.is_empty() {
+            return self.skip_legacy_velocity(header, end);
+        }
+        for name in &header.sections {
+            if name == crate::types::SECTION_VELOCITIES {
+                // Same probe as `parse_velocity_section`: a blank symbol
+                // does not open the block, so the section is missing.
+                let opens = match self.at_blank_separator() {
+                    Some(true) => {
+                        let rest = &self.lines.bytes[self.lines.pos..];
+                        split_raw_line(rest).is_some_and(|(_, after)| blank_opens_section(after))
+                    }
+                    _ => false,
+                };
+                if !opens {
+                    return Err(error::ParseError::IncompleteSection(name.clone()));
+                }
+                self.consume_section_block(header, name, "Velocities of Component", false, end)?;
+                continue;
+            }
+            if let Some(prefix) = crate::parser::reserved_section_label_prefix(name) {
+                if self.at_blank_separator() != Some(true) {
+                    return Err(error::ParseError::IncompleteSection(name.clone()));
+                }
+                self.consume_section_block(header, name, prefix, false, end)?;
+                continue;
+            }
+            let newer = crate::parser::frame_minor(header) > u64::from(crate::CON_SPEC_MINOR);
+            if newer && crate::parser::section_row_arity(header, name).is_some() {
+                if self.at_blank_separator() != Some(true) {
+                    return Err(error::ParseError::IncompleteSection(name.clone()));
+                }
+                self.consume_section_block(header, name, "", true, end)?;
+                continue;
+            }
+            return Err(error::ParseError::UnknownSection(name.clone()));
+        }
+        Ok(())
+    }
+
     /// memchr-backed equivalent of [`Self::forward`]. Skips the next
     /// frame without fully parsing its atom data. Shares the same line
     /// cursor as [`Iterator::next`], so skip and full parse interleave safely.
@@ -959,6 +1089,60 @@ impl<'a> ConFrameIterator<'a> {
         self.lines.pos += next_eol.map(|p| p + 1).unwrap_or(rest.len());
         self.lines.line_no = self.lines.line_no.saturating_add(1);
         self.advance_lines_to(block_lines, end)
+    }
+
+    /// Boundary scan for the parallel reader.
+    ///
+    /// [`Self::forward_fast`] skips six header lines and then any blank that
+    /// looks like a section. This scan reads the sections list the parser
+    /// reads, so an undeclared tail stays the next frame.
+    fn scan_declared_frame(&mut self, end: Option<usize>) -> Option<Result<(), error::ParseError>> {
+        self.lines.clear_peek();
+        if self.lines.pos >= self.lines.bytes.len() {
+            return None;
+        }
+        // A header the parser rejects, such as a non-finite box length, is
+        // still a frame the line skip can walk past. Falling back keeps the
+        // later frames in the boundary list.
+        let saved = (
+            self.lines.pos,
+            self.lines.line_no,
+            self.lines.index_line,
+            self.lines.utf8_bad,
+        );
+        // The header parse is the same one `next` uses, so a declared
+        // `sections` list, including an empty one, is known before the
+        // coordinate skip. Skipping those lines wholesale treated every
+        // blank-plus-label tail as a section of this frame.
+        let header = match crate::parser::parse_frame_header(&mut self.lines) {
+            Ok(header) => header,
+            Err(_) => {
+                self.lines.pos = saved.0;
+                self.lines.line_no = saved.1;
+                self.lines.index_line = saved.2;
+                self.lines.utf8_bad = saved.3;
+                self.lines.clear_peek();
+                return self.forward_fast_to(end);
+            }
+        };
+        if header.natm_types == 0 {
+            return self.note_skipped_frame();
+        }
+        // A block longer than `usize::MAX` lines never fits the buffer, so a
+        // saturated length ends in `IncompleteFrame` as the exact one would.
+        let total_atoms = header
+            .natms_per_type
+            .iter()
+            .fold(0usize, |sum, &n| sum.saturating_add(n));
+        let coord_block_lines = total_atoms.saturating_add(header.natm_types.saturating_mul(2));
+        if let Err(e) = self.advance_lines_to(coord_block_lines, end) {
+            return Some(Err(e));
+        }
+        self.lines.clear_peek();
+        if let Err(e) = self.skip_declared_sections(&header, end) {
+            return Some(Err(e));
+        }
+        self.note_skipped_frame()
     }
 
     /// Skips the next frame without fully parsing its atomic data.
@@ -2624,22 +2808,22 @@ where
                     slots_ptr.write_slot(i, frame);
                 }
             }
-            // A scan that swallowed the next frame leaves that frame in the
-            // iterator. Its error is this range's verdict. A frame that
-            // parsed is one the split did not give its own slot. A slot
-            // that already failed keeps that error: the cursor is mid-frame.
-            if !failed && let Some(extra) = iter.next() {
-                let last = end - 1;
-                let error = match extra {
-                    Err(error) => error,
-                    Ok(_) => error::ParseError::ValidationError(
-                        "a frame past the scanned boundary was not read".into(),
-                    ),
+            // The scan can swallow a later frame into this share. `next`
+            // stops at the first frame, so a non-whitespace tail is that
+            // frame and has to fail the share. A slot that already failed
+            // keeps that error: the cursor is mid-frame.
+            if !failed && !iter.lines.remainder_is_whitespace() {
+                let i = end - 1;
+                let error = match iter.next() {
+                    Some(Err(error)) => error,
+                    Some(Ok(_)) | None => {
+                        iter.lines.prefer_utf8(error::ParseError::IncompleteFrame)
+                    }
                 };
                 let line = share_cursor(iter.error_line(&error), bytes, byte_start);
-                fail_lines.lock().expect("fail lines").push((last, line));
+                fail_lines.lock().expect("fail lines").push((i, line));
                 unsafe {
-                    slots_ptr.write_slot(last, Err(error));
+                    slots_ptr.write_slot(i, Err(error));
                 }
             }
             crate::parser::clear_coord_shells();
@@ -3817,7 +4001,7 @@ fn collect_frame_starts_inner(
             break;
         }
         boundaries.push(start);
-        match scanner.forward_fast_to(None) {
+        match scanner.scan_declared_frame(None) {
             Some(Ok(())) => {}
             Some(Err(_)) | None => break,
         }

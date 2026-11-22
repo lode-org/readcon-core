@@ -5077,7 +5077,7 @@ fn iter_con(py: Python<'_>, path: &str, mmap: bool, stream: bool) -> PyResult<Py
             }
             .map_err(|e| e.to_string())
         })
-        .map_err(PyIOError::new_err)?;
+        .map_err(|msg| iter_open_err(&path_owned, msg))?;
     Ok(PyConFrameIterator {
         source,
         line_base: 0,
@@ -7993,6 +7993,28 @@ fn parse_err_in_frame(py: Python<'_>, err: &ParseError, line: u32, frame_index: 
     parse_err_to_py(py, &err.clone().in_frame(frame_index), line, frame_index)
 }
 
+/// `ForwardText` rejects a file that is not UTF-8 before the parser runs.
+/// The byte iterator reports the class and line the manifest names.
+fn iter_open_err(path: &str, msg: String) -> PyErr {
+    let utf8 = msg.contains("UTF-8") || msg.contains("utf-8");
+    if utf8 && let Some(err) = byte_cursor_error(path) {
+        return err;
+    }
+    PyIOError::new_err(msg)
+}
+
+fn byte_cursor_error(path: &str) -> Option<PyErr> {
+    let source = crate::compression::read_bytes_owned(std::path::Path::new(path)).ok()?;
+    let mut iter = crate::iterators::ConFrameIterator::from_bytes(source.as_slice());
+    while let Some(item) = iter.next() {
+        let Err(error) = item else { continue };
+        let located =
+            crate::error::LocatedParseError::new(error, iter.lines.line_no(), iter.frame_index());
+        return Some(located_to_py(located));
+    }
+    None
+}
+
 fn located_to_py(err: crate::error::LocatedParseError) -> PyErr {
     Python::attach(|py| parse_err_to_py(py, &err.error, err.line, err.frame_index))
 }
@@ -8079,6 +8101,9 @@ fn count_fail_located(located: &crate::error::LocatedParseError) -> CountFail {
 /// from the parse that failed. The line and frame are already on that
 /// error, so this does not open the path again.
 fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
+    // A parse error whose text says "invalid UTF-8" still carries a class
+    // and a line. Only a real I/O error, or a failure that is not a parse
+    // error, is an OSError.
     if let Some(located) = err.downcast_ref::<crate::error::LocatedParseError>() {
         return count_fail_located(located);
     }
@@ -8092,6 +8117,9 @@ fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
             line: parse.line(),
             frame: 0,
         };
+    }
+    if err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("invalid UTF-8") {
+        return CountFail::Io(err.to_string());
     }
     CountFail::Other(err.to_string())
 }

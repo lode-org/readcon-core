@@ -172,3 +172,6 @@ mod tests {
         assert_eq!(text, format!("{VERSION}\n"));
     }
 }
+
+#[cfg(all(test, feature = "parallel", feature = "zstd"))]
+mod corpus31_manifest;
