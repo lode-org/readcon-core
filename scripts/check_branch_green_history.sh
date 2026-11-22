@@ -81,6 +81,7 @@ sys.path.insert(0, str(Path(sys.argv[2]) / "scripts"))
 from spec_measurement_schema import (
     MeasurementSchemaError,
     measured_commit,
+    require_ancestor,
     resolve_measurement,
 )
 
@@ -105,6 +106,10 @@ if chosen != relpath:
 if commit is None:
     print(f"OK: {path.name} uses legacy schema without measured_at.commit")
     raise SystemExit(0)
+try:
+    require_ancestor(root, commit, chosen)
+except MeasurementSchemaError as exc:
+    raise SystemExit(str(exc)) from None
 
 def git(*args: str) -> str:
     done = subprocess.run(
