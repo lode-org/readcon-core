@@ -754,6 +754,9 @@ pub struct PyConFrame {
     /// Parsed frames leave this false and fill `atoms` on first use.
     /// `xyz` reads `inner` and does not build the Python atom list.
     atoms_ready: std::sync::atomic::AtomicBool,
+    /// Successful fills of `atoms` from the parsed frame. Array getters
+    /// leave this at zero.
+    atoms_fills: std::sync::atomic::AtomicUsize,
     /// Serializes the one-time fill of `atoms` on free-threaded builds.
     atoms_init: std::sync::Mutex<()>,
     #[pyo3(get)]
@@ -807,6 +810,7 @@ impl PyConFrame {
             spec_version: crate::CON_SPEC_VERSION,
             atoms,
             atoms_ready: std::sync::atomic::AtomicBool::new(true),
+            atoms_fills: std::sync::atomic::AtomicUsize::new(0),
             atoms_init: std::sync::Mutex::new(()),
             metadata: filled_lock(py, metadata),
             inner: None,
@@ -946,12 +950,22 @@ impl PyConFrame {
         self.coords_array(py)
     }
 
-    /// Per-atom masses as a read-only numpy `[N] float64` view of the
-    /// parsed column. Its base owns the column; nothing is copied.
+    /// Per-atom masses as a numpy `[N] float64` array.
     ///
-    /// This does not build the Python atom list.
+    /// Until `.atoms` exists this returns a read-only view of the parsed
+    /// column without copying or building the Python atom list. Once that
+    /// list exists the returned array follows it, including an edit, a
+    /// pop, an append, or an insert.
     #[getter]
     fn mass_column<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray1<f64>>>> {
+        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            let atoms = self.py_atoms(py)?;
+            if atoms.is_empty() {
+                return Ok(None);
+            }
+            let data: Vec<f64> = atoms.iter().map(|atom| atom.mass.unwrap_or(0.0)).collect();
+            return Ok(Some(Array1::from_vec(data).into_pyarray(py)));
+        }
         let Some(frame) = self.inner.as_ref() else {
             return Ok(None);
         };
@@ -969,57 +983,15 @@ impl PyConFrame {
         Ok(Some(Array1::from_vec(src.to_vec()).into_pyarray(py)))
     }
 
+    /// Velocities. Same array as `velocities_array`.
     #[getter]
     fn vel<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
-        if let Some(frame) = self.inner.as_ref() {
-            let owner = self.column_owner(py, frame)?;
-            if let Some(view) = FrameColumns::rows(&owner, |c| c.velocities.as_ref())? {
-                return Ok(Some(view));
-            }
-            let n = frame.velocities.nrows();
-            if n == 0 {
-                return Ok(None);
-            }
-            count_binding_copy();
-            let mut data = Vec::with_capacity(n.saturating_mul(3));
-            if let Some(src) = frame.velocities.f64_slice() {
-                data.extend_from_slice(src);
-            } else {
-                for i in 0..n {
-                    data.extend_from_slice(&frame.velocities.as_f64_row(i));
-                }
-            }
-            let array = Array2::from_shape_vec((n, 3), data)
-                .map_err(|e| PyValueError::new_err(format!("vel shape error: {e}")))?;
-            return Ok(Some(array.into_pyarray(py)));
-        }
         self.velocities_array(py)
     }
 
+    /// Forces. Same array as `forces_array`.
     #[getter]
     fn frc<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
-        if let Some(frame) = self.inner.as_ref() {
-            let owner = self.column_owner(py, frame)?;
-            if let Some(view) = FrameColumns::rows(&owner, |c| c.forces.as_ref())? {
-                return Ok(Some(view));
-            }
-            let n = frame.forces.nrows();
-            if n == 0 {
-                return Ok(None);
-            }
-            count_binding_copy();
-            let mut data = Vec::with_capacity(n.saturating_mul(3));
-            if let Some(src) = frame.forces.f64_slice() {
-                data.extend_from_slice(src);
-            } else {
-                for i in 0..n {
-                    data.extend_from_slice(&frame.forces.as_f64_row(i));
-                }
-            }
-            let array = Array2::from_shape_vec((n, 3), data)
-                .map_err(|e| PyValueError::new_err(format!("frc shape error: {e}")))?;
-            return Ok(Some(array.into_pyarray(py)));
-        }
         self.forces_array(py)
     }
 
@@ -1061,6 +1033,11 @@ impl PyConFrame {
     /// Returns the per-atom velocity vectors as a contiguous numpy
     /// `[N, 3] float64` array. Returns `None` if the frame has no
     /// velocity data.
+    ///
+    /// A parsed frame reads its velocity column until `.atoms` exists.
+    /// An f64 column is then a read-only view. A store raises
+    /// `ValueError`. Once the list exists, the array is built from it,
+    /// so an edit or an appended atom shows up here and in `write_con`.
     fn velocities_array<'py>(
         &self,
         py: Python<'py>,
@@ -1070,6 +1047,11 @@ impl PyConFrame {
                 return Ok(Some(view));
             }
             let frame = self.inner.as_ref().expect("parsed frame");
+            let n = frame.atom_data.len();
+            if frame.velocities.nrows() == n && n > 0 && frame.velocities.ncols() == 3 {
+                count_binding_copy();
+                return Ok(Some(copy_f64_rows(py, &frame.velocities, "velocities")?));
+            }
             return gathered_rows(py, frame, AtomDatum::velocity);
         }
         let atoms = self.py_atoms(py)?;
@@ -1090,12 +1072,22 @@ impl PyConFrame {
     /// Returns the per-atom force vectors as a contiguous numpy
     /// `[N, 3] float64` array. Returns `None` if the frame has no
     /// force data.
+    ///
+    /// A parsed frame reads its force column until `.atoms` exists.
+    /// An f64 column is then a read-only view. A store raises
+    /// `ValueError`. Once the list exists, the array is built from it,
+    /// so an edit or an appended atom shows up here and in `write_con`.
     fn forces_array<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
         if let Some(owner) = self.parsed_columns(py)? {
             if let Some(view) = FrameColumns::rows(&owner, |c| c.forces.as_ref())? {
                 return Ok(Some(view));
             }
             let frame = self.inner.as_ref().expect("parsed frame");
+            let n = frame.atom_data.len();
+            if frame.forces.nrows() == n && n > 0 && frame.forces.ncols() == 3 {
+                count_binding_copy();
+                return Ok(Some(copy_f64_rows(py, &frame.forces, "forces")?));
+            }
             return gathered_rows(py, frame, AtomDatum::force);
         }
         let atoms = self.py_atoms(py)?;
@@ -1223,25 +1215,33 @@ impl PyConFrame {
             return Ok(FrameSymbols::of_parsed(py, frame));
         }
         let atoms = self.atoms.bind(py);
-        let mut names: Vec<(String, usize)> = Vec::new();
-        for item in atoms.iter() {
-            let atom = item.cast::<PyAtomDatum>().map_err(|_| {
-                PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
-            })?;
-            let atom = atom.borrow();
-            match names.last_mut() {
-                Some((last, count)) if *last == atom.symbol => *count += 1,
-                _ => names.push((atom.symbol.clone(), 1usize)),
+        let names = pyo3::sync::critical_section::with_critical_section(atoms.as_any(), || {
+            let mut names: Vec<(String, usize)> = Vec::new();
+            for item in atoms.iter() {
+                let atom = item.cast::<PyAtomDatum>().map_err(|_| {
+                    PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
+                })?;
+                let atom = atom.borrow();
+                match names.last_mut() {
+                    Some((last, count)) if *last == atom.symbol => *count += 1,
+                    _ => names.push((atom.symbol.clone(), 1usize)),
+                }
             }
-        }
+            PyResult::Ok(names)
+        })?;
         Ok(FrameSymbols::from_runs(
             py,
             names.iter().map(|(name, count)| (name.as_str(), *count)),
         ))
     }
 
-    /// Returns the per-atom atomic numbers as a numpy `[N] uint64`
-    /// array, useful for filtering / one-hot encoding workflows.
+    /// Returns the per-atom ids as a numpy `[N] uint64` array.
+    ///
+    /// A parsed frame views its id column until `.atoms` exists. The
+    /// view is read-only: a store raises `ValueError`, and
+    /// `setflags(write=True)` fails. Once the list exists, the array
+    /// is built from it, so an edit or an appended atom shows up here
+    /// and in `write_con`.
     fn atom_ids_array<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<u64>>> {
         if let Some(owner) = self.parsed_columns(py)? {
             if let Some(view) = FrameColumns::column(&owner, |c| c.atom_ids.as_ref())? {
@@ -1257,6 +1257,50 @@ impl PyConFrame {
         let atoms = self.py_atoms(py)?;
         let data: Vec<u64> = atoms.iter().map(|a| a.atom_id).collect();
         Ok(data.into_pyarray(py))
+    }
+
+    /// True once `.atoms` has been built. Array getters leave this false.
+    #[getter]
+    fn atoms_materialized(&self) -> bool {
+        self.atoms_ready.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Times the parsed frame was copied into Python atoms.
+    #[getter]
+    fn atoms_fill_count(&self) -> usize {
+        self.atoms_fills.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Atomic numbers in file order, numpy `[N] uint64`.
+    ///
+    /// Z is not stored. Until `.atoms` exists the array is filled from
+    /// the type table, one lookup per species. Once the list exists it
+    /// follows that list. Unknown symbols are 0.
+    fn atomic_numbers<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<u64>>> {
+        if let Some(frame) = self.parsed_frame() {
+            return Ok(atomic_numbers_from_runs(&symbol_runs(frame)).into_pyarray(py));
+        }
+        let data: Vec<u64> = self
+            .py_atoms(py)?
+            .iter()
+            .map(|atom| crate::helpers::symbol_to_atomic_number(&atom.symbol))
+            .collect();
+        Ok(data.into_pyarray(py))
+    }
+
+    /// Per-axis fixed flags as a numpy `[N, 3] uint8` array.
+    ///
+    /// Column 0 is x, 1 is y, 2 is z. A held axis is 1. Until `.atoms`
+    /// exists the flags are copied from each parsed record. Once the
+    /// list exists the array follows that list.
+    fn fixed_mask_array<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<u8>>> {
+        if let Some(frame) = self.parsed_frame() {
+            let data = fixed_mask_bytes(frame.atom_data.iter().map(|atom| atom.fixed()));
+            return fixed_mask_array_from(py, data, frame.atom_data.len());
+        }
+        let atoms = self.py_atoms(py)?;
+        let data = fixed_mask_bytes(atoms.iter().map(|atom| atom.fixed));
+        fixed_mask_array_from(py, data, atoms.len())
     }
 
     // --- atom_id index ---
@@ -1324,12 +1368,12 @@ impl PyConFrame {
 
     /// Canonical multiset formula (`Cu:2|H:2`) for campaign composition index.
     ///
-    /// A frame that still holds the parser's atoms is counted in place.
-    /// Rebuilding it through Python atom objects allocated one string per
-    /// atom and made a million-atom read look noisy.
+    /// Until `.atoms` exists the parser's atoms are counted in place.
+    /// Once the list exists the formula follows it, including an edit,
+    /// a pop, an append, or an insert.
     #[getter]
     fn composition_formula(&self, py: Python<'_>) -> PyResult<String> {
-        if let Some(frame) = self.inner.as_ref() {
+        if let Some(frame) = self.parsed_frame() {
             return Ok(crate::index_proj::frame_composition_formula(frame));
         }
         let frame = self.to_con_frame(py)?;
@@ -1657,11 +1701,16 @@ impl PyConFrame {
     }
 
     fn atom_count(&self, py: Python<'_>) -> usize {
+        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            // pyo3 reads `ob_size` with a plain load. Another thread's
+            // append stores it inside the list's critical section.
+            let list = self.atoms.bind(py);
+            return pyo3::sync::critical_section::with_critical_section(list.as_any(), || {
+                list.len()
+            });
+        }
         if self.n_atoms > 0 {
             return self.n_atoms;
-        }
-        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
-            return self.atoms.bind(py).len();
         }
         self.inner
             .as_ref()
@@ -1733,6 +1782,7 @@ impl PyConFrame {
             postbox_header,
             atoms: PyList::empty(py).unbind(),
             atoms_ready: std::sync::atomic::AtomicBool::new(false),
+            atoms_fills: std::sync::atomic::AtomicUsize::new(0),
             atoms_init: std::sync::Mutex::new(()),
             spec_version,
             metadata: pyo3::sync::PyOnceLock::new(),
@@ -1782,6 +1832,7 @@ impl PyConFrame {
             postbox_header,
             atoms: PyList::empty(py).unbind(),
             atoms_ready: std::sync::atomic::AtomicBool::new(false),
+            atoms_fills: std::sync::atomic::AtomicUsize::new(0),
             atoms_init: std::sync::Mutex::new(()),
             spec_version,
             metadata: pyo3::sync::PyOnceLock::new(),
@@ -1815,6 +1866,7 @@ impl PyConFrame {
             postbox_header: frame.header.postbox_header.clone(),
             atoms: PyList::empty(py).unbind(),
             atoms_ready: std::sync::atomic::AtomicBool::new(false),
+            atoms_fills: std::sync::atomic::AtomicUsize::new(0),
             atoms_init: std::sync::Mutex::new(()),
             spec_version: frame.header.spec_version,
             metadata: pyo3::sync::PyOnceLock::new(),
@@ -1832,10 +1884,9 @@ impl PyConFrame {
         if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(());
         }
-        let _initializing = self
-            .atoms_init
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Detach while waiting. Holding this lock across `clear` and
+        // `append` must not stop the world on a free-threaded build.
+        let _initializing = lock_attached(py, &self.atoms_init);
         if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(());
         }
@@ -1872,6 +1923,8 @@ impl PyConFrame {
             let mass = per_atom_mass.get(i).copied().unwrap_or(0.0);
             list.append(PyAtomDatum::from_atom_with_mass(atom, mass))?;
         }
+        self.atoms_fills
+            .fetch_add(1, std::sync::atomic::Ordering::Release);
         self.atoms_ready
             .store(true, std::sync::atomic::Ordering::Release);
         Ok(())
@@ -1879,15 +1932,16 @@ impl PyConFrame {
 
     fn py_atoms(&self, py: Python<'_>) -> PyResult<Vec<PyAtomDatum>> {
         self.ensure_atoms(py)?;
-        self.atoms
-            .bind(py)
-            .iter()
-            .map(|item| {
-                item.extract::<PyAtomDatum>().map_err(|_| {
-                    PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
+        let list = self.atoms.bind(py);
+        pyo3::sync::critical_section::with_critical_section(list.as_any(), || {
+            list.iter()
+                .map(|item| {
+                    item.extract::<PyAtomDatum>().map_err(|_| {
+                        PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
+                    })
                 })
-            })
-            .collect()
+                .collect()
+        })
     }
 
     fn meta<'py>(&self, py: Python<'py>) -> PyResult<&Bound<'py, PyDict>> {
@@ -2189,6 +2243,10 @@ struct PackedColumns {
     cell: Vec<f64>,
     velocities: Option<Vec<f64>>,
     forces: Option<Vec<f64>>,
+    atom_ids: Vec<u64>,
+    atomic_numbers: Vec<u64>,
+    /// One species string repeated `count` times, in frame order.
+    symbol_runs: Vec<(String, usize)>,
 }
 
 fn frame_has_vel(frame: &ConFrame) -> bool {
@@ -2270,6 +2328,9 @@ fn pack_frame_columns<'a>(
             cell: Vec::new(),
             velocities: None,
             forces: None,
+            atom_ids: Vec::new(),
+            atomic_numbers: Vec::new(),
+            symbol_runs: Vec::new(),
         });
     }
     let n_atoms = frames[0].atom_data.len();
@@ -2288,6 +2349,9 @@ fn pack_frame_columns<'a>(
     let any_force = frames.iter().any(|frame| frame_has_force(frame));
     let mut velocities = any_vel.then(|| Vec::with_capacity(n_frames * n_atoms * 3));
     let mut forces = any_force.then(|| Vec::with_capacity(n_frames * n_atoms * 3));
+    let mut atom_ids = Vec::with_capacity(n_frames * n_atoms);
+    let mut atomic_numbers = Vec::with_capacity(n_frames * n_atoms);
+    let mut symbol_runs = Vec::new();
     for frame in frames {
         if pack_positions {
             for atom in &frame.atom_data {
@@ -2309,6 +2373,7 @@ fn pack_frame_columns<'a>(
         if let Some(dest) = forces.as_mut() {
             push_vec3(&frame.forces, frame, dest, |atom| atom.force());
         }
+        push_frame_identity(frame, &mut atom_ids, &mut atomic_numbers, &mut symbol_runs);
     }
     Some(PackedColumns {
         n_frames,
@@ -2319,6 +2384,9 @@ fn pack_frame_columns<'a>(
         cell,
         velocities,
         forces,
+        atom_ids,
+        atomic_numbers,
+        symbol_runs,
     })
 }
 
@@ -3043,15 +3111,18 @@ impl ConFrameList {
         Ok((digest, touch_s))
     }
 
-    /// Positions, masses, constraint flags, cell, and any velocity or
-    /// force block as one contiguous NumPy array each.
+    /// Positions, masses, constraint flags, cell, identity, and any
+    /// velocity or force block as one contiguous NumPy array each.
     ///
     /// `positions` is the coordinate slab from the read, the same array
     /// object on every call. The other arrays are copied from the parsed
-    /// frames while this call holds the list lock. Indexing a frame takes
-    /// that frame out of the list, and a later call then fails. Call this
-    /// before `frames[i]`. `write_columns` writes the dict back. Indexing
-    /// a frame still builds Python atoms; this does not.
+    /// frames while this call holds the list lock. `atom_ids` and
+    /// `atomic_numbers` are `(frames, atoms)` uint64. `symbols` is an
+    /// object array of that shape, one Python string per species run.
+    /// Indexing a frame takes that frame out of the list, and a later
+    /// call then fails. Call this before `frames[i]`. `write_columns`
+    /// writes the numeric dict back and ignores the identity keys.
+    /// Indexing a frame still builds Python atoms; this does not.
     fn columns(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let (packed, slab) = {
             // The write lock waits out any detached reader of the stored
@@ -3149,6 +3220,20 @@ impl ConFrameList {
         } else {
             dict.set_item("forces", py.None())?;
         }
+        let ids =
+            ndarray::Array2::from_shape_vec((packed.n_frames, packed.n_atoms), packed.atom_ids)
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        let numbers = ndarray::Array2::from_shape_vec(
+            (packed.n_frames, packed.n_atoms),
+            packed.atomic_numbers,
+        )
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        dict.set_item("atom_ids", ids.into_pyarray(py))?;
+        dict.set_item("atomic_numbers", numbers.into_pyarray(py))?;
+        dict.set_item(
+            "symbols",
+            symbols_array(py, &packed.symbol_runs, Some(packed.n_frames))?,
+        )?;
         Ok(dict.unbind())
     }
 
@@ -4039,6 +4124,23 @@ fn iter_con(py: Python<'_>, path: &str, mmap: bool, stream: bool) -> PyResult<Py
     })
 }
 
+/// Streaming iterator over frames in CON text the caller already holds.
+///
+/// Each frame is the same object `iter_con` yields for a path. Array
+/// getters on those frames read the parsed columns and do not build
+/// Python atoms. `read_con_string` parses the same text into a list.
+#[pyfunction]
+fn iter_con_string(contents: &str) -> PyResult<PyConFrameIterator> {
+    Ok(PyConFrameIterator {
+        source: FrameSource::Text(
+            crate::compression::ForwardText::from_owned(contents.to_owned()),
+            0,
+        ),
+        line_base: 0,
+        frame_index: 0,
+    })
+}
+
 /// Count frames without building atom / Python objects (skip walk).
 #[pyfunction]
 fn count_frames(py: Python<'_>, path: &str) -> PyResult<usize> {
@@ -4276,7 +4378,16 @@ fn con_frame_list_stored(
     for index in 0..n {
         if let Some(frame) = snapshot.slots()[index].as_ref() {
             // The clone reads only the private atomic snapshot.
-            out.push(frame.clone());
+            let mut owned = frame.clone();
+            if let Some(py_frame) = cached_borrows[index].as_ref()
+                && !py_frame
+                    .atoms_ready
+                    .load(std::sync::atomic::Ordering::Acquire)
+                && let Some((meta, minor_raw)) = metadata_edit(py, py_frame, frame)?
+            {
+                install_metadata(&mut owned, meta, minor_raw.as_deref());
+            }
+            out.push(owned);
             continue;
         }
         if let Some(frame) = cached_borrows[index].as_ref() {
@@ -5149,6 +5260,38 @@ fn write_list_string(
     Ok(Some(text))
 }
 
+/// Parsed metadata that disagrees with the frame the parser stored.
+type MetaEdit = (BTreeMap<String, Value>, Option<String>);
+
+/// `Some` when the Python metadata dict differs from `inner`.
+///
+/// `set_energy` and the other setters edit that dict and leave the
+/// parsed frame alone. A writer that emits `inner` would keep the old
+/// value.
+fn metadata_edit(
+    py: Python<'_>,
+    frame: &PyConFrame,
+    inner: &ConFrame,
+) -> PyResult<Option<MetaEdit>> {
+    let Some(dict) = frame.metadata.get(py) else {
+        return Ok(None);
+    };
+    let (meta, minor_raw) = py_metadata_to_json_map_with_minor(dict.bind(py).as_any())?;
+    if minor_raw.as_deref() == inner.header.metadata.huge_minor_raw() {
+        let mut stored = inner.header.metadata.to_map();
+        stored.remove(meta::CON_SPEC_VERSION);
+        stored.remove(meta::SECTIONS);
+        if stored == meta {
+            return Ok(None);
+        }
+    }
+    Ok(Some((meta, minor_raw)))
+}
+
+fn install_metadata(frame: &mut ConFrame, meta: BTreeMap<String, Value>, minor_raw: Option<&str>) {
+    frame.header.metadata = crate::types::FrameMeta::from_map_with_minor_raw(meta, minor_raw);
+}
+
 fn detach_stamped_pyframe<W>(
     py: Python<'_>,
     mut writer: ConFrameWriter<W>,
@@ -5160,6 +5303,16 @@ where
     if !frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire)
         && let Some(inner) = frame.inner.as_ref()
     {
+        if let Some((meta, minor_raw)) = metadata_edit(py, frame, inner)? {
+            let mut owned = inner.clone();
+            install_metadata(&mut owned, meta, minor_raw.as_deref());
+            let shared = frame.coords_shared();
+            return detach_refs(py, &[&owned], shared, move |refs| {
+                write_stamped_frame(&mut writer, refs[0]).map_err(|err| err.to_string())?;
+                Ok::<_, String>(writer)
+            })
+            .map_err(PyIOError::new_err);
+        }
         return detach_refs(py, &[inner], frame.coords_shared(), move |refs| {
             write_stamped_frame(&mut writer, refs[0]).map_err(|err| err.to_string())?;
             Ok::<_, String>(writer)
@@ -5195,10 +5348,16 @@ fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
 
 struct BorrowedFrames<'py> {
     held: Vec<PyRef<'py, PyConFrame>>,
+    /// Parsed frames with the live metadata dict copied on. Empty when
+    /// no frame's metadata was edited, so `refs` borrows `inner`.
+    owned: Vec<ConFrame>,
 }
 
 impl<'py> BorrowedFrames<'py> {
     fn refs(&self) -> Vec<&ConFrame> {
+        if !self.owned.is_empty() {
+            return self.owned.iter().collect();
+        }
         self.held
             .iter()
             .map(|frame| frame.inner.as_ref().expect("unmodified frame"))
@@ -5217,7 +5376,9 @@ impl<'py> BorrowedFrames<'py> {
 fn borrow_unmodified_frames<'py>(
     frames: &'py Bound<'_, PyAny>,
 ) -> PyResult<Option<BorrowedFrames<'py>>> {
+    let py = frames.py();
     let mut held = Vec::new();
+    let mut edits = Vec::new();
     for item in PyIterator::from_object(frames)? {
         let item = item?;
         let Ok(frame) = item.extract::<PyRef<'py, PyConFrame>>() else {
@@ -5226,14 +5387,31 @@ fn borrow_unmodified_frames<'py>(
         if frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire) || frame.inner.is_none() {
             return Ok(None);
         }
+        let inner = frame.inner.as_ref().expect("unmodified frame");
+        edits.push(metadata_edit(py, &frame, inner)?);
         held.push(frame);
     }
     if held.is_empty() {
         return Ok(None);
     }
+    let owned = if edits.iter().any(Option::is_some) {
+        held.iter()
+            .zip(edits)
+            .map(|(frame, edit)| {
+                let inner = frame.inner.as_ref().expect("unmodified frame");
+                let mut owned = inner.clone();
+                if let Some((meta, minor_raw)) = edit {
+                    install_metadata(&mut owned, meta, minor_raw.as_deref());
+                }
+                owned
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     #[cfg(any(test, feature = "borrow-path-counts"))]
     BORROW_LIST_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    Ok(Some(BorrowedFrames { held }))
+    Ok(Some(BorrowedFrames { held, owned }))
 }
 
 #[cfg(any(test, feature = "borrow-path-counts"))]
@@ -5847,6 +6025,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         postbox_header: Default::default(),
         atoms: py_atoms_to_list(py, atoms)?,
         atoms_ready: std::sync::atomic::AtomicBool::new(true),
+        atoms_fills: std::sync::atomic::AtomicUsize::new(0),
         atoms_init: std::sync::Mutex::new(()),
         spec_version: crate::CON_SPEC_VERSION,
         metadata: filled_lock(py, metadata.unbind()),
@@ -6882,6 +7061,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_all_frames, m)?)?;
     m.add_function(wrap_pyfunction!(read_first_frame, m)?)?;
     m.add_function(wrap_pyfunction!(iter_con, m)?)?;
+    m.add_function(wrap_pyfunction!(iter_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(count_frames, m)?)?;
     m.add_function(wrap_pyfunction!(read_nth_frame, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_string, m)?)?;
@@ -7812,6 +7992,24 @@ impl FrameSymbols {
             start = end;
         }
         Ok(ids.into_pyarray(py))
+    }
+
+    /// Object array of species strings, one interned string per run.
+    fn __call__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let mut items: Vec<Py<PyAny>> = Vec::with_capacity(self.len());
+        let mut start = 0usize;
+        for (name, &end) in self.runs.iter().zip(&self.ends) {
+            let text = name.clone_ref(py).into_any();
+            for _ in start..end {
+                items.push(text.clone_ref(py));
+            }
+            start = end;
+        }
+        let list = PyList::new(py, items)?;
+        let numpy = py.import("numpy")?;
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("dtype", numpy.getattr("object_")?)?;
+        numpy.call_method("array", (list,), Some(&kwargs))
     }
 }
 
@@ -8802,4 +9000,146 @@ fn select_atom_positions_on_frames(
         .detach(|| rust_sel(&selection_owned, &rust_frames))
         .map_err(chemfiles_err_to_py)?;
     multi_frame_selection_to_py(py, multi)
+}
+
+struct SymbolRun<'a> {
+    symbol: &'a str,
+    count: usize,
+}
+
+/// Species runs from the type table. One symbol per species, not per atom.
+fn symbol_runs(frame: &ConFrame) -> Vec<SymbolRun<'_>> {
+    let n = frame.atom_data.len();
+    let declared: usize = frame.header.natms_per_type.iter().sum();
+    if declared == n {
+        let mut runs = Vec::with_capacity(frame.header.natms_per_type.len());
+        let mut offset = 0usize;
+        for &count in &frame.header.natms_per_type {
+            if count == 0 || offset >= n {
+                continue;
+            }
+            let take = count.min(n - offset);
+            runs.push(SymbolRun {
+                symbol: frame.atom_data[offset].symbol.as_ref(),
+                count: take,
+            });
+            offset += take;
+        }
+        if offset == n {
+            return runs;
+        }
+    }
+    let mut runs = Vec::new();
+    let mut index = 0usize;
+    while index < n {
+        let ptr = frame.atom_data[index].symbol.as_ptr();
+        let symbol = frame.atom_data[index].symbol.as_ref();
+        let start = index;
+        index += 1;
+        while index < n && std::ptr::eq(frame.atom_data[index].symbol.as_ptr(), ptr) {
+            index += 1;
+        }
+        runs.push(SymbolRun {
+            symbol,
+            count: index - start,
+        });
+    }
+    runs
+}
+
+fn push_frame_identity(
+    frame: &ConFrame,
+    atom_ids: &mut Vec<u64>,
+    atomic_numbers: &mut Vec<u64>,
+    symbol_runs_out: &mut Vec<(String, usize)>,
+) {
+    let n = frame.atom_data.len();
+    match frame.atom_ids.as_slice() {
+        Some(slice) if slice.len() == n => atom_ids.extend_from_slice(slice),
+        _ => atom_ids.extend(frame.atom_data.iter().map(|atom| atom.atom_id)),
+    }
+    for run in symbol_runs(frame) {
+        let atomic = crate::helpers::symbol_to_atomic_number(run.symbol);
+        atomic_numbers.extend(std::iter::repeat_n(atomic, run.count));
+        symbol_runs_out.push((run.symbol.to_owned(), run.count));
+    }
+}
+
+/// Object array of species strings. Each run allocates one string.
+///
+/// The numeric columns do not store symbols, so this array is a copy
+/// of pointers. `rows` stacks those pointers as `(frames, atoms)`.
+fn symbols_array<'py>(
+    py: Python<'py>,
+    runs: &[(String, usize)],
+    rows: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let total: usize = runs.iter().map(|(_, count)| *count).sum();
+    let mut items: Vec<Py<PyAny>> = Vec::with_capacity(total);
+    for (symbol, count) in runs {
+        let text: Py<PyAny> = PyString::intern(py, symbol).into_any().unbind();
+        for _ in 0..*count {
+            items.push(text.clone_ref(py));
+        }
+    }
+    let list = PyList::new(py, items)?;
+    let numpy = py.import("numpy")?;
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("dtype", numpy.getattr("object_")?)?;
+    let array = numpy.call_method("array", (list,), Some(&kwargs))?;
+    let Some(n_frames) = rows else {
+        return Ok(array);
+    };
+    if n_frames == 0 {
+        return array.call_method1("reshape", ((0, 0),));
+    }
+    if !total.is_multiple_of(n_frames) {
+        return Err(PyValueError::new_err("symbol run length"));
+    }
+    array.call_method1("reshape", ((n_frames, total / n_frames),))
+}
+
+fn copy_f64_rows<'py>(
+    py: Python<'py>,
+    storage: &crate::storage_dtype::Array2Storage,
+    what: &str,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let n = storage.nrows();
+    let mut data = Vec::with_capacity(n.saturating_mul(3));
+    for row in 0..n {
+        data.extend_from_slice(&storage.as_f64_row(row));
+    }
+    let array = Array2::from_shape_vec((n, 3), data)
+        .map_err(|err| PyValueError::new_err(format!("{what} shape error: {err}")))?;
+    Ok(array.into_pyarray(py))
+}
+
+fn fixed_mask_bytes(flags: impl Iterator<Item = [bool; 3]>) -> Vec<u8> {
+    let mut data = Vec::new();
+    for flag in flags {
+        data.push(u8::from(flag[0]));
+        data.push(u8::from(flag[1]));
+        data.push(u8::from(flag[2]));
+    }
+    data
+}
+
+fn fixed_mask_array_from<'py>(
+    py: Python<'py>,
+    data: Vec<u8>,
+    n: usize,
+) -> PyResult<Bound<'py, PyArray2<u8>>> {
+    let array = Array2::from_shape_vec((n, 3), data)
+        .map_err(|err| PyValueError::new_err(format!("fixed_mask_array shape error: {err}")))?;
+    Ok(array.into_pyarray(py))
+}
+
+fn atomic_numbers_from_runs(runs: &[SymbolRun<'_>]) -> Vec<u64> {
+    let n = runs.iter().map(|run| run.count).sum();
+    let mut data = Vec::with_capacity(n);
+    for run in runs {
+        let atomic = crate::helpers::symbol_to_atomic_number(run.symbol);
+        data.extend(std::iter::repeat_n(atomic, run.count));
+    }
+    data
 }

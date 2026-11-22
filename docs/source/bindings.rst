@@ -307,12 +307,23 @@ Types
     set\_neb\_band(), atom\_index\_by\_id(id) (v0.10.0+),
     build\_atom\_id\_index() (v0.10.0+), coords\_array() (v0.10.0+),
     velocities\_array() (v0.10.0+), forces\_array() (v0.10.0+),
-    energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+).
-    For a frame from a read, ``vel``, ``frc``, ``mass_column`` and, until
-    ``.atoms`` is used, the ``\*_array()`` methods other than ``coords_array()``
-    are read-only views of the parsed columns: no copy, and ``.copy()`` gives
-    a writeable array. ``symbols`` (a ``FrameSymbols``) gives every atom's
-    symbol as interned runs, without building ``atoms``.
+    energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+),
+    atomic\_numbers(), fixed\_mask\_array().
+    ``atoms_materialized`` is false until ``.atoms`` is built.
+    ``atoms_fill_count`` counts that build. The array getters above do
+    not increment it. For a frame from a read, ``vel``, ``frc``,
+    ``mass_column`` and, until ``.atoms`` is used, the ``\*_array()`` methods
+    other than ``coords_array()`` are read-only views of the parsed
+    columns: no copy, a store raises ``ValueError``, and
+    ``setflags(write=True)`` fails; ``.copy()`` gives a writeable array.
+    ``symbols`` (a ``FrameSymbols``) gives every atom's symbol as interned
+    runs without building ``atoms``, and ``symbols()`` returns an object
+    array from those runs. Once ``.atoms`` exists, those getters,
+    ``composition_formula``, ``atomic_numbers``, and ``fixed_mask_array``
+    follow it, including an edit, a pop, an append, or an insert.
+    ``len`` and ``repr`` follow that list, including a frame from
+    ``from_ase``. ``write_con`` writes the list and a metadata edit made
+    before ``.atoms`` exists.
     The constructor and ``from_ase()`` raise ``readcon.NonFiniteValue`` (a
     ``ValueError``) for a cell length or angle that is NaN or infinite, and
     for a ``lattice_vectors`` metadata matrix that holds one. The message names
@@ -333,6 +344,11 @@ Types
     With ``stream=True``, the iterator raises ``OSError`` for a parse error or invalid UTF-8 (Unicode Transformation Format, 8-bit) when it reaches the bad frame, after the frames before it.
     An input or output error from the file or the decoder raises ``OSError`` with a message that starts with ``read error:``, after the frames in the bytes read before it.
     Setting both ``mmap`` and ``stream`` raises ``ValueError``.
+
+``readcon.iter_con_string(text)``
+    The same iterator over CON text
+    the caller already holds. Each frame's array getters read the parsed
+    columns, as they do for ``iter_con`` and ``read_con_string``.
 
 ``readcon.symbol_to_atomic_number(symbol)``
     Atomic number for a
@@ -379,11 +395,17 @@ CUDA). Legacy
 
     frame = readcon.read_first_frame("trajectory.con")
 
+    atom_ids = frame.atom_ids_array()     # read-only uint64 view
+    assert atom_ids.flags.writeable is False
+    symbols = frame.symbols()             # object array, one str per species
+    atomic_numbers = frame.atomic_numbers()  # uint64 copy from the type table
+    fixed = frame.fixed_mask_array()      # uint8 (N, 3) copy; 1 means held
+    assert frame.atoms_materialized is False
+
     coords = frame.coords_array()         # ndarray (N, 3); inspect .dtype
     forces = frame.forces_array()         # Optional; None if absent
     velocities = frame.velocities_array()
     energies = frame.energies_array()     # Optional shape (N,)
-    atom_ids = frame.atom_ids_array()     # typically uint64
 
     # Zero-copy hand-off into torch via DLPack (dtype follows the tensor).
     coords_torch = torch.from_dlpack(coords)
