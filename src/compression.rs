@@ -345,6 +345,14 @@ impl ForwardText {
         })
     }
 
+    /// Text the caller already holds. Page release is a no-op.
+    pub fn from_owned(text: String) -> Self {
+        Self {
+            contents: FileContents::Owned(text),
+            released: 0,
+        }
+    }
+
     pub fn as_str(&self) -> &str {
         match &self.contents {
             FileContents::Owned(s) => s,
