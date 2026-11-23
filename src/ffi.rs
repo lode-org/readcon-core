@@ -1506,6 +1506,15 @@ pub unsafe extern "C" fn free_con_frame_iterator(iterator: *mut CConFrameIterato
 fn export_catoms(frame: &ConFrame) -> Result<Vec<CAtom>, crate::writer::WriteError> {
     let coords = crate::writer::frame_coords(frame)?;
     let atoms = &frame.atom_data;
+    let typed: usize = frame.header.natms_per_type.iter().sum();
+    if typed != atoms.len() {
+        return Err(crate::writer::WriteError::Format(
+            crate::error::ParseError::ValidationError(format!(
+                "the header types {typed} atoms but the frame holds {}",
+                atoms.len()
+            )),
+        ));
+    }
     let mut out = Vec::with_capacity(atoms.len());
     let has_vel = frame.has_velocities();
     let has_force = frame.has_forces();
@@ -1734,7 +1743,8 @@ pub unsafe extern "C" fn rkr_frame_plain_geometry(
 /// Extracts the core atomic data into a transparent `CFrame` struct.
 /// The caller OWNS the returned pointer and MUST call `free_c_frame` on it.
 /// NULL with `RKR_STATUS_VALIDATION_ERROR` when the positions column does
-/// not hold one `(x, y, z)` row per atom.
+/// not hold one `(x, y, z)` row per atom, or the header type counts do not
+/// add up to the atoms.
 ///
 /// # Safety
 /// frame_handle must be valid. The caller takes ownership of the returned CFrame.
@@ -5851,13 +5861,15 @@ fn copy_array1_f64(
         return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let arr = get(frame);
-    let n = if !arr.is_empty() {
-        arr.len()
-    } else {
-        frame.atom_data.len()
-    };
+    let n = frame.atom_data.len();
     if section && arr.is_empty() {
         return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
+    }
+    if !arr.is_empty() && arr.len() != n {
+        return note_validation(&format!(
+            "column has {} rows but the frame holds {n} atoms",
+            arr.len()
+        ));
     }
     if out_len < n {
         return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
@@ -5866,35 +5878,29 @@ fn copy_array1_f64(
         return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
     let dest = unsafe { std::slice::from_raw_parts_mut(out, n) };
-    if arr.len() == n {
-        if let Some(src) = arr.f64_slice()
-            && src.len() == n
-        {
-            dest.copy_from_slice(src);
-            return note(RKRStatus::RKR_STATUS_SUCCESS);
+    if arr.is_empty() {
+        // Only the mass column is optional here; the header gives one
+        // mass per type run.
+        let header = &frame.header;
+        if header.natms_per_type.iter().sum::<usize>() != n {
+            return note_validation("no mass column, and the type counts do not cover the atoms");
         }
-        for (slot, dest_i) in dest.iter_mut().enumerate() {
-            *dest_i = arr.get_f64(slot);
+        let mut at = 0;
+        for (count, mass) in header.natms_per_type.iter().zip(&header.masses_per_type) {
+            dest[at..at + count].fill(*mass);
+            at += count;
+        }
+        if at != n {
+            return note_validation("no mass column, and a type has no mass");
         }
         return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
-    let mut written = 0usize;
-    for (slot, &count) in frame.header.natms_per_type.iter().enumerate() {
-        let mass = frame
-            .header
-            .masses_per_type
-            .get(slot)
-            .copied()
-            .unwrap_or(0.0);
-        let take = count.min(n - written);
-        dest[written..written + take].fill(mass);
-        written += take;
-        if written == n {
-            break;
-        }
+    if let Some(src) = arr.f64_slice() {
+        dest.copy_from_slice(src);
+        return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
-    if written < n {
-        dest[written..].fill(0.0);
+    for (slot, dest_i) in dest.iter_mut().enumerate() {
+        *dest_i = arr.get_f64(slot);
     }
     note(RKRStatus::RKR_STATUS_SUCCESS)
 }
@@ -5998,6 +6004,10 @@ pub unsafe extern "C" fn rkr_frame_copy_atom_energies(
 ) -> RKRStatus {
     copy_array1_f64(frame_handle, out, out_len, |f| &f.atom_energies, true)
 }
+/// Copy one mass per atom into `out` (length >= `N`). Without a mass column
+/// the header's per-type masses are copied. `RKR_STATUS_VALIDATION_ERROR`
+/// when a column or the type counts do not give one value per atom.
+///
 /// # Safety
 ///
 /// A non-null pointer argument must point at a live value of its declared
@@ -6010,6 +6020,9 @@ pub unsafe extern "C" fn rkr_frame_copy_masses(
 ) -> RKRStatus {
     copy_array1_f64(frame_handle, out, out_len, |f| &f.masses, false)
 }
+/// Copy one id per atom into `out` (length >= `N`). Without an id column
+/// of `N` entries the ids stored on the atoms are copied.
+///
 /// # Safety
 ///
 /// A non-null pointer argument must point at a live value of its declared
@@ -6026,9 +6039,12 @@ pub unsafe extern "C" fn rkr_frame_copy_atom_ids(
     let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
         return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
-    let n = frame.atom_ids.len().max(frame.atom_data.len());
+    let n = frame.atom_data.len();
     if out_len < n {
         return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
+    }
+    if n == 0 {
+        return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
     let dest = unsafe { std::slice::from_raw_parts_mut(out, n) };
     if frame.atom_ids.len() == n
@@ -6108,6 +6124,8 @@ pub unsafe extern "C" fn rkr_frame_positions_as_dlpack(
 
 /// Ingest positions from a DLManagedTensorVersioned (CPU float32/64, shape (N,3)
 /// or length 3N). Metatensor-style write path symmetry.
+/// `RKR_STATUS_VALIDATION_ERROR` when the frame's positions column is not
+/// `(N, 3)`.
 ///
 /// # Safety
 /// `frame` must be a valid mutable frame; `tensor` non-null managed tensor.
@@ -6180,7 +6198,11 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     };
     if frame.positions.nrows() != n || frame.positions.ncols() != 3 {
-        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+        return note_validation(&format!(
+            "positions column is ({}, {}) but the frame holds {n} atoms of (x, y, z)",
+            frame.positions.nrows(),
+            frame.positions.ncols()
+        ));
     }
     // The positions column is the coordinate store. The imported rows
     // replace it, and accessors read those rows.
@@ -8880,6 +8902,63 @@ Coordinates of Component 1
             }
             unsafe { rkr_dlpack_delete(t) };
         }
+    }
+
+    #[test]
+    fn copy_masses_without_a_mass_column_reads_the_header() {
+        let mut frame = vel_forces_frame();
+        let n = frame.atom_data.len();
+        let expected: Vec<f64> = (0..n).map(|i| frame.masses.get_f64(i)).collect();
+        frame.masses =
+            crate::storage_dtype::FloatArray1::zeros(crate::storage_dtype::ElementKind::Float64, 0);
+        let handle = &frame as *const ConFrame as *const RKRConFrame;
+        let mut out = vec![-1.0f64; n];
+        let st = unsafe { rkr_frame_copy_masses(handle, out.as_mut_ptr(), out.len()) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        assert_eq!(out, expected);
+        frame.masses = crate::storage_dtype::FloatArray1::from_f64_vec(vec![1.0; n - 1]);
+        let handle = &frame as *const ConFrame as *const RKRConFrame;
+        let st = unsafe { rkr_frame_copy_masses(handle, out.as_mut_ptr(), out.len()) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
+
+    #[test]
+    fn copy_atom_ids_without_an_id_column_reads_the_atoms() {
+        let mut frame = vel_forces_frame();
+        let n = frame.atom_data.len();
+        let expected: Vec<u64> = frame.atom_data.iter().map(|a| a.atom_id).collect();
+        frame.atom_ids = ndarray::ArcArray1::from_vec(Vec::new());
+        let handle = &frame as *const ConFrame as *const RKRConFrame;
+        let mut out = vec![u64::MAX; n];
+        let st = unsafe { rkr_frame_copy_atom_ids(handle, out.as_mut_ptr(), out.len()) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn positions_from_dlpack_rejects_a_column_without_three_columns() {
+        let mut frame = vel_forces_frame();
+        let n = frame.atom_data.len();
+        let mut t: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+        let handle = &mut frame as *mut ConFrame as *mut RKRConFrame;
+        assert_eq!(
+            unsafe { rkr_frame_positions_dlpack(handle, &mut t) },
+            RKRStatus::RKR_STATUS_SUCCESS
+        );
+        frame.positions =
+            crate::storage_dtype::FloatArray2::from_f64_row_major(n, 2, vec![0.5; n * 2]);
+        let handle = &mut frame as *mut ConFrame as *mut RKRConFrame;
+        let st = unsafe { rkr_frame_positions_from_dlpack(handle, t) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+        unsafe { rkr_dlpack_delete(t) };
+    }
+
+    #[test]
+    fn c_frame_export_rejects_type_counts_that_miss_atoms() {
+        let mut frame = vel_forces_frame();
+        frame.header.natms_per_type = vec![1];
+        let handle = &frame as *const ConFrame as *const RKRConFrame;
+        assert!(unsafe { rkr_frame_to_c_frame(handle) }.is_null());
     }
 
     #[test]

@@ -9975,3 +9975,36 @@ fn atomic_numbers_from_runs(runs: &[SymbolRun<'_>]) -> Vec<u64> {
     }
     data
 }
+
+#[cfg(test)]
+mod push_vec3_tests {
+    use super::push_vec3;
+    use crate::storage_dtype::FloatArray2;
+
+    fn frame() -> crate::types::ConFrame {
+        let text = include_str!("../resources/test/tiny_cuh2_vel_forces.con");
+        crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse")
+    }
+
+    #[test]
+    fn a_column_without_three_columns_packs_the_atom_values() {
+        let frame = frame();
+        let n = frame.atom_data.len();
+        let mut expected = Vec::new();
+        for atom in &frame.atom_data {
+            expected.extend_from_slice(&atom.velocity().unwrap());
+        }
+        let two = FloatArray2::from_f64_row_major(n, 2, vec![1.0; n * 2]);
+        let mut out = Vec::new();
+        push_vec3(&two, &frame, &mut out, |atom| atom.velocity());
+        assert_eq!(out, expected);
+        // Same element count as (n, 3), another shape.
+        let wide = FloatArray2::from_f64_row_major(n * 3 / 4, 4, vec![2.0; n * 3]);
+        let mut out = Vec::new();
+        push_vec3(&wide, &frame, &mut out, |atom| atom.velocity());
+        assert_eq!(out, expected);
+    }
+}
