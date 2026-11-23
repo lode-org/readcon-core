@@ -812,6 +812,7 @@ impl<W: Write> ConFrameWriter<W> {
                 ),
             )));
         }
+        check_position_rows(frame)?;
         // A uniform trajectory either has lattice vectors on every frame
         // or on none. The first frame decides; the rest read lines 3-4.
         let (boxl, angles) = if self.keep_bound && self.bound_no_lattice == Some(true) {
@@ -1068,7 +1069,7 @@ impl<W: Write> ConFrameWriter<W> {
                     row.clear();
                 }
             }
-            let coord_buf = frame_coords(frame);
+            let coord_buf = frame_coords(frame)?;
             let mut atom_idx_offset = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[atom_idx_offset].symbol;
@@ -2070,23 +2071,48 @@ pub(crate) fn borrowed_coord_slice(frame: &ConFrame) -> Option<&[f64]> {
     None
 }
 
-fn frame_coords(frame: &ConFrame) -> std::borrow::Cow<'_, [f64]> {
+/// Row-major coordinates of every atom.
+///
+/// A `ValidationError` when no buffer holds one `(x, y, z)` row per atom:
+/// a positions column with other than three columns, with a row count
+/// that is not the atom count, or empty while the frame has atoms.
+pub(crate) fn frame_coords(frame: &ConFrame) -> Result<std::borrow::Cow<'_, [f64]>, WriteError> {
     let n = frame.atom_data.len();
-    if let Some(slice) = frame.positions.f64_slice()
+    if let Some(slice) = frame.positions.f64_rows3()
         && slice.len() == n * 3
     {
-        return std::borrow::Cow::Borrowed(slice);
+        return Ok(std::borrow::Cow::Borrowed(slice));
     }
     if let Some(slice) = borrowed_coord_slice(frame)
         && slice.len() == n * 3
     {
-        return std::borrow::Cow::Borrowed(slice);
+        return Ok(std::borrow::Cow::Borrowed(slice));
     }
+    check_position_rows(frame)?;
     let mut owned = Vec::with_capacity(n.saturating_mul(3));
     for index in 0..n {
         owned.extend_from_slice(&frame.xyz_at(index));
     }
-    std::borrow::Cow::Owned(owned)
+    Ok(std::borrow::Cow::Owned(owned))
+}
+
+/// [`frame_coords`] succeeds for `frame`, checked without copying a row.
+fn check_position_rows(frame: &ConFrame) -> Result<(), WriteError> {
+    let n = frame.atom_data.len();
+    let positions = &frame.positions;
+    if positions.nrows() == n && (n == 0 || positions.ncols() == 3) {
+        return Ok(());
+    }
+    if borrowed_coord_slice(frame).is_some_and(|slice| slice.len() == n * 3) {
+        return Ok(());
+    }
+    Err(WriteError::Format(
+        crate::error::ParseError::ValidationError(format!(
+            "positions column is ({}, {}) but the frame holds {n} atoms of (x, y, z)",
+            positions.nrows(),
+            positions.ncols()
+        )),
+    ))
 }
 
 struct MotionFmt<'a> {
@@ -2202,8 +2228,8 @@ pub fn wide_frame_header(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
     if frame.atom_data.is_empty() {
         return Ok(header);
     }
-    let with_one = format_coord_range(frame, 0, 1);
-    let coords = frame_coords(frame);
+    let with_one = format_coord_range(frame, 0, 1)?;
+    let coords = frame_coords(frame)?;
     let first = coords.get(..3).unwrap_or(&[]);
     let one = format_coordinate_lines(&frame.atom_data[..1], first)?;
     if let Some(species) = with_one.strip_suffix(one.as_slice()) {
@@ -2214,10 +2240,14 @@ pub fn wide_frame_header(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
 
 /// Coordinate lines for atoms `begin..end`, including a species header when
 /// the range contains the first atom of that species.
-pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> Vec<u8> {
+pub(crate) fn format_coord_range(
+    frame: &ConFrame,
+    begin: usize,
+    end: usize,
+) -> Result<Vec<u8>, WriteError> {
     let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
     let prec = FloatFormat::RoundTrip;
-    let coords = frame_coords(frame);
+    let coords = frame_coords(frame)?;
     let mut buf = Vec::with_capacity((end - begin).saturating_mul(32) + 64);
     let mut ryu = ryu::Buffer::new();
     let mut slots = [FmtSlot::new(); 3];
@@ -2256,7 +2286,7 @@ pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> 
         }
         offset = type_end;
     }
-    buf
+    Ok(buf)
 }
 
 /// Coordinate lines for `atoms`, using the same formatter as a frame write.
@@ -5061,7 +5091,10 @@ fn sum_spelling_widths(values: &[f64]) -> usize {
 }
 
 /// Floats the writer emits for `frame`, excluding the header text around them.
-fn packed_float_widths(frame: &ConFrame) -> usize {
+///
+/// `None` when the frame has no `(x, y, z)` row per atom, which the
+/// buffered path reports as an error.
+fn packed_float_widths(frame: &ConFrame) -> Option<usize> {
     let mut sum = 0usize;
     let (boxl, angles) = written_box(frame);
     add_widths(&mut sum, &boxl);
@@ -5069,7 +5102,7 @@ fn packed_float_widths(frame: &ConFrame) -> usize {
     add_widths(&mut sum, &frame.header.masses_per_type);
     // The positions column may have been moved into a slab. `frame_coords`
     // borrows that row; `xyz_at` would only see the empty column.
-    let coords = frame_coords(frame);
+    let coords = frame_coords(frame).ok()?;
     for index in 0..frame.atom_data.len() {
         let at = index * 3;
         sum += round_trip_width(coords[at]);
@@ -5107,7 +5140,7 @@ fn packed_float_widths(frame: &ConFrame) -> usize {
             sum += round_trip_width(x) + round_trip_width(y) + round_trip_width(z);
         }
     }
-    sum
+    Some(sum)
 }
 
 fn optional_rows_width(storage: Option<&crate::storage_dtype::Array2Storage>) -> usize {
@@ -5219,15 +5252,15 @@ fn packed_frame_lengths(
                 frames[start..end]
                     .iter()
                     .map(|frame| packed_float_widths(frame))
-                    .collect::<Vec<_>>()
+                    .collect::<Option<Vec<_>>>()
             }));
         }
         let mut widths = Vec::with_capacity(frames.len());
         for guard in guards {
-            widths.extend(guard.join().unwrap_or_default());
+            widths.extend(guard.join().ok().flatten()?);
         }
-        widths
-    });
+        Some(widths)
+    })?;
     if widths.len() != frames.len() {
         return None;
     }
@@ -7353,7 +7386,7 @@ mod parallel_write_bytes {
     #[test]
     fn coordinate_lines_match_the_serial_frame_body() {
         let frames = frames_from_text(&wide_text(32), Some(1)).unwrap();
-        let rows = super::frame_coords(&frames[0]);
+        let rows = super::frame_coords(&frames[0]).unwrap();
         let lines = super::format_coordinate_lines(&frames[0].atom_data, &rows).unwrap();
         let serial = write_frames_to_vec(&frames).unwrap();
         let text = std::str::from_utf8(&serial).unwrap();
@@ -7446,7 +7479,7 @@ mod parallel_write_bytes {
     fn a_binding_header_plus_coordinate_lines_match_the_bound_writer() {
         let frame = copper_frame(4, "Cu", 63.546, |i| i as u64);
         let header = super::wide_frame_header(&frame).expect("header");
-        let rows = super::frame_coords(&frame);
+        let rows = super::frame_coords(&frame).expect("coords");
         let coords = super::format_coordinate_lines(&frame.atom_data, &rows).expect("coords");
         let mut full = Vec::new();
         {
@@ -7473,7 +7506,7 @@ mod parallel_write_bytes {
             let mut split = header.clone();
             for rank in 0..ranks {
                 let slice = &frame.atom_data[rank * share..(rank + 1) * share];
-                let rows = super::frame_coords(&frame);
+                let rows = super::frame_coords(&frame).expect("coords");
                 split.extend(
                     super::format_coordinate_lines(
                         slice,
