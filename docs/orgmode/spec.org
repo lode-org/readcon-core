@@ -686,7 +686,7 @@ tail           = [blank-line] *tail-line
 file           = *frame [tail]
 
 unit-power     = "^" ["-"] ( 1*digit ["." *digit] / "." 1*digit )
-unit-atom      = %s"m" / %s"meter" / %s"metre" / %s"angstrom" / %s"Angstrom" / %s"A" / %s"a" / %s"å" / %s"Å" / %s"nm" / %s"nanometer" / %s"bohr" / %s"a0" / %s"J" / %s"j" / %s"joule" / %s"eV" / %s"ev" / %s"meV" / %s"mev" / %s"MeV" / %s"hartree" / %s"ha" / %s"kcal" / %s"kJ" / %s"kj" / %s"kg" / %s"kilogram" / %s"u" / %s"amu" / %s"AMU" / %s"dalton" / %s"da" / %s"s" / %s"second" / %s"fs" / %s"femtosecond" / %s"ps" / %s"picosecond" / %s"ns" / %s"nanosecond" / %s"mol"
+unit-atom      = %s"m" / %s"meter" / %s"metre" / %s"angstrom" / %s"Angstrom" / %s"A" / %s"å" / %s"Å" / %s"nm" / %s"nanometer" / %s"bohr" / %s"a0" / %s"J" / %s"j" / %s"joule" / %s"eV" / %s"ev" / %s"meV" / %s"mev" / %s"MeV" / %s"hartree" / %s"Ha" / %s"kcal" / %s"kJ" / %s"kj" / %s"kg" / %s"kilogram" / %s"u" / %s"Da" / %s"amu" / %s"AMU" / %s"dalton" / %s"s" / %s"second" / %s"fs" / %s"femtosecond" / %s"ps" / %s"picosecond" / %s"ns" / %s"nanosecond" / %s"mol"
 unit-term      = unit-atom [unit-power] / "(" unit-expr ")" [unit-power]
 unit-expr      = unit-term *( ( "*" / "/" ) unit-term )
 #+end_example
