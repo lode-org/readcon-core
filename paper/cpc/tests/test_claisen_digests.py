@@ -202,3 +202,17 @@ def test_stage_refuses_to_overwrite_divergent_outputs(tmp_path) -> None:
     module.stage_or_verify(staged, copy, overwrite=True)
     assert (copy / "identity" / "ts.con").read_text(encoding="utf-8") == "tampered\n"
     module.check_outputs(copy)
+
+
+def test_the_last_provenance_of_the_supersedes_chain_is_checked(tmp_path) -> None:
+    module = _load()
+    assert module.live_provenance(module.DATA)[0] == "PROVENANCE-3"
+    copy = _copy_claisen(tmp_path, module.DATA)
+    (copy / "PROVENANCE-3").unlink()
+    assert module.live_provenance(copy)[0] == "PROVENANCE-2"
+    (copy / "PROVENANCE-4").write_text(
+        "supersedes: PROVENANCE-2\nexported torchscript: /" + "tmp/x.pt\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit, match="PROVENANCE-4 names a machine path"):
+        module.check_outputs(copy)
