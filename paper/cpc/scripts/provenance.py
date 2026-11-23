@@ -136,9 +136,7 @@ def source_identity() -> dict:
         if not commit or commit in seen:
             continue
         seen.add(commit)
-        listing = (
-            _git("ls-tree", "-r", commit, "--", *LIBRARY_PATHS)
-        )
+        listing = _git("ls-tree", "-r", commit, "--", *LIBRARY_PATHS)
         if not listing:
             continue
         if hashed is None:

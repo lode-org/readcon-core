@@ -2942,10 +2942,7 @@ def minor_1_label_applied(tmp):
         f"velocity_time_unit {unit!r}; to_ase() "
         f"{'equals' if close else 'differs from'} the file (rtol 1e-6); rewritten version {version}, "
         f"units.time {label!r}",
-        unit == NATURAL
-        and close
-        and version == (3, 1)
-        and label == NATURAL,
+        unit == NATURAL and close and version == (3, 1) and label == NATURAL,
     )
 
 
@@ -3431,7 +3428,9 @@ def main() -> int:
         parser.error(f"unknown probe: {', '.join(unknown)}")
     results = run_all(only)
     failed = failures(results)
-    differs = stale_against_record(results, args.record or selected) if args.check else []
+    differs = (
+        stale_against_record(results, args.record or selected) if args.check else []
+    )
     stale = stale_module() + differs
     if not args.check and not failed and not stale:
         contents = json.dumps(record(results), indent=2) + "\n"

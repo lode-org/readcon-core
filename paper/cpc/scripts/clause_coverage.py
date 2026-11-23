@@ -192,10 +192,7 @@ def probes() -> dict[str, set[str]]:
         sys.exit(
             f"{rel(PROBES)} is not a passing probe record: {', '.join(failed[:5])}"
         )
-    return {
-        probe["id"]: ids_in(probe.get("rule", ""))
-        for probe in record["probes"]
-    }
+    return {probe["id"]: ids_in(probe.get("rule", "")) for probe in record["probes"]}
 
 
 def depth(line: str) -> int:
