@@ -120,7 +120,13 @@ fn con_units_21_velocity_follows_the_assigned_time() {
         "0 0 0 0 0",
     );
     let lying = format!("{lying}\nH\nVelocities of Component 1\n0.1 0.2 0.3 0 0\n");
-    assert_eq!(class_of(&lying), "ok");
+    assert_eq!(class_of(&lying), "InvalidUnits");
+    let con3 = frame(
+        r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV","time":"fs","velocity":"angstrom/(amu*angstrom^2/eV)^0.5"},"sections":["velocities"]}"#,
+        "0 0 0 0 0",
+    );
+    let con3 = format!("{con3}\nH\nVelocities of Component 1\n0.1 0.2 0.3 0 0\n");
+    assert_eq!(class_of(&con3), "ok");
 }
 
 /// CON-units.5 and CON-units.16. The two natural spellings match, and a, ha, da do not fold.
