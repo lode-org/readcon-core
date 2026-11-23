@@ -6226,10 +6226,6 @@ mod tests {
         assert!((to_nm - 0.1).abs() < 1e-12);
         let x_nm = frame.atom_data[0].x() * to_nm;
         assert!((x_nm - 0.1).abs() < 1e-12);
-    }
-
-    #[test]
-    fn builder_set_units_uses_the_selected_major() {
         let units = serde_json::json!({
             "length": "angstrom",
             "energy": "eV",
