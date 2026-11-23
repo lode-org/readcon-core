@@ -2364,6 +2364,30 @@ where
     })
 }
 
+/// Store double `at` of a C-contiguous array, one relaxed store.
+///
+/// Other threads read the same buffer with [`load_numpy_triple`] without
+/// a lock, so no `&mut` slice of it may exist. An `at` past the end
+/// stores nothing. `Err` when the array is not C-contiguous.
+fn store_numpy_component<D>(
+    array: &Bound<'_, numpy::PyArray<f64, D>>,
+    at: usize,
+    value: f64,
+) -> Result<(), ()>
+where
+    D: numpy::ndarray::Dimension,
+{
+    if !array.is_c_contiguous() {
+        return Err(());
+    }
+    if let Some((ptr, len)) = numpy_f64_ptr(array)
+        && at < len
+    {
+        unsafe { crate::types::atomic_store_f64(ptr.cast_mut().add(at), value) };
+    }
+    Ok(())
+}
+
 fn frame_from_arrays(
     positions: &[f64],
     masses: &[f64],

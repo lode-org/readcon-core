@@ -750,31 +750,18 @@ impl PyConFrame {
         axis: usize,
         value: f64,
     ) -> PyResult<()> {
-        if let Some(owned) = &self.xyz_owned {
-            let arr = owned.bind(py);
-            let n = arr.shape()[0];
-            if index < n {
-                unsafe {
-                    let slice = arr.as_slice_mut().map_err(|err| {
-                        PyValueError::new_err(format!("xyz is not contiguous: {err}"))
-                    })?;
-                    slice[index * 3 + axis] = value;
-                }
-            }
+        if let Some(owned) = &self.xyz_owned
+            && index < self.n_atoms
+        {
+            store_numpy_component(owned.bind(py), index * 3 + axis, value)
+                .map_err(|()| PyValueError::new_err("xyz is not contiguous"))?;
         }
-        if let Some(slab) = &self.slab {
-            let arr = slab.bind(py);
-            let shape = arr.shape();
-            let n = shape[1];
-            if index < n && self.slab_index < shape[0] {
-                unsafe {
-                    let slice = arr.as_slice_mut().map_err(|err| {
-                        PyValueError::new_err(format!("coordinate slab is not contiguous: {err}"))
-                    })?;
-                    let offset = (self.slab_index * n + index) * 3 + axis;
-                    slice[offset] = value;
-                }
-            }
+        if let Some(slab) = &self.slab
+            && index < self.n_atoms
+        {
+            let at = (self.slab_index * self.n_atoms + index) * 3 + axis;
+            store_numpy_component(slab.bind(py), at, value)
+                .map_err(|()| PyValueError::new_err("coordinate slab is not contiguous"))?;
         }
         Ok(())
     }
