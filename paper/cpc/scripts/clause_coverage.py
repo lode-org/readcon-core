@@ -20,9 +20,12 @@ gives a reason for a clause that something names.
 
     python paper/cpc/scripts/clause_coverage.py            # writes clauses_macros.tex from the live tree
     python paper/cpc/scripts/clause_coverage.py --check    # compares the live regeneration without writing
-    python paper/cpc/scripts/clause_coverage.py --record   # writes the one final spec-major record
+    python paper/cpc/scripts/clause_coverage.py --record   # appends a final spec-major record
 
-It also writes clauses_macros.tex, the counts the paper prints.
+It also writes clauses_macros.tex, the counts the paper prints. A committed
+final record is never rewritten: when the sources change, --record writes
+clause_coverage-<version>-spec-major-<n>.json, which supersedes record n - 1,
+and --check compares the newest one.
 """
 
 from __future__ import annotations
@@ -51,7 +54,22 @@ SKIP_DIRS = {"target", "build", "__pycache__"}
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
 RECORD_DIR = ROOT / "data" / "spec"
 LEGACY_RECORD = RECORD_DIR / f"clause_coverage-{VERSION}.json"
-FINAL_RECORD = RECORD_DIR / f"clause_coverage-{VERSION}-spec-major.json"
+
+
+def final_record(n: int) -> Path:
+    """Final record n of this version. Record n supersedes record n - 1."""
+    suffix = "" if n == 1 else f"-{n}"
+    return RECORD_DIR / f"clause_coverage-{VERSION}-spec-major{suffix}.json"
+
+
+def final_count() -> int:
+    n = 0
+    while final_record(n + 1).is_file():
+        n += 1
+    return n
+
+
+FINAL_RECORD = final_record(max(final_count(), 1))
 MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)
@@ -372,16 +390,31 @@ def build() -> dict:
     }
 
 
-def record_for_sources() -> tuple[Path, dict]:
-    payload = build()
-    return FINAL_RECORD, {
-        "supersedes": rel(LEGACY_RECORD),
-        "reason": (
+def final_payload(n: int, payload: dict) -> dict:
+    if n == 1:
+        supersedes = LEGACY_RECORD
+        reason = (
             f"Final spec-major recount of specification coverage for "
             f"readcon-core {VERSION}."
-        ),
-        **payload,
-    }
+        )
+    else:
+        supersedes = final_record(n - 1)
+        reason = (
+            f"Final spec-major recount of specification coverage for "
+            f"readcon-core {VERSION} after the sources counted in "
+            f"{supersedes.name} changed."
+        )
+    return {"supersedes": rel(supersedes), "reason": reason, **payload}
+
+
+def record_for_sources() -> tuple[Path, dict]:
+    n = max(final_count(), 1)
+    return final_record(n), final_payload(n, build())
+
+
+def next_record_for_sources() -> tuple[Path, dict]:
+    n = final_count() + 1
+    return final_record(n), final_payload(n, build())
 
 
 def macros(record: dict) -> str:
@@ -412,7 +445,7 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        help="final record path (default: data/spec/clause_coverage-<version>-spec-major.json)",
+        help="final record path (default: the newest data/spec/clause_coverage-<version>-spec-major*.json)",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -458,6 +491,13 @@ def main() -> int:
         return 0
     if args.record:
         wanted = text(record)
+        if (
+            args.out is None
+            and out.is_file()
+            and out.read_text(encoding="utf-8") != wanted
+        ):
+            out, record = next_record_for_sources()
+            wanted = text(record)
         if out.is_file() and out.read_text(encoding="utf-8") != wanted:
             sys.exit(f"refusing to overwrite committed record {rel(out)}")
         if not out.is_file():

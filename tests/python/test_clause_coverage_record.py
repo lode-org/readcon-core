@@ -9,9 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "paper" / "cpc" / "scripts"
-SPEC_DATA = ROOT / "paper" / "cpc" / "data" / "spec"
 MACROS = ROOT / "paper" / "cpc" / "src" / "figures" / "generated" / "clauses_macros.tex"
-FINAL_RECORD = SPEC_DATA / "clause_coverage-0.24.0-spec-major.json"
 
 
 def _check_manuscript():
@@ -37,13 +35,13 @@ def test_clause_coverage_is_the_live_regeneration() -> None:
     assert values["clauseTotal"] == str(totals["clauses"])
     assert values["clauseCovered"] == str(totals["covered"])
 
-    if FINAL_RECORD.is_file():
-        sys.path.insert(0, str(SCRIPTS))
-        try:
-            import clause_coverage
+    sys.path.insert(0, str(SCRIPTS))
+    try:
+        import clause_coverage
 
-            _, expected = clause_coverage.record_for_sources()
-            assert FINAL_RECORD.read_text() == clause_coverage.text(expected)
-        finally:
-            sys.path.remove(str(SCRIPTS))
-            sys.modules.pop("clause_coverage", None)
+        final, expected = clause_coverage.record_for_sources()
+        if final.is_file():
+            assert final.read_text() == clause_coverage.text(expected)
+    finally:
+        sys.path.remove(str(SCRIPTS))
+        sys.modules.pop("clause_coverage", None)
