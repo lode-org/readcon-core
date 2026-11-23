@@ -1955,6 +1955,18 @@ pub(crate) unsafe fn atomic_load_f64(ptr: *const f64) -> f64 {
     f64::from_bits(unsafe { atomic_load_bits(ptr) })
 }
 
+/// Store one potentially shared `f64` without creating an `f64` reference.
+///
+/// The write is one relaxed 64-bit atomic store. Callers must keep the
+/// allocation alive and check [`assert_atomic_f64_alignment`] first.
+#[cfg(feature = "python")]
+#[inline(always)]
+pub(crate) unsafe fn atomic_store_f64(ptr: *mut f64, value: f64) {
+    use std::sync::atomic::Ordering;
+    let atomic = ptr.cast::<std::sync::atomic::AtomicU64>();
+    unsafe { (*atomic).store(value.to_bits(), Ordering::Relaxed) }
+}
+
 #[cfg(feature = "python")]
 #[inline(always)]
 unsafe fn atomic_load_bits(ptr: *const f64) -> u64 {
