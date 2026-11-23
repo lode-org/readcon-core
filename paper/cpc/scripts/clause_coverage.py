@@ -60,8 +60,12 @@ def _default_paths() -> tuple[Path, Path]:
         check=True,
     ).stdout.strip()[:8]
     by_blob = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}-{blob8}.json"
-    if by_blob.is_file():
-        return base, by_blob
+    by_blob_variants = sorted(
+        (ROOT / "data" / "spec").glob(f"clause_coverage-{VERSION}-{blob8}*.json")
+    )
+    if by_blob_variants:
+        newest = max(by_blob_variants, key=lambda path: (len(path.name), path.name))
+        return by_blob, newest
     if base.is_file():
         existing = (
             json.loads(base.read_text(encoding="utf-8")).get("spec", {}).get("sha256")
