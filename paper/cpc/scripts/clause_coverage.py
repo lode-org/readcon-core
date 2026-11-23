@@ -60,12 +60,27 @@ def _default_paths() -> tuple[Path, Path]:
         check=True,
     ).stdout.strip()[:8]
     by_blob = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}-{blob8}.json"
-    by_blob_variants = sorted(
-        (ROOT / "data" / "spec").glob(f"clause_coverage-{VERSION}-{blob8}*.json")
-    )
-    if by_blob_variants:
-        newest = max(by_blob_variants, key=lambda path: (len(path.name), path.name))
-        return by_blob, newest
+    if by_blob.is_file():
+        # A later record of the same spec names the one it supersedes; the
+        # newest is the end of that chain, whatever its file name sorts as.
+        later = {
+            path: json.loads(path.read_text(encoding="utf-8")).get("supersedes")
+            for path in (ROOT / "data" / "spec").glob(
+                f"clause_coverage-{VERSION}-{blob8}-*.json"
+            )
+        }
+        previous, newest = base, by_blob
+        for _ in later:
+            name = newest.resolve().relative_to(REPO).as_posix()
+            after = [path for path, prior in later.items() if prior == name]
+            if len(after) != 1:
+                sys.exit(
+                    f"{len(after)} records of data/spec supersede {newest.name}; "
+                    f"the {len(later) + 1} clause coverage records of spec "
+                    f"{blob8} must form one chain"
+                )
+            previous, newest = newest, after[0]
+        return previous, newest
     if base.is_file():
         existing = (
             json.loads(base.read_text(encoding="utf-8")).get("spec", {}).get("sha256")
