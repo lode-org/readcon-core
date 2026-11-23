@@ -53,7 +53,9 @@ def test_a_reused_slot_address_writes_its_own_frames(
     two = tmp_path / "two.con"
     one.write_text(_text(2, 5000, ("Cu",)), encoding="utf-8")
     two.write_text(_text(2, 5000, ("Cu", "H")), encoding="utf-8")
-    want = readcon.write_con_string(list(readcon.read_con_string(two.read_text()))).encode()
+    want = readcon.write_con_string(
+        list(readcon.read_con_string(two.read_text()))
+    ).encode()
     for _ in range(5):
         frames = readcon.read_con(str(one), n_threads=n_threads)
         readcon.write_con(str(tmp_path / "a.con"), frames, n_threads=n_threads)
