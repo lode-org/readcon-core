@@ -979,7 +979,7 @@ impl PyConFrame {
             picked.push(all[i as usize].clone());
             i += indices.step;
         }
-        picked
+        Ok(picked)
     }
 
     fn set_slice_snaps(
@@ -1045,7 +1045,7 @@ impl PyConFrame {
 
     fn same_physical(&self, other: &Self) -> bool {
         if self.cell != other.cell || self.angles != other.angles {
-            return false;
+            return Ok(false);
         }
         let a = self.snapshot_atoms();
         let b = other.snapshot_atoms();
@@ -1632,7 +1632,7 @@ impl PyAtomSeq {
         }
         let index = i as usize;
         let popped = frame.atoms.bind(py).get_item(index)?.unbind();
-        let mut snaps = frame.snapshot_atoms(py);
+        let mut snaps = frame.snapshot_atoms(py)?;
         snaps.remove(index);
         frame.replace_atoms(py, snaps)?;
         Ok(popped)
@@ -1775,7 +1775,7 @@ impl PyAtomListRace {
                 .lock_py_attached(py)
                 .unwrap_or_else(|err| err.into_inner());
             let mut frame = self.frame.try_borrow_mut(py)?;
-            let snaps = frame.snapshot_atoms(py);
+            let snaps = frame.snapshot_atoms(py)?;
             frame.replace_atoms(py, snaps)?;
         }
         Ok(false)
@@ -1869,6 +1869,16 @@ fn _hold_frame_borrow(
         callback.call0()?;
     }
     Ok(())
+}
+
+/// Put `value` on the materialized atom list without checking its type.
+///
+/// A later snapshot then reports the list error instead of ignoring it.
+#[pyfunction]
+fn _append_foreign_atom(frame: &Bound<'_, PyConFrame>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    let this = shared(frame)?;
+    this.ensure_atoms(frame.py())?;
+    this.atoms.bind(frame.py()).append(value)
 }
 
 #[pyfunction]
