@@ -76,6 +76,11 @@ benchmark = ["mimalloc-allocator"]
 static_system_alloc = []
 # Counters for the borrowed-frame writer. Off in a release module.
 borrow-path-counts = []
+# Atom-list race handle and the two test helpers that drive it.
+# Off in a release module. Python CI and pixi python-build turn it on
+# so pytest can import readcon._atom_list_race. cfg(test) does not:
+# those tests load the maturin extension, which is not built as a test.
+race-hooks = ["python"]
 python = ["dep:pyo3", "dep:numpy", "parallel", "mimalloc-allocator"]
 zstd = ["dep:zstd"]
 # Distributed I/O over a caller-supplied communicator (rsmpi). Needs an
