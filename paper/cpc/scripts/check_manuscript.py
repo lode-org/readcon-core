@@ -70,6 +70,7 @@ LISTED = 40
 
 sys.path.insert(0, str(SCRIPTS))
 
+import clause_coverage  # noqa: E402
 import provenance  # noqa: E402
 
 
@@ -1017,13 +1018,8 @@ def check_conformance() -> str:
     every = json.loads((ROOT / "data" / "every_path.json").read_text())["results"][
         "totals"
     ]
-    version = (ROOT.parents[1] / "VERSION").read_text().strip()
-    spec = ROOT.parents[1] / "docs" / "orgmode" / "spec.org"
-    spec_digest = hashlib.sha256(spec.read_bytes()).hexdigest()[:8]
-    coverage_record = f"clause_coverage-{version}-{spec_digest}.json"
-    clauses = json.loads((ROOT / "data" / "spec" / coverage_record).read_text())[
-        "totals"
-    ]
+    coverage_record = clause_coverage.latest().name
+    clauses = json.loads(clause_coverage.latest().read_text())["totals"]
     mutants = json.loads(
         (ROOT / "data" / "spec" / "mutant_differential.json").read_text()
     )["totals"]
