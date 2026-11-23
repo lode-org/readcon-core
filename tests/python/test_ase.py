@@ -39,6 +39,13 @@ class TestAseAtomId:
         roundtrip_ids = [a.atom_id for a in frame_back.atoms]
         assert roundtrip_ids == original_ids
 
+        legacy_v3 = (
+            't\n{"con_spec_version":3,"units":{"length":"ANGSTROM","energy":"ha","mass":"AMU"},"sections":[]}\n'
+            "10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n1.0 2.0 3.0 0 0\n"
+        )
+        legacy_atoms = readcon.read_con_string(legacy_v3)[0].to_ase()
+        assert np.allclose(legacy_atoms.positions[0], [1.0, 2.0, 3.0])
+
     def test_from_ase_falls_back_to_tags(self):
         atoms = ase.Atoms(
             "CuH", positions=[[0, 0, 0], [1, 1, 1]], cell=[10, 10, 10], pbc=True
