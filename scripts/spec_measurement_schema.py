@@ -19,9 +19,7 @@ class MeasurementSchemaError(Exception):
     """A record that is not legacy is missing measured_at.commit."""
 
 
-def resolve_measurement(
-    records: dict[str, dict], relpath: str
-) -> tuple[str, dict]:
+def resolve_measurement(records: dict[str, dict], relpath: str) -> tuple[str, dict]:
     """Follow supersedes links from ``relpath`` to the record that replaces it.
 
     A record replaces a path when its ``supersedes`` field is that path.
@@ -45,9 +43,7 @@ def resolve_measurement(
         if not nxt:
             return current, record
         if len(nxt) > 1:
-            raise MeasurementSchemaError(
-                f"{current} is superseded by {', '.join(nxt)}"
-            )
+            raise MeasurementSchemaError(f"{current} is superseded by {', '.join(nxt)}")
         current = nxt[0]
     raise MeasurementSchemaError(f"{relpath} supersede links cycle")
 
