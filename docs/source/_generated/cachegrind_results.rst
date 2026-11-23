@@ -35,16 +35,16 @@
      - 20,602,074
      - buffer writer (10×)
    * - ``chemfiles_xyz_path``
-     - 7,604,349
+     - 7,604,384
      - XYZ path → ConFrame (50×)
    * - ``chemfiles_xyz_memory``
-     - 7,399,022
+     - 7,399,057
      - XYZ memory → ConFrame (50×)
    * - ``chemfiles_select_name_O``
-     - 6,457,587
+     - 6,457,637
      - selection ``name O`` (50×)
 
-Generated **2026-11-16T12:54:22Z** from commit ``25169dd``
+Generated **2026-11-23T14:52:49Z** from commit ``e742ccc``
 (Cargo features: ``chemfiles-from-sources``). Metric: Valgrind Cachegrind **I refs**.
 Lower is better for the same scenario. Comparable across commits on the same CI image/Valgrind.
 
