@@ -426,7 +426,9 @@ def history_rows(org: str) -> list[dict]:
 
     A bare major 3 is minor 0.
     """
-    section = re.search(r"^\* Version history\n(.*?)(?=^\* |\Z)", org, re.M | re.S)
+    section = re.search(
+        r"^\* Version (?:history|chronology)\n(.*?)(?=^\* |\Z)", org, re.M | re.S
+    )
     rows, head = [], None
     for line in section[1].splitlines() if section else ():
         if not line.startswith("|") or line.startswith("|-"):
@@ -624,15 +626,10 @@ def release_rows(org: str) -> list[dict]:
         if first is None:
             tree = record["tree"]
             listed = any(
-                (entry["version"], entry["date"])
-                == (row["version"], row["date"])
+                (entry["version"], entry["date"]) == (row["version"], row["date"])
                 for entry in record.get("unreleased_history", [])
             )
-            if (
-                not listed
-                or tree["tagged"]
-                or tree["release"] != package_version()
-            ):
+            if not listed or tree["tagged"] or tree["release"] != package_version():
                 raise SystemExit(
                     f"no tag or superseding tree record of "
                     f"{VERSIONS.relative_to(ROOT)} lists version "
