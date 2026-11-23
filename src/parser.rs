@@ -2652,33 +2652,19 @@ pub(crate) fn relax_unreserved_overflow(line: &str) -> Option<String> {
     let bytes = line.as_bytes();
     let mut out = String::with_capacity(line.len() + 2);
     let mut i = 0usize;
-    let mut in_string = false;
-    let mut escape = false;
     let mut pending_key: Option<String> = None;
     let mut stack: Vec<Option<String>> = Vec::new();
     let mut replaced = false;
     while i < bytes.len() {
         let b = bytes[i];
-        if in_string {
-            out.push(b as char);
-            if escape {
-                escape = false;
-            } else if b == b'\\' {
-                escape = true;
-            } else if b == b'"' {
-                in_string = false;
-            }
-            i += 1;
-            continue;
-        }
         if b == b'"' {
             let start = i;
             i += 1;
-            let mut text = String::new();
+            let mut has_escape = false;
             while i < bytes.len() {
                 let c = bytes[i];
                 if c == b'\\' && i + 1 < bytes.len() {
-                    text.push(bytes[i + 1] as char);
+                    has_escape = true;
                     i += 2;
                     continue;
                 }
@@ -2686,16 +2672,21 @@ pub(crate) fn relax_unreserved_overflow(line: &str) -> Option<String> {
                     i += 1;
                     break;
                 }
-                text.push(c as char);
                 i += 1;
             }
-            out.push_str(&line[start..i]);
+            let raw = &line[start..i];
+            out.push_str(raw);
             let mut j = i;
             while j < bytes.len() && is_field_ws(bytes[j]) {
                 j += 1;
             }
             if bytes.get(j) == Some(&b':') {
-                pending_key = Some(text);
+                let decoded = if has_escape {
+                    serde_json::from_str::<String>(raw).ok()?
+                } else {
+                    raw.get(1..raw.len().saturating_sub(1))?.to_string()
+                };
+                pending_key = Some(decoded);
             }
             continue;
         }
@@ -2706,8 +2697,15 @@ pub(crate) fn relax_unreserved_overflow(line: &str) -> Option<String> {
             continue;
         }
         if b == b'}' || b == b']' {
-            pending_key = stack.pop().flatten();
+            stack.pop();
+            pending_key = None;
             out.push(b as char);
+            i += 1;
+            continue;
+        }
+        if b == b',' {
+            pending_key = None;
+            out.push(',');
             i += 1;
             continue;
         }
@@ -2730,11 +2728,12 @@ pub(crate) fn relax_unreserved_overflow(line: &str) -> Option<String> {
             }
             let finite = token.parse::<f64>().ok().filter(|value| value.is_finite());
             if finite.is_none() {
-                let reserved = pending_key
-                    .as_deref()
-                    .or_else(|| stack.iter().rev().find_map(|key| key.as_deref()))
-                    .is_some_and(reserved_number_key);
-                if reserved {
+                let top_key = if stack.len() == 1 {
+                    pending_key.as_deref()
+                } else {
+                    stack.get(1).and_then(Option::as_deref)
+                };
+                if top_key.is_some_and(reserved_number_key) {
                     return None;
                 }
                 out.push('"');
@@ -2747,6 +2746,9 @@ pub(crate) fn relax_unreserved_overflow(line: &str) -> Option<String> {
             out.push_str(token);
             pending_key = None;
             continue;
+        }
+        if !b.is_ascii() {
+            return None;
         }
         out.push(b as char);
         i += 1;
@@ -3213,18 +3215,19 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
     let mut version = None;
     let mut saw_minor = false;
     let mut saw_huge_minor = false;
+    let mut saw_units = false;
     let mut length = None;
     let mut energy = None;
-    let mut extra_unit = false;
+    let mut saw_mass = false;
+    let mut saw_time = false;
+    let mut saw_force = false;
     loop {
         skip(&mut i);
         if i < bytes.len() && bytes[i] == b'}' {
             i += 1;
             break;
         }
-        if (version.is_some() || saw_minor || length.is_some() || energy.is_some() || extra_unit)
-            && !eat(&mut i, b',')
-        {
+        if (version.is_some() || saw_minor || saw_units) && !eat(&mut i, b',') {
             return None;
         }
         let key = quoted(&mut i)?;
@@ -3243,7 +3246,8 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
                 }
                 saw_minor = true;
             }
-            "units" if length.is_none() && energy.is_none() && !extra_unit => {
+            "units" if !saw_units => {
+                saw_units = true;
                 if !eat(&mut i, b'{') {
                     return None;
                 }
@@ -3253,7 +3257,9 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
                         i += 1;
                         break;
                     }
-                    if (length.is_some() || energy.is_some() || extra_unit) && !eat(&mut i, b',') {
+                    if (length.is_some() || energy.is_some() || saw_mass || saw_time || saw_force)
+                        && !eat(&mut i, b',')
+                    {
                         return None;
                     }
                     let ukey = quoted(&mut i)?;
@@ -3264,15 +3270,23 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
                     match ukey {
                         "length" if length.is_none() => length = Some(value),
                         "energy" if energy.is_none() => energy = Some(value),
-                        "mass" | "time" | "velocity" | "force" => {
-                            // CON-units.21 compares velocity with the assigned time.
-                            if ukey == "velocity" {
-                                return None;
-                            }
+                        "mass" if !saw_mass => {
                             if crate::units::validate_unit_for_quantity(ukey, value).is_err() {
                                 return None;
                             }
-                            extra_unit = true;
+                            saw_mass = true;
+                        }
+                        "time" if !saw_time => {
+                            if crate::units::validate_unit_for_quantity(ukey, value).is_err() {
+                                return None;
+                            }
+                            saw_time = true;
+                        }
+                        "force" if !saw_force => {
+                            if crate::units::validate_unit_for_quantity(ukey, value).is_err() {
+                                return None;
+                            }
+                            saw_force = true;
                         }
                         _ => return None,
                     }
