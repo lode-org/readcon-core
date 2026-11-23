@@ -2920,7 +2920,12 @@ impl ConFrame {
         if self.atom_data.len() != n {
             return;
         }
-        self.materialise_section_slots();
+        let bound = self.materialise_section_slots();
+        self.sync_atoms_from_columns(n);
+        self.bind_section_slots(&bound);
+    }
+
+    fn sync_atoms_from_columns(&mut self, n: usize) {
         let has_vel = self.velocities.nrows() == n;
         let has_frc = self.forces.nrows() == n;
         let has_eng = self.atom_energies.len() == n;
@@ -2966,7 +2971,8 @@ impl ConFrame {
         let n = self.atom_data.len();
         let kind = self.header.metadata.dtypes().velocities;
         if kind != crate::storage_dtype::ElementKind::Float64 {
-            self.materialise_section_slots();
+            // The slots address `data`, which a converted column frees.
+            self.clear_slots(false);
         }
         self.velocities = store_rows(kind, n, data).into();
         self.bind_velocity_slots();
@@ -2977,10 +2983,19 @@ impl ConFrame {
         let n = self.atom_data.len();
         let kind = self.header.metadata.dtypes().forces;
         if kind != crate::storage_dtype::ElementKind::Float64 {
-            self.materialise_section_slots();
+            self.clear_slots(true);
         }
         self.forces = store_rows(kind, n, data).into();
         self.bind_force_slots();
+    }
+
+    /// Null every velocity (or force) slot, keeping the other one.
+    fn clear_slots(&mut self, force: bool) {
+        for tail in &mut self.column_tails {
+            if let HeapTail::Column { vel, force: frc } = tail {
+                *(if force { frc } else { vel }) = std::ptr::null_mut();
+            }
+        }
     }
 
     fn bind_velocity_slots(&mut self) {
@@ -3200,8 +3215,11 @@ impl ConFrame {
         clear_uniform_symbol_drop(&self.atom_data);
         let n = self.atom_data.len();
         for i in 0..n {
-            let velocity = self.atom_data[i].velocity();
-            let force = self.atom_data[i].force();
+            let atom = &self.atom_data[i];
+            let velocity = slot_value(atom.velocity_slot(), &self.velocities, n, i)
+                .unwrap_or_else(|| atom.velocity());
+            let force =
+                slot_value(atom.force_slot(), &self.forces, n, i).unwrap_or_else(|| atom.force());
             self.atom_data[i].detach_external_tail();
             if velocity.is_some() {
                 self.atom_data[i].set_velocity(velocity);
@@ -5391,6 +5409,33 @@ fn pack_col(n: usize, mut one: impl FnMut(usize) -> f64) -> Vec<f64> {
     data
 }
 
+/// The value a bound atom holds: row `i` of `column`, which is
+/// authoritative while any atom holds a slot. A slot that is not inside
+/// that column (it was copied on write, replaced or reshaped) may address
+/// a freed block and is never read. `None` for an unbound atom, or when
+/// the slot is inside the column and can be read directly.
+fn slot_value(
+    slot: *const f64,
+    column: &crate::storage_dtype::Array2Storage,
+    n: usize,
+    i: usize,
+) -> Option<Option<[f64; 3]>> {
+    if slot.is_null() {
+        return None;
+    }
+    if let Some(rows) = column.f64_rows3()
+        && rows.len() == n * 3
+        && rows.as_ptr_range().contains(&slot)
+    {
+        return None;
+    }
+    Some(if column.nrows() == n {
+        column.try_f64_row(i)
+    } else {
+        None
+    })
+}
+
 fn store_rows(
     kind: crate::storage_dtype::ElementKind,
     n: usize,
@@ -7146,5 +7191,133 @@ mod tests {
         };
         assert!(forces.is_unique());
         assert_slots_on_columns(&frame);
+    }
+
+    #[test]
+    fn a_velocity_edit_keeps_the_force_of_a_forces_only_atom() {
+        let text = include_str!("../resources/test/tiny_cuh2_forces.con");
+        let mut frame = crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let force0 = frame.atom_data[0].force().expect("parsed force");
+        let force1 = frame.atom_data[1].force().expect("parsed force");
+        frame.atom_data[0].set_velocity(None);
+        assert_eq!(frame.atom_data[0].force(), Some(force0));
+        assert_eq!(frame.atom_data[0].velocity(), None);
+        frame.atom_data[1].set_velocity(Some([1.5, -2.5, 3.5]));
+        assert_eq!(frame.atom_data[1].force(), Some(force1));
+        assert_eq!(frame.atom_data[1].velocity(), Some([1.5, -2.5, 3.5]));
+    }
+
+    #[test]
+    fn a_reordered_frame_reads_its_own_columns_after_the_source_drops() {
+        let frame = vel_forces_frame();
+        let mut reordered = crate::correspondence::reorder_like(
+            &frame,
+            &frame,
+            crate::correspondence::IdentityCheck::Strict,
+        )
+        .expect("same frame");
+        drop(frame);
+        reordered.velocities.set_f64_row(0, [4.0, 5.0, 6.0]);
+        reordered.forces.set_f64_row(1, [-4.0, -5.0, -6.0]);
+        for (i, atom) in reordered.atom_data.iter().enumerate() {
+            assert_eq!(atom.velocity(), Some(reordered.velocities.as_f64_row(i)));
+            assert_eq!(atom.force(), Some(reordered.forces.as_f64_row(i)));
+        }
+    }
+
+    #[test]
+    fn a_reordered_frame_unshares_its_columns_after_the_source_drops() {
+        let frame = vel_forces_frame();
+        let expected: Vec<_> = frame.atom_data.iter().map(|a| a.velocity()).collect();
+        let mut reordered = crate::correspondence::reorder_like(
+            &frame,
+            &frame,
+            crate::correspondence::IdentityCheck::Strict,
+        )
+        .expect("same frame");
+        drop(frame);
+        let shared = (*reordered.velocities).clone();
+        reordered.unshare_slot_columns();
+        reordered.atom_data[0].set_velocity(Some([7.0, 8.0, 9.0]));
+        assert_eq!(shared.as_f64_row(0), expected[0].unwrap());
+        assert_eq!(reordered.velocities.as_f64_row(0), [7.0, 8.0, 9.0]);
+        for (i, atom) in reordered.atom_data.iter().enumerate().skip(1) {
+            assert_eq!(atom.velocity(), expected[i]);
+        }
+        assert_slots_on_columns(&reordered);
+    }
+
+    #[test]
+    fn syncing_atoms_after_a_column_copy_leaves_the_other_handle_alone() {
+        let mut frame = vel_forces_frame();
+        let shared = (*frame.velocities).clone();
+        let before = shared.as_f64_row(0);
+        frame.velocities.set_f64_row(0, [11.0, 22.0, 33.0]);
+        frame.sync_atom_data_from_arrays();
+        assert_eq!(shared.as_f64_row(0), before);
+        drop(shared);
+        assert_eq!(frame.atom_data[0].velocity(), Some([11.0, 22.0, 33.0]));
+        assert_slots_on_columns(&frame);
+    }
+
+    #[test]
+    fn a_dtype_projection_after_the_shared_block_drops_reads_the_column() {
+        let mut frame = vel_forces_frame();
+        let shared = (*frame.forces).clone();
+        frame.forces.set_f64_row(1, [3.0, 2.0, 1.0]);
+        drop(shared);
+        let dtypes = frame.header.metadata.dtypes();
+        frame.project_storage_dtypes(&dtypes);
+        assert_eq!(frame.atom_data[1].force(), Some([3.0, 2.0, 1.0]));
+        assert_slots_on_columns(&frame);
+    }
+
+    #[test]
+    fn adopting_a_float32_column_over_bound_slots_gives_each_atom_its_row() {
+        let mut frame = vel_forces_frame();
+        let n = frame.atom_data.len();
+        let mut dtypes = frame.header.metadata.dtypes();
+        dtypes.velocities = crate::storage_dtype::ElementKind::Float32;
+        let mut map = frame.header.metadata.to_map();
+        dtypes.insert_into(&mut map);
+        frame.header.metadata = FrameMeta::from_map_with_minor_raw(map, None);
+        let data: Vec<f64> = (0..n * 3).map(|k| k as f64 + 0.5).collect();
+        frame.adopt_velocity_column(data);
+        for (i, atom) in frame.atom_data.iter().enumerate() {
+            let row = [0.5, 1.5, 2.5].map(|v| v + (i * 3) as f64);
+            assert_eq!(atom.velocity(), Some(row), "velocity {i}");
+        }
+    }
+
+    #[test]
+    fn a_float32_motion_section_gives_each_atom_its_converted_row() {
+        let text = include_str!("../resources/test/tiny_cuh2_vel_forces.con");
+        let mut lines: Vec<&str> = text.lines().collect();
+        let meta = concat!(
+            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"#,
+            r#""sections":["velocities","forces"],"#,
+            r#""storage_dtypes":{"velocities":"float32","forces":"float32"},"energy":-42.5}"#
+        );
+        lines[1] = meta;
+        let text = lines.join("\n") + "\n";
+        let frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        assert_eq!(
+            frame.velocities.kind(),
+            crate::storage_dtype::ElementKind::Float32
+        );
+        let reference = vel_forces_frame();
+        for (i, atom) in frame.atom_data.iter().enumerate() {
+            let vel = reference.velocities.as_f64_row(i).map(|v| v as f32 as f64);
+            let frc = reference.forces.as_f64_row(i).map(|v| v as f32 as f64);
+            assert_eq!(frame.velocities.as_f64_row(i), vel, "column v {i}");
+            assert_eq!(atom.velocity(), Some(vel), "atom v {i}");
+            assert_eq!(atom.force(), Some(frc), "atom f {i}");
+        }
     }
 }
