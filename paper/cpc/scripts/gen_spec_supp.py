@@ -743,10 +743,9 @@ def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 
 
 def package_version() -> str:
-    found = re.search(r'^version = "([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M)
-    if found is None:
-        raise SystemExit("Cargo.toml names no package version")
-    return found.group(1)
+    # VERSION, not Cargo.toml: the branch history check reads the release
+    # back from <measured commit>:VERSION.
+    return (ROOT / "VERSION").read_text().strip()
 
 
 def versions_record() -> dict:
