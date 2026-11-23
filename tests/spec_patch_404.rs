@@ -139,12 +139,6 @@ fn con_units_16_symbols_are_case_sensitive() {
     assert!(validate_unit_for_quantity("length", "a").is_err());
     assert!(validate_unit_for_quantity("energy", "ha").is_err());
     assert!(validate_unit_for_quantity("mass", "da").is_err());
-    let _ = ParseError::InvalidUnits("marker".into());
-}
-
-/// CON-units.16. SI prefixes remain case-sensitive in every major.
-#[test]
-fn con_units_16_con3_mev_spellings_are_case_sensitive() {
     let mega = unit_conversion_factor_for_version(3, "MeV", "eV").unwrap();
     assert!((mega - 1.0e6).abs() < 1.0e-6);
     let milli = unit_conversion_factor_for_version(3, "mev", "eV").unwrap();
@@ -155,6 +149,7 @@ fn con_units_16_con3_mev_spellings_are_case_sensitive() {
             "{unknown}"
         );
     }
+    let _ = ParseError::InvalidUnits("marker".into());
 }
 
 /// CON-status.8. Requirement words are uppercase, and RFC 8174 is cited.
