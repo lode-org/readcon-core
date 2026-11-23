@@ -902,7 +902,8 @@ impl FrameHeader {
     /// Sets the unit system. Aliases are rewritten to preferred names
     /// (`A` → `angstrom`) so line 2 carries the contract spelling.
     pub fn set_units(&mut self, units: serde_json::Value) {
-        let stored = crate::units::canonicalize_units_object(&units).unwrap_or(units);
+        let stored = crate::units::canonicalize_units_object_for_version(self.spec_version, &units)
+            .unwrap_or(units);
         self.metadata.insert(meta::UNITS.into(), stored);
     }
 
@@ -3805,7 +3806,11 @@ impl ConFrameBuilder {
     /// This is the builder entry that C and C++ call. [`FrameHeader::set_units`]
     /// is the same contract on a frame that already exists.
     pub fn set_units(&mut self, units: serde_json::Value) -> Result<(), crate::error::ParseError> {
-        let stored = crate::units::canonicalize_units_object(&units)
+        let spec_version = match self.written_spec {
+            0 => crate::CON_SPEC_VERSION,
+            version => version,
+        };
+        let stored = crate::units::canonicalize_units_object_for_version(spec_version, &units)
             .map_err(|err| crate::error::ParseError::InvalidUnits(err.to_string()))?;
         self.metadata.insert(meta::UNITS.into(), stored);
         Ok(())
@@ -6221,6 +6226,27 @@ mod tests {
         assert!((to_nm - 0.1).abs() < 1e-12);
         let x_nm = frame.atom_data[0].x() * to_nm;
         assert!((x_nm - 0.1).abs() < 1e-12);
+    }
+
+    #[test]
+    fn builder_set_units_uses_the_selected_major() {
+        let units = serde_json::json!({
+            "length": "angstrom",
+            "energy": "eV",
+            "time": crate::units::HISTORICAL_NATURAL_TIME
+        });
+        for (major, expected) in [
+            (3, crate::units::HISTORICAL_NATURAL_TIME),
+            (4, crate::units::NATURAL_TIME_UNIT),
+        ] {
+            let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+            builder.spec_version(major);
+            builder.set_units(units.clone()).unwrap();
+            builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+            let frame = builder.build().unwrap();
+            assert_eq!(frame.header.spec_version, major);
+            assert_eq!(frame.header.units().unwrap()["time"], expected);
+        }
     }
 
     #[test]

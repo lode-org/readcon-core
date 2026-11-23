@@ -1,7 +1,7 @@
 //! Unit expressions and conversion (metatomic-inspired, SI dimensional analysis).
 //!
 //! Supports named base units and simple products/quotients with `*`, `/`, `^`,
-//! and parentheses (case-insensitive). `unit_conversion_factor(from, to)` returns
+//! and parentheses (case-sensitive). `unit_conversion_factor(from, to)` returns
 //! the multiplier `x_to = factor * x_from` when dimensions match.
 
 use crate::error::ParseError;
@@ -292,32 +292,19 @@ fn lookup_base(name: &str) -> Option<&'static UnitValue> {
         .map(|index| &BASE_UNITS[index].value)
 }
 
-/// The fold is the one [`canonicalize_unit_expression_for_version`] writes,
-/// so a folded spelling such as `MEV` reads as the unit it is written back as.
-fn lookup_base_legacy(name: &str) -> Option<&'static UnitValue> {
-    lookup_base(name).or_else(|| preferred_atom_with(name, true).and_then(lookup_base))
-}
-
 /// Parse a unit expression into SI factor and dimension.
 ///
 /// ASCII spaces and tabs are removed (CON-units.17). Names are exact
 /// spellings: `MeV` is megaelectronvolt and `meV` is millielectronvolt.
 pub fn parse_unit_expression(expr: &str) -> Result<(f64, Dimension), ParseError> {
-    parse_unit_expression_with(expr, false)
-}
-
-fn parse_unit_expression_with(
-    expr: &str,
-    legacy_case: bool,
-) -> Result<(f64, Dimension), ParseError> {
     let s: String = expr.chars().filter(|c| *c != ' ' && *c != '\t').collect();
     if s.is_empty() {
         return Err(ParseError::ValidationError("empty unit expression".into()));
     }
-    parse_expr(&s, legacy_case)
+    parse_expr(&s)
 }
 
-fn parse_expr(s: &str, legacy_case: bool) -> Result<(f64, Dimension), ParseError> {
+fn parse_expr(s: &str) -> Result<(f64, Dimension), ParseError> {
     // Split on * and / with left-associative scan; handle ^N on atoms.
     let mut factor = 1.0_f64;
     let mut dim = Dimension::ZERO;
@@ -334,7 +321,7 @@ fn parse_expr(s: &str, legacy_case: bool) -> Result<(f64, Dimension), ParseError
             i += 1;
             continue;
         }
-        let (atom_f, atom_d, consumed) = parse_atom(&s[i..], legacy_case)?;
+        let (atom_f, atom_d, consumed) = parse_atom(&s[i..])?;
         i += consumed;
         if pending_div {
             factor /= atom_f;
@@ -348,7 +335,7 @@ fn parse_expr(s: &str, legacy_case: bool) -> Result<(f64, Dimension), ParseError
     Ok((factor, dim))
 }
 
-fn parse_atom(s: &str, legacy_case: bool) -> Result<(f64, Dimension, usize), ParseError> {
+fn parse_atom(s: &str) -> Result<(f64, Dimension, usize), ParseError> {
     let bytes = s.as_bytes();
     if bytes.is_empty() {
         return Err(ParseError::ValidationError(
@@ -364,7 +351,7 @@ fn parse_atom(s: &str, legacy_case: bool) -> Result<(f64, Dimension, usize), Par
                 depth -= 1;
                 if depth == 0 {
                     let inner = &s[1..j];
-                    let (f, d) = parse_expr(inner, legacy_case)?;
+                    let (f, d) = parse_expr(inner)?;
                     let mut end = j + 1;
                     let (f2, d2, extra) = apply_power(f, d, &s[end..])?;
                     end += extra;
@@ -387,12 +374,8 @@ fn parse_atom(s: &str, legacy_case: bool) -> Result<(f64, Dimension, usize), Par
         )));
     }
     let name = &s[..j];
-    let base = if legacy_case {
-        lookup_base_legacy(name)
-    } else {
-        lookup_base(name)
-    }
-    .ok_or_else(|| ParseError::ValidationError(format!("unknown unit '{name}'")))?;
+    let base = lookup_base(name)
+        .ok_or_else(|| ParseError::ValidationError(format!("unknown unit '{name}'")))?;
     let mut end = j;
     let (f, d, extra) = apply_power(base.si_factor, base.dim, &s[end..])?;
     end += extra;
@@ -441,16 +424,15 @@ pub fn unit_conversion_factor(from_unit: &str, to_unit: &str) -> Result<f64, Par
     unit_conversion_factor_for_version(crate::CON_SPEC_VERSION, from_unit, to_unit)
 }
 
-/// Multiplicative factor from `from_unit` to `to_unit`, preserving CON 3
-/// case-insensitive aliases when `spec_version == 3`.
+/// Multiplicative factor from `from_unit` to `to_unit` under a CON major.
 pub fn unit_conversion_factor_for_version(
     spec_version: u32,
     from_unit: &str,
     to_unit: &str,
 ) -> Result<f64, ParseError> {
-    let legacy_case = spec_version == 3;
-    let (f_from, d_from) = parse_unit_expression_with(from_unit, legacy_case)?;
-    let (f_to, d_to) = parse_unit_expression_with(to_unit, legacy_case)?;
+    let _ = spec_version;
+    let (f_from, d_from) = parse_unit_expression(from_unit)?;
+    let (f_to, d_to) = parse_unit_expression(to_unit)?;
     if !d_from.compatible(d_to) {
         return Err(ParseError::ValidationError(format!(
             "incompatible units '{from_unit}' and '{to_unit}'"
@@ -524,15 +506,7 @@ pub fn velocity_scale_to_natural(file_time: &str) -> Result<f64, ParseError> {
 /// Validate that `unit` has dimensions appropriate for `quantity`
 /// (`length`, `energy`, `mass`, `time`, `velocity`, `force`).
 pub fn validate_unit_for_quantity(quantity: &str, unit: &str) -> Result<(), ParseError> {
-    validate_unit_for_quantity_with(quantity, unit, false)
-}
-
-fn validate_unit_for_quantity_with(
-    quantity: &str,
-    unit: &str,
-    legacy_case: bool,
-) -> Result<(), ParseError> {
-    let (_, dim) = parse_unit_expression_with(unit, legacy_case)?;
+    let (_, dim) = parse_unit_expression(unit)?;
     let expect = match quantity {
         "length" => Dimension::LENGTH,
         "time" => Dimension::TIME,
@@ -568,7 +542,7 @@ pub fn validate_units_metadata_for_version(
     spec_version: u32,
     units: &serde_json::Value,
 ) -> Result<(), ParseError> {
-    let legacy_case = spec_version == 3;
+    let _ = spec_version;
     let obj = units
         .as_object()
         .ok_or_else(|| ParseError::ValidationError("units must be a JSON object".into()))?;
@@ -588,7 +562,7 @@ pub fn validate_units_metadata_for_version(
                 "units.{key} must be non-empty"
             )));
         }
-        validate_unit_for_quantity_with(key, s, legacy_case)?;
+        validate_unit_for_quantity(key, s)?;
     }
     // Optional keys if present must be valid for their quantity
     for (key, qty) in [
@@ -601,7 +575,7 @@ pub fn validate_units_metadata_for_version(
             let s = v.as_str().ok_or_else(|| {
                 ParseError::ValidationError(format!("units.{key} must be a string"))
             })?;
-            validate_unit_for_quantity_with(qty, s, legacy_case)?;
+            validate_unit_for_quantity(qty, s)?;
         }
     }
     Ok(())
@@ -659,49 +633,17 @@ fn preferred_atom(alias: &str) -> Option<&'static str> {
     })
 }
 
-fn preferred_atom_with(alias: &str, legacy_case: bool) -> Option<&'static str> {
-    if let Some(exact) = preferred_atom(alias) {
-        return Some(exact);
-    }
-    if !legacy_case {
-        return None;
-    }
-    Some(match alias.to_ascii_lowercase().as_str() {
-        "a" | "angstrom" => "angstrom",
-        "nm" | "nanometer" => "nm",
-        "m" | "meter" | "metre" => "m",
-        "bohr" | "a0" => "bohr",
-        "fs" | "femtosecond" => "fs",
-        "ps" | "picosecond" => "ps",
-        "ns" | "nanosecond" => "ns",
-        "s" | "second" => "s",
-        "ev" => "eV",
-        "mev" => "meV",
-        "ha" | "hartree" => "hartree",
-        "j" | "joule" => "J",
-        "kj" => "kJ",
-        "kcal" => "kcal",
-        "amu" => "amu",
-        "u" | "da" | "dalton" => "u",
-        "kg" | "kilogram" => "kg",
-        "mol" => "mol",
-        _ => return None,
-    })
-}
-
 /// Rewrite a unit expression to preferred names (`A` → `angstrom`, `ev` → `eV`).
 /// The expression MUST parse (`unit_conversion_factor` identity).
 pub fn canonicalize_unit_expression(expr: &str) -> Result<String, ParseError> {
     canonicalize_unit_expression_for_version(crate::CON_SPEC_VERSION, expr)
 }
 
-/// Rewrite a unit expression to preferred names, honoring CON 3
-/// case-insensitive aliases when `spec_version == 3`.
+/// Rewrite a unit expression to preferred names for a CON major.
 pub fn canonicalize_unit_expression_for_version(
     spec_version: u32,
     expr: &str,
 ) -> Result<String, ParseError> {
-    let legacy_case = spec_version == 3;
     let trimmed = expr.trim();
     if trimmed.is_empty() {
         return Err(ParseError::ValidationError("empty unit".into()));
@@ -709,7 +651,12 @@ pub fn canonicalize_unit_expression_for_version(
     let _ = unit_conversion_factor_for_version(spec_version, trimmed, trimmed)?;
     let compact: String = trimmed.chars().filter(|c| !c.is_whitespace()).collect();
     if is_natural_time(&compact) {
-        return Ok(NATURAL_TIME_UNIT.to_string());
+        return Ok(if spec_version >= 4 {
+            NATURAL_TIME_UNIT
+        } else {
+            HISTORICAL_NATURAL_TIME
+        }
+        .to_string());
     }
     let mut out = String::new();
     let bytes = compact.as_bytes();
@@ -742,12 +689,17 @@ pub fn canonicalize_unit_expression_for_version(
             )));
         }
         let atom = &compact[start..i];
-        out.push_str(preferred_atom_with(atom, legacy_case).unwrap_or(atom));
+        out.push_str(preferred_atom(atom).unwrap_or(atom));
     }
     let rendered = out.split_whitespace().collect::<Vec<_>>().join(" ");
     let rendered_compact: String = rendered.chars().filter(|c| !c.is_whitespace()).collect();
     if is_natural_time(&rendered_compact) {
-        return Ok(NATURAL_TIME_UNIT.to_string());
+        return Ok(if spec_version >= 4 {
+            NATURAL_TIME_UNIT
+        } else {
+            HISTORICAL_NATURAL_TIME
+        }
+        .to_string());
     }
     Ok(rendered)
 }
@@ -785,7 +737,7 @@ pub fn enforce_velocity_precedence(
         NATURAL_TIME_UNIT.to_string()
     };
     let quotient = format!("({length})/({time})");
-    let factor = unit_conversion_factor(velocity, &quotient)?;
+    let factor = unit_conversion_factor_for_version(spec_version, velocity, &quotient)?;
     if (factor - 1.0).abs() > 1e-9 {
         return Err(ParseError::InvalidUnits(format!(
             "units.velocity must equal units.length divided by the time unit, not '{velocity}'"
@@ -801,8 +753,7 @@ pub fn canonicalize_units_object(
     canonicalize_units_object_for_version(crate::CON_SPEC_VERSION, units)
 }
 
-/// Rewrite every string member, honoring CON 3 case-insensitive aliases when
-/// `spec_version == 3`.
+/// Rewrite every string member under the named CON major.
 pub fn canonicalize_units_object_for_version(
     spec_version: u32,
     units: &serde_json::Value,

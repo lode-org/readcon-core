@@ -68,8 +68,8 @@ fn patch_identity_and_major3_time() {
 }
 
 #[test]
-fn major3_keeps_case_insensitive_unit_compatibility() {
-    let legacy = r#"{"con_spec_version":3,"units":{"length":"ANGSTROM","energy":"ha","mass":"AMU"},"sections":[]}"#;
+fn major3_keeps_exact_legacy_aliases() {
+    let legacy = r#"{"con_spec_version":3,"units":{"length":"Angstrom","energy":"Ha","mass":"AMU"},"sections":[]}"#;
     let frames = parse(&text(legacy, "90 90 90", atoms())).unwrap();
     let mut out = Vec::new();
     readcon_core::writer::ConFrameWriter::new(&mut out)
@@ -80,7 +80,7 @@ fn major3_keeps_case_insensitive_unit_compatibility() {
     assert!(written.contains(r#""energy":"hartree""#), "{written}");
     assert!(parse(&written).is_ok(), "{written}");
 
-    let legacy_vel = r#"{"con_spec_version":3,"units":{"length":"ANGSTROM","energy":"ha","time":"fs"},"sections":["velocities"]}"#;
+    let legacy_vel = r#"{"con_spec_version":3,"units":{"length":"Angstrom","energy":"Ha","time":"fs"},"sections":["velocities"]}"#;
     let vel_frames = parse(&with_velocity(legacy_vel)).unwrap();
     let rewritten = readcon_core::writer::binding_rewrite_frame(&vel_frames[0]).unwrap();
     let mut vel_out = Vec::new();
@@ -99,8 +99,8 @@ fn major3_keeps_case_insensitive_unit_compatibility() {
     assert!(parse(&vel_written).is_ok(), "{vel_written}");
 
     let canon = readcon_core::units::canonicalize_units_metadata(&serde_json::json!({
-        "length": "ANGSTROM",
-        "energy": "ha",
+        "length": "Angstrom",
+        "energy": "Ha",
         "mass": "AMU"
     }))
     .unwrap();
@@ -108,21 +108,22 @@ fn major3_keeps_case_insensitive_unit_compatibility() {
     assert_eq!(canon["energy"], "hartree");
     assert_eq!(canon["mass"], "amu");
 
-    // A case variant of mev keeps the millielectronvolt it had in CON 3.
-    // The read factor and the rewritten label name the same unit.
-    for energy in ["MEV", "Mev", "mEV", "mev"] {
+    for (energy, expected, canonical) in [("MeV", 1.0e6, "MeV"), ("mev", 1.0e-3, "meV")] {
         let line = format!(
             r#"{{"con_spec_version":3,"units":{{"length":"angstrom","energy":"{energy}"}}}}"#
         );
         let frames = parse(&text(&line, "90 90 90", atoms())).unwrap();
         let read = frames[0].conversion_factor_to("energy", "eV").unwrap();
-        assert!((read - 1e-3).abs() < 1e-15, "{energy}: {read}");
+        assert!((read - expected).abs() < 1e-9, "{energy}: {read}");
         let mut out = Vec::new();
         readcon_core::writer::ConFrameWriter::new(&mut out)
             .write_frame(&frames[0])
             .unwrap();
         let written = String::from_utf8(out).unwrap();
-        assert!(written.contains(r#""energy":"meV""#), "{written}");
+        assert!(
+            written.contains(&format!(r#""energy":"{canonical}""#)),
+            "{written}"
+        );
         let back = parse(&written).unwrap();
         assert_eq!(
             back[0].conversion_factor_to("energy", "eV").unwrap(),

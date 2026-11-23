@@ -3,7 +3,8 @@
 use readcon_core::error::ParseError;
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::units::{
-    HISTORICAL_NATURAL_TIME, NATURAL_TIME_UNIT, unit_conversion_factor, validate_unit_for_quantity,
+    HISTORICAL_NATURAL_TIME, NATURAL_TIME_UNIT, unit_conversion_factor,
+    unit_conversion_factor_for_version, validate_unit_for_quantity,
 };
 
 fn class_of(text: &str) -> String {
@@ -119,8 +120,6 @@ fn con_units_21_velocity_follows_the_assigned_time() {
         "0 0 0 0 0",
     );
     let lying = format!("{lying}\nH\nVelocities of Component 1\n0.1 0.2 0.3 0 0\n");
-    // CON 3 assigned its natural time regardless of these optional labels;
-    // preserve that compatibility rather than applying the CON 4 precedence.
     assert_eq!(class_of(&lying), "ok");
 }
 
@@ -135,6 +134,21 @@ fn con_units_16_symbols_are_case_sensitive() {
     assert!(validate_unit_for_quantity("energy", "ha").is_err());
     assert!(validate_unit_for_quantity("mass", "da").is_err());
     let _ = ParseError::InvalidUnits("marker".into());
+}
+
+/// CON-units.16. SI prefixes remain case-sensitive in every major.
+#[test]
+fn con_units_16_con3_mev_spellings_are_case_sensitive() {
+    let mega = unit_conversion_factor_for_version(3, "MeV", "eV").unwrap();
+    assert!((mega - 1.0e6).abs() < 1.0e-6);
+    let milli = unit_conversion_factor_for_version(3, "mev", "eV").unwrap();
+    assert!((milli - 1.0e-3).abs() < 1.0e-12);
+    for unknown in ["MEV", "Mev", "mEV"] {
+        assert!(
+            unit_conversion_factor_for_version(3, unknown, "eV").is_err(),
+            "{unknown}"
+        );
+    }
 }
 
 /// CON-status.8. Requirement words are uppercase, and RFC 8174 is cited.

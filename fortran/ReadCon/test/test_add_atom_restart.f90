@@ -140,7 +140,8 @@ contains
     end do
     call check_bits(got%energy(), energy, "energy")
     md = got%metadata_json()
-    call check_true(index(md, '"time":"(amu*angstrom^2/eV)^0.5"') > 0, "units.time")
+    call check_true(index(md, '"con_spec_version":4') > 0, "CON major")
+    call check_true(index(md, '"time":"(u*Å^2/eV)^0.5"') > 0, "units.time")
     seen = -1_int64
     do j = 1, min(n, got%natoms())
       at = got%atom(j)
