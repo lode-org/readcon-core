@@ -2378,8 +2378,11 @@ enum RKRStatus rkr_frame_atom_ids_view(const struct RKRConFrame *frame_handle,
                                        struct RKRArrayView *out);
 
 /**
- * Row-major f64 xyz pointer, or NULL if storage is not float64.
- * `*n` receives the atom count. Pointer is valid until `free_rkr_frame`.
+ * Row-major f64 xyz pointer, or NULL if storage is not float64 or not
+ * one row of three doubles per atom. `*n` receives the atom count.
+ * Pointer is valid until `free_rkr_frame` or the next
+ * `rkr_frame_positions_from_dlpack` on this frame, which copies a column
+ * a DLPack export shares before it writes.
  */
 const double *rkr_frame_xyz_f64(const struct RKRConFrame *frame_handle,
                                 uintptr_t *n);
@@ -2399,19 +2402,49 @@ int rkr_frame_plain_geometry(const struct RKRConFrame *frame_handle,
                              double *cell, double *angles);
 
 /**
- * Row-major f64 velocities pointer, or NULL if absent / not float64.
+ * Row-major f64 velocities pointer, or NULL if absent, not float64, or not
+ * one row of three doubles per atom. `*n` receives the row count.
+ *
+ * The pointer addresses the frame's velocities column, the block
+ * `rkr_frame_to_c_frame`, the copy function, and the DLPack export read.
+ * It is read-only and valid until `free_rkr_frame`. No C function writes
+ * or replaces that column, so the values do not change while the frame
+ * lives. A DLPack export of the column shares the block and keeps it
+ * alive past `free_rkr_frame` on its own; this pointer does not.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `n` is NULL or writable.
  */
 const double *rkr_frame_velocities_f64(const struct RKRConFrame *frame_handle,
                                        uintptr_t *n);
 
 /**
- * Row-major f64 forces pointer, or NULL if absent / not float64.
+ * Row-major f64 forces pointer, or NULL if absent, not float64, or not
+ * one row of three doubles per atom. `*n` receives the row count.
+ *
+ * The pointer addresses the frame's forces column, the block
+ * `rkr_frame_to_c_frame`, the copy function, and the DLPack export read.
+ * It is read-only and valid until `free_rkr_frame`. No C function writes
+ * or replaces that column, so the values do not change while the frame
+ * lives. A DLPack export of the column shares the block and keeps it
+ * alive past `free_rkr_frame` on its own; this pointer does not.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `n` is NULL or writable.
  */
 const double *rkr_frame_forces_f64(const struct RKRConFrame *frame_handle,
                                    uintptr_t *n);
 
 /**
- * Row-major f64 displacements pointer, or NULL if absent / not float64.
+ * Row-major f64 displacements pointer, or NULL if absent, not float64, or not
+ * one row of three doubles per atom. `*n` receives the row count.
+ *
+ * The pointer addresses the frame's displacements column, the block the copy
+ * function and the DLPack export read. It is read-only and valid until
+ * `free_rkr_frame`. No C function writes or replaces that column, so the
+ * values do not change while the frame lives. A DLPack export of the
+ * column shares the block and keeps it alive past `free_rkr_frame` on
+ * its own; this pointer does not.
  *
  * # Safety
  * `frame_handle` must be a valid frame handle; `n` is NULL or writable.
@@ -2420,7 +2453,15 @@ const double *rkr_frame_displacements_f64(const struct RKRConFrame *frame_handle
                                           uintptr_t *n);
 
 /**
- * Row-major f64 spreads pointer, or NULL if absent / not float64.
+ * Row-major f64 spreads pointer, or NULL if absent, not float64, or not
+ * one row of three doubles per atom. `*n` receives the row count.
+ *
+ * The pointer addresses the frame's spreads column, the block the copy
+ * function and the DLPack export read. It is read-only and valid until
+ * `free_rkr_frame`. No C function writes or replaces that column, so the
+ * values do not change while the frame lives. A DLPack export of the
+ * column shares the block and keeps it alive past `free_rkr_frame` on
+ * its own; this pointer does not.
  *
  * # Safety
  * `frame_handle` must be a valid frame handle; `n` is NULL or writable.

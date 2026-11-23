@@ -1544,13 +1544,23 @@ fn export_catoms(frame: &ConFrame) -> Result<Vec<CAtom>, crate::writer::WriteErr
             z = symbol_to_atomic_number(atoms[i].symbol.as_ref());
             last_symbol = symbol;
         }
+        let velocity = if has_vel {
+            motion_row(&frame.velocities, atoms.len(), i, atoms[i].velocity())
+        } else {
+            [0.0; 3]
+        };
+        let force = if has_force {
+            motion_row(&frame.forces, atoms.len(), i, atoms[i].force())
+        } else {
+            [0.0; 3]
+        };
         out.push(catom_from_datum(
             &atoms[i],
             [coords[i * 3], coords[i * 3 + 1], coords[i * 3 + 2]],
             z,
             mass,
-            has_vel,
-            has_force,
+            velocity,
+            force,
         ));
         i += 1;
         mass_left -= 1;
@@ -1558,24 +1568,34 @@ fn export_catoms(frame: &ConFrame) -> Result<Vec<CAtom>, crate::writer::WriteErr
     Ok(out)
 }
 
+/// Row `i` of a per-atom `(n, 3)` section column, else the atom's value.
+///
+/// The column is what `rkr_frame_velocities_f64`, the copies, and the
+/// DLPack exports read, so every C view of a section agrees with it.
+fn motion_row(
+    column: &crate::storage_dtype::Array2Storage,
+    n: usize,
+    i: usize,
+    atom: Option<[f64; 3]>,
+) -> [f64; 3] {
+    if column.nrows() == n
+        && let Some(row) = column.try_f64_row(i)
+    {
+        return row;
+    }
+    atom.unwrap_or([0.0; 3])
+}
+
 fn catom_from_datum(
     atom: &crate::types::AtomDatum,
     xyz: [f64; 3],
     atomic_number: u64,
     mass: f64,
-    has_vel: bool,
-    has_force: bool,
+    velocity: [f64; 3],
+    force: [f64; 3],
 ) -> CAtom {
-    let [vx, vy, vz] = if has_vel {
-        atom.velocity().unwrap_or([0.0; 3])
-    } else {
-        [0.0; 3]
-    };
-    let [fx, fy, fz] = if has_force {
-        atom.force().unwrap_or([0.0; 3])
-    } else {
-        [0.0; 3]
-    };
+    let [vx, vy, vz] = velocity;
+    let [fx, fy, fz] = force;
     let fixed = atom.fixed();
     CAtom {
         atomic_number,
@@ -5587,8 +5607,11 @@ pub unsafe extern "C" fn rkr_frame_atom_ids_view(
     note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 
-/// Row-major f64 xyz pointer, or NULL if storage is not float64.
-/// `*n` receives the atom count. Pointer is valid until `free_rkr_frame`.
+/// Row-major f64 xyz pointer, or NULL if storage is not float64 or not
+/// one row of three doubles per atom. `*n` receives the atom count.
+/// Pointer is valid until `free_rkr_frame` or the next
+/// `rkr_frame_positions_from_dlpack` on this frame, which copies a column
+/// a DLPack export shares before it writes.
 /// # Safety
 ///
 /// A non-null pointer argument must point at a live value of its declared
@@ -5601,11 +5624,18 @@ pub unsafe extern "C" fn rkr_frame_xyz_f64(
     f64_col_ptr(frame_handle, n, |f| f.positions.f64_rows3())
 }
 
-/// Row-major f64 velocities pointer, or NULL if absent / not float64.
-/// # Safety
+/// Row-major f64 velocities pointer, or NULL if absent, not float64, or not
+/// one row of three doubles per atom. `*n` receives the row count.
 ///
-/// A non-null pointer argument must point at a live value of its declared
-/// type for this call. A null pointer is handled inside the function.
+/// The pointer addresses the frame's velocities column, the block
+/// `rkr_frame_to_c_frame`, the copy function, and the DLPack export read.
+/// It is read-only and valid until `free_rkr_frame`. No C function writes
+/// or replaces that column, so the values do not change while the frame
+/// lives. A DLPack export of the column shares the block and keeps it
+/// alive past `free_rkr_frame` on its own; this pointer does not.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle; `n` is NULL or writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_velocities_f64(
     frame_handle: *const RKRConFrame,
@@ -5614,11 +5644,18 @@ pub unsafe extern "C" fn rkr_frame_velocities_f64(
     f64_col_ptr(frame_handle, n, |f| f.velocities.f64_rows3())
 }
 
-/// Row-major f64 forces pointer, or NULL if absent / not float64.
-/// # Safety
+/// Row-major f64 forces pointer, or NULL if absent, not float64, or not
+/// one row of three doubles per atom. `*n` receives the row count.
 ///
-/// A non-null pointer argument must point at a live value of its declared
-/// type for this call. A null pointer is handled inside the function.
+/// The pointer addresses the frame's forces column, the block
+/// `rkr_frame_to_c_frame`, the copy function, and the DLPack export read.
+/// It is read-only and valid until `free_rkr_frame`. No C function writes
+/// or replaces that column, so the values do not change while the frame
+/// lives. A DLPack export of the column shares the block and keeps it
+/// alive past `free_rkr_frame` on its own; this pointer does not.
+///
+/// # Safety
+/// `frame_handle` must be a valid frame handle; `n` is NULL or writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_forces_f64(
     frame_handle: *const RKRConFrame,
@@ -5627,7 +5664,15 @@ pub unsafe extern "C" fn rkr_frame_forces_f64(
     f64_col_ptr(frame_handle, n, |f| f.forces.f64_rows3())
 }
 
-/// Row-major f64 displacements pointer, or NULL if absent / not float64.
+/// Row-major f64 displacements pointer, or NULL if absent, not float64, or not
+/// one row of three doubles per atom. `*n` receives the row count.
+///
+/// The pointer addresses the frame's displacements column, the block the copy
+/// function and the DLPack export read. It is read-only and valid until
+/// `free_rkr_frame`. No C function writes or replaces that column, so the
+/// values do not change while the frame lives. A DLPack export of the
+/// column shares the block and keeps it alive past `free_rkr_frame` on
+/// its own; this pointer does not.
 ///
 /// # Safety
 /// `frame_handle` must be a valid frame handle; `n` is NULL or writable.
@@ -5639,7 +5684,15 @@ pub unsafe extern "C" fn rkr_frame_displacements_f64(
     f64_col_ptr(frame_handle, n, |f| f.displacements.f64_rows3())
 }
 
-/// Row-major f64 spreads pointer, or NULL if absent / not float64.
+/// Row-major f64 spreads pointer, or NULL if absent, not float64, or not
+/// one row of three doubles per atom. `*n` receives the row count.
+///
+/// The pointer addresses the frame's spreads column, the block the copy
+/// function and the DLPack export read. It is read-only and valid until
+/// `free_rkr_frame`. No C function writes or replaces that column, so the
+/// values do not change while the frame lives. A DLPack export of the
+/// column shares the block and keeps it alive past `free_rkr_frame` on
+/// its own; this pointer does not.
 ///
 /// # Safety
 /// `frame_handle` must be a valid frame handle; `n` is NULL or writable.
@@ -6238,9 +6291,8 @@ pub unsafe extern "C" fn rkr_frame_velocities_dlpack_ex(
         return status;
     }
     let mut data = Vec::with_capacity(n * 3);
-    for a in &frame.atom_data {
-        let v = a.velocity().unwrap_or([0.0; 3]);
-        data.extend_from_slice(&v);
+    for (i, a) in frame.atom_data.iter().enumerate() {
+        data.extend_from_slice(&motion_row(&frame.velocities, n, i, a.velocity()));
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
         .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
@@ -6289,9 +6341,8 @@ pub unsafe extern "C" fn rkr_frame_forces_dlpack_ex(
         return status;
     }
     let mut data = Vec::with_capacity(n * 3);
-    for a in &frame.atom_data {
-        let f = a.force().unwrap_or([0.0; 3]);
-        data.extend_from_slice(&f);
+    for (i, a) in frame.atom_data.iter().enumerate() {
+        data.extend_from_slice(&motion_row(&frame.forces, n, i, a.force()));
     }
     let arr = ndarray::ArcArray2::from_shape_vec((n, 3), data)
         .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)));
@@ -8753,6 +8804,87 @@ Coordinates of Component 1
         crate::iterators::frames_from_text(text, Some(1))
             .expect("parse")
             .remove(0)
+    }
+
+    /// A frame whose column moved after a clone shared it, with atom 0
+    /// holding its own tail and the rest addressing the column.
+    fn moved_motion_frame() -> ConFrame {
+        let mut frame = vel_forces_frame();
+        frame.atom_data[0].set_energy(Some(-1.0));
+        let clone = frame.clone();
+        frame.velocities.set_f64_row(1, [9.0, 8.0, 7.0]);
+        frame.forces.set_f64_row(2, [6.0, 5.0, 4.0]);
+        drop(clone);
+        frame
+    }
+
+    #[test]
+    fn c_frame_export_reads_motion_from_the_columns() {
+        let frame = moved_motion_frame();
+        let handle = &frame as *const ConFrame as *const RKRConFrame;
+        let c = unsafe { rkr_frame_to_c_frame(handle) };
+        assert!(!c.is_null());
+        let atoms = unsafe { std::slice::from_raw_parts((*c).atoms, (*c).num_atoms) };
+        let mut n = 0usize;
+        let vel = unsafe { rkr_frame_velocities_f64(handle, &mut n) };
+        let vel = unsafe { std::slice::from_raw_parts(vel, n * 3) };
+        let frc = unsafe { rkr_frame_forces_f64(handle, &mut n) };
+        let frc = unsafe { std::slice::from_raw_parts(frc, n * 3) };
+        for (i, atom) in atoms.iter().enumerate() {
+            assert_eq!([atom.vx, atom.vy, atom.vz], vel[i * 3..i * 3 + 3], "v {i}");
+            assert_eq!([atom.fx, atom.fy, atom.fz], frc[i * 3..i * 3 + 3], "f {i}");
+        }
+        assert_eq!([atoms[1].vx, atoms[1].vy, atoms[1].vz], [9.0, 8.0, 7.0]);
+        unsafe { free_c_frame(c) };
+    }
+
+    #[test]
+    fn converted_motion_dlpack_reads_the_columns() {
+        let frame = moved_motion_frame();
+        let handle = &frame as *const ConFrame as *const RKRConFrame;
+        let opts32 = RKRDlpackExportOptions {
+            dtype: RKRDLDataType {
+                code: rkr_dl_type_code::RKR_DL_FLOAT,
+                bits: 32,
+                lanes: 1,
+            },
+            device: RKRDLDevice {
+                device_type: rkr_dl_device_type::RKR_DL_CPU,
+                device_id: 0,
+            },
+        };
+        let n = frame.atom_data.len();
+        for (column, export) in [
+            (
+                &frame.velocities,
+                rkr_frame_velocities_dlpack_ex
+                    as unsafe extern "C" fn(
+                        *const RKRConFrame,
+                        *const RKRDlpackExportOptions,
+                        *mut *mut RKRDLManagedTensorVersioned,
+                    ) -> RKRStatus,
+            ),
+            (&frame.forces, rkr_frame_forces_dlpack_ex),
+        ] {
+            let mut t: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
+            assert_eq!(
+                unsafe { export(handle, &opts32, &mut t) },
+                RKRStatus::RKR_STATUS_SUCCESS
+            );
+            unsafe { assert_dlpack_cpu_float(t, 2, &[n as i64, 3], 32) };
+            let dl = unsafe { &(*t).dl_tensor };
+            let data = unsafe {
+                std::slice::from_raw_parts(
+                    (dl.data as *const u8).add(dl.byte_offset as usize) as *const f32,
+                    n * 3,
+                )
+            };
+            for i in 0..n {
+                let row = column.as_f64_row(i).map(|v| v as f32);
+                assert_eq!(data[i * 3..i * 3 + 3], row, "row {i}");
+            }
+            unsafe { rkr_dlpack_delete(t) };
+        }
     }
 
     #[test]

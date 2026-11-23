@@ -988,6 +988,9 @@ impl PyConFrame {
         let (created, stored) = {
             let frame = self.store_mut();
             if matches!(which, VecSection::Velocity | VecSection::Force) {
+                // A column view handed to Python shares the block. The row
+                // store below would copy it and leave atom slots on the
+                // view's block.
                 frame.unshare_slot_columns();
             }
             let kind = vec_kind(which, &dt);

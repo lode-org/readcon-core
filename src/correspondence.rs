@@ -405,17 +405,23 @@ pub fn reorder_like(
 
 fn apply_permutation(frame: &ConFrame, perm: &[usize]) -> Result<ConFrame, CorrespondenceError> {
     let n = perm.len();
-    let mut out = frame.clone();
     let mut atoms = Vec::with_capacity(n);
     for &j in perm {
         let mut atom = frame.atom_data[j].clone();
         overlay_sections(&mut atom, frame, j)?;
         atoms.push(atom);
     }
+    let velocities = permute_rows(&frame.velocities, perm, "velocities")?;
+    let forces = permute_rows(&frame.forces, perm, "forces")?;
+    let mut out = frame.clone();
+    // The clone's atoms address its velocity and force columns. Both are
+    // replaced here, and the atoms in `perm` order then address the rows
+    // of the permuted columns.
+    let bound = out.materialise_section_slots();
     out.atom_data = atoms;
     out.positions = permute_rows(&frame.positions, perm, "positions")?;
-    out.velocities = permute_rows(&frame.velocities, perm, "velocities")?.into();
-    out.forces = permute_rows(&frame.forces, perm, "forces")?.into();
+    out.velocities = velocities.into();
+    out.forces = forces.into();
     out.magmoms = permute_rows(&frame.magmoms, perm, "magmoms")?.into();
     out.displacements = permute_rows(&frame.displacements, perm, "displacements")?.into();
     out.spreads = permute_rows(&frame.spreads, perm, "spreads")?.into();
@@ -427,6 +433,10 @@ fn apply_permutation(frame: &ConFrame, perm: &[usize]) -> Result<ConFrame, Corre
     out.atom_ids = ndarray::Array1::from_vec(ids).into_shared();
     refresh_type_runs(&mut out);
     remap_bonds(&mut out, perm)?;
+    if !bound.is_empty() {
+        let bound: Vec<bool> = perm.iter().map(|&j| bound[j]).collect();
+        out.bind_section_slots(&bound);
+    }
     Ok(out)
 }
 
