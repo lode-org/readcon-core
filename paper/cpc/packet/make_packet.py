@@ -6,7 +6,11 @@ generative-AI statements and Data availability links come from rg_main.tex, auth
 with every macro expanded from the files that the preamble of rg_main.tex inputs (commit.tex, release.tex and
 the generated macro files) and section references resolved from rg_main.aux; figure, table and listing counts
 from rg_main.aux; references from rg_main.bbl and rg_supp.bbl; undefined references from the pdfTeX logs;
-pages and SHA-256 from the PDFs, the pages through the pdfinfo of the environment.  The commit comes from
+pages and SHA-256 from the PDFs, the pages through the pdfinfo of the environment.  Those counts and
+digests are the TeX Live pdfTeX build from ``build_tex.sh``.  Tectonic 0.17.0 paginates
+``rg_supp.pdf`` to 99 pages and TeX Live to 98, so a PDF whose producer is not pdfTeX is not
+compared: the form keeps the page count and digest it already records, and the summary line says
+which PDFs were not checked.  The commit comes from
 commit.tex; the version, the commit's role and tag, its library digest and the main-branch commit and pull
 request it descends from come from release.tex.  The concept DOI is the one DOI that section Data
 availability links; that section must also name the version, the commit, readcon-core.bundle and paper/cpc.  CITATION.cff and
@@ -316,11 +320,59 @@ def counted(aux: str, kind: str, env: str) -> int:
     )
 
 
-def pages(pdf: Path) -> int:
-    info = subprocess.run(
+def pdf_info(pdf: Path) -> str:
+    return subprocess.run(
         [cm.tool("pdfinfo"), str(pdf)], capture_output=True, text=True, check=True
     ).stdout
-    return int(re.search(r"^Pages:\s+(\d+)$", info, re.M).group(1))
+
+
+def pdftex_producer(info: str) -> bool:
+    """True when pdfinfo names pdfTeX, the engine ``build_tex.sh`` runs.
+
+    Tectonic 0.17.0 paginates ``rg_supp.pdf`` to 99 pages. TeX Live pdfTeX
+    paginates it to 98. CPC-FORM.md records the pdfTeX counts and digests.
+    """
+    producer = re.search(r"^Producer:\s*(.*)$", info, re.M)
+    return producer is not None and "pdfTeX" in producer.group(1)
+
+
+def recorded_pdf(name: str) -> tuple[int, str] | None:
+    """Pages and sha256 already written in CPC-FORM.md for ``name``."""
+    path = HERE / "CPC-FORM.md"
+    if not path.is_file():
+        return None
+    text = path.read_text()
+    if name == "rg_supp.pdf":
+        match = re.search(
+            r"`(?:[\w./]*)rg_supp\.pdf` \((\d+) pages, sha256 `([0-9a-f]{64})`\)",
+            text,
+        )
+    else:
+        match = re.search(
+            r"`rg_main\.pdf` has (\d+) pages, sha256 `([0-9a-f]{64})`",
+            text,
+        )
+    if match is None:
+        return None
+    return int(match.group(1)), match.group(2)
+
+
+def pdf_fields(name: str, pdf: Path) -> tuple[int, str, bool]:
+    """Pages and sha256 the form records for ``pdf``, and whether they were read from ``pdf``.
+
+    A pdfTeX file supplies both. For another engine, such as Tectonic, the
+    form keeps the pages and digest CPC-FORM.md already records. Those are
+    not checked against anything, and the third value is False.
+    """
+    info = pdf_info(pdf)
+    pages = int(re.search(r"^Pages:\s+(\d+)$", info, re.M).group(1))
+    digest = cm.sha256(pdf)
+    if pdftex_producer(info):
+        return pages, digest, True
+    recorded = recorded_pdf(name)
+    if recorded is None:
+        return pages, digest, True
+    return *recorded, False
 
 
 def author_block(values: dict[str, str]) -> dict[str, str]:
@@ -475,7 +527,13 @@ def render(draft: bool = False) -> tuple[dict[str, str], str]:
     if problems:
         refuse(problems)
 
-    main_pages, supp_pages = pages(SRC / "rg_main.pdf"), pages(SRC / "rg_supp.pdf")
+    main_pages, main_sha256, main_read = pdf_fields("rg_main.pdf", SRC / "rg_main.pdf")
+    supp_pages, supp_sha256, supp_read = pdf_fields("rg_supp.pdf", SRC / "rg_supp.pdf")
+    unchecked = [
+        name
+        for name, read in (("rg_main.pdf", main_read), ("rg_supp.pdf", supp_read))
+        if not read
+    ]
     n_fig, n_tab, n_lst = (
         counted(aux, kind, env)
         for kind, env in (("lof", "figure"), ("lot", "table"), ("lol", "lstlisting"))
@@ -553,8 +611,8 @@ def render(draft: bool = False) -> tuple[dict[str, str], str]:
         "n_tab": n_tab,
         "main_pages": main_pages,
         "supp_pages": supp_pages,
-        "main_sha256": cm.sha256(SRC / "rg_main.pdf"),
-        "supp_sha256": cm.sha256(SRC / "rg_supp.pdf"),
+        "main_sha256": main_sha256,
+        "supp_sha256": supp_sha256,
         **block,
     }
     texts = {}
@@ -593,6 +651,11 @@ def render(draft: bool = False) -> tuple[dict[str, str], str]:
         f"{n_fig} figures, {n_tab} tables, {n_lst} listings, {n_refs}+{n_refs_supp} references; "
         f"summary words {summary_words}; highlights {[len(h) for h in highlights]}"
     )
+    if unchecked:
+        summary += (
+            f"; pages and sha256 of {', '.join(unchecked)} not checked: not typeset by "
+            "pdfTeX, the form keeps its recorded values"
+        )
     return texts, summary
 
 
