@@ -2550,19 +2550,22 @@ impl PyConFrame {
     }
 }
 
-/// Copy every atom while the list critical section stays the innermost lock.
+/// Copy one generation of the atom list.
 ///
-/// `PyList::iter` and `get_item` lock the list again. On free-threaded 3.13
-/// that suspends the outer section, so one walk can see two writes. The
-/// unchecked load is valid only while this section is not re-entered.
+/// `PyList::iter` and `get_item` lock the list again. On a free-threaded
+/// build that suspends the outer section, so one walk can see two writes.
+/// The unchecked load is valid only while this section is not re-entered.
+/// Identities are copied here. Payloads are cloned afterwards with the
+/// waiting shared borrow: `borrow` panics when a writer holds the atom,
+/// and waiting inside the section would suspend it.
 fn read_atom_list(list: &Bound<'_, PyList>) -> PyResult<Vec<PyAtomDatum>> {
-    pyo3::sync::critical_section::with_critical_section(list.as_any(), || {
+    let py = list.py();
+    let held = pyo3::sync::critical_section::with_critical_section(list.as_any(), || {
         let n = list.len();
-        let mut atoms = Vec::with_capacity(n);
+        let mut held = Vec::with_capacity(n);
         for index in 0..n {
             // SAFETY: `index < len` under this critical section, and the body
-            // does not lock `list` again. `Py_TYPE` and the pyclass borrow
-            // flag do not start a critical section.
+            // does not lock `list` again. `Py_TYPE` does not start a section.
             let item = unsafe { list.get_item_unchecked(index) };
             if !item.is_exact_instance_of::<PyAtomDatum>() {
                 return Err(PyTypeError::new_err(
@@ -2570,10 +2573,15 @@ fn read_atom_list(list: &Bound<'_, PyList>) -> PyResult<Vec<PyAtomDatum>> {
                 ));
             }
             let atom = unsafe { item.cast_unchecked::<PyAtomDatum>() };
-            atoms.push(atom.borrow().clone());
+            held.push(atom.clone().unbind());
         }
-        Ok(atoms)
-    })
+        Ok(held)
+    })?;
+    let mut atoms = Vec::with_capacity(held.len());
+    for atom in held {
+        atoms.push(shared(atom.bind(py))?.clone());
+    }
+    Ok(atoms)
 }
 
 impl PyConFrame {
