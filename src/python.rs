@@ -6329,7 +6329,7 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
             .and_then(|units| units.get(quantity))
             .and_then(Value::as_str)
             .unwrap_or(target);
-        crate::units::unit_conversion_factor(source, target)
+        crate::units::unit_conversion_factor_for_version(frame.spec_version, source, target)
             .map_err(|error| PyValueError::new_err(error.to_string()))
     };
     let has_velocities = if frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {

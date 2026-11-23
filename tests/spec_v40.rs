@@ -70,7 +70,44 @@ fn patch_identity_and_major3_time() {
 #[test]
 fn major3_keeps_case_insensitive_unit_compatibility() {
     let legacy = r#"{"con_spec_version":3,"units":{"length":"ANGSTROM","energy":"ha","mass":"AMU"},"sections":[]}"#;
-    assert!(parse(&text(legacy, "90 90 90", atoms())).is_ok());
+    let frames = parse(&text(legacy, "90 90 90", atoms())).unwrap();
+    let mut out = Vec::new();
+    readcon_core::writer::ConFrameWriter::new(&mut out)
+        .write_frame(&frames[0])
+        .unwrap();
+    let written = String::from_utf8(out).unwrap();
+    assert!(written.contains(r#""length":"angstrom""#), "{written}");
+    assert!(written.contains(r#""energy":"hartree""#), "{written}");
+    assert!(parse(&written).is_ok(), "{written}");
+
+    let legacy_vel = r#"{"con_spec_version":3,"units":{"length":"ANGSTROM","energy":"ha","time":"fs"},"sections":["velocities"]}"#;
+    let vel_frames = parse(&with_velocity(legacy_vel)).unwrap();
+    let rewritten = readcon_core::writer::binding_rewrite_frame(&vel_frames[0]).unwrap();
+    let mut vel_out = Vec::new();
+    readcon_core::writer::ConFrameWriter::new(&mut vel_out)
+        .write_frame(&rewritten)
+        .unwrap();
+    let vel_written = String::from_utf8(vel_out).unwrap();
+    assert!(
+        vel_written.contains(r#""con_spec_version":4"#),
+        "{vel_written}"
+    );
+    assert!(
+        vel_written.contains(r#""energy":"hartree""#),
+        "{vel_written}"
+    );
+    assert!(parse(&vel_written).is_ok(), "{vel_written}");
+
+    let canon = readcon_core::units::canonicalize_units_metadata(&serde_json::json!({
+        "length": "ANGSTROM",
+        "energy": "ha",
+        "mass": "AMU"
+    }))
+    .unwrap();
+    assert_eq!(canon["length"], "angstrom");
+    assert_eq!(canon["energy"], "hartree");
+    assert_eq!(canon["mass"], "amu");
+
     let metadata = serde_json::Map::new();
     assert_eq!(
         velocity_file_time_unit(3, &metadata, Some("not-a-time-unit")).unwrap(),
