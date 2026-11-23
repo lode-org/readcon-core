@@ -768,6 +768,7 @@ def test_atom_list_race_returns_a_borrow_error() -> None:
     readcon._hold_frame_borrow(frame, enter_while_exclusive, exclusive_borrow=True)
 
     live = readcon._atom_list_race(frame).__enter__()
+    live.replace([atom])
 
     def exit_while_shared() -> None:
         with pytest.raises(RuntimeError, match="borrow"):
@@ -775,6 +776,9 @@ def test_atom_list_race_returns_a_borrow_error() -> None:
 
     readcon._hold_frame_borrow(frame, exit_while_shared, exclusive_borrow=False)
     live.__exit__(None, None, None)
+    assert len(frame) == len(frame.atoms) == 1
+    with pytest.raises(IndexError):
+        _ = frame[1]
 
     live = readcon._atom_list_race(frame).__enter__()
 

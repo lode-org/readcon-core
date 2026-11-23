@@ -1889,12 +1889,15 @@ impl PyAtomListRace {
                         "atom list race handle cannot be re-entered",
                     )
                 })?;
-            if let Err(err) = this.frame.try_borrow(py) {
-                this.state
-                    .store(RACE_CLOSED, std::sync::atomic::Ordering::Release);
-                return Err(err.into());
-            }
-            if let Err(err) = this.frame.try_borrow(py)?.ensure_atoms(py) {
+            let frame = match this.frame.try_borrow(py) {
+                Ok(frame) => frame,
+                Err(err) => {
+                    this.state
+                        .store(RACE_CLOSED, std::sync::atomic::Ordering::Release);
+                    return Err(err.into());
+                }
+            };
+            if let Err(err) = frame.ensure_atoms(py) {
                 this.state
                     .store(RACE_CLOSED, std::sync::atomic::Ordering::Release);
                 return Err(err);
@@ -1911,17 +1914,24 @@ impl PyAtomListRace {
         _exc_val: Option<&Bound<'_, PyAny>>,
         _exc_tb: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<bool> {
-        let prev = self
-            .state
-            .swap(RACE_CLOSED, std::sync::atomic::Ordering::AcqRel);
-        if prev == RACE_ACTIVE {
-            let _write = self
-                .write
-                .lock_py_attached(py)
-                .unwrap_or_else(|err| err.into_inner());
+        let _write = self
+            .write
+            .lock_py_attached(py)
+            .unwrap_or_else(|err| err.into_inner());
+        let state = self.state.load(std::sync::atomic::Ordering::Acquire);
+        if state == RACE_ACTIVE {
             let mut frame = self.frame.try_borrow_mut(py)?;
             let snaps = frame.snapshot_atoms(py)?;
             frame.replace_atoms(py, snaps)?;
+            self.state
+                .store(RACE_CLOSED, std::sync::atomic::Ordering::Release);
+        } else if state == RACE_READY {
+            let _ = self.state.compare_exchange(
+                RACE_READY,
+                RACE_CLOSED,
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+            );
         }
         Ok(false)
     }
