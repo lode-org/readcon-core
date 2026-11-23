@@ -1242,8 +1242,6 @@ def stage_or_verify(
 
 
 def main() -> None:
-    import readcon
-
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--check",
@@ -1259,6 +1257,8 @@ def main() -> None:
     if args.check:
         print(check_outputs(DATA))
         return
+
+    import readcon
 
     DATA.mkdir(parents=True, exist_ok=True)
     archived = archive_unminimised()
