@@ -631,8 +631,7 @@ def release_rows(org: str) -> list[dict]:
             )
             if not listed or tree["tagged"] or tree["release"] != package_version():
                 raise SystemExit(
-                    f"no tag or superseding tree record of "
-                    f"{VERSIONS.relative_to(ROOT)} lists version "
+                    f"no tag of {VERSIONS.relative_to(ROOT)} lists version "
                     f"{row['version']} of {row['date']}"
                 )
             row["release"] = f"readcon-core {tree['release']} (untagged)"
