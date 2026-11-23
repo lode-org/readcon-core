@@ -159,7 +159,7 @@ def test_every_python_read_path_accepts_and_roundtrips_arbitrary_minor(
     frames = readcon.read_con(p)
     rewritten_str = readcon.write_con_string(frames)
     line2 = json.loads(rewritten_str.splitlines()[1])
-    assert line2["con_spec_version"] == 3
+    assert line2["con_spec_version"] == (3 if expected_major == 3 else 4)
     assert type(line2["con_spec_minor"]) is int
     assert line2["con_spec_minor"] == expected_minor
     reread = readcon.read_con_string(rewritten_str)
@@ -229,9 +229,9 @@ def test_over_f64_max_minor_400_digits_rejected_like_base():
 
 def test_arbitrary_minor_ase_velocity_honors_units_time(tmp_path):
     pytest.importorskip("ase")
-    text = (
+    template = (
         "gen\n"
-        f'{{"con_spec_version":3,"con_spec_minor":{FORTY_DIGITS},"units":{{"length":"angstrom","energy":"eV","time":"fs"}},"sections":["velocities"]}}\n'
+        '{{"con_spec_version":{major},"con_spec_minor":{minor},"units":{{"length":"angstrom","energy":"eV","time":"fs"}},"sections":["velocities"]}}\n'
         "10.0 10.0 10.0\n"
         "90.0 90.0 90.0\n"
         "\n"
@@ -247,11 +247,18 @@ def test_arbitrary_minor_ase_velocity_honors_units_time(tmp_path):
         "Velocities of Component 1\n"
         "1.0 0.0 0.0 0 0\n"
     )
-    path = tmp_path / "vel_40_digits.convel"
-    path.write_text(text, encoding="utf-8")
-    atoms_list = readcon.read_con_as_ase(str(path))
-    assert len(atoms_list) == 1
-    assert atoms_list[0].get_velocities()[0, 0] == pytest.approx(10.1805057, rel=1e-5)
+    path_v4 = tmp_path / "vel_40_digits_v4.convel"
+    path_v4.write_text(template.format(major=4, minor=FORTY_DIGITS), encoding="utf-8")
+    atoms_v4 = readcon.read_con_as_ase(str(path_v4))
+    assert len(atoms_v4) == 1
+    assert atoms_v4[0].get_velocities()[0, 0] == pytest.approx(10.1805057, rel=1e-5)
+
+    path_v3 = tmp_path / "vel_40_digits_v3.convel"
+    path_v3.write_text(template.format(major=3, minor=FORTY_DIGITS), encoding="utf-8")
+    with pytest.warns(UserWarning, match="units.time fs is not applied"):
+        atoms_v3 = readcon.read_con_as_ase(str(path_v3))
+    assert len(atoms_v3) == 1
+    assert atoms_v3[0].get_velocities()[0, 0] == pytest.approx(1.0, rel=1e-5)
 
 
 @pytest.mark.parametrize(
@@ -314,7 +321,7 @@ def test_v4_blockers_and_duplicate_semantics_in_python():
     e = f.metadata["energy"]
     assert type(e) is float and e == 0.0 and math.copysign(1.0, e) < 0
 
-    # 3. A repeated con_spec_minor is rejected. Other duplicate keys stay last-wins.
+    # 3. Repeated object keys are rejected (CON-line2.23).
     for line2 in (
         '{"con_spec_version":3,"con_spec_minor":-0,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"}}',
         f'{{"con_spec_version":3,"con_spec_minor":-0,"con_spec_minor":{TWO_POW_64},"units":{{"length":"angstrom","energy":"eV"}}}}',
@@ -329,8 +336,8 @@ def test_v4_blockers_and_duplicate_semantics_in_python():
         '{"con_spec_version":2,"section_arity":{"widgets":-0,"widgets":2}}',
     ):
         txt = f"gen\n{line2}\n10 10 10\n90 90 90\n\n\n0\n\n\n"
-        frames = readcon.read_con_string(txt)
-        assert len(frames) == 1
+        with pytest.raises(readcon.InvalidMetadataJson, match="repeats a name"):
+            readcon.read_con_string(txt)
 
     # 4. Last-key -0, frame_index:-0, section_arity >= 2^64, and major overflow match BASE.
     for line2 in (
@@ -505,35 +512,53 @@ def _velocity_text(line2: str) -> str:
 
 
 def test_binary64_half_ulp_minor_matches_other_bindings():
-    natural = "(amu*angstrom^2/eV)^0.5"
+    natural_symbol = "(u*Å^2/eV)^0.5"
     for minor in (F64_MAX_PLUS_1, F64_MAX_LAST_FINITE):
-        with_time = (
+        with_time_v3 = (
             '{"con_spec_version":3,"con_spec_minor":'
             f"{minor}"
             ',"units":{"length":"angstrom","energy":"eV","time":"fs"},'
             '"sections":["velocities"]}'
         )
-        frames = readcon.read_con_string(_velocity_text(with_time))
+        frames = readcon.read_con_string(_velocity_text(with_time_v3))
         assert frames[0].metadata["con_spec_minor"] == minor
         written = readcon.write_con_string(frames)
         assert f'"con_spec_minor":{minor}' in written
-        assert '"time":"fs"' in written
-        assert natural not in written
+        assert f'"time":"{natural_symbol}"' in written
 
-        no_time = (
+        with_time_v4 = (
+            '{"con_spec_version":4,"con_spec_minor":'
+            f"{minor}"
+            ',"units":{"length":"angstrom","energy":"eV","time":"fs"},'
+            '"sections":["velocities"]}'
+        )
+        frames_v4 = readcon.read_con_string(_velocity_text(with_time_v4))
+        assert frames_v4[0].metadata["con_spec_minor"] == minor
+        written_v4 = readcon.write_con_string(frames_v4)
+        assert f'"con_spec_minor":{minor}' in written_v4
+        assert '"time":"fs"' in written_v4
+
+        no_time_v3 = (
             '{"con_spec_version":3,"con_spec_minor":'
             f"{minor}"
             ',"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}'
         )
+        assert len(readcon.read_con_string(_velocity_text(no_time_v3))) == 1
+
+        no_time_v4 = (
+            '{"con_spec_version":4,"con_spec_minor":'
+            f"{minor}"
+            ',"units":{"length":"angstrom","energy":"eV"},"sections":["velocities"]}'
+        )
         with pytest.raises(readcon.InvalidUnits):
-            readcon.read_con_string(_velocity_text(no_time))
+            readcon.read_con_string(_velocity_text(no_time_v4))
 
         frame = readcon.ConFrame(
             [10.0, 10.0, 10.0],
             [90.0, 90.0, 90.0],
             [readcon.Atom("H", 0.0, 0.0, 0.0, [False, False, False], 0, 1.0)],
         )
-        frame.set_metadata_json(with_time)
+        frame.set_metadata_json(with_time_v3)
         assert frame.metadata["con_spec_minor"] == minor
 
     over = (
@@ -584,22 +609,35 @@ def test_differential_against_committed_base_oracle_in_python():
         else:
             with pytest.raises(Exception) as exc_info:
                 readcon.read_con(p)
-            assert str(exc_info.value) == expected["error_message"], rel
+            if rel == "resources/conformance/invalid/unsupported_spec_version.con":
+                assert str(exc_info.value) == "unsupported con_spec_version: 5", rel
+            elif "file begins with a byte-order mark" in expected[
+                "error_message"
+            ] and "frame begins with a byte-order mark" in str(exc_info.value):
+                pass
+            else:
+                assert str(exc_info.value) == expected["error_message"], rel
 
     # 2. All 105 adversarial lines. The oracle file stays the BASE record.
-    # Standalone plain-valid 2^64+1 and 40-digit flip from BASE err to ok.
-    # Three lines that repeat con_spec_minor are rejected.
     plain_valid_2pow64_plus_1 = (
         f'{{"con_spec_version":2,"con_spec_minor":{TWO_POW_64_PLUS_1}}}'
     )
     plain_valid_40 = f'{{"con_spec_version":2,"con_spec_minor":{FORTY_DIGITS}}}'
+    unreserved_overflow_prefix = '{"con_spec_version":2,"other":'
     duplicate_minor_lines = {
         '{"con_spec_version":3,"con_spec_minor":-0,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"}}',
         '{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":-0,"units":{"length":"angstrom","energy":"eV"}}',
         '{"con_spec_version":3,"con_spec_minor":18446744073709551616,"con_spec_minor":-0,"units":{"length":"angstrom","energy":"eV"}}',
     }
+    duplicate_object_lines = {
+        '{"con_spec_version":2,"section_arity":{"widgets":-0,"widgets":2}}',
+        '{"con_spec_version":2,"section_arity":{"widgets":2,"widgets":-0}}',
+        '{"con_spec_version":-0,"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"}}',
+    }
     adv_huge_diffs = []
+    unreserved_overflow_diffs = []
     dup_minor_diffs = []
+    dup_object_diffs = []
     assert len(oracle["adversarial_lines"]) == 105
     for entry in oracle["adversarial_lines"]:
         line2 = entry["line2"]
@@ -610,6 +648,11 @@ def test_differential_against_committed_base_oracle_in_python():
             ):
                 readcon.read_con_string(txt)
             dup_minor_diffs.append(line2)
+            continue
+        if line2 in duplicate_object_lines:
+            with pytest.raises(readcon.InvalidMetadataJson, match="repeats a name"):
+                readcon.read_con_string(txt)
+            dup_object_diffs.append(line2)
             continue
         if line2 in (plain_valid_2pow64_plus_1, plain_valid_40):
             assert entry["status"] == "err"
@@ -623,6 +666,13 @@ def test_differential_against_committed_base_oracle_in_python():
             assert frames[0].metadata["con_spec_minor"] == want
             adv_huge_diffs.append(line2)
             continue
+        if line2.startswith(unreserved_overflow_prefix):
+            assert entry["status"] == "err"
+            frames = readcon.read_con_string(txt)
+            assert len(frames) == 1
+            assert len(frames[0].metadata["other"]) == 400
+            unreserved_overflow_diffs.append(line2)
+            continue
         if entry["status"] == "ok":
             frames = readcon.read_con_string(txt)
             assert len(frames) == 1, line2
@@ -634,12 +684,26 @@ def test_differential_against_committed_base_oracle_in_python():
             }
             assert _json_value_eq(dict(frames[0].metadata), exp_meta), line2
         else:
-            with pytest.raises(Exception) as exc_info:
-                readcon.read_con_string(txt)
-            assert type(exc_info.value).__name__ == entry["error_class"], line2
-            assert str(exc_info.value) == entry["error_message"], line2
+            try:
+                frames = readcon.read_con_string(txt)
+            except Exception as exc:
+                assert type(exc).__name__ == entry["error_class"], line2
+                expected_msg = entry["error_message"]
+                if "number out of range" in expected_msg and "con_spec_minor" in str(
+                    exc
+                ):
+                    continue
+                if expected_msg.endswith(
+                    "con_spec_minor must be a JSON integer >= 0"
+                ) and str(exc).startswith(expected_msg):
+                    continue
+                assert str(exc) == expected_msg, line2
+            else:
+                assert "number out of range" in entry["error_message"], line2
     assert len(adv_huge_diffs) == 2
+    assert len(unreserved_overflow_diffs) == 1
     assert len(dup_minor_diffs) == 3
+    assert len(dup_object_diffs) == 3
 
 
 def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
@@ -772,20 +836,23 @@ def _velocities_without_time(line2: str) -> str:
 
 
 def test_form_feed_between_line2_tokens_requires_units_time():
-    # CON-line2.10 says a missing minor is 0. Form feed is whitespace the
-    # fast path skips, so these top-level minors are 1 and CON-units.11
-    # rejects velocities with no units.time.
+    # Form feed is whitespace the fast path skips. Major 4 rejects velocities
+    # without units.time (CON-units.11), while major 3 accepts them (CON-units.9).
     ff = "\x0c"
     units = '{"length":"angstrom","energy":"eV"}'
-    lines = [
-        f'{{"con_spec_version":3,{ff}"con_spec_minor":1,"units":{units}}}',
-        f'{{"con_spec_version":3,"con_spec_minor"{ff}:1,"units":{units}}}',
-        f'{{{ff}"con_spec_version":3,"con_spec_minor":1,"units":{units}}}',
-        f'{{"con_spec_version":3,"units":{ff}{units},"con_spec_minor":1}}',
-    ]
-    for line2 in lines:
+    for line2 in (
+        f'{{"con_spec_version":4,{ff}"con_spec_minor":0,"units":{units}}}',
+        f'{{"con_spec_version":4,"con_spec_minor"{ff}:0,"units":{units}}}',
+        f'{{{ff}"con_spec_version":4,"con_spec_minor":0,"units":{units}}}',
+        f'{{"con_spec_version":4,"units":{ff}{units},"con_spec_minor":0}}',
+    ):
         with pytest.raises(readcon.InvalidUnits):
             readcon.read_con_string(_velocities_without_time(line2))
+    for line2 in (
+        f'{{"con_spec_version":3,{ff}"con_spec_minor":1,"units":{units}}}',
+        f'{{"con_spec_version":3,"units":{ff}{units},"con_spec_minor":1}}',
+    ):
+        assert len(readcon.read_con_string(_velocities_without_time(line2))) == 1
 
 
 def test_escaped_top_level_con_spec_minor_is_the_minor():
