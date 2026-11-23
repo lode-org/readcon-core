@@ -230,7 +230,7 @@ pub enum Array2Storage {
 pub type FloatArray2 = Array2Storage;
 
 /// An absent 2-D section. Empty stays a null pointer instead of a 56-byte header.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Optional2 {
     inner: Option<Box<Array2Storage>>,
 }
