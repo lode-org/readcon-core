@@ -906,7 +906,7 @@ impl FrameHeader {
                 "metadata units.{dimension} is missing"
             ))
         })?;
-        crate::units::unit_conversion_factor(from, to_unit)
+        crate::units::unit_conversion_factor_for_version(self.spec_version, from, to_unit)
     }
 
     /// Sets the unit system. Aliases are rewritten to preferred names
