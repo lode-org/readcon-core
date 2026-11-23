@@ -1069,10 +1069,10 @@ pub struct PyConFrame {
     /// False while a parsed frame can use the direct Rust write path.
     /// Accessing the atom sequence or structurally editing it sets this true.
     atoms_ready: std::sync::atomic::AtomicBool,
-    /// Serializes the one-time parsed atom projection on free-threaded builds.
     /// Successful fills of `atoms` from the parsed frame. Array getters
     /// leave this at zero.
     atoms_fills: std::sync::atomic::AtomicUsize,
+    /// Serializes the one-time parsed atom projection on free-threaded builds.
     atoms_init: std::sync::Mutex<()>,
     pub spec_version: u32,
     /// Built from `inner`'s header on first use when the frame was parsed.
