@@ -282,6 +282,41 @@ def test_view_outlives_reader_and_slice_survives_gc() -> None:
         piece.setflags(write=True)
 
 
+@pytest.mark.parametrize("getter", ["velocities_array", "vel", "forces_array"])
+def test_atom_edit_after_view_keeps_slots_on_the_frame(getter: str) -> None:
+    """An atom edit must write the frame's column, not the view's copy.
+
+    The view's copy is freed with the view. A later edit through a slot
+    still aimed at it would write freed memory."""
+    import readcon
+
+    path = str(CORPUS / "tiny_cuh2_vel_forces.con")
+    frame = readcon.read_con(path, n_threads=1)[0]
+    view = getattr(frame, getter)
+    view = view() if callable(view) else view
+    before = view.tobytes()
+    frame[0].vx = 123.0
+    frame[0].fx = 321.0
+    assert view.tobytes() == before
+
+    del view
+    gc.collect()
+    others = [readcon.read_con(path, n_threads=1)[0] for _ in range(64)]
+
+    def bytes_of(frames: list) -> list:
+        return [
+            (f.velocities_array().tobytes(), f.forces_array().tobytes()) for f in frames
+        ]
+
+    clean = bytes_of(others)
+    frame[1].vx = 55.0
+    frame[1].fx = 66.0
+    assert bytes_of(others) == clean
+    back = readcon.read_con_string(readcon.write_con_string([frame]))[0]
+    assert back.velocities_array()[:2, 0].tolist() == [123.0, 55.0]
+    assert back.forces_array()[:2, 0].tolist() == [321.0, 66.0]
+
+
 def _read_three(path: str) -> tuple[bytes, bytes, bytes]:
     import readcon
 

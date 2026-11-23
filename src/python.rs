@@ -896,8 +896,9 @@ impl PositionStore {
 ///
 /// Each field shares its allocation with the frame (an `ArcArray` clone, no
 /// copy). The arrays that view them are read-only and have this object as
-/// their base. Nothing in the binding writes to a parsed frame's columns, so
-/// the doubles do not change while a view exists.
+/// their base. An atom edit gives the frame's column its own allocation
+/// before writing (`ConFrame::unshare_slot_columns`), so the doubles do not
+/// change while a view exists.
 #[pyclass(module = "readcon", name = "_FrameColumns", frozen)]
 struct FrameColumns {
     velocities: Option<ndarray::ArcArray2<f64>>,
