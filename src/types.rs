@@ -5251,6 +5251,11 @@ impl ConFrameBuilder {
         );
         let sections_declared = !sections.is_empty();
         let mut metadata = self.metadata;
+        if let Some(units) = metadata.get(meta::UNITS).cloned() {
+            let units = crate::units::canonicalize_units_object_for_version(written_spec, &units)
+                .map_err(|err| ParseError::InvalidUnits(err.to_string()))?;
+            metadata.insert(meta::UNITS.into(), units);
+        }
         // v3 writers always emit units (defaults if the caller omitted them).
         if written_spec >= 3 && !metadata.contains_key(meta::UNITS) {
             metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
@@ -6235,13 +6240,20 @@ mod tests {
             (3, crate::units::HISTORICAL_NATURAL_TIME),
             (4, crate::units::NATURAL_TIME_UNIT),
         ] {
-            let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
-            builder.spec_version(major);
-            builder.set_units(units.clone()).unwrap();
-            builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
-            let frame = builder.build().unwrap();
-            assert_eq!(frame.header.spec_version, major);
-            assert_eq!(frame.header.units().unwrap()["time"], expected);
+            for set_spec_first in [true, false] {
+                let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+                if set_spec_first {
+                    builder.spec_version(major);
+                }
+                builder.set_units(units.clone()).unwrap();
+                if !set_spec_first {
+                    builder.spec_version(major);
+                }
+                builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+                let frame = builder.build().unwrap();
+                assert_eq!(frame.header.spec_version, major);
+                assert_eq!(frame.header.units().unwrap()["time"], expected);
+            }
         }
     }
 
