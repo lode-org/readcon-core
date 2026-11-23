@@ -86,9 +86,9 @@ fn snap_from_datum(atom: &PyAtomDatum) -> AtomSnap {
     };
     AtomSnap {
         symbol: atom.symbol.clone(),
-        x: atom.x,
-        y: atom.y,
-        z: atom.z,
+        x: atom.read_coord(0),
+        y: atom.read_coord(1),
+        z: atom.read_coord(2),
         fixed: atom.fixed,
         atom_id: atom.atom_id,
         mass: atom.mass.unwrap_or(0.0),
@@ -151,6 +151,8 @@ fn datum_from_snap(snap: &AtomSnap) -> PyAtomDatum {
         sx,
         sy,
         sz,
+        coord: None,
+        edits: 0,
     }
 }
 
@@ -572,6 +574,7 @@ impl PyConFrame {
     /// Drop the iterator's source substring. A later write would not emit it.
     fn note_mutated(&mut self) {
         self.source_text = None;
+        self.source_coord_hash = None;
     }
 
     fn ensure_index(&self, index: usize) -> PyResult<()> {
@@ -696,6 +699,7 @@ impl PyConFrame {
             slab_index: 0,
             xyz_owned: None,
             source_text: None,
+            source_coord_hash: None,
         })
     }
 
