@@ -1744,7 +1744,12 @@ impl PyAtomListRace {
                         "atom list race handle cannot be re-entered",
                     )
                 })?;
-            if let Err(err) = this.frame.borrow(py).ensure_atoms(py) {
+            if let Err(err) = this.frame.try_borrow(py) {
+                this.state
+                    .store(RACE_CLOSED, std::sync::atomic::Ordering::Release);
+                return Err(err.into());
+            }
+            if let Err(err) = this.frame.try_borrow(py)?.ensure_atoms(py) {
                 this.state
                     .store(RACE_CLOSED, std::sync::atomic::Ordering::Release);
                 return Err(err);
@@ -1769,7 +1774,7 @@ impl PyAtomListRace {
                 .write
                 .lock_py_attached(py)
                 .unwrap_or_else(|err| err.into_inner());
-            let mut frame = self.frame.borrow_mut(py);
+            let mut frame = self.frame.try_borrow_mut(py)?;
             let snaps = frame.snapshot_atoms(py);
             frame.replace_atoms(py, snaps)?;
         }
@@ -1778,7 +1783,7 @@ impl PyAtomListRace {
 
     fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
         self.ensure_active()?;
-        Ok(self.frame.borrow(py).atom_count(py))
+        Ok(self.frame.try_borrow(py)?.atom_count(py))
     }
 
     fn replace(&self, py: Python<'_>, atoms: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -1792,14 +1797,14 @@ impl PyAtomListRace {
                 .map_err(|_| {
                     PyTypeError::new_err("ConFrame atom cache must hold readcon.Atom objects")
                 })?
-                .borrow()
+                .try_borrow()?
                 .clone();
             datums.push(datum);
             fresh.append(item)?;
         }
         validate_race_atoms(&datums)?;
         let _write = self.write_guard(py)?;
-        let frame = self.frame.borrow(py);
+        let frame = self.frame.try_borrow(py)?;
         let list = frame.atoms.bind(py);
         list.as_any()
             .set_item(PySlice::new(py, 0, isize::MAX, 1), &fresh)?;
@@ -1811,12 +1816,12 @@ impl PyAtomListRace {
         let datum = atom
             .cast::<PyAtomDatum>()
             .map_err(|_| PyTypeError::new_err("ConFrame atom cache must hold readcon.Atom objects"))?
-            .borrow()
+            .try_borrow()?
             .clone();
         validate_race_atom_spread(&datum)?;
         let incoming_mass = datum.mass.unwrap_or(0.0);
         let _write = self.write_guard(py)?;
-        let frame = self.frame.borrow(py);
+        let frame = self.frame.try_borrow(py)?;
         for existing in read_atom_list(frame.atoms.bind(py))? {
             if existing.atom_id == datum.atom_id {
                 return Err(PyValueError::new_err(format!(
@@ -1840,9 +1845,30 @@ impl PyAtomListRace {
     fn pop(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         self.ensure_active()?;
         let _write = self.write_guard(py)?;
-        let frame = self.frame.borrow(py);
+        let frame = self.frame.try_borrow(py)?;
         Ok(frame.atoms.bind(py).as_any().call_method0("pop")?.unbind())
     }
+}
+
+/// Run `callback` while this thread holds a borrow of `frame`.
+///
+/// A list-race edit that overlaps the borrow returns an error. It does
+/// not panic.
+#[pyfunction]
+#[pyo3(signature = (frame, callback, exclusive_borrow = false))]
+fn _hold_frame_borrow(
+    frame: &Bound<'_, PyConFrame>,
+    callback: &Bound<'_, PyAny>,
+    exclusive_borrow: bool,
+) -> PyResult<()> {
+    if exclusive_borrow {
+        let _guard = exclusive(frame)?;
+        callback.call0()?;
+    } else {
+        let _guard = shared(frame)?;
+        callback.call0()?;
+    }
+    Ok(())
 }
 
 #[pyfunction]

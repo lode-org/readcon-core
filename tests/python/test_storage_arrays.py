@@ -723,6 +723,45 @@ def test_atom_sequence_pop_semantics() -> None:
         frame.atoms.pop()
 
 
+def test_atom_list_race_returns_a_borrow_error() -> None:
+    """A borrowed frame makes the race return an error, not a panic."""
+    import readcon
+
+    frame = _fresh_vel_frame()
+    atom = frame.atoms[0]
+
+    def enter_while_exclusive() -> None:
+        with pytest.raises(RuntimeError, match="borrow"):
+            with readcon._atom_list_race(frame):
+                pass
+
+    readcon._hold_frame_borrow(frame, enter_while_exclusive, exclusive_borrow=True)
+
+    live = readcon._atom_list_race(frame).__enter__()
+
+    def exit_while_shared() -> None:
+        with pytest.raises(RuntimeError, match="borrow"):
+            live.__exit__(None, None, None)
+
+    readcon._hold_frame_borrow(frame, exit_while_shared, exclusive_borrow=False)
+    live.__exit__(None, None, None)
+
+    live = readcon._atom_list_race(frame).__enter__()
+
+    def edits_while_exclusive() -> None:
+        with pytest.raises(RuntimeError, match="borrow"):
+            live.replace([atom])
+        with pytest.raises(RuntimeError, match="borrow"):
+            live.append(atom)
+        with pytest.raises(RuntimeError, match="borrow"):
+            len(live)
+        with pytest.raises(RuntimeError, match="borrow"):
+            live.pop()
+
+    readcon._hold_frame_borrow(frame, edits_while_exclusive, exclusive_borrow=True)
+    live.__exit__(None, None, None)
+
+
 def test_atom_list_race_keeps_frame_consistent_and_writable() -> None:
     import readcon
 
