@@ -5132,8 +5132,14 @@ impl ConFrameBuilder {
         if dt != StorageDtypes::all_f64() {
             dt.insert_into(&mut metadata);
         }
+        // `atom_data` is grouped. `self.positions` is still insertion
+        // order, so copy the row that landed in each grouped slot.
+        let mut from_insertion = vec![0usize; n];
+        for (insertion, &grouped) in insertion_to_grouped.iter().enumerate() {
+            from_insertion[grouped] = insertion;
+        }
         for (i, a) in atom_data.iter().enumerate() {
-            let row = self.positions.row(i);
+            let row = self.positions.row(from_insertion[i]);
             pos.set_f64_row(i, [row[0], row[1], row[2]]);
             ids_arr[i] = a.atom_id;
             if has_vel && let Some(v) = a.velocity() {
@@ -5798,6 +5804,10 @@ mod tests {
         assert_eq!(&*frame.atom_data[0].symbol, "H");
         assert_eq!(&*frame.atom_data[1].symbol, "H");
         assert_eq!(&*frame.atom_data[2].symbol, "Cu");
+        // Coordinates follow the symbols, not the insertion slots.
+        assert_eq!(frame.xyz_at(0), [0.0, 0.0, 0.0]);
+        assert_eq!(frame.xyz_at(1), [2.0, 0.0, 0.0]);
+        assert_eq!(frame.xyz_at(2), [1.0, 0.0, 0.0]);
     }
 
     #[test]
@@ -5826,6 +5836,15 @@ mod tests {
                 .map(|a| a.atom_id)
                 .collect::<Vec<_>>(),
             vec![10, 30, 20, 40]
+        );
+        assert_eq!(
+            (0..4).map(|i| frame.xyz_at(i)).collect::<Vec<_>>(),
+            vec![
+                [0.0, 0.0, 0.0],
+                [2.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [3.0, 0.0, 0.0],
+            ]
         );
         for (insertion, &grouped) in perm.iter().enumerate() {
             let expected_id = [10, 20, 30, 40][insertion];
