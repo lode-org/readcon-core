@@ -807,6 +807,9 @@ impl PyConFrame {
         }
         let (created, stored) = {
             let frame = self.store_mut();
+            if matches!(which, VecSection::Velocity | VecSection::Force) {
+                frame.unshare_slot_columns();
+            }
             let kind = vec_kind(which, &dt);
             let arr = vec_array_mut(frame, which);
             let created = arr.nrows() != n;

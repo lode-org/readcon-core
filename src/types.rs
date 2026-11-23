@@ -2931,6 +2931,38 @@ impl ConFrame {
         );
     }
 
+    /// Give the velocity and force columns their own allocation before an
+    /// in-place write, and move the atom slots with them.
+    ///
+    /// A NumPy view of a column holds a clone of it. Writing the shared
+    /// column copies it first, and the slots would keep addressing the
+    /// allocation the view owns, which is freed with the view.
+    #[cfg(feature = "python")]
+    pub(crate) fn unshare_slot_columns(&mut self) {
+        let n = self.atom_data.len();
+        if n == 0 || self.column_tails.len() != n {
+            return;
+        }
+        if self.velocities.nrows() == n
+            && let Some((old, new)) = unshare_rows(&mut self.velocities)
+        {
+            for tail in &mut self.column_tails {
+                if let HeapTail::Column { vel, .. } = tail {
+                    *vel = rebase_slot(*vel, old, new);
+                }
+            }
+        }
+        if self.forces.nrows() == n
+            && let Some((old, new)) = unshare_rows(&mut self.forces)
+        {
+            for tail in &mut self.column_tails {
+                if let HeapTail::Column { force, .. } = tail {
+                    *force = rebase_slot(*force, old, new);
+                }
+            }
+        }
+    }
+
     fn point_column(&mut self, set: impl Fn(&mut HeapTail, *mut f64), base: *mut f64) {
         let n = self.atom_data.len();
         if self.column_tails.len() != n {
@@ -3399,6 +3431,28 @@ fn arc_push_f64_1d(arr: &mut ndarray::ArcArray1<f64>, value: f64) {
         .push(ndarray::Axis(0), ndarray::aview0(&value))
         .expect("push failed");
     *arr = owned.into_shared();
+}
+
+/// The old and new base of a packed f64 column that was shared and is now
+/// a private copy. `None` when it was already unique or is not packed f64.
+#[cfg(feature = "python")]
+fn unshare_rows(column: &mut crate::storage_dtype::Array2Storage) -> Option<(usize, *mut f64)> {
+    let old = column.f64_slice()?.as_ptr() as usize;
+    let new = column.f64_mut_slice()?.as_mut_ptr();
+    (new as usize != old).then_some((old, new))
+}
+
+/// `slot` moved from the column at `old` to the same element at `new`.
+/// A null slot (section cleared for that atom) stays null.
+#[cfg(feature = "python")]
+fn rebase_slot(slot: *mut f64, old: usize, new: *mut f64) -> *mut f64 {
+    if slot.is_null() {
+        return slot;
+    }
+    let offset = (slot as usize - old) / std::mem::size_of::<f64>();
+    // SAFETY: `slot` addressed element `offset` of the old column, and the
+    // copy at `new` has the same shape.
+    unsafe { new.add(offset) }
 }
 
 #[derive(Debug, Clone)]
