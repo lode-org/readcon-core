@@ -7724,6 +7724,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAtomSeq>()?;
     m.add_class::<PyAtomListRace>()?;
     m.add_function(wrap_pyfunction!(_atom_list_race, m)?)?;
+    m.add_function(wrap_pyfunction!(_hold_frame_borrow, m)?)?;
     m.add_class::<PyConFrame>()?;
     m.add_class::<PyConFrameIterator>()?;
     m.add_class::<PyConTrajectory>()?;
