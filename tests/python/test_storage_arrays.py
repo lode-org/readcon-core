@@ -711,11 +711,7 @@ def test_atom_list_race_keeps_frame_consistent_and_writable() -> None:
             )
         with pytest.raises(ValueError):
             live.replace(
-                [
-                    readcon.Atom(
-                        "He", 1.0, 2.0, 3.0, atom_id=10, sx=-1.0, sy=0.0, sz=0.0
-                    )
-                ]
+                [readcon.Atom("He", 1.0, 2.0, 3.0, atom_id=10, sx=-1.0, sy=0.0, sz=0.0)]
             )
 
         live.replace(he[:5])
@@ -726,9 +722,7 @@ def test_atom_list_race_keeps_frame_consistent_and_writable() -> None:
             live.append(readcon.Atom("He", 2.0, 2.0, 2.0, atom_id=2999, mass=5.0))
         with pytest.raises(ValueError):
             live.append(
-                readcon.Atom(
-                    "He", 2.0, 2.0, 2.0, atom_id=2998, sx=-0.5, sy=0.0, sz=0.0
-                )
+                readcon.Atom("He", 2.0, 2.0, 2.0, atom_id=2998, sx=-0.5, sy=0.0, sz=0.0)
             )
 
         live.append(he[5])
