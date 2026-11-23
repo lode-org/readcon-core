@@ -2,10 +2,12 @@
 
 use readcon_core::error::ParseError;
 use readcon_core::iterators::ConFrameIterator;
+use readcon_core::types::ConFrameBuilder;
 use readcon_core::units::{
     HISTORICAL_NATURAL_TIME, NATURAL_TIME_UNIT, unit_conversion_factor,
     unit_conversion_factor_for_version, validate_unit_for_quantity,
 };
+use readcon_core::writer::{ConFrameWriter, WriteError};
 
 fn class_of(text: &str) -> String {
     match ConFrameIterator::new(text).next() {
@@ -127,6 +129,42 @@ fn con_units_21_velocity_follows_the_assigned_time() {
     );
     let con3 = format!("{con3}\nH\nVelocities of Component 1\n0.1 0.2 0.3 0 0\n");
     assert_eq!(class_of(&con3), "ok");
+
+    let con2_valid = frame(
+        r#"{"con_spec_version":2,"units":{"length":"angstrom","time":"fs","velocity":"angstrom/(amu*angstrom^2/eV)^0.5"}}"#,
+        "0 0 0 0 0",
+    );
+    assert_eq!(class_of(&con2_valid), "ok");
+    let con2_lying = frame(
+        r#"{"con_spec_version":2,"units":{"length":"angstrom","time":"fs","velocity":"angstrom/fs"}}"#,
+        "0 0 0 0 0",
+    );
+    assert_eq!(class_of(&con2_lying), "InvalidUnits");
+
+    let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+    builder.spec_version(2);
+    builder
+        .set_units(serde_json::json!({
+            "length": "angstrom",
+            "time": "fs",
+            "velocity": "angstrom/fs"
+        }))
+        .unwrap();
+    builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+    let mut output = Vec::new();
+    let err = ConFrameWriter::new(&mut output)
+        .write_frame(&builder.build().unwrap())
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        WriteError::Format(ParseError::InvalidUnits(_))
+    ));
+
+    let parsed = ConFrameIterator::new(&con2_valid).next().unwrap().unwrap();
+    output.clear();
+    ConFrameWriter::new(&mut output)
+        .write_frame(&parsed)
+        .unwrap();
 }
 
 /// CON-units.5 and CON-units.16. The two natural spellings match, and a, ha, da do not fold.

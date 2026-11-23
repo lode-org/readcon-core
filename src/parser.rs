@@ -2944,8 +2944,6 @@ pub fn parse_frame_header<'a>(
                 Some(u) => {
                     crate::units::validate_units_metadata_for_version(ver, u)
                         .map_err(|e| ParseError::InvalidUnits(format!("v3 units: {e}")))?;
-                    crate::units::enforce_velocity_precedence(ver, u)
-                        .map_err(|e| ParseError::InvalidUnits(format!("v3 units: {e}")))?;
                 }
                 None => {
                     return Err(ParseError::InvalidUnits(
@@ -2954,6 +2952,12 @@ pub fn parse_frame_header<'a>(
                     ));
                 }
             }
+        }
+        if ver >= 2
+            && let Some(units) = json_obj.get(meta::UNITS)
+        {
+            crate::units::enforce_velocity_precedence(ver, units)
+                .map_err(|e| ParseError::InvalidUnits(format!("units: {e}")))?;
         }
 
         // Single pass over the JSON object: collect sections, capture the
