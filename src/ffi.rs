@@ -8722,8 +8722,10 @@ Coordinates of Component 1
         )
         .into();
         let mut buf = vec![0.0f64; n * 3];
-        let handle = (&frame as *const ConFrame).cast::<RKRConFrame>();
-        let st = unsafe { rkr_frame_copy_velocities(handle, buf.as_mut_ptr(), buf.len()) };
+        let st = unsafe {
+            let handle = (&frame as *const ConFrame).cast::<RKRConFrame>();
+            rkr_frame_copy_velocities(handle, buf.as_mut_ptr(), buf.len())
+        };
         assert_eq!(st, RKRStatus::RKR_STATUS_VALIDATION_ERROR);
 
         // Wide-column positions must also return VALIDATION_ERROR.
@@ -8732,14 +8734,20 @@ Coordinates of Component 1
             n,
             4,
         );
-        let st = unsafe { rkr_frame_copy_positions(handle, buf.as_mut_ptr(), buf.len()) };
+        let st = unsafe {
+            let handle = (&frame as *const ConFrame).cast::<RKRConFrame>();
+            rkr_frame_copy_positions(handle, buf.as_mut_ptr(), buf.len())
+        };
         assert_eq!(st, RKRStatus::RKR_STATUS_VALIDATION_ERROR);
 
         // Empty masses SoA with populated atom_data must fall back to header masses.
         frame.masses =
             crate::storage_dtype::FloatArray1::zeros(crate::storage_dtype::ElementKind::Float64, 0);
         let mut masses = vec![-1.0f64; n];
-        let st = unsafe { rkr_frame_copy_masses(handle, masses.as_mut_ptr(), masses.len()) };
+        let st = unsafe {
+            let handle = (&frame as *const ConFrame).cast::<RKRConFrame>();
+            rkr_frame_copy_masses(handle, masses.as_mut_ptr(), masses.len())
+        };
         assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
         assert!(masses.iter().all(|&m| m > 0.0));
 
