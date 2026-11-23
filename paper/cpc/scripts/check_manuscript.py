@@ -409,6 +409,100 @@ def records() -> list[Path]:
     ]
 
 
+def superseded_records(paths: list[Path]) -> set[str]:
+    """Paths relative to the paper root that a later record's ``supersedes`` names.
+
+    The field is a repository path (``paper/cpc/...``) or a path relative to
+    this paper directory. The stored file stays byte-identical.
+    """
+    named: set[str] = set()
+    for path in paths:
+        try:
+            data = json.loads(path.read_text())
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        link = data.get("supersedes")
+        if not isinstance(link, str):
+            continue
+        rel = link.removeprefix("paper/cpc/")
+        named.add(rel)
+    return named
+
+
+def campaign_commit(data: dict) -> str | None:
+    """The commit that stored the campaign a build record names in ``record``, or None.
+
+    ``scripts/check_version_sot.sh`` holds such a record to one 40-char ``source_commit``
+    that wrote the named file, with the bytes stored now. This is the same rule.
+    """
+    named, commit = data.get("record"), data.get("source_commit")
+    if not isinstance(named, str) or not isinstance(commit, str):
+        return None
+    if not re.fullmatch(r"[0-9a-f]{40}", commit) or not (REPO / named).is_file():
+        return None
+    touched = subprocess.run(
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", commit]
+        + ["--", named],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if touched.returncode != 0 or named not in touched.stdout.splitlines():
+        return None
+    stored = subprocess.run(
+        ["git", "cat-file", "blob", f"{commit}:{named}"],
+        cwd=REPO,
+        capture_output=True,
+        check=False,
+    )
+    if stored.returncode != 0 or stored.stdout != (REPO / named).read_bytes():
+        return None
+    return commit
+
+
+def record_builds(
+    stored: list[tuple[str, dict]], manifest: str, digest: str
+) -> tuple[list[str], dict[tuple[str, str], list[str]], int]:
+    """Problems with the builds that ``stored`` records name, the modules of ``manifest``, and the count.
+
+    A record of version ``manifest`` names the library ``digest`` of this tree. An older measurement
+    keeps the build it recorded. A campaign keeps the library of the commit that stored it.
+    """
+    bad: list[str] = []
+    modules: dict[tuple[str, str], list[str]] = {}
+    checked = 0
+    for rel, data in stored:
+        named = list(named_builds(data, "", True)) or list(
+            named_builds(data, "", False)
+        )
+        if not named:
+            continue
+        measured = data.get("measures_release") or ()
+        measured = {measured} if isinstance(measured, str) else set(measured)
+        campaign = campaign_commit(data)
+        kept = library_at(campaign) if campaign else None
+        for build in named:
+            if build.version in measured:
+                continue
+            where = f"{rel} ({build.where})" if build.where else rel
+            if build.version == manifest and build.digest not in (None, digest, kept):
+                bad.append(
+                    f"{where}: library {(build.digest or 'of an unknown commit')[:12]}, this tree "
+                    f"{digest[:12]}"
+                )
+            if build.newer:
+                bad.append(f"{where}: written by a build older than {build.newer[0]}")
+            if build.version == manifest and build.module_sha256 is not None:
+                modules.setdefault((build.module, build.module_sha256), []).append(
+                    where
+                )
+        checked += 1
+    return bad, modules, checked
+
+
 REPRODUCTION_DOCUMENTS = ("readme.org", "REPRO-ARCHIVE.md", "packet/CPC-FORM.md")
 WRITTEN_DOCUMENTS = ("packet/CPC-FORM.md",)
 COMMIT_LIKE = re.compile(
@@ -507,6 +601,9 @@ def check_release(imported: dict) -> str:
     check.
 
     A record that ``measures_release`` lists published versions is held to them for the builds of those versions.
+    A record named by another record's ``supersedes`` field is the stored file. The check reads the record
+    that replaces it. A build record whose ``record`` names a campaign keeps the library of the commit that
+    stored the campaign.
     """
     version, commit = release()
     manifest = (REPO / "VERSION").read_text().strip()
@@ -555,38 +652,16 @@ def check_release(imported: dict) -> str:
             f"this Python imports a readcon module built before {imported['newer_sources'][0]} changed; "
             "python3 -m pip install . rebuilds it"
         )
-    modules: dict[tuple[str, str], list[str]] = {}
-    checked = 0
-    for path in records():
+    paths = records()
+    replaced = superseded_records(paths)
+    stored = []
+    for path in paths:
         data = json.loads(path.read_text())
-        if not isinstance(data, dict):
-            continue
-        named = list(named_builds(data, "", True)) or list(
-            named_builds(data, "", False)
-        )
-        if not named:
-            continue
-        measured = data.get("measures_release") or ()
-        measured = {measured} if isinstance(measured, str) else set(measured)
         rel = path.relative_to(ROOT).as_posix()
-        for build in named:
-            if build.version in measured:
-                continue
-            where = f"{rel} ({build.where})" if build.where else rel
-            # A record of this tree's version must name this tree's library. An older
-            # measurement keeps the build it recorded.
-            if build.version == manifest and build.digest not in (None, digest):
-                bad.append(
-                    f"{where}: library {(build.digest or 'of an unknown commit')[:12]}, this tree "
-                    f"{digest[:12]}"
-                )
-            if build.newer:
-                bad.append(f"{where}: written by a build older than {build.newer[0]}")
-            if build.version == manifest and build.module_sha256 is not None:
-                modules.setdefault((build.module, build.module_sha256), []).append(
-                    where
-                )
-        checked += 1
+        if isinstance(data, dict) and rel not in replaced:
+            stored.append((rel, data))
+    found, modules, checked = record_builds(stored, manifest, digest)
+    bad += found
     if len(modules) > 1:
         bad += [
             f"module {name} {sha[:12]}: {', '.join(wheres[:3])}{' ...' if len(wheres) > 3 else ''}"

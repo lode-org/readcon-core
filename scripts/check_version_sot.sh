@@ -258,6 +258,7 @@ recorded_results = {
     "paper/cpc/data/claisen/readcon-build.json",
     "paper/cpc/data/spec/version_drift.json",
     "paper/cpc/data/spec/corpus_recount.json",
+    "paper/cpc/data/spec/corpus_recount-2.json",
 }
 skip_dirs = {
     ".git",
