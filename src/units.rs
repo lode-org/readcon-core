@@ -374,8 +374,12 @@ fn parse_atom(s: &str) -> Result<(f64, Dimension, usize), ParseError> {
         )));
     }
     let name = &s[..j];
-    let base = lookup_base(name)
-        .ok_or_else(|| ParseError::ValidationError(format!("unknown unit '{name}'")))?;
+    let base = lookup_base(name).ok_or_else(|| {
+        ParseError::ValidationError(format!(
+            "unknown unit '{name}'; unit symbols are case-sensitive \
+             (meV is milli, MeV is mega)"
+        ))
+    })?;
     let mut end = j;
     let (f, d, extra) = apply_power(base.si_factor, base.dim, &s[end..])?;
     end += extra;
