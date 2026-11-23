@@ -72,7 +72,7 @@ RULES: list[Rule] = [
         HERE,
     ),
     Rule(
-        "v1.1.0",
+        "1.1.0",
         jget(REC, "potential.version").lstrip("v"),
         REC,
         "potential.version",

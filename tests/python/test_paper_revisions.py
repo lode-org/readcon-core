@@ -110,6 +110,7 @@ def _external_pin(lines: list[str], digest: str) -> bool:
         "gitlab.com",
         "github.com",
         "githubusercontent.com",
+        "huggingface.co",
         "lode-org/readcon-db",
         "EON_COMMIT",
         "READCON_DB_REV",
