@@ -1506,19 +1506,21 @@ fn export_catoms(frame: &ConFrame) -> Vec<CAtom> {
     let mut i = 0usize;
     while i < atoms.len() {
         if mass_left == 0 {
-            if mass_slot >= frame.header.natms_per_type.len() {
-                break;
-            }
-            mass_left = frame.header.natms_per_type[mass_slot];
-            mass = frame
-                .header
-                .masses_per_type
-                .get(mass_slot)
-                .copied()
-                .unwrap_or(0.0);
-            mass_slot += 1;
-            if mass_left == 0 {
-                continue;
+            if mass_slot < frame.header.natms_per_type.len() {
+                mass_left = frame.header.natms_per_type[mass_slot];
+                mass = frame
+                    .header
+                    .masses_per_type
+                    .get(mass_slot)
+                    .copied()
+                    .unwrap_or(0.0);
+                mass_slot += 1;
+                if mass_left == 0 {
+                    continue;
+                }
+            } else {
+                mass_left = atoms.len() - i;
+                mass = 0.0;
             }
         }
         let symbol = atoms[i].symbol.as_ptr();
@@ -5722,14 +5724,24 @@ fn copy_array2_f64(
     if section && arr.nrows() == 0 {
         return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
-    let need = n.saturating_mul(3);
+    if arr.nrows() > 0 && arr.ncols() != 3 {
+        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
+    let Some(need) = n.checked_mul(3) else {
+        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    };
     if out_len < need {
         return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
+    if need == 0 {
+        return note(RKRStatus::RKR_STATUS_SUCCESS);
+    }
     let dest = unsafe { std::slice::from_raw_parts_mut(out, need) };
     if arr.nrows() == n {
-        if let Some(src) = arr.f64_slice() {
-            dest.copy_from_slice(&src[..need.min(src.len())]);
+        if let Some(src) = arr.f64_slice()
+            && src.len() == need
+        {
+            dest.copy_from_slice(src);
             return note(RKRStatus::RKR_STATUS_SUCCESS);
         }
         for i in 0..n {
@@ -5773,13 +5785,39 @@ fn copy_array1_f64(
     if out_len < n {
         return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
-    let dest = unsafe { std::slice::from_raw_parts_mut(out, n) };
-    if let Some(src) = arr.f64_slice() {
-        dest.copy_from_slice(&src[..n.min(src.len())]);
+    if n == 0 {
         return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
-    for (slot, dest_i) in dest.iter_mut().enumerate() {
-        *dest_i = arr.get_f64(slot);
+    let dest = unsafe { std::slice::from_raw_parts_mut(out, n) };
+    if arr.len() == n {
+        if let Some(src) = arr.f64_slice()
+            && src.len() == n
+        {
+            dest.copy_from_slice(src);
+            return note(RKRStatus::RKR_STATUS_SUCCESS);
+        }
+        for (slot, dest_i) in dest.iter_mut().enumerate() {
+            *dest_i = arr.get_f64(slot);
+        }
+        return note(RKRStatus::RKR_STATUS_SUCCESS);
+    }
+    let mut written = 0usize;
+    for (slot, &count) in frame.header.natms_per_type.iter().enumerate() {
+        let mass = frame
+            .header
+            .masses_per_type
+            .get(slot)
+            .copied()
+            .unwrap_or(0.0);
+        let take = count.min(n - written);
+        dest[written..written + take].fill(mass);
+        written += take;
+        if written == n {
+            break;
+        }
+    }
+    if written < n {
+        dest[written..].fill(0.0);
     }
     note(RKRStatus::RKR_STATUS_SUCCESS)
 }
@@ -5916,8 +5954,10 @@ pub unsafe extern "C" fn rkr_frame_copy_atom_ids(
         return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
     }
     let dest = unsafe { std::slice::from_raw_parts_mut(out, n) };
-    if let Some(src) = frame.atom_ids.as_slice_memory_order() {
-        dest[..src.len().min(n)].copy_from_slice(&src[..src.len().min(n)]);
+    if frame.atom_ids.len() == n
+        && let Some(src) = frame.atom_ids.as_slice_memory_order()
+    {
+        dest.copy_from_slice(src);
         return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
     for (i, a) in frame.atom_data.iter().enumerate() {
@@ -6062,7 +6102,7 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
     } else {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     };
-    if frame.positions.nrows() != n {
+    if frame.positions.nrows() != n || frame.positions.ncols() != 3 {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
     // An exported tensor can share this column. The first row write then
@@ -8658,5 +8698,51 @@ Coordinates of Component 1
             assert_eq!(st, RKRStatus::RKR_STATUS_INVALID_JSON, "{name} builder");
             unsafe { free_rkr_frame_builder(builder) };
         }
+    }
+
+    #[test]
+    fn ffi_copy_and_export_reject_shape_mismatches_without_panicking() {
+        let text = std::fs::read_to_string("resources/test/tiny_cuh2_vel_forces.con").unwrap();
+        let mut frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .unwrap()
+            .unwrap();
+        let n = frame.atom_data.len();
+
+        // Short-column velocities must return VALIDATION_ERROR instead of panicking.
+        frame.velocities = crate::storage_dtype::Array2Storage::zeros(
+            crate::storage_dtype::ElementKind::Float64,
+            n,
+            2,
+        )
+        .into();
+        let mut buf = vec![0.0f64; n * 3];
+        let handle = (&frame as *const ConFrame).cast::<RKRConFrame>();
+        let st = unsafe { rkr_frame_copy_velocities(handle, buf.as_mut_ptr(), buf.len()) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+
+        // Wide-column positions must also return VALIDATION_ERROR.
+        frame.positions = crate::storage_dtype::Array2Storage::zeros(
+            crate::storage_dtype::ElementKind::Float32,
+            n,
+            4,
+        );
+        let st = unsafe { rkr_frame_copy_positions(handle, buf.as_mut_ptr(), buf.len()) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+
+        // Empty masses SoA with populated atom_data must fall back to header masses.
+        frame.masses =
+            crate::storage_dtype::FloatArray1::zeros(crate::storage_dtype::ElementKind::Float64, 0);
+        let mut masses = vec![-1.0f64; n];
+        let st = unsafe { rkr_frame_copy_masses(handle, masses.as_mut_ptr(), masses.len()) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
+        assert!(masses.iter().all(|&m| m > 0.0));
+
+        // Short header.natms_per_type must still export all atoms via export_catoms.
+        frame.header.natms_per_type = vec![1];
+        let exported = export_catoms(&frame);
+        assert_eq!(exported.len(), n);
+        assert!(exported[0].mass > 0.0);
+        assert_eq!(exported[n - 1].mass, 0.0);
     }
 }
