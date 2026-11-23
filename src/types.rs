@@ -6346,6 +6346,29 @@ mod tests {
     }
 
     #[test]
+    fn grouping_interleaved_species_keeps_each_atom_on_its_coordinates() {
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        let added = [
+            ("H", [0.1, 0.2, 0.3], 1.008),
+            ("Cu", [1.1, 1.2, 1.3], 63.546),
+            ("H", [2.1, 2.2, 2.3], 1.008),
+            ("O", [3.1, 3.2, 3.3], 15.999),
+            ("Cu", [4.1, 4.2, 4.3], 63.546),
+        ];
+        for (id, (symbol, [x, y, z], mass)) in added.iter().enumerate() {
+            b.add_atom(symbol, *x, *y, *z, [false; 3], id as u64, *mass);
+        }
+        let (frame, perm) = b.build_with_permutation().unwrap();
+        assert_eq!(perm, [0, 2, 1, 4, 3]);
+        for (insertion, &grouped) in perm.iter().enumerate() {
+            let (symbol, xyz, _) = added[insertion];
+            let atom = &frame.atom_data[grouped];
+            assert_eq!(&*atom.symbol, symbol, "atom {insertion}");
+            assert_eq!(frame.positions.as_f64_row(grouped), xyz, "row {insertion}");
+        }
+    }
+
+    #[test]
     fn builder_set_atom_position_in_place() {
         let mut b = three_atom_builder();
         b.set_atom_position(1, 5.0, 6.0, 7.0).unwrap();
