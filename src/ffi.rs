@@ -8747,6 +8747,12 @@ Coordinates of Component 1
         assert!(masses.iter().all(|&m| m > 0.0));
 
         // Short header.natms_per_type must still export all atoms via export_catoms.
+        // A fresh frame: the shape cases above replaced the velocity column
+        // the parsed slots addressed, and this export reads those slots.
+        let mut frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .unwrap()
+            .unwrap();
         frame.header.natms_per_type = vec![1];
         let exported = export_catoms(&frame);
         assert_eq!(exported.len(), n);
