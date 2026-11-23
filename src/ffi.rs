@@ -727,6 +727,13 @@ fn null_err<T>(status: RKRStatus) -> *mut T {
     ptr::null_mut()
 }
 
+/// Record `RKR_STATUS_VALIDATION_ERROR` with `message` as its detail.
+fn note_validation(message: &str) -> RKRStatus {
+    let status = RKRStatus::RKR_STATUS_VALIDATION_ERROR;
+    set_last_error(status as i32, &format!("validation error: {message}"), 0, 0);
+    status
+}
+
 fn status_for_parse(err: &crate::error::ParseError) -> RKRStatus {
     use crate::error::ParseError;
     match err {
@@ -1493,7 +1500,11 @@ pub unsafe extern "C" fn free_con_frame_iterator(iterator: *mut CConFrameIterato
 /// per atom was most of the cost of handing a long trajectory to eOn,
 /// which asks for every atom's atomic number. Atoms of one species are
 /// stored together, so the lookup is once per run.
-fn export_catoms(frame: &ConFrame) -> Vec<CAtom> {
+///
+/// A `ValidationError` when the positions column holds no `(x, y, z)` row
+/// per atom.
+fn export_catoms(frame: &ConFrame) -> Result<Vec<CAtom>, crate::writer::WriteError> {
+    let coords = crate::writer::frame_coords(frame)?;
     let atoms = &frame.atom_data;
     let mut out = Vec::with_capacity(atoms.len());
     let has_vel = frame.has_velocities();
@@ -1530,7 +1541,7 @@ fn export_catoms(frame: &ConFrame) -> Vec<CAtom> {
         }
         out.push(catom_from_datum(
             &atoms[i],
-            frame.xyz_at(i),
+            [coords[i * 3], coords[i * 3 + 1], coords[i * 3 + 2]],
             z,
             mass,
             has_vel,
@@ -1539,7 +1550,7 @@ fn export_catoms(frame: &ConFrame) -> Vec<CAtom> {
         i += 1;
         mass_left -= 1;
     }
-    out
+    Ok(out)
 }
 
 fn catom_from_datum(
@@ -1702,6 +1713,8 @@ pub unsafe extern "C" fn rkr_frame_plain_geometry(
 
 /// Extracts the core atomic data into a transparent `CFrame` struct.
 /// The caller OWNS the returned pointer and MUST call `free_c_frame` on it.
+/// NULL with `RKR_STATUS_VALIDATION_ERROR` when the positions column does
+/// not hold one `(x, y, z)` row per atom.
 ///
 /// # Safety
 /// frame_handle must be valid. The caller takes ownership of the returned CFrame.
@@ -1711,7 +1724,13 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
         Some(f) => f,
         None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
-    let c_atoms = export_catoms(frame);
+    let c_atoms = match export_catoms(frame) {
+        Ok(atoms) => atoms,
+        Err(err) => {
+            note_validation(&err.to_string());
+            return ptr::null_mut();
+        }
+    };
     let has_velocities = frame.has_velocities();
     // `into_boxed_slice` owns an allocation whose size is the length.
     // Freeing that pointer with `Vec`'s capacity guessed as `num_atoms`
@@ -5574,7 +5593,7 @@ pub unsafe extern "C" fn rkr_frame_xyz_f64(
     frame_handle: *const RKRConFrame,
     n: *mut usize,
 ) -> *const f64 {
-    f64_col_ptr(frame_handle, n, |f| f.positions.f64_slice())
+    f64_col_ptr(frame_handle, n, |f| f.positions.f64_rows3())
 }
 
 /// Row-major f64 velocities pointer, or NULL if absent / not float64.
@@ -5587,7 +5606,7 @@ pub unsafe extern "C" fn rkr_frame_velocities_f64(
     frame_handle: *const RKRConFrame,
     n: *mut usize,
 ) -> *const f64 {
-    f64_col_ptr(frame_handle, n, |f| f.velocities.f64_slice())
+    f64_col_ptr(frame_handle, n, |f| f.velocities.f64_rows3())
 }
 
 /// Row-major f64 forces pointer, or NULL if absent / not float64.
@@ -5600,7 +5619,7 @@ pub unsafe extern "C" fn rkr_frame_forces_f64(
     frame_handle: *const RKRConFrame,
     n: *mut usize,
 ) -> *const f64 {
-    f64_col_ptr(frame_handle, n, |f| f.forces.f64_slice())
+    f64_col_ptr(frame_handle, n, |f| f.forces.f64_rows3())
 }
 
 /// Row-major f64 displacements pointer, or NULL if absent / not float64.
@@ -5612,7 +5631,7 @@ pub unsafe extern "C" fn rkr_frame_displacements_f64(
     frame_handle: *const RKRConFrame,
     n: *mut usize,
 ) -> *const f64 {
-    f64_col_ptr(frame_handle, n, |f| f.displacements.f64_slice())
+    f64_col_ptr(frame_handle, n, |f| f.displacements.f64_rows3())
 }
 
 /// Row-major f64 spreads pointer, or NULL if absent / not float64.
@@ -5624,7 +5643,7 @@ pub unsafe extern "C" fn rkr_frame_spreads_f64(
     frame_handle: *const RKRConFrame,
     n: *mut usize,
 ) -> *const f64 {
-    f64_col_ptr(frame_handle, n, |f| f.spreads.f64_slice())
+    f64_col_ptr(frame_handle, n, |f| f.spreads.f64_rows3())
 }
 
 fn fill_array2_view(
@@ -5697,7 +5716,9 @@ fn f64_col_ptr(
 }
 
 /// Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
-/// Prefers a memcpy from the SoA column; falls back to AoS only if SoA is empty.
+/// `RKR_STATUS_VALIDATION_ERROR` when the column does not have three
+/// columns, or is empty while the frame has atoms. The velocity and force
+/// copies apply the same check.
 /// # Safety
 ///
 /// A non-null pointer argument must point at a live value of its declared
@@ -5724,16 +5745,18 @@ fn copy_array2_f64(
         return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     };
     let arr = get(frame);
-    let n = if arr.nrows() > 0 {
-        arr.nrows()
-    } else {
-        frame.atom_data.len()
-    };
     if section && arr.nrows() == 0 {
         return note(RKRStatus::RKR_STATUS_SECTION_ABSENT);
     }
-    if arr.nrows() > 0 && arr.ncols() != 3 {
-        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    let atoms = frame.atom_data.len();
+    let n = arr.nrows();
+    if n == 0 && atoms > 0 {
+        return note_validation(&format!(
+            "column is empty but the frame holds {atoms} atoms"
+        ));
+    }
+    if n > 0 && arr.ncols() != 3 {
+        return note_validation(&format!("column is ({n}, {}), not (n, 3)", arr.ncols()));
     }
     let Some(need) = n.checked_mul(3) else {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
@@ -5745,23 +5768,15 @@ fn copy_array2_f64(
         return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
     let dest = unsafe { std::slice::from_raw_parts_mut(out, need) };
-    if arr.nrows() == n {
-        if let Some(src) = arr.f64_slice()
-            && src.len() == need
-        {
-            dest.copy_from_slice(src);
-            return note(RKRStatus::RKR_STATUS_SUCCESS);
+    if let Some(src) = arr.f64_rows3() {
+        if src.len() != need {
+            return note_validation(&format!("column holds {} doubles for {n} rows", src.len()));
         }
-        for i in 0..n {
-            let row = arr.as_f64_row(i);
-            dest[i * 3] = row[0];
-            dest[i * 3 + 1] = row[1];
-            dest[i * 3 + 2] = row[2];
-        }
+        dest.copy_from_slice(src);
         return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
-    for i in 0..frame.atom_data.len() {
-        let row = frame.xyz_at(i);
+    for i in 0..n {
+        let row = arr.as_f64_row(i);
         dest[i * 3] = row[0];
         dest[i * 3 + 1] = row[1];
         dest[i * 3 + 2] = row[2];
@@ -8719,17 +8734,65 @@ Coordinates of Component 1
         assert_eq!(st, RKRStatus::RKR_STATUS_SUCCESS);
         assert!(masses.iter().all(|&m| m > 0.0));
 
-        // Short header.natms_per_type must still export all atoms via export_catoms.
-        // A fresh frame: the shape cases above replaced the velocity column
-        // the parsed slots addressed, and this export reads those slots.
+        // A short type table cannot describe every exported atom.
         let mut frame = crate::iterators::ConFrameIterator::new(&text)
             .next()
             .unwrap()
             .unwrap();
         frame.header.natms_per_type = vec![1];
-        let exported = export_catoms(&frame);
-        assert_eq!(exported.len(), n);
-        assert!(exported[0].mass > 0.0);
-        assert_eq!(exported[n - 1].mass, 0.0);
+        assert!(export_catoms(&frame).is_err());
+    }
+
+    fn vel_forces_frame() -> ConFrame {
+        let text = include_str!("../resources/test/tiny_cuh2_vel_forces.con");
+        crate::iterators::frames_from_text(text, Some(1))
+            .expect("parse")
+            .remove(0)
+    }
+
+    #[test]
+    fn copy_positions_rejects_a_column_without_three_columns() {
+        let mut frame = vel_forces_frame();
+        frame.positions =
+            crate::storage_dtype::FloatArray2::from_f64_row_major(4, 1, vec![1.0, 2.0, 3.0, 4.0]);
+        let handle = &frame as *const ConFrame as *const RKRConFrame;
+        let mut out = [0.0f64; 12];
+        let st = unsafe { rkr_frame_copy_positions(handle, out.as_mut_ptr(), out.len()) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+        let mut n = 7usize;
+        assert!(unsafe { rkr_frame_xyz_f64(handle, &mut n) }.is_null());
+        assert_eq!(n, 0);
+    }
+
+    #[test]
+    fn copy_positions_rejects_an_empty_column_with_atoms() {
+        let mut frame = vel_forces_frame();
+        frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+        let handle = &frame as *const ConFrame as *const RKRConFrame;
+        let mut out = [0.0f64; 12];
+        let st = unsafe { rkr_frame_copy_positions(handle, out.as_mut_ptr(), out.len()) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
+
+    #[test]
+    fn copy_velocities_rejects_a_column_without_three_columns() {
+        let mut frame = vel_forces_frame();
+        *frame.velocities =
+            crate::storage_dtype::FloatArray2::from_f64_row_major(4, 1, vec![1.0, 2.0, 3.0, 4.0]);
+        let handle = &frame as *const ConFrame as *const RKRConFrame;
+        let mut out = [0.0f64; 12];
+        let st = unsafe { rkr_frame_copy_velocities(handle, out.as_mut_ptr(), out.len()) };
+        assert_eq!(st, RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
+
+    #[test]
+    fn c_frame_export_rejects_an_empty_positions_column() {
+        let mut frame = vel_forces_frame();
+        frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+        let handle = &frame as *const ConFrame as *const RKRConFrame;
+        let c = unsafe { rkr_frame_to_c_frame(handle) };
+        assert!(c.is_null());
+        let err = unsafe { &*rkr_last_error() };
+        assert_eq!(err.code, RKRStatus::RKR_STATUS_VALIDATION_ERROR as i32);
     }
 }

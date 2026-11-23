@@ -863,6 +863,8 @@ void free_con_frame_iterator(struct CConFrameIterator *iterator);
 /**
  * Extracts the core atomic data into a transparent `CFrame` struct.
  * The caller OWNS the returned pointer and MUST call `free_c_frame` on it.
+ * NULL with `RKR_STATUS_VALIDATION_ERROR` when the positions column does
+ * not hold one `(x, y, z)` row per atom.
  *
  * # Safety
  * frame_handle must be valid. The caller takes ownership of the returned CFrame.
@@ -2428,7 +2430,9 @@ const double *rkr_frame_spreads_f64(const struct RKRConFrame *frame_handle,
 
 /**
  * Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
- * Prefers a memcpy from the SoA column; falls back to AoS only if SoA is empty.
+ * `RKR_STATUS_VALIDATION_ERROR` when the column does not have three
+ * columns, or is empty while the frame has atoms. The velocity and force
+ * copies apply the same check.
  */
 enum RKRStatus rkr_frame_copy_positions(const struct RKRConFrame *frame_handle,
                                         double *out,
