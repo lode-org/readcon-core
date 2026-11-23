@@ -187,6 +187,16 @@ fn con_units_16_symbols_are_case_sensitive() {
             "{unknown}"
         );
     }
+    let error = validate_unit_for_quantity("energy", "MEV")
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("case-sensitive"), "{error}");
+    assert!(error.contains("meV is milli, MeV is mega"), "{error}");
+    let con3_mev = frame(
+        r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"MEV"}}"#,
+        "0 0 0 0 0",
+    );
+    assert_eq!(class_of(&con3_mev), "InvalidUnits");
     let _ = ParseError::InvalidUnits("marker".into());
 }
 
