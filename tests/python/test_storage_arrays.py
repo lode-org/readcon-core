@@ -723,6 +723,19 @@ def test_atom_sequence_pop_semantics() -> None:
         frame.atoms.pop()
 
 
+def test_snapshot_reports_a_foreign_atom_list_entry() -> None:
+    """A non-atom in the list is an error, not a silent store rebuild."""
+    import readcon
+
+    frame = _fresh_vel_frame()
+    kept = frame.atoms[0]
+    readcon._append_foreign_atom(frame, "not-an-atom")
+    with pytest.raises(TypeError, match="atom cache"):
+        frame.atoms.append(kept)
+    with pytest.raises(TypeError, match="atom cache"):
+        _ = frame == frame
+
+
 def test_atom_list_race_returns_a_borrow_error() -> None:
     """A borrowed frame makes the race return an error, not a panic."""
     import readcon

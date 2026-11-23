@@ -656,27 +656,22 @@ impl PyConFrame {
         snap_from_frame(self.store(), index)
     }
 
-    fn snapshot_atoms(&self, py: Python<'_>) -> Vec<AtomSnap> {
+    fn snapshot_atoms(&self, py: Python<'_>) -> PyResult<Vec<AtomSnap>> {
         if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
             let list = self.atoms.bind(py);
-            return match read_atom_list(list) {
-                Ok(datums) => datums
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, atom)| {
-                        let mut snap = snap_from_datum(&atom);
-                        snap.origin = Some(i);
-                        snap
-                    })
-                    .collect(),
-                Err(_) => (0..self.n_atoms())
-                    .map(|i| self.store_snap_unchecked(i))
-                    .collect(),
-            };
+            return Ok(read_atom_list(list)?
+                .into_iter()
+                .enumerate()
+                .map(|(i, atom)| {
+                    let mut snap = snap_from_datum(&atom);
+                    snap.origin = Some(i);
+                    snap
+                })
+                .collect());
         }
-        (0..self.n_atoms())
+        Ok((0..self.n_atoms())
             .map(|i| self.store_snap_unchecked(i))
-            .collect()
+            .collect())
     }
 
     /// Index of `obj` when it is one of this frame's cached `Atom` objects.
@@ -1082,7 +1077,7 @@ impl PyConFrame {
 
     fn set_symbol_at(&mut self, py: Python<'_>, index: usize, symbol: String) -> PyResult<()> {
         self.ensure_index(index)?;
-        let mut snaps = self.snapshot_atoms(py);
+        let mut snaps = self.snapshot_atoms(py)?;
         snaps[index].symbol = symbol;
         self.replace_atoms(py, snaps)
     }
@@ -1143,15 +1138,19 @@ impl PyConFrame {
         n > 0 && arr.len() == n
     }
 
-    fn picked_snaps(&self, py: Python<'_>, indices: &PySliceIndices) -> Vec<AtomSnap> {
-        let all = self.snapshot_atoms(py);
+    fn picked_snaps(
+        &self,
+        py: Python<'_>,
+        indices: &PySliceIndices,
+    ) -> PyResult<Vec<AtomSnap>> {
+        let all = self.snapshot_atoms(py)?;
         let mut picked = Vec::with_capacity(indices.slicelength);
         let mut i = indices.start;
         for _ in 0..indices.slicelength {
             picked.push(all[i as usize].clone());
             i += indices.step;
         }
-        picked
+        Ok(picked)
     }
 
     fn set_slice_snaps(
@@ -1168,7 +1167,7 @@ impl PyConFrame {
                 indices.slicelength
             )));
         }
-        let mut snaps = self.snapshot_atoms(py);
+        let mut snaps = self.snapshot_atoms(py)?;
         if indices.step == 1 {
             let start = indices.start as usize;
             for (k, (snap, origin)) in incoming.iter_mut().enumerate() {
@@ -1193,7 +1192,7 @@ impl PyConFrame {
 
     fn del_at(&mut self, py: Python<'_>, index: usize) -> PyResult<()> {
         self.ensure_index(index)?;
-        let mut snaps = self.snapshot_atoms(py);
+        let mut snaps = self.snapshot_atoms(py)?;
         snaps.remove(index);
         self.replace_atoms(py, snaps)
     }
@@ -1208,28 +1207,28 @@ impl PyConFrame {
         }
         drop_at.sort_unstable();
         drop_at.dedup();
-        let mut snaps = self.snapshot_atoms(py);
+        let mut snaps = self.snapshot_atoms(py)?;
         for idx in drop_at.into_iter().rev() {
             snaps.remove(idx);
         }
         self.replace_atoms(py, snaps)
     }
 
-    fn same_physical(&self, py: Python<'_>, other: &Self) -> bool {
+    fn same_physical(&self, py: Python<'_>, other: &Self) -> PyResult<bool> {
         if self.cell != other.cell || self.angles != other.angles {
-            return false;
+            return Ok(false);
         }
-        let a = self.snapshot_atoms(py);
+        let a = self.snapshot_atoms(py)?;
         // A held `Atom` can change between two reads of one frame.
         let b = if std::ptr::eq(self, other) {
             a.clone()
         } else {
-            other.snapshot_atoms(py)
+            other.snapshot_atoms(py)?
         };
-        a.len() == b.len()
+        Ok(a.len() == b.len()
             && a.iter()
                 .zip(b.iter())
-                .all(|(x, y)| same_physical_atom(x, y))
+                .all(|(x, y)| same_physical_atom(x, y)))
     }
 }
 
@@ -1705,7 +1704,7 @@ impl PyAtomSeq {
             // `atoms[i] = atoms[i]` refills that object instead of detaching
             // it. Another slot, or another frame, stays a copy.
             carry_own_slot(&mut snap, cached, i);
-            let mut snaps = frame.snapshot_atoms(py);
+            let mut snaps = frame.snapshot_atoms(py)?;
             snaps[i] = snap;
             return frame.replace_atoms(py, snaps);
         }
@@ -1733,7 +1732,7 @@ impl PyAtomSeq {
     fn append(&self, py: Python<'_>, atom: &Bound<'_, PyAny>) -> PyResult<()> {
         let snap = snap_from_bound(atom)?;
         let mut frame = exclusive(self.frame.bind(py))?;
-        let mut snaps = frame.snapshot_atoms(py);
+        let mut snaps = frame.snapshot_atoms(py)?;
         snaps.push(snap);
         frame.replace_atoms(py, snaps)
     }
@@ -1743,7 +1742,7 @@ impl PyAtomSeq {
     fn insert(&self, py: Python<'_>, index: isize, atom: &Bound<'_, PyAny>) -> PyResult<()> {
         let snap = snap_from_bound(atom)?;
         let mut frame = exclusive(self.frame.bind(py))?;
-        let mut snaps = frame.snapshot_atoms(py);
+        let mut snaps = frame.snapshot_atoms(py)?;
         let n = snaps.len() as isize;
         let mut i = if index < 0 { index + n } else { index };
         if i < 0 {
@@ -1759,7 +1758,7 @@ impl PyAtomSeq {
     fn extend(&self, py: Python<'_>, atoms: &Bound<'_, PyAny>) -> PyResult<()> {
         let extra = snaps_from_iterable(atoms)?;
         let mut frame = exclusive(self.frame.bind(py))?;
-        let mut snaps = frame.snapshot_atoms(py);
+        let mut snaps = frame.snapshot_atoms(py)?;
         snaps.extend(extra);
         frame.replace_atoms(py, snaps)
     }
@@ -1775,7 +1774,7 @@ impl PyAtomSeq {
         }
         let index = i as usize;
         let popped = frame.atoms.bind(py).get_item(index)?.unbind();
-        let mut snaps = frame.snapshot_atoms(py);
+        let mut snaps = frame.snapshot_atoms(py)?;
         snaps.remove(index);
         frame.replace_atoms(py, snaps)?;
         Ok(popped)
@@ -1921,7 +1920,7 @@ impl PyAtomListRace {
                 .lock_py_attached(py)
                 .unwrap_or_else(|err| err.into_inner());
             let mut frame = self.frame.try_borrow_mut(py)?;
-            let snaps = frame.snapshot_atoms(py);
+            let snaps = frame.snapshot_atoms(py)?;
             frame.replace_atoms(py, snaps)?;
         }
         Ok(false)
@@ -2017,6 +2016,16 @@ fn _hold_frame_borrow(
     Ok(())
 }
 
+/// Put `value` on the materialized atom list without checking its type.
+///
+/// A later snapshot then reports the list error instead of ignoring it.
+#[pyfunction]
+fn _append_foreign_atom(frame: &Bound<'_, PyConFrame>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    let this = shared(frame)?;
+    this.ensure_atoms(frame.py())?;
+    this.atoms.bind(frame.py()).append(value)
+}
+
 #[pyfunction]
 fn _atom_list_race(frame: Py<PyConFrame>) -> PyAtomListRace {
     PyAtomListRace {
@@ -2033,7 +2042,7 @@ impl PyConFrame {
             Err(_) => return Ok(false),
         };
         Ok(self
-            .snapshot_atoms(item.py())
+            .snapshot_atoms(item.py())?
             .iter()
             .any(|snap| same_physical_atom(snap, &wanted)))
     }
@@ -2062,7 +2071,7 @@ fn sequence_getitem(
     if let Ok(slice) = key.cast::<PySlice>() {
         let frame = shared(frame_obj.bind(py))?;
         let indices = slice_indices(slice, frame.n_atoms())?;
-        let snaps = frame.picked_snaps(py, &indices);
+        let snaps = frame.picked_snaps(py, &indices)?;
         let sliced = frame.assemble_like(py, snaps)?;
         return Ok(Py::new(py, sliced)?.into_any());
     }

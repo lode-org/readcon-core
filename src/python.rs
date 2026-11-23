@@ -1339,7 +1339,7 @@ impl PyConFrame {
             // `frame[i] = frame.atoms[i]` refills that object instead of
             // detaching it. Another slot, or another frame, stays a copy.
             carry_own_slot(&mut snap, cached, i);
-            let mut snaps = frame.snapshot_atoms(py);
+            let mut snaps = frame.snapshot_atoms(py)?;
             snaps[i] = snap;
             return frame.replace_atoms(py, snaps);
         }
@@ -1368,7 +1368,7 @@ impl PyConFrame {
     fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
         let this = shared(slf)?;
         match other.cast::<Self>() {
-            Ok(other) => Ok(this.same_physical(other.py(), &*shared(other)?)),
+            Ok(other) => this.same_physical(other.py(), &*shared(other)?),
             Err(_) => Ok(false),
         }
     }
@@ -1377,7 +1377,7 @@ impl PyConFrame {
     fn append(slf: Py<Self>, py: Python<'_>, atom: &Bound<'_, PyAny>) -> PyResult<()> {
         let snap = snap_from_bound(atom)?;
         let mut frame = exclusive(slf.bind(py))?;
-        let mut snaps = frame.snapshot_atoms(py);
+        let mut snaps = frame.snapshot_atoms(py)?;
         snaps.push(snap);
         frame.replace_atoms(py, snaps)
     }
@@ -1391,7 +1391,7 @@ impl PyConFrame {
     ) -> PyResult<()> {
         let snap = snap_from_bound(atom)?;
         let mut frame = exclusive(slf.bind(py))?;
-        let mut snaps = frame.snapshot_atoms(py);
+        let mut snaps = frame.snapshot_atoms(py)?;
         let n = snaps.len() as isize;
         let mut i = if index < 0 { index + n } else { index };
         if i < 0 {
@@ -1407,7 +1407,7 @@ impl PyConFrame {
     fn extend(slf: Py<Self>, py: Python<'_>, atoms: &Bound<'_, PyAny>) -> PyResult<()> {
         let extra = snaps_from_iterable(atoms)?;
         let mut frame = exclusive(slf.bind(py))?;
-        let mut snaps = frame.snapshot_atoms(py);
+        let mut snaps = frame.snapshot_atoms(py)?;
         snaps.extend(extra);
         frame.replace_atoms(py, snaps)
     }
@@ -7725,6 +7725,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAtomListRace>()?;
     m.add_function(wrap_pyfunction!(_atom_list_race, m)?)?;
     m.add_function(wrap_pyfunction!(_hold_frame_borrow, m)?)?;
+    m.add_function(wrap_pyfunction!(_append_foreign_atom, m)?)?;
     m.add_class::<PyConFrame>()?;
     m.add_class::<PyConFrameIterator>()?;
     m.add_class::<PyConTrajectory>()?;
