@@ -108,6 +108,29 @@ fn major3_keeps_case_insensitive_unit_compatibility() {
     assert_eq!(canon["energy"], "hartree");
     assert_eq!(canon["mass"], "amu");
 
+    // A case variant of mev keeps the millielectronvolt it had in CON 3.
+    // The read factor and the rewritten label name the same unit.
+    for energy in ["MEV", "Mev", "mEV", "mev"] {
+        let line = format!(
+            r#"{{"con_spec_version":3,"units":{{"length":"angstrom","energy":"{energy}"}}}}"#
+        );
+        let frames = parse(&text(&line, "90 90 90", atoms())).unwrap();
+        let read = frames[0].conversion_factor_to("energy", "eV").unwrap();
+        assert!((read - 1e-3).abs() < 1e-15, "{energy}: {read}");
+        let mut out = Vec::new();
+        readcon_core::writer::ConFrameWriter::new(&mut out)
+            .write_frame(&frames[0])
+            .unwrap();
+        let written = String::from_utf8(out).unwrap();
+        assert!(written.contains(r#""energy":"meV""#), "{written}");
+        let back = parse(&written).unwrap();
+        assert_eq!(
+            back[0].conversion_factor_to("energy", "eV").unwrap(),
+            read,
+            "{written}"
+        );
+    }
+
     let metadata = serde_json::Map::new();
     assert_eq!(
         velocity_file_time_unit(3, &metadata, Some("not-a-time-unit")).unwrap(),

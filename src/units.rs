@@ -292,13 +292,10 @@ fn lookup_base(name: &str) -> Option<&'static UnitValue> {
         .map(|index| &BASE_UNITS[index].value)
 }
 
+/// The fold is the one [`canonicalize_unit_expression_for_version`] writes,
+/// so a folded spelling such as `MEV` reads as the unit it is written back as.
 fn lookup_base_legacy(name: &str) -> Option<&'static UnitValue> {
-    lookup_base(name).or_else(|| {
-        BASE_UNITS
-            .iter()
-            .find(|entry| entry.name.eq_ignore_ascii_case(name))
-            .map(|entry| &entry.value)
-    })
+    lookup_base(name).or_else(|| preferred_atom_with(name, true).and_then(lookup_base))
 }
 
 /// Parse a unit expression into SI factor and dimension.
