@@ -222,11 +222,9 @@ else:
     print(f"PENDING: {clause_coverage} has not been measured")
 allow_exact.update(
     path.relative_to(root).as_posix()
-    for pattern in (
-        f"clause_coverage-{version}-*.json",
-        "spec-measurement-tree-*.json",
+    for path in (root / "paper/cpc/data/spec").glob(
+        f"clause_coverage-{version}-*.json"
     )
-    for path in (root / "paper/cpc/data/spec").glob(pattern)
 )
 allow_exact.update(
     path.relative_to(root).as_posix()

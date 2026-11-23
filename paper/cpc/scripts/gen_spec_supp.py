@@ -583,23 +583,6 @@ def measurement_record() -> dict:
         spec_blob = hashlib.sha1(
             f"blob {len(contents)}\0".encode() + contents
         ).hexdigest()
-        overlays = [
-            path
-            for path in sorted(SPEC_DATA.glob("spec-measurement-tree-*.json"))
-            if json.loads(path.read_text(encoding="utf-8"))
-            .get("tree", {})
-            .get("spec_blob")
-            == spec_blob
-        ]
-        overlay = overlays[-1] if overlays else None
-    else:
-        overlay = None
-        spec_blob = ""
-    if overlay is not None:
-        superseding = json.loads(overlay.read_text(encoding="utf-8"))
-        record["tree"] = superseding["tree"]
-        record["unreleased_history"] = superseding.get("history", [])
-    elif VERSIONS == MEASUREMENT:
         tree = record["tree"]
         release = package_version()
         tagged_releases = {entry["tag"] for entry in record["tags"]}
@@ -655,8 +638,7 @@ def release_rows(org: str) -> list[dict]:
             )
             if not listed or tree["tagged"] or tree["release"] != package_version():
                 raise SystemExit(
-                    f"no tag or superseding tree record of "
-                    f"{VERSIONS.relative_to(ROOT)} lists version "
+                    f"no tag of {VERSIONS.relative_to(ROOT)} lists version "
                     f"{row['version']} of {row['date']}"
                 )
             row["release"] = f"readcon-core {tree['release']} (untagged)"

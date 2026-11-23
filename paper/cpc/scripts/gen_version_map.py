@@ -90,7 +90,6 @@ def no_build(rel: str) -> bool:
     return rel in NO_BUILD or rel.startswith(
         (
             f"data/spec/clause_coverage-{VERSION}-",
-            "data/spec/spec-measurement-tree-",
             "data/referee_probes",
         )
     )
