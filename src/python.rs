@@ -1598,25 +1598,21 @@ impl PyConFrame {
                 let n = this.n_atoms;
                 let mut data = Vec::new();
                 if store.get().copy_rows(this.slab_index, n, &mut data) && data.len() == n * 3 {
-                    let array = Array2::from_shape_vec((n, 3), data).map_err(|e| {
-                        PyValueError::new_err(format!("coords_array shape error: {e}"))
-                    })?;
-                    return Ok(array.into_pyarray(py));
+                    return Ok(filled_rows(
+                        py,
+                        data.chunks_exact(3).map(|row| [row[0], row[1], row[2]]),
+                    ));
                 }
             }
             if let Some(frame) = this.inner.as_ref() {
                 let n = frame.atom_data.len();
                 if n > 0 && frame.positions.nrows() == n {
-                    let mut data: Vec<f64> = Vec::with_capacity(n * 3);
-                    for index in 0..n {
-                        data.extend_from_slice(&frame.load_coords(index));
-                    }
-                    let array = Array2::from_shape_vec((n, 3), data).map_err(|e| {
-                        PyValueError::new_err(format!("coords_array shape error: {e}"))
-                    })?;
                     // NumPy allocates this buffer (`OWNDATA`, no base). The
                     // frame can be dropped and the array stays valid.
-                    return Ok(array.into_pyarray(py));
+                    return Ok(filled_rows(
+                        py,
+                        (0..n).map(|index| frame.load_coords(index)),
+                    ));
                 }
             }
         }
@@ -2861,13 +2857,17 @@ where
     if n == 0 || at.saturating_add(len) > total {
         return Ok(None);
     }
-    let mut data = vec![0.0; len];
-    unsafe {
-        crate::types::atomic_copy_f64(ptr.add(at), data.as_mut_ptr(), len);
-    }
-    let shaped = Array2::from_shape_vec((n, 3), data)
-        .map_err(|e| PyValueError::new_err(format!("coords_array shape error: {e}")))?;
-    Ok(Some(shaped.into_pyarray(py)))
+    let rows = (0..n).map(|row| {
+        let start = at + row * 3;
+        unsafe {
+            [
+                crate::types::atomic_load_f64(ptr.add(start)),
+                crate::types::atomic_load_f64(ptr.add(start + 1)),
+                crate::types::atomic_load_f64(ptr.add(start + 2)),
+            ]
+        }
+    });
+    Ok(Some(filled_rows(py, rows)))
 }
 
 /// Three doubles at `at`, loaded one element at a time.
