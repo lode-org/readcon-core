@@ -272,3 +272,94 @@ def test_write_con_string_of_an_indexed_list_reads_an_xyz_store(tmp_path: Path) 
     parsed = readcon.read_con_string(text)
     assert float(parsed[0].xyz[1, 2]) == pytest.approx(4.5)
     assert float(parsed[1].xyz[0, 0]) == pytest.approx(2.0)
+
+
+def test_atom_edit_of_a_slab_frame_lands_on_its_row(tmp_path: Path) -> None:
+    import numpy as np
+    import readcon
+
+    path = tmp_path / "slab.con"
+    _write(path, n_frames=3, n_atoms=4)
+    frames = readcon.read_con(str(path), n_threads=1)
+    slab = frames.columns()["positions"]
+    before = np.array(slab, copy=True)
+    frames[1][2].y = -7.5
+    frames[2][3].z = 9.25
+    after = np.asarray(slab)
+    expected = before.copy()
+    expected[1, 2, 1] = -7.5
+    expected[2, 3, 2] = 9.25
+    assert after.tobytes() == expected.tobytes()
+    assert frames[1][2].y == -7.5
+    assert float(np.asarray(frames[1].coords_array())[2, 1]) == -7.5
+    back = readcon.read_con_string(readcon.write_con_string([frames[2]]))[0]
+    assert float(back.atoms[3].z) == pytest.approx(9.25)
+
+
+requires_free_threaded = pytest.mark.skipif(
+    __import__("sysconfig").get_config_var("Py_GIL_DISABLED") != 1,
+    reason="requires a free-threaded interpreter",
+)
+
+
+@requires_free_threaded
+@pytest.mark.parametrize("source", ["slab", "read", "string"])
+def test_concurrent_atom_edits_store_whole_doubles(tmp_path: Path, source: str) -> None:
+    """Edits of different atoms race reads of the same buffer.
+
+    Each store is one atomic double, so a reader sees the old or the new
+    value of an element and every edit survives."""
+    import threading
+
+    import numpy as np
+    import readcon
+
+    n_atoms, n_workers, rounds = 64, 8, 400
+    path = tmp_path / "race.con"
+    _write(path, n_frames=2, n_atoms=n_atoms)
+    if source == "string":
+        frames = readcon.read_con_string(path.read_text(encoding="utf-8"))
+    else:
+        frames = readcon.read_con(str(path), n_threads=1)
+    if source == "slab":
+        frames.columns()
+    frame = frames[1]
+    start = np.array(frame.coords_array(), copy=True)
+    barrier = threading.Barrier(n_workers + 1)
+    stop = threading.Event()
+    errors: list[BaseException] = []
+
+    def edit(worker: int) -> None:
+        try:
+            barrier.wait()
+            atoms = range(worker, n_atoms, n_workers)
+            for step in range(rounds):
+                for i in atoms:
+                    frame[i].x = float(step)
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    def read() -> None:
+        try:
+            barrier.wait()
+            while not stop.is_set():
+                xs = np.asarray(frame.coords_array())[:, 0]
+                whole = (xs >= 0) & (xs < rounds) & (xs == np.floor(xs))
+                ok = (xs == start[:, 0]) | whole
+                assert ok.all(), xs[~ok]
+                assert np.array_equal(np.asarray(frame.coords_array())[:, 1], start[:, 1])
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    workers = [threading.Thread(target=edit, args=(w,)) for w in range(n_workers)]
+    reader = threading.Thread(target=read)
+    for thread in [*workers, reader]:
+        thread.start()
+    for thread in workers:
+        thread.join()
+    stop.set()
+    reader.join()
+    assert not errors, errors[0]
+    final = np.asarray(frame.coords_array())
+    assert final[:, 0].tolist() == [float(rounds - 1)] * n_atoms
+    assert np.array_equal(final[:, 1:], start[:, 1:])
