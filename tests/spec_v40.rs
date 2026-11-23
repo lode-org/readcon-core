@@ -202,6 +202,26 @@ fn con_line2_21_relaxes_overflow_not_malformed_numbers() {
             "{value}"
         );
     }
+    let nested_unreserved =
+        format!(r#"{{"con_spec_version":4,{units},"extra":{{"energy":1e999}}}}"#);
+    assert!(
+        parse(&text(&nested_unreserved, "90 90 90", atoms())).is_ok(),
+        "{nested_unreserved}"
+    );
+    for bad in [
+        format!(r#"{{"con_spec_version":4,{units},"\u0074ime":1e999}}"#),
+        format!(r#"{{"con_spec_version":4,{units},"section_arity":{{"widgets":1e999}}}}"#),
+        r#"{"con_spec_version":4,"units":{"length":"angstrom","energy":"eV","time":"fs","time":"ps"}}"#.to_string(),
+        r#"{"con_spec_version":4,"units":{"length":"angstrom","energy":"eV","mass":"amu","mass":"u"}}"#.to_string(),
+        r#"{"con_spec_version":2,"units":{},"units":{}}"#.to_string(),
+        r#"{"units":{}"con_spec_version":2}"#.to_string(),
+    ] {
+        assert_eq!(
+            class_of(&text(&bad, "90 90 90", atoms())),
+            "InvalidMetadataJson",
+            "{bad}"
+        );
+    }
 }
 
 /// CON-line2.5. The builder writes only a major this reader reads back, so a
