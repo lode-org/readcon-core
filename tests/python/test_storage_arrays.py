@@ -317,6 +317,23 @@ def test_atom_edit_after_view_keeps_slots_on_the_frame(getter: str) -> None:
     assert back.forces_array()[:2, 0].tolist() == [321.0, 66.0]
 
 
+def test_atom_edit_after_reorder_like_and_view_does_not_panic() -> None:
+    """Reordered frames must not carry stale column_tails into unshare_slot_columns."""
+    import readcon
+
+    path = str(CORPUS / "tiny_cuh2_vel_forces.con")
+    frame = readcon.read_con(path, n_threads=1)[0]
+    reordered = readcon.reorder_like(frame, frame)
+    del frame
+    gc.collect()
+
+    view = reordered.velocities_array()
+    before = view.tobytes()
+    reordered[0].vx = 123.0
+    assert view.tobytes() == before
+    assert reordered.velocities_array()[0, 0] == 123.0
+
+
 def _read_three(path: str) -> tuple[bytes, bytes, bytes]:
     import readcon
 
