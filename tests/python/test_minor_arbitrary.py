@@ -6,6 +6,7 @@ import json
 import math
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -714,8 +715,27 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
         == "9aff911e809390163d2d7b08671145ad99f24496"
     )
 
-    # All 143 corpus31 files: only d14_minor_2pow64.con and v2_minor_2pow64.con
-    # change from BASE rejection to accepted 2^64 (plus zstd files which Python enables).
+    # All 143 corpus31 files. d14_minor_2pow64.con and v2_minor_2pow64.con
+    # change from BASE rejection to accepted 2^64, and Python enables the zstd
+    # files. Every other verdict that differs from BASE is the one
+    # manifest.toml gives, except where CON 4 decides the file otherwise.
+    con4_accepts = {
+        # CON-units.9: a missing units.time does not reject any minor of major 3.
+        "d02_legacy_velocity_no_time.convel": 3,
+        "v31_convel_no_time.convel": 3,
+        "v31_legacy_velocity_no_time.convel": 3,
+        # Major 4 is the current major, so CON-line2.6 does not reject it.
+        "json_version_4.con": 4,
+    }
+    bom = "CON validation failed: frame begins with a byte-order mark"
+    con4_messages = {
+        "v31_bom.con": bom,
+        "v31_bom_later_frame.con": bom,
+        "v31_minor_string.con": "invalid JSON metadata on line 2: con_spec_minor "
+        "must be a JSON integer >= 0 that fits in an unsigned 64-bit integer",
+        "v31_validate_bad_label.convel": "CON validation failed: expected section "
+        'label "Velocities of Component 1", found "Velocity of Component 1"',
+    }
     corpus_dir = tmp_path / "corpus31"
     subprocess.run(
         [
@@ -726,10 +746,18 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
         ],
         check=True,
     )
+    labels = {
+        entry["file"]: entry["expected"]
+        for entry in tomllib.loads(
+            (corpus_dir / "manifest.toml").read_text(encoding="utf-8")
+        )["file"]
+    }
     c31_oracle = oracle["corpus31"]
     assert len(c31_oracle) == 143
 
     huge_minor_diffs = []
+    con4_diffs = []
+    manifest_diffs = []
     for name, expected in c31_oracle.items():
         p = str(corpus_dir / name)
         if name in ("d14_minor_2pow64.con", "v2_minor_2pow64.con"):
@@ -742,9 +770,26 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
             assert json.loads(out.splitlines()[1])["con_spec_minor"] == TWO_POW_64
             huge_minor_diffs.append(name)
             continue
+        if name in con4_accepts:
+            assert expected["status"] == "err", name
+            assert labels[name] == "reject", name
+            frames = readcon.read_con(p)
+            assert len(frames) == 1, name
+            assert frames[0].spec_version == con4_accepts[name], name
+            con4_diffs.append(name)
+            continue
         if name.endswith(".zst"):
             frames = readcon.read_con(p)
             assert len(frames) >= 1, name
+            continue
+        try:
+            readcon.read_con(p)
+            verdict = "ok"
+        except Exception:
+            verdict = "err"
+        if verdict != expected["status"]:
+            assert verdict == {"accept": "ok", "reject": "err"}[labels[name]], name
+            manifest_diffs.append(name)
             continue
         if expected["status"] == "ok":
             frames = readcon.read_con(p)
@@ -761,8 +806,11 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
         else:
             with pytest.raises(Exception) as exc_info:
                 readcon.read_con(p)
-            assert str(exc_info.value) == expected["error_message"], name
+            message = con4_messages.get(name, expected["error_message"])
+            assert str(exc_info.value) == message, name
     assert sorted(huge_minor_diffs) == ["d14_minor_2pow64.con", "v2_minor_2pow64.con"]
+    assert sorted(con4_diffs) == sorted(con4_accepts)
+    assert len(manifest_diffs) == 26
 
 
 @pytest.mark.parametrize(
