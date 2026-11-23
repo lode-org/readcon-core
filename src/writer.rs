@@ -710,30 +710,21 @@ impl<W: Write> ConFrameWriter<W> {
                             ))
                         },
                     )?;
-                    crate::units::enforce_velocity_precedence(spec_version, u).map_err(|e| {
-                        WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
-                    })?;
                 }
             }
         }
+        if spec_version >= 2
+            && let Some(units) = meta_obj.get(meta::UNITS)
+        {
+            crate::units::enforce_velocity_precedence(spec_version, units).map_err(|e| {
+                WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
+            })?;
+        }
         if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
             // D11: an invalid unit fails the write. Do not substitute a default.
-            let mut c = crate::units::canonicalize_units_object_for_version(spec_version, &u)
-                .map_err(|e| {
-                    WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
-                })?;
-            // Canonicalization folds both natural spellings to the symbol.
-            // Major 3 and earlier record the historical spelling (CON-units.5).
-            if spec_version < 4
-                && let Some(object) = c.as_object_mut()
-                && object.get("time").and_then(|value| value.as_str())
-                    == Some(crate::units::NATURAL_TIME_UNIT)
-            {
-                object.insert(
-                    "time".to_string(),
-                    serde_json::Value::String(crate::units::HISTORICAL_NATURAL_TIME.to_string()),
-                );
-            }
+            let c = crate::units::canonicalize_units_object_for_version(spec_version, &u).map_err(
+                |e| WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string())),
+            )?;
             meta_obj.insert(meta::UNITS.into(), c);
         }
         let minor = if minor_raw.is_some() {
@@ -3332,24 +3323,6 @@ pub fn binding_rewrite_frame(frame: &ConFrame) -> Result<ConFrame, crate::error:
     let mut out = frame.clone();
     let spec = binding_spec(frame);
     let (mut meta, minor_raw) = binding_metadata_with_minor_raw(frame);
-    if frame.header.spec_version == 3
-        && spec >= 4
-        && let Some(units) = meta.get(meta::UNITS).cloned()
-        && crate::units::validate_units_metadata_for_version(spec, &units).is_err()
-    {
-        let mut canonical = crate::units::canonicalize_units_object_for_version(3, &units)
-            .map_err(|e| crate::error::ParseError::InvalidUnits(e.to_string()))?;
-        if let Some(obj) = canonical.as_object_mut()
-            && units.get("time").and_then(Value::as_str)
-                == Some(crate::units::HISTORICAL_NATURAL_TIME)
-        {
-            obj.insert(
-                "time".to_string(),
-                Value::String(crate::units::HISTORICAL_NATURAL_TIME.to_string()),
-            );
-        }
-        meta.insert(meta::UNITS.to_string(), canonical);
-    }
     if spec < 4 {
         meta.remove(meta::CON_SPEC_PATCH);
     }
