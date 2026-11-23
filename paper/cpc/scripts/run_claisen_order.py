@@ -40,12 +40,12 @@ import numpy as np
 
 CPC = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get("CLAISEN_DATA", CPC / "data" / "claisen"))
-CACHE = Path(os.environ.get("CLAISEN_CACHE", "/tmp/claisen-src"))
+CACHE = Path(os.environ.get("CLAISEN_CACHE", CPC / "cache" / "claisen-src"))
 
 OUTPUTS_MANIFEST = "outputs.sha256"
 # The manifest cannot list itself and readcon-build.json is checked by
 # check_version_sot.sh; baker17_initial.xyz is pinned by XYZ_SHA256.
-UNHASHED_RECORDS = (OUTPUTS_MANIFEST, "readcon-build.json")
+UNHASHED_RECORDS = (OUTPUTS_MANIFEST, "readcon-build.json", "PROVENANCE-2")
 XYZ_NAME = "baker17_initial.xyz"
 CLAISEN_OUTPUTS = (
     "PROVENANCE",
@@ -902,7 +902,28 @@ def versions(binary: Path) -> dict:
     }
 
 
+def shown_path(path: Path) -> str:
+    """A repo-relative path, or an env-variable path when the file sits outside the tree."""
+    resolved = path.resolve()
+    repo = CPC.parents[1]
+    try:
+        return resolved.relative_to(repo).as_posix()
+    except ValueError:
+        pass
+    for name in ("CLAISEN_CACHE", "CLAISEN_SCRATCH"):
+        root = os.environ.get(name)
+        if not root:
+            continue
+        try:
+            tail = resolved.relative_to(Path(root).resolve()).as_posix()
+        except ValueError:
+            continue
+        return "${" + name + "}/" + tail
+    return path.name
+
+
 def provenance(model: Path) -> str:
+    model_shown = shown_path(model)
     return f"""Baker reactant and product, entry 17 (Claisen rearrangement)
 file: eonRuns/resources/icFSM/baker/17_claisen/initial.xyz
 url: {XYZ_URL}
@@ -917,7 +938,7 @@ url: {CKPT_URL}
 commit: {CKPT_COMMIT}
 repository: https://huggingface.co/lab-cosmo/upet
 checkpoint sha256: {CKPT_SHA256}
-exported torchscript: {model}
+exported torchscript: {model_shown}
 exported sha256: {sha256(model)}
 export command: mtt export {PET_MAD_STEM}.ckpt -o {PET_MAD_STEM}.pt
 eOn loads the exported .pt through the metatomic potential, device cpu.
@@ -1109,6 +1130,38 @@ def write_outputs_manifest(data_dir: Path = DATA) -> Path:
     return manifest
 
 
+def live_provenance(data_dir: Path = DATA) -> tuple[str, str]:
+    """The provenance a later record names, else the stored PROVENANCE.
+
+    A file supersedes the stored record when it has a ``supersedes`` line
+    or JSON field of ``paper/cpc/data/claisen/PROVENANCE``.
+    """
+    stored = "paper/cpc/data/claisen/PROVENANCE"
+    chosen_name = "PROVENANCE"
+    chosen = (data_dir / "PROVENANCE").read_text(encoding="utf-8")
+    for path in sorted(data_dir.iterdir()):
+        if not path.is_file() or path.name == "PROVENANCE":
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        link = None
+        if path.suffix == ".json":
+            try:
+                body = json.loads(text)
+            except json.JSONDecodeError:
+                body = None
+            if isinstance(body, dict) and isinstance(body.get("supersedes"), str):
+                link = body["supersedes"]
+        else:
+            for line in text.splitlines():
+                if line.startswith("supersedes:"):
+                    link = line.split(":", 1)[1].strip()
+                    break
+        if link in {stored, "PROVENANCE"}:
+            chosen_name = path.name
+            chosen = text
+    return chosen_name, chosen
+
+
 def check_outputs(data_dir: Path = DATA) -> str:
     manifest = data_dir / OUTPUTS_MANIFEST
     recorded = parse_outputs_manifest(manifest)
@@ -1149,6 +1202,10 @@ def check_outputs(data_dir: Path = DATA) -> str:
                 bad.append(
                     f"results.json {section}.{key} {found!r} does not match {label} {expected}"
                 )
+    name, text = live_provenance(data_dir)
+    machine = ("/" + "tmp", "/" + "var/" + "tmp", "/" + "home/", "/" + "agent")
+    if any(prefix in text for prefix in machine):
+        bad.append(f"{name} names a machine path")
     if bad:
         raise SystemExit("\n".join(bad))
     return f"{len(recorded)} Claisen outputs match {OUTPUTS_MANIFEST}"
@@ -1213,7 +1270,7 @@ def main() -> None:
     perm = ira["permutation_product_into_reactant_slots"]
     product_ira = apply_perm(product, perm)
 
-    scratch = Path(os.environ.get("CLAISEN_SCRATCH", "/tmp/claisen-run"))
+    scratch = Path(os.environ.get("CLAISEN_SCRATCH", CPC / "cache" / "claisen-run"))
     if scratch.exists():
         shutil.rmtree(scratch)
     scratch.mkdir(parents=True)
