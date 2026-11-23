@@ -709,9 +709,6 @@ pub fn enforce_velocity_precedence(
     spec_version: u32,
     units: &serde_json::Value,
 ) -> Result<(), ParseError> {
-    if spec_version < 4 {
-        return Ok(());
-    }
     let Some(obj) = units.as_object() else {
         return Ok(());
     };
