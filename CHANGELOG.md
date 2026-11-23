@@ -226,6 +226,37 @@ All notable changes to this project will be documented in this file. See [conven
   binary64 and infinite in binary32. Reading a finite cell costs nothing, and
   a finite cell round-trips bit for bit.
 
+- **Rust API:** an atom's velocity and force are rows of the frame's
+  `velocities` and `forces` columns. A write that gave a column a new
+  allocation (copy on write after a clone or an export, a section repack,
+  a dtype projection, `reorder_like`) left the atoms on the old block, so
+  they read stale values or freed memory. Every such path now moves the
+  atoms with the column, and a clone owns its own columns.
+  `ConFrame::unshare_slot_columns` gives the frame a private copy of a
+  column another handle shares, and `ConFrame::with_section_columns` runs
+  an edit that replaces the columns and rebinds the atoms after it.
+- **Python:** editing an atom's velocity or force while a NumPy view of a
+  parsed column (`vel`, `frc`, `velocities_array`, `forces_array`) was
+  alive wrote into the view and left the atom on memory freed with it. A
+  later edit corrupted the heap. The edit now moves the frame's column and
+  its atoms to a private copy first.
+- **Python:** an atom view edit of a frame backed by the read slab or the
+  owned `xyz` array stores one atomic double instead of writing through a
+  mutable slice of the whole buffer, which raced readers on a
+  free-threaded build. The slab row uses the frame's atom count, as reads
+  do.
+- **C ABI:** `rkr_frame_to_c_frame` and the converting velocity and force
+  DLPack exports read rows from the columns, so they agree with
+  `rkr_frame_velocities_f64` and `rkr_frame_forces_f64`. The borrowed
+  `*_f64` accessors document how long their pointer stays valid.
+- A positions column without one `(x, y, z)` row per atom (not three
+  columns, too few rows, or empty while the frame holds atoms) made the
+  writers, `rkr_frame_to_c_frame`, and `rkr_frame_copy_positions` panic.
+  The Rust writers return `WriteError::Format(ParseError::ValidationError)`,
+  and the C calls return NULL or `RKR_STATUS_VALIDATION_ERROR`. A
+  Fortran-ordered coordinate block writes the same text as a row-major
+  one, and `set_f64_row` writes the right row of it.
+
 ## v0.23.3 - 2026-11-14
 
 ### Features
