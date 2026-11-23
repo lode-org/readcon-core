@@ -71,6 +71,7 @@ LISTED = 40
 
 sys.path.insert(0, str(SCRIPTS))
 
+import clause_coverage  # noqa: E402
 import provenance  # noqa: E402
 
 

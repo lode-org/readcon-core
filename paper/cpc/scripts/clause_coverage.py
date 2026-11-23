@@ -376,8 +376,7 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        default=OUT,
-        help=f"record (default: {provenance.portable(OUT)})",
+        help=f"record (default: the newest {provenance.portable(OUT)} recount)",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -391,6 +390,7 @@ def main() -> int:
         help="write only the TeX, from the record at --out; the record and the library are not read again",
     )
     args = parser.parse_args()
+    chain = recounts()
     if args.macros:
         MACROS.write_text(
             macros(json.loads(args.out.read_text(encoding="utf-8")), args.out),
@@ -421,7 +421,7 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"{args.out.name} and {MACROS.name} match the sources")
+        print(f"{compared.name} and {MACROS.name} match the sources")
         return 0
     target = args.out
     if target.resolve() == OUT.resolve():
