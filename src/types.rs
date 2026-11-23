@@ -6698,4 +6698,23 @@ mod tests {
         drop(shared_vel);
         assert_eq!(frame.atom_data[0].velocity(), Some([11.0, 22.0, 33.0]));
     }
+
+    #[test]
+    fn unshare_moves_live_slots_off_a_shared_velocity_column() {
+        let text = std::fs::read_to_string("resources/test/tiny_cuh2_vel_forces.con").unwrap();
+        let mut frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .unwrap()
+            .unwrap();
+        let shared = frame.velocities.clone();
+        let before = shared.as_f64_row(0);
+        frame.unshare_slot_columns();
+        frame.atom_data[0].set_velocity(Some([123.0, 0.0, 0.0]));
+        assert_eq!(shared.as_f64_row(0), before);
+        assert_eq!(frame.atom_data[0].velocity(), Some([123.0, 0.0, 0.0]));
+        assert_eq!(frame.velocities.as_f64_row(0), [123.0, 0.0, 0.0]);
+        let slot = frame.atom_data[0].velocity_slot() as usize;
+        let range = frame.velocities.f64_slice().unwrap().as_ptr_range();
+        assert!(range.contains(&(slot as *const f64)));
+    }
 }
