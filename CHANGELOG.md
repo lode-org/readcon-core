@@ -256,6 +256,22 @@ All notable changes to this project will be documented in this file. See [conven
   and the C calls return NULL or `RKR_STATUS_VALIDATION_ERROR`. A
   Fortran-ordered coordinate block writes the same text as a row-major
   one, and `set_f64_row` writes the right row of it.
+- **Rust API:** setting the velocity of an atom parsed with forces but
+  no velocities dropped its force. `sync_atom_data_from_arrays` wrote
+  through slots a copy on write had left on the other handle, and
+  adopting a float32 velocity or force column left the atoms on the
+  freed float64 buffer. The atoms keep their force, and both paths
+  rebind the atoms to the frame's own columns.
+- **C ABI:** `rkr_frame_copy_masses` and `rkr_frame_copy_atom_ids` read
+  past a column shorter than the atom count, and
+  `rkr_frame_positions_from_dlpack` panicked on a positions column that
+  was not `(N, 3)`. An empty mass or id column now reads the header
+  masses or the atom ids, and the other mismatches return
+  `RKR_STATUS_VALIDATION_ERROR`. `rkr_frame_to_c_frame` returns NULL
+  when the header type counts do not add up to the atoms instead of
+  dropping the rest.
+- **Python:** packing velocities or forces for a frame whose column was
+  not `(N, 3)` panicked. The packer reads the atoms instead.
 
 ## v0.23.3 - 2026-11-14
 
