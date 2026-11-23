@@ -355,6 +355,27 @@ def test_shipped_spec_blob_is_the_measured_commit() -> None:
     assert r"\rcMeasuredSpecBlob" in release
     assert "rcReleaseSpecBlob" not in release
 
+    scripts_dir = ROOT / "paper" / "cpc" / "scripts"
+    import sys
+
+    sys.path.insert(0, str(scripts_dir))
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "gen_spec_supp", scripts_dir / "gen_spec_supp.py"
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        org = (ROOT / "docs" / "orgmode" / "spec.org").read_text(encoding="utf-8")
+        rows = module.history_rows(org)
+        versions = [row["version"] for row in rows]
+        assert "4.0.0" in versions and "4.0.4" in versions, versions
+        macros = module.spec_macros(org)
+        assert r"\newcommand{\specTextRelease}" in macros
+        assert module.release_rows(org)
+    finally:
+        sys.path.remove(str(scripts_dir))
+
 
 def test_measured_commit_matches_its_cargo_and_spec() -> None:
     macros = _macros()

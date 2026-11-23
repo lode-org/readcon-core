@@ -91,6 +91,7 @@ def no_build(rel: str) -> bool:
         (
             f"data/spec/clause_coverage-{VERSION}-",
             "data/spec/spec-measurement-tree-",
+            "data/referee_probes",
         )
     )
 

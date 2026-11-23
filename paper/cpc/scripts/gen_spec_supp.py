@@ -414,7 +414,9 @@ def history_rows(org: str) -> list[dict]:
 
     A bare major 3 is minor 0.
     """
-    section = re.search(r"^\* Version history\n(.*?)(?=^\* |\Z)", org, re.M | re.S)
+    section = re.search(
+        r"^\* Version (?:history|chronology)\n(.*?)(?=^\* |\Z)", org, re.M | re.S
+    )
     rows, head = [], None
     for line in section[1].splitlines() if section else ():
         if not line.startswith("|") or line.startswith("|-"):
@@ -592,10 +594,30 @@ def measurement_record() -> dict:
         overlay = overlays[-1] if overlays else None
     else:
         overlay = None
+        spec_blob = ""
     if overlay is not None:
         superseding = json.loads(overlay.read_text(encoding="utf-8"))
         record["tree"] = superseding["tree"]
         record["unreleased_history"] = superseding.get("history", [])
+    elif VERSIONS == MEASUREMENT:
+        tree = record["tree"]
+        release = package_version()
+        tagged_releases = {entry["tag"] for entry in record["tags"]}
+        if (
+            not tree["tagged"]
+            and tree["release"] == release
+            and f"v{release}" not in tagged_releases
+        ):
+            record["tree"] = {
+                "release": release,
+                "tagged": False,
+                "spec_blob": spec_blob,
+            }
+            record["unreleased_history"] = [
+                {"version": row["version"], "date": row["date"]}
+                for row in history_rows(SPEC.read_text(encoding="utf-8"))
+                if row["version"] != "1"
+            ]
     return record
 
 
@@ -628,15 +650,10 @@ def release_rows(org: str) -> list[dict]:
         if first is None:
             tree = record["tree"]
             listed = any(
-                (entry["version"], entry["date"])
-                == (row["version"], row["date"])
+                (entry["version"], entry["date"]) == (row["version"], row["date"])
                 for entry in record.get("unreleased_history", [])
             )
-            if (
-                not listed
-                or tree["tagged"]
-                or tree["release"] != package_version()
-            ):
+            if not listed or tree["tagged"] or tree["release"] != package_version():
                 raise SystemExit(
                     f"no tag or superseding tree record of "
                     f"{VERSIONS.relative_to(ROOT)} lists version "
