@@ -185,7 +185,9 @@ MEASUREMENT_RECORDS = frozenset(
         *(
             p.relative_to(ROOT).as_posix()
             for p in sorted(
-                (ROOT / "paper" / "cpc" / "data" / "spec").glob("spec-measurement-*.json")
+                (ROOT / "paper" / "cpc" / "data" / "spec").glob(
+                    "spec-measurement-*.json"
+                )
             )
         ),
         "paper/cpc/data/spec/versions.json",
