@@ -1924,7 +1924,7 @@ pub(crate) unsafe fn atomic_load_f64(ptr: *const f64) -> f64 {
 }
 
 /// Store one potentially shared `f64` without creating an `f64` reference.
-#[cfg(any(feature = "python", test))]
+#[cfg(feature = "python")]
 #[inline(always)]
 pub(crate) unsafe fn atomic_store_f64(ptr: *mut f64, value: f64) {
     use std::sync::atomic::{AtomicU64, Ordering};
