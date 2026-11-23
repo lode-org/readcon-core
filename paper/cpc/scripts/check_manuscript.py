@@ -1018,7 +1018,9 @@ def check_conformance() -> str:
         "totals"
     ]
     version = (ROOT.parents[1] / "VERSION").read_text().strip()
-    coverage_record = f"clause_coverage-{version}.json"
+    spec = ROOT.parents[1] / "docs" / "orgmode" / "spec.org"
+    spec_digest = hashlib.sha256(spec.read_bytes()).hexdigest()[:8]
+    coverage_record = f"clause_coverage-{version}-{spec_digest}.json"
     clauses = json.loads((ROOT / "data" / "spec" / coverage_record).read_text())[
         "totals"
     ]
