@@ -1707,13 +1707,10 @@ impl SnapshotViewGuard {
     fn dismantle(&mut self) {
         for (slot, shared) in self.frames.iter_mut().zip(&self.shared_maps) {
             let Some(frame) = slot else { continue };
-            // The view owns its positions column. Drop it before the rest
-            // of the frame is forgotten with the source.
-            let positions = unsafe { std::ptr::read(&frame.positions) };
-            unsafe {
-                std::ptr::write(&mut frame.positions, std::mem::zeroed());
-            }
-            drop(positions);
+            // The view owns its positions column. Drop it in place; the
+            // frame is forgotten below, so the field is not dropped again.
+            // Writing a zeroed column instead would be an invalid value.
+            unsafe { std::ptr::drop_in_place(&mut frame.positions) };
             // Counted clones of the source columns, released here.
             drop(std::mem::take(&mut frame.velocities));
             drop(std::mem::take(&mut frame.forces));
