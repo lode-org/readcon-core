@@ -45,7 +45,12 @@ CACHE = Path(os.environ.get("CLAISEN_CACHE", CPC / "cache" / "claisen-src"))
 OUTPUTS_MANIFEST = "outputs.sha256"
 # The manifest cannot list itself and readcon-build.json is checked by
 # check_version_sot.sh; baker17_initial.xyz is pinned by XYZ_SHA256.
-UNHASHED_RECORDS = (OUTPUTS_MANIFEST, "readcon-build.json", "PROVENANCE-2")
+UNHASHED_RECORDS = (
+    OUTPUTS_MANIFEST,
+    "readcon-build.json",
+    "PROVENANCE-2",
+    "PROVENANCE-3",
+)
 XYZ_NAME = "baker17_initial.xyz"
 CLAISEN_OUTPUTS = (
     "PROVENANCE",
@@ -1131,14 +1136,13 @@ def write_outputs_manifest(data_dir: Path = DATA) -> Path:
 
 
 def live_provenance(data_dir: Path = DATA) -> tuple[str, str]:
-    """The provenance a later record names, else the stored PROVENANCE.
+    """The last provenance in the ``supersedes`` chain from the stored PROVENANCE.
 
-    A file supersedes the stored record when it has a ``supersedes`` line
-    or JSON field of ``paper/cpc/data/claisen/PROVENANCE``.
+    A file supersedes another when it has a ``supersedes`` line or JSON
+    field of ``paper/cpc/data/claisen/<name>`` or ``<name>``.
     """
-    stored = "paper/cpc/data/claisen/PROVENANCE"
-    chosen_name = "PROVENANCE"
-    chosen = (data_dir / "PROVENANCE").read_text(encoding="utf-8")
+    stored = "paper/cpc/data/claisen/"
+    successor: dict[str, str] = {}
     for path in sorted(data_dir.iterdir()):
         if not path.is_file() or path.name == "PROVENANCE":
             continue
@@ -1156,10 +1160,14 @@ def live_provenance(data_dir: Path = DATA) -> tuple[str, str]:
                 if line.startswith("supersedes:"):
                     link = line.split(":", 1)[1].strip()
                     break
-        if link in {stored, "PROVENANCE"}:
-            chosen_name = path.name
-            chosen = text
-    return chosen_name, chosen
+        if link is not None:
+            successor[link.removeprefix(stored)] = path.name
+    chosen_name = "PROVENANCE"
+    seen = {chosen_name}
+    while successor.get(chosen_name) not in (None, *seen):
+        chosen_name = successor[chosen_name]
+        seen.add(chosen_name)
+    return chosen_name, (data_dir / chosen_name).read_text(encoding="utf-8")
 
 
 def check_outputs(data_dir: Path = DATA) -> str:
