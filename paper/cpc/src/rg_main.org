@@ -555,7 +555,7 @@ With the height free, which is the problem a reader solves when the file has los
 
 \subsection{Atom order between the endpoints}\label{sec:claisen} A band carries atom \(i\) of the reactant to atom \(i\) of the product, so the two endpoint files must list the atoms in the same order.
 Entry 17 of the Baker transition-state set, as distributed with our band protocol \cite{goswamiReproducibleOrchestrationBest2026}, is the Claisen rearrangement of allyl vinyl ether to pent-4-enal, 14 atoms in the order C C C O C C followed by eight H.
-We relaxed both endpoints under PET-MAD-S v1.1.0 in eOn 3.6.0 \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026} and ran climbing-image bands between them with one protocol for two atom orders (Figure~\ref{fig:claisen}).
+We relaxed both endpoints under PET-MAD-S 1.1.0 in eOn 3.6.0 \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026} and ran climbing-image bands between them with one protocol for two atom orders (Figure~\ref{fig:claisen}).
 In the order of the Baker file, the band reaches a largest atomic force below \(0.05\,\mathrm{eV/\text{\AA}}\) on 24 images with steps capped at \(0.008\,\text{\AA}\); its highest image lies \(0.631\,\mathrm{eV}\) above the reactant and has one imaginary frequency, \(161i\,\mathrm{cm^{-1}}\).
 IRA shape matching \cite{gundeIRAShapeMatching2021} instead pairs the atoms of each element by geometry, with a Hausdorff distance of \(2.11\,\text{\AA}\), and not by bonds.
 With the product permuted onto the reactant by that match, the band breaks the molecule into three fragments, its highest image climbs to \(9.97\,\mathrm{eV}\), and after 3000 iterations its largest atomic force is still \(0.995\,\mathrm{eV/\text{\AA}}\).

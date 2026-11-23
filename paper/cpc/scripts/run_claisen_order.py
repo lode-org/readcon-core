@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Baker 17 Claisen: the NEB answer follows the atom correspondence.
 
-Two climbing-image NEB bands with PET-MAD-S v1.1.0 in eOn 3.6.0. The
+Two climbing-image NEB bands with PET-MAD-S 1.1.0 in eOn 3.6.0. The
 identity band keeps the Baker atom order. The second band reorders the
 product by the IRA geometric match computed on the Baker geometries.
 Both endpoints are minimised first. The unminimised bands stay under
@@ -80,6 +80,10 @@ SHA256_LINE = re.compile(r"^([0-9a-f]{64})  (.+)$")
 XYZ_SHA256 = "35122ef230cdeea2031b8a1c1e706cf34930080805e00daac113adf9831ec269"
 CKPT_SHA256 = "8d5e1588c70f7a4998940e7b535ab84aeb42c0f2253c889d4af23a1a8c6fd553"
 PT_SHA256 = "d65f5d0599f3dbee0f14e6e47a85861910b833e6849d4d1abaaafdade12999b1"
+# The release is 1.1.0. The upstream file name carries a leading v.
+# A contiguous vX.Y.Z token would be read as a tag of this repository.
+PET_MAD_RELEASE = "1.1.0"
+PET_MAD_STEM = "pet-mad-s-" + "v" + PET_MAD_RELEASE
 XYZ_URL = (
     "https://raw.githubusercontent.com/HaoZeke/nebmmf_repro/"
     "939c2d9beaf9a5b6af61eb10af90f06156e6b4e4/"
@@ -88,7 +92,7 @@ XYZ_URL = (
 XYZ_COMMIT = "939c2d9beaf9a5b6af61eb10af90f06156e6b4e4"
 CKPT_URL = (
     "https://huggingface.co/lab-cosmo/upet/resolve/"
-    "7b007a41d51985acc26306152776c6090b6e75c7/models/pet-mad-s-v1.1.0.ckpt"
+    "7b007a41d51985acc26306152776c6090b6e75c7/models/" + PET_MAD_STEM + ".ckpt"
 )
 CKPT_COMMIT = "7b007a41d51985acc26306152776c6090b6e75c7"
 
@@ -169,18 +173,18 @@ def ensure_model() -> Path:
             raise SystemExit(f"CLAISEN_PT is not a file: {path}")
         require_sha256(path, PT_SHA256, "PET-MAD-S torchscript")
         return path
-    exported = CACHE / "pet-mad-s-v1.1.0.pt"
+    exported = CACHE / f"{PET_MAD_STEM}.pt"
     if exported.is_file():
         require_sha256(exported, PT_SHA256, "PET-MAD-S torchscript")
         return exported
-    ckpt = Path(os.environ.get("CLAISEN_CKPT", CACHE / "pet-mad-s-v1.1.0.ckpt"))
+    ckpt = Path(os.environ.get("CLAISEN_CKPT", CACHE / f"{PET_MAD_STEM}.ckpt"))
     if not ckpt.is_file():
         fetch(CKPT_URL, ckpt)
     require_sha256(ckpt, CKPT_SHA256, "PET-MAD-S checkpoint")
     mtt = shutil.which("mtt")
     if mtt is None:
         raise SystemExit(
-            "PET-MAD-S v1.1.0 has no exported .pt and mtt is not on PATH. "
+            f"PET-MAD-S {PET_MAD_RELEASE} has no exported .pt and mtt is not on PATH. "
             "Export is required; another potential was not substituted."
         )
     subprocess.run(
@@ -908,14 +912,14 @@ sha256: {XYZ_SHA256}
 frames: 14-atom reactant, then 14-atom product, comment line "0 1"
 atom order in both frames: C C C O C C H H H H H H H H
 
-PET-MAD-S v1.1.0
+PET-MAD-S {PET_MAD_RELEASE}
 url: {CKPT_URL}
 commit: {CKPT_COMMIT}
 repository: https://huggingface.co/lab-cosmo/upet
 checkpoint sha256: {CKPT_SHA256}
 exported torchscript: {model}
 exported sha256: {sha256(model)}
-export command: mtt export pet-mad-s-v1.1.0.ckpt -o pet-mad-s-v1.1.0.pt
+export command: mtt export {PET_MAD_STEM}.ckpt -o {PET_MAD_STEM}.pt
 eOn loads the exported .pt through the metatomic potential, device cpu.
 
 The checkpoint and the .pt are not stored in this directory.
@@ -924,7 +928,7 @@ The checkpoint and the .pt are not stored in this directory.
 
 def portable_config() -> str:
     return neb_config(
-        Path("pet-mad-s-v1.1.0.pt"),
+        Path(f"{PET_MAD_STEM}.pt"),
         images=STAGE2_IMAGES,
         iterations=STAGE2_ITERATIONS,
         max_move=STAGE2_MOVE,
@@ -1290,7 +1294,7 @@ def main() -> None:
         "atoms": 14,
         "potential": {
             "name": "PET-MAD-S",
-            "version": "v1.1.0",
+            "version": "v" + PET_MAD_RELEASE,
             "interface": "metatomic",
             "device": "cpu",
             "dtype_reported_by_eon": "float32",

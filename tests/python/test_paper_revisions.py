@@ -110,6 +110,7 @@ def _external_pin(lines: list[str], digest: str) -> bool:
         "gitlab.com",
         "github.com",
         "githubusercontent.com",
+        "huggingface.co",
         "lode-org/readcon-db",
         "EON_COMMIT",
         "READCON_DB_REV",
@@ -175,9 +176,15 @@ MEASUREMENT_RECORDS = frozenset(
         "paper/cpc/data/sizes.json",
         "paper/cpc/data/restart_walls/restart_walls.json",
         "paper/cpc/data/spec/corpus_recount.json",
+        # The model release is PET-MAD-S 1.1.0. The record keeps the
+        # upstream file token, which is not a tag of this repository.
+        "paper/cpc/data/claisen/results.json",
         f"paper/cpc/data/spec/clause_coverage-{CURRENT_VERSION}.json",
         "paper/cpc/data/spec/mutant_differential.json",
         f"paper/cpc/data/spec/spec-measurement-{CURRENT_VERSION}.json",
+        # Reruns name the specification blobs they measured, not commits.
+        f"paper/cpc/data/spec/spec-measurement-{CURRENT_VERSION}-measured.json",
+        f"paper/cpc/data/spec/spec-measurement-{CURRENT_VERSION}-measured-2.json",
         "paper/cpc/data/spec/versions.json",
         "paper/cpc/data/survey_frame.json",
         "paper/cpc/data/worked_example.json",
