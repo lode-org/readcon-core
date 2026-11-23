@@ -5559,6 +5559,7 @@ Forces of Component 1
     }
 
     #[test]
+    /// CON-line2.14 rejects a repeated top-level `con_spec_minor` key.
     fn test_invalid_con_spec_minor_and_duplicate_semantics() {
         for bad in [
             "-1",
