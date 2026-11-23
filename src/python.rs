@@ -2943,13 +2943,13 @@ fn push_vec3(
     from_atom: impl Fn(&crate::types::AtomDatum) -> Option<[f64; 3]>,
 ) {
     let n = frame.atom_data.len();
-    if let Some(slice) = storage.f64_slice() {
-        if slice.len() == n * 3 {
+    if storage.nrows() == n && storage.ncols() == 3 {
+        if let Some(slice) = storage.f64_slice()
+            && slice.len() == n * 3
+        {
             into.extend_from_slice(slice);
             return;
         }
-    }
-    if storage.nrows() == n {
         for row in 0..n {
             into.extend_from_slice(&storage.as_f64_row(row));
         }

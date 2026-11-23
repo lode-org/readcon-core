@@ -287,6 +287,26 @@ fn empty_rows_static() -> &'static Array2Storage {
     EMPTY.get_or_init(|| Array2Storage::zeros(ElementKind::Float64, 0, 3))
 }
 
+#[inline]
+fn read_f64_row3<T: Copy>(row: ndarray::ArrayView1<'_, T>, convert: impl Fn(T) -> f64) -> [f64; 3] {
+    [
+        row.first().copied().map(&convert).unwrap_or(0.0),
+        row.get(1).copied().map(&convert).unwrap_or(0.0),
+        row.get(2).copied().map(&convert).unwrap_or(0.0),
+    ]
+}
+
+#[inline]
+fn write_f64_row3<T>(
+    mut row: ndarray::ArrayViewMut1<'_, T>,
+    v: [f64; 3],
+    convert: impl Fn(f64) -> T,
+) {
+    for (slot, val) in row.iter_mut().take(3).zip(v) {
+        *slot = convert(val);
+    }
+}
+
 impl PartialEq for Array2Storage {
     fn eq(&self, other: &Self) -> bool {
         self.kind() == other.kind()
@@ -498,61 +518,22 @@ impl Array2Storage {
     }
 
     /// Real part of each column (imag discarded / zero for complex hosts).
+    /// Columns past `ncols()` read as `0.0`.
     pub fn as_f64_row(&self, i: usize) -> [f64; 3] {
-        let g = |a: f64, b: f64, c: f64| [a, b, c];
         match self {
-            Self::F64(a) => {
-                let r = a.row(i);
-                g(r[0], r[1], r[2])
-            }
-            Self::F32(a) => {
-                let r = a.row(i);
-                g(r[0] as f64, r[1] as f64, r[2] as f64)
-            }
-            Self::F16(a) => {
-                let r = a.row(i);
-                g(r[0].to_f64(), r[1].to_f64(), r[2].to_f64())
-            }
-            Self::I8(a) => {
-                let r = a.row(i);
-                g(r[0] as f64, r[1] as f64, r[2] as f64)
-            }
-            Self::I16(a) => {
-                let r = a.row(i);
-                g(r[0] as f64, r[1] as f64, r[2] as f64)
-            }
-            Self::I32(a) => {
-                let r = a.row(i);
-                g(r[0] as f64, r[1] as f64, r[2] as f64)
-            }
-            Self::I64(a) => {
-                let r = a.row(i);
-                g(r[0] as f64, r[1] as f64, r[2] as f64)
-            }
-            Self::U8(a) | Self::Bool(a) => {
-                let r = a.row(i);
-                g(r[0] as f64, r[1] as f64, r[2] as f64)
-            }
-            Self::U16(a) => {
-                let r = a.row(i);
-                g(r[0] as f64, r[1] as f64, r[2] as f64)
-            }
-            Self::U32(a) => {
-                let r = a.row(i);
-                g(r[0] as f64, r[1] as f64, r[2] as f64)
-            }
-            Self::U64(a) => {
-                let r = a.row(i);
-                g(r[0] as f64, r[1] as f64, r[2] as f64)
-            }
-            Self::C64(a) => {
-                let r = a.row(i);
-                g(r[0][0] as f64, r[1][0] as f64, r[2][0] as f64)
-            }
-            Self::C128(a) => {
-                let r = a.row(i);
-                g(r[0][0], r[1][0], r[2][0])
-            }
+            Self::F64(a) => read_f64_row3(a.row(i), |x| x),
+            Self::F32(a) => read_f64_row3(a.row(i), |x| x as f64),
+            Self::F16(a) => read_f64_row3(a.row(i), half::f16::to_f64),
+            Self::I8(a) => read_f64_row3(a.row(i), |x| x as f64),
+            Self::I16(a) => read_f64_row3(a.row(i), |x| x as f64),
+            Self::I32(a) => read_f64_row3(a.row(i), |x| x as f64),
+            Self::I64(a) => read_f64_row3(a.row(i), |x| x as f64),
+            Self::U8(a) | Self::Bool(a) => read_f64_row3(a.row(i), |x| x as f64),
+            Self::U16(a) => read_f64_row3(a.row(i), |x| x as f64),
+            Self::U32(a) => read_f64_row3(a.row(i), |x| x as f64),
+            Self::U64(a) => read_f64_row3(a.row(i), |x| x as f64),
+            Self::C64(a) => read_f64_row3(a.row(i), |x| x[0] as f64),
+            Self::C128(a) => read_f64_row3(a.row(i), |x| x[0]),
         }
     }
 
@@ -562,96 +543,30 @@ impl Array2Storage {
             Self::F64(a) => {
                 // Contiguous (N,3) layout: three stores at i*3 without ndarray
                 // row view machinery on the coordinate hot path.
-                if let Some(s) = a.as_slice_memory_order_mut() {
+                if a.ncols() == 3
+                    && let Some(s) = a.as_slice_memory_order_mut()
+                {
                     let o = i * 3;
                     s[o] = v[0];
                     s[o + 1] = v[1];
                     s[o + 2] = v[2];
                 } else {
-                    let mut row = a.row_mut(i);
-                    row[0] = v[0];
-                    row[1] = v[1];
-                    row[2] = v[2];
+                    write_f64_row3(a.row_mut(i), v, |x| x);
                 }
             }
-            Self::F32(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = v[0] as f32;
-                row[1] = v[1] as f32;
-                row[2] = v[2] as f32;
-            }
-            Self::F16(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = half::f16::from_f64(v[0]);
-                row[1] = half::f16::from_f64(v[1]);
-                row[2] = half::f16::from_f64(v[2]);
-            }
-            Self::I8(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = v[0] as i8;
-                row[1] = v[1] as i8;
-                row[2] = v[2] as i8;
-            }
-            Self::I16(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = v[0] as i16;
-                row[1] = v[1] as i16;
-                row[2] = v[2] as i16;
-            }
-            Self::I32(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = v[0] as i32;
-                row[1] = v[1] as i32;
-                row[2] = v[2] as i32;
-            }
-            Self::I64(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = v[0] as i64;
-                row[1] = v[1] as i64;
-                row[2] = v[2] as i64;
-            }
-            Self::U8(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = v[0] as u8;
-                row[1] = v[1] as u8;
-                row[2] = v[2] as u8;
-            }
-            Self::Bool(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = (v[0] != 0.0) as u8;
-                row[1] = (v[1] != 0.0) as u8;
-                row[2] = (v[2] != 0.0) as u8;
-            }
-            Self::U16(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = v[0] as u16;
-                row[1] = v[1] as u16;
-                row[2] = v[2] as u16;
-            }
-            Self::U32(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = v[0] as u32;
-                row[1] = v[1] as u32;
-                row[2] = v[2] as u32;
-            }
-            Self::U64(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = v[0] as u64;
-                row[1] = v[1] as u64;
-                row[2] = v[2] as u64;
-            }
-            Self::C64(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = [v[0] as f32, 0.0];
-                row[1] = [v[1] as f32, 0.0];
-                row[2] = [v[2] as f32, 0.0];
-            }
-            Self::C128(a) => {
-                let mut row = a.row_mut(i);
-                row[0] = [v[0], 0.0];
-                row[1] = [v[1], 0.0];
-                row[2] = [v[2], 0.0];
-            }
+            Self::F32(a) => write_f64_row3(a.row_mut(i), v, |x| x as f32),
+            Self::F16(a) => write_f64_row3(a.row_mut(i), v, half::f16::from_f64),
+            Self::I8(a) => write_f64_row3(a.row_mut(i), v, |x| x as i8),
+            Self::I16(a) => write_f64_row3(a.row_mut(i), v, |x| x as i16),
+            Self::I32(a) => write_f64_row3(a.row_mut(i), v, |x| x as i32),
+            Self::I64(a) => write_f64_row3(a.row_mut(i), v, |x| x as i64),
+            Self::U8(a) => write_f64_row3(a.row_mut(i), v, |x| x as u8),
+            Self::Bool(a) => write_f64_row3(a.row_mut(i), v, |x| (x != 0.0) as u8),
+            Self::U16(a) => write_f64_row3(a.row_mut(i), v, |x| x as u16),
+            Self::U32(a) => write_f64_row3(a.row_mut(i), v, |x| x as u32),
+            Self::U64(a) => write_f64_row3(a.row_mut(i), v, |x| x as u64),
+            Self::C64(a) => write_f64_row3(a.row_mut(i), v, |x| [x as f32, 0.0]),
+            Self::C128(a) => write_f64_row3(a.row_mut(i), v, |x| [x, 0.0]),
         }
     }
 
@@ -1205,5 +1120,26 @@ mod tests {
             assert_eq!(t.shape(), &[2]);
         }
         assert!(IdArray1::zeros(ElementKind::Float32, 1).is_err());
+    }
+
+    #[test]
+    fn as_f64_row_and_set_f64_row_handle_short_and_wide_columns() {
+        for &kind in &[
+            ElementKind::Float64,
+            ElementKind::Float32,
+            ElementKind::Int32,
+        ] {
+            let mut short = Array2Storage::zeros(kind, 2, 2);
+            short.set_f64_row(0, [1.0, 2.0, 3.0]);
+            short.set_f64_row(1, [4.0, 5.0, 6.0]);
+            assert_eq!(short.as_f64_row(0), [1.0, 2.0, 0.0]);
+            assert_eq!(short.as_f64_row(1), [4.0, 5.0, 0.0]);
+
+            let mut wide = Array2Storage::zeros(kind, 2, 4);
+            wide.set_f64_row(0, [1.0, 2.0, 3.0]);
+            wide.set_f64_row(1, [4.0, 5.0, 6.0]);
+            assert_eq!(wide.as_f64_row(0), [1.0, 2.0, 3.0]);
+            assert_eq!(wide.as_f64_row(1), [4.0, 5.0, 6.0]);
+        }
     }
 }
