@@ -557,9 +557,10 @@ function _units_object_bounds(metadata_json::AbstractString)
     return nothing
 end
 
-# v3.0 stores velocities in the natural unit whatever units.time says
-# (CON-units.9). Writing minor 1 makes that label authoritative, so replace
-# a present label and insert one when it is missing.
+# Versions 1 and 2 and every minor of major 3 store velocities in the natural
+# unit whatever units.time says (CON-units.8, CON-units.9). A rewrite to
+# major 4 makes the label authoritative, so replace a present label and
+# insert one when it is missing.
 function _ensure_natural_time(metadata_json::AbstractString)
     _units_declares_time(metadata_json) || return _inject_units_time(metadata_json)
     bounds = _units_object_bounds(metadata_json)
@@ -812,16 +813,6 @@ function _top_level_minor_tokens(json::AbstractString)
     return [String(units[span]) for span in _top_level_minor_spans(json)]
 end
 
-# Write a top-level con_spec_minor of 0 as 1. Nested keys keep their values.
-function _promote_zero_minor(metadata_json::AbstractString)
-    spans = _top_level_minor_spans(metadata_json)
-    length(spans) == 1 || return metadata_json
-    bytes = Vector{UInt8}(codeunits(metadata_json))
-    bytes[spans[1]] == UInt8['0'] || return metadata_json
-    bytes[first(spans[1])] = UInt8('1')
-    return String(bytes)
-end
-
 function _reject_duplicate_con_spec_minor(metadata_json::AbstractString)
     if length(_top_level_minor_tokens(metadata_json)) > 1
         error(_DUPLICATE_CON_SPEC_MINOR)
@@ -857,41 +848,137 @@ function _json_u64(metadata_json::AbstractString, key::AbstractString)
     return parse(UInt64, m.captures[1])
 end
 
-# v1, v2, and v3.0 velocities are in the natural time unit (CON-units.8, CON-units.9).
-# Returns the metadata to store, and whether the caller must set default units.
-function _legacy_velocity_units(frame::ConFrame)
-    metadata_json = frame.metadata_json
-    if !frame.has_velocities
-        return metadata_json, false
+# The unit units.time names, or nothing when the units object has none.
+function _units_time_label(metadata_json::AbstractString)
+    bounds = _units_object_bounds(metadata_json)
+    bounds === nothing && return nothing
+    open, close = bounds
+    m = match(r"\"time\"\s*:\s*\"([^\"]*)\"", metadata_json[open:close])
+    return m === nothing ? nothing : String(m.captures[1])
+end
+
+# The major a binding rewrite writes, as Rust `binding_spec` chooses it.
+# A major-3 frame keeps major 3 unless its velocities carry the legacy fs
+# label, which moves it to the current major with the natural unit stamped.
+function _binding_major(frame::ConFrame)
+    current = ccall(_lib_symbol(:rkr_con_spec_version), UInt32, ())
+    if frame.spec_version == 3
+        legacy_fs = frame.has_velocities && _units_time_label(frame.metadata_json) == "fs"
+        legacy_fs || return UInt32(3)
     end
+    return max(frame.spec_version, current)
+end
+
+# Byte range of the top-level member `key`, from its key to the end of its
+# value, or nothing when the key is absent.
+function _top_level_member_span(json::AbstractString, key::AbstractString)
+    bytes = Vector{UInt8}(codeunits(json))
+    i = _skip_json_ws(bytes, 1)
+    (i <= length(bytes) && bytes[i] == UInt8('{')) || return nothing
+    i += 1
+    while true
+        i = _skip_json_ws(bytes, i)
+        (i > length(bytes) || bytes[i] == UInt8('}')) && return nothing
+        if bytes[i] == UInt8(',')
+            i = _skip_json_ws(bytes, i + 1)
+        end
+        (i <= length(bytes) && bytes[i] == UInt8('"')) || return nothing
+        k_start = i
+        k_end = _scan_json_string_end(bytes, i)
+        k_end === nothing && return nothing
+        raw_key = String(bytes[i:(k_end - 1)])
+        i = _skip_json_ws(bytes, k_end)
+        (i <= length(bytes) && bytes[i] == UInt8(':')) || return nothing
+        i = _skip_json_ws(bytes, i + 1)
+        v_end = _scan_json_value_end(bytes, i)
+        v_end === nothing && return nothing
+        _decode_json_key(raw_key) == key && return k_start:(v_end - 1)
+        i = v_end
+    end
+end
+
+# Remove the top-level member `key` and the comma that separated it.
+function _drop_top_level_member(json::AbstractString, key::AbstractString)
+    span = _top_level_member_span(json, key)
+    span === nothing && return json
+    bytes = Vector{UInt8}(codeunits(json))
+    lo, hi = first(span), last(span)
+    j = hi + 1
+    while j <= length(bytes) && _json_ws(bytes[j])
+        j += 1
+    end
+    if j <= length(bytes) && bytes[j] == UInt8(',')
+        hi = j
+    else
+        k = lo - 1
+        while k >= 1 && _json_ws(bytes[k])
+            k -= 1
+        end
+        k >= 1 && bytes[k] == UInt8(',') && (lo = k)
+    end
+    return String(vcat(bytes[1:(lo - 1)], bytes[(hi + 1):end]))
+end
+
+# Insert a top-level member right after the opening brace.
+function _prepend_member(json::AbstractString, member::AbstractString)
+    open = findfirst(==('{'), json)
+    open === nothing && return json
+    rest = json[nextind(json, open):end]
+    sep = occursin(r"^\s*\}", rest) ? "" : ","
+    return json[begin:open] * member * sep * rest
+end
+
+# CON-header.3 reads a missing length as angstrom, and CON-units.1 needs an
+# energy. Fill both when a units object omits them, as Rust
+# `materialize_header_units` does.
+function _materialize_header_units(metadata_json::AbstractString)
+    bounds = _units_object_bounds(metadata_json)
+    bounds === nothing && return metadata_json
+    open, close = bounds
+    body = metadata_json[open:close]
+    for (key, value) in (("length", "angstrom"), ("energy", "eV"))
+        occursin(Regex("\"$(key)\"\\s*:"), body) && continue
+        rest = metadata_json[nextind(metadata_json, open):end]
+        sep = occursin(r"^\s*\}", rest) ? "" : ","
+        metadata_json = metadata_json[begin:open] * "\"$(key)\":\"$(value)\"" * sep * rest
+        bounds = _units_object_bounds(metadata_json)
+        open, close = bounds
+        body = metadata_json[open:close]
+    end
+    return metadata_json
+end
+
+# The metadata a binding rewrite writes, as Rust `binding_metadata` builds it.
+# Versions 1 and 2 and every minor of major 3 store velocities in the natural
+# unit whatever units.time says (CON-units.8, CON-units.9), so that label is
+# replaced. Returns the metadata, and whether the caller must set default units.
+function _legacy_velocity_units(frame::ConFrame, major::UInt32)
+    metadata_json = frame.metadata_json
     # Hand a token the builder rejects to it unchanged, so the write fails
-    # as it does in the other bindings instead of being rewritten to minor 1.
+    # as it does in the other bindings.
     tokens = _top_level_minor_tokens(metadata_json)
     if length(tokens) == 1 && _minor_token_u64(tokens[1]) === nothing
         return metadata_json, false
     end
-    minor = _json_u64(metadata_json, "con_spec_minor")
-    # Minor 1 and later name the time unit. Do not invent or replace it.
-    if frame.spec_version >= 3 && minor >= 1
-        return metadata_json, false
-    end
-    # A v3.0 frame with velocities is rebuilt as minor 1. Stamp the natural
-    # unit, and promote an explicit minor of 0 so that label is authoritative.
-    # This matches Python's stamp_legacy_velocity_time.
-    if frame.spec_version >= 3
-        stamped = _promote_zero_minor(metadata_json)
-        if _units_object_bounds(stamped) !== nothing
-            stamped = _ensure_natural_time(stamped)
+    stamp_default_units = false
+    if frame.has_velocities && frame.spec_version < 4
+        if _units_object_bounds(metadata_json) === nothing
+            stamp_default_units = true
+        else
+            metadata_json = _ensure_natural_time(metadata_json)
         end
-        return stamped, _units_object_bounds(metadata_json) === nothing
     end
-    if _units_declares_time(metadata_json)
-        return metadata_json, false
+    metadata_json = _materialize_header_units(metadata_json)
+    if major < 4
+        # The builder stamps minor 1 on a major-3 frame. A rewrite keeps the
+        # minor the file had, which is 0 when the key is absent.
+        if isempty(tokens)
+            metadata_json = isempty(metadata_json) ? "{\"con_spec_minor\":0}" :
+                _prepend_member(metadata_json, "\"con_spec_minor\":0")
+        end
+        metadata_json = _drop_top_level_member(metadata_json, "con_spec_patch")
     end
-    if occursin(r"\"units\"\s*:", metadata_json)
-        return _inject_units_time(metadata_json), false
-    end
-    return metadata_json, true
+    return metadata_json, stamp_default_units
 end
 
 function _build_frame_handle(frame::ConFrame)
@@ -909,7 +996,13 @@ function _build_frame_handle(frame::ConFrame)
     builder == C_NULL && _throw_last("failed to create frame builder")
 
     try
-        metadata_json, stamp_default_units = _legacy_velocity_units(frame)
+        major = _binding_major(frame)
+        status = ccall(
+            _lib_symbol(:rkr_frame_builder_set_spec_version),
+            Cint, (Ptr{Cvoid}, UInt32), builder, major
+        )
+        _check_status(status, "failed to set the written major")
+        metadata_json, stamp_default_units = _legacy_velocity_units(frame, major)
         if !isempty(metadata_json)
             status = ccall(
                 _lib_symbol(:rkr_frame_builder_set_metadata_json),
@@ -918,8 +1011,8 @@ function _build_frame_handle(frame::ConFrame)
             _check_status(status, "failed to set frame metadata")
         end
         if stamp_default_units
-            # v1, v2, and v3.0 velocities are in the natural time unit.
-            # The builder writes minor 1, which requires units.time (CON-units.11).
+            # v1, v2, and v3 velocities are in the natural time unit.
+            # Major 4 requires units.time (CON-units.11).
             status = ccall(
                 _lib_symbol(:rkr_frame_builder_set_units),
                 Cint, (Ptr{Cvoid}, Cstring),

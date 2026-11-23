@@ -4286,6 +4286,26 @@ pub unsafe extern "C" fn rkr_frame_builder_set_con_spec_minor(
     builder.set_con_spec_minor(minor);
     note(RKRStatus::RKR_STATUS_SUCCESS)
 }
+/// Sets the major the built frame writes on line 2.
+/// `0` writes the current major. `3` writes a CON 3 frame, as a binding
+/// rewrite of a major-3 file does. A major above the current one makes
+/// `rkr_frame_builder_build` fail.
+/// Returns `RKR_STATUS_SUCCESS` on success.
+///
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_spec_version(
+    builder_handle: *mut RKRConFrameBuilder,
+    version: u32,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.spec_version(version);
+    note(RKRStatus::RKR_STATUS_SUCCESS)
+}
 /// Sets a numeric metadata key on an existing frame builder.
 /// Returns `RKR_STATUS_SUCCESS` on success, or an error code.
 ///
