@@ -22,7 +22,10 @@ gives a reason for a clause that something names.
     python paper/cpc/scripts/clause_coverage.py --check    # writes nothing; exits 1 if the recount or the TeX differs
     python paper/cpc/scripts/clause_coverage.py --macros   # writes only clauses_macros.tex, from the committed recount
 
-It also writes clauses_macros.tex, the counts the paper prints.
+It also writes clauses_macros.tex, the counts the paper prints. A committed
+final record is never rewritten: when the sources change, --record writes
+clause_coverage-<version>-spec-major-<n>.json, which supersedes record n - 1,
+and --check compares the newest one.
 """
 
 from __future__ import annotations
