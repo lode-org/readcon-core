@@ -267,8 +267,8 @@ readcon.atomic_number_to_symbol(93)     # "X"
   slice is an independent =ConFrame=.
 - =readcon.ConFrame= :: Constructable with cell, angles, atoms, and
   optional headers and metadata (v0.4.0+).  Properties: cell, angles,
-  atoms (live =AtomSequence=), has_velocities, has_forces, has_energies
-  (v0.10.0+), prebox_header, postbox_header, spec_version (v0.6.0+),
+  atoms (live =AtomSequence=), has_velocities, has_forces,
+  prebox_header, postbox_header, spec_version (v0.6.0+),
   metadata (v0.6.0+, live dict of native JSON-compatible values),
   energy, frame_index, time, timestep, neb_bead, neb_band,
   =source_text= and its alias =raw=.
@@ -302,6 +302,9 @@ readcon.atomic_number_to_symbol(93)     # "X"
   Frames yielded by non-streaming =iter_con= expose the exact consumed
   file substring through =source_text= / =raw=. Batch reads, constructed
   frames, streamed frames, slices, and mutated frames return =None=.
+  An edit through =atoms=, a held =Atom=, or =xyz= (an item store
+  or an assignment) is a mutation. Reading =atoms= or =xyz= leaves
+  the substring in place.
   The constructor and =from_ase()= raise =readcon.NonFiniteValue= (a
   =ValueError=) for a cell length or angle that is NaN or infinite, and
   for a =lattice_vectors= metadata matrix that holds one. The message names
