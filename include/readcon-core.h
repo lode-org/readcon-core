@@ -864,7 +864,8 @@ void free_con_frame_iterator(struct CConFrameIterator *iterator);
  * Extracts the core atomic data into a transparent `CFrame` struct.
  * The caller OWNS the returned pointer and MUST call `free_c_frame` on it.
  * NULL with `RKR_STATUS_VALIDATION_ERROR` when the positions column does
- * not hold one `(x, y, z)` row per atom.
+ * not hold one `(x, y, z)` row per atom, or the header type counts do not
+ * add up to the atoms.
  *
  * # Safety
  * frame_handle must be valid. The caller takes ownership of the returned CFrame.
@@ -2544,10 +2545,19 @@ enum RKRStatus rkr_frame_copy_atom_energies(const struct RKRConFrame *frame_hand
                                             double *out,
                                             uintptr_t out_len);
 
+/**
+ * Copy one mass per atom into `out` (length >= `N`). Without a mass column
+ * the header's per-type masses are copied. `RKR_STATUS_VALIDATION_ERROR`
+ * when a column or the type counts do not give one value per atom.
+ */
 enum RKRStatus rkr_frame_copy_masses(const struct RKRConFrame *frame_handle,
                                      double *out,
                                      uintptr_t out_len);
 
+/**
+ * Copy one id per atom into `out` (length >= `N`). Without an id column
+ * of `N` entries the ids stored on the atoms are copied.
+ */
 enum RKRStatus rkr_frame_copy_atom_ids(const struct RKRConFrame *frame_handle,
                                        uint64_t *out,
                                        uintptr_t out_len);
@@ -2574,6 +2584,8 @@ enum RKRStatus rkr_frame_positions_as_dlpack(const struct RKRConFrame *frame_han
 /**
  * Ingest positions from a DLManagedTensorVersioned (CPU float32/64, shape (N,3)
  * or length 3N). Metatensor-style write path symmetry.
+ * `RKR_STATUS_VALIDATION_ERROR` when the frame's positions column is not
+ * `(N, 3)`.
  *
  * # Safety
  * `frame` must be a valid mutable frame; `tensor` non-null managed tensor.
