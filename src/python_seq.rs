@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use pyo3::exceptions::PyIndexError;
+#[cfg(feature = "race-hooks")]
 use pyo3::sync::MutexExt;
 use pyo3::types::PySliceIndices;
 
@@ -1643,10 +1644,14 @@ impl PyAtomSeq {
     }
 }
 
+#[cfg(feature = "race-hooks")]
 const RACE_READY: u8 = 0;
+#[cfg(feature = "race-hooks")]
 const RACE_ACTIVE: u8 = 1;
+#[cfg(feature = "race-hooks")]
 const RACE_CLOSED: u8 = 2;
 
+#[cfg(feature = "race-hooks")]
 fn validate_race_atom_spread(atom: &PyAtomDatum) -> PyResult<()> {
     if atom.has_spread() {
         let row = [
@@ -1663,6 +1668,7 @@ fn validate_race_atom_spread(atom: &PyAtomDatum) -> PyResult<()> {
     Ok(())
 }
 
+#[cfg(feature = "race-hooks")]
 fn validate_race_atoms(atoms: &[PyAtomDatum]) -> PyResult<()> {
     let mut seen_ids = std::collections::HashSet::with_capacity(atoms.len());
     let mut species_masses: std::collections::HashMap<&str, f64> = std::collections::HashMap::new();
@@ -1694,6 +1700,10 @@ fn validate_race_atoms(atoms: &[PyAtomDatum]) -> PyResult<()> {
 
 /// Scoped, validated handle for racing in-place atom-list mutations against
 /// concurrent frame readers on free-threaded builds.
+///
+/// Registered only with the `race-hooks` feature. A release module does
+/// not export it.
+#[cfg(feature = "race-hooks")]
 #[pyclass(name = "_AtomListRace")]
 struct PyAtomListRace {
     frame: Py<PyConFrame>,
@@ -1702,6 +1712,7 @@ struct PyAtomListRace {
     write: std::sync::Mutex<()>,
 }
 
+#[cfg(feature = "race-hooks")]
 impl PyAtomListRace {
     fn ensure_active(&self) -> PyResult<()> {
         if self.state.load(std::sync::atomic::Ordering::Acquire) != RACE_ACTIVE {
@@ -1726,6 +1737,7 @@ impl PyAtomListRace {
     }
 }
 
+#[cfg(feature = "race-hooks")]
 #[pymethods]
 impl PyAtomListRace {
     fn __enter__<'py>(slf: Bound<'py, Self>) -> PyResult<Bound<'py, Self>> {
@@ -1863,7 +1875,8 @@ impl PyAtomListRace {
 /// Run `callback` while this thread holds a borrow of `frame`.
 ///
 /// A list-race edit that overlaps the borrow returns an error. It does
-/// not panic.
+/// not panic. Test helper, registered only with `race-hooks`.
+#[cfg(feature = "race-hooks")]
 #[pyfunction]
 #[pyo3(signature = (frame, callback, exclusive_borrow = false))]
 fn _hold_frame_borrow(
@@ -1884,6 +1897,8 @@ fn _hold_frame_borrow(
 /// Put `value` on the materialized atom list without checking its type.
 ///
 /// A later snapshot then reports the list error instead of ignoring it.
+/// Test helper, registered only with `race-hooks`.
+#[cfg(feature = "race-hooks")]
 #[pyfunction]
 fn _append_foreign_atom(frame: &Bound<'_, PyConFrame>, value: &Bound<'_, PyAny>) -> PyResult<()> {
     let this = shared(frame)?;
@@ -1891,6 +1906,7 @@ fn _append_foreign_atom(frame: &Bound<'_, PyConFrame>, value: &Bound<'_, PyAny>)
     this.atoms.bind(frame.py()).append(value)
 }
 
+#[cfg(feature = "race-hooks")]
 #[pyfunction]
 fn _atom_list_race(frame: Py<PyConFrame>) -> PyAtomListRace {
     PyAtomListRace {

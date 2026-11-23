@@ -15,7 +15,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 OUT="${1:-python_lcov.info}"
-FEATURES="${READCON_PY_FEATURES:-python,chemfiles}"
+FEATURES="${READCON_PY_FEATURES:-python,chemfiles,race-hooks}"
 
 # Drop only real build caches (sccache), not the llvm-cov rustc wrapper.
 unset SCCACHE_GHA_ENABLED || true
