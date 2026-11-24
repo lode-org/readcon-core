@@ -1,9 +1,8 @@
 //! A positions import while an exported DLPack tensor shares the column.
 //!
-//! The atoms of a parsed frame address its position column. A CPU export
-//! shares that column with the tensor, so the import's first row write
-//! copies it. Atoms left on the old column read the tensor's buffer, and
-//! freed memory once the tensor is deleted.
+//! A CPU export shares that column with the tensor, so the import's first
+//! row write copies it. The import copies those rows onto the atoms as well.
+//! Writing the tensor's buffer and deleting it must not change the atoms.
 
 use readcon_core::ffi::{
     RKRConFrame, RKRDLManagedTensorVersioned, RKRStatus, rkr_dl_type_code, rkr_dlpack_delete,
@@ -18,10 +17,8 @@ fn an_import_from_the_exported_tensor_leaves_the_atoms_on_the_column() {
         .next()
         .expect("frame")
         .expect("parse");
-    let before: Vec<[f64; 3]> = frame
-        .atom_data
-        .iter()
-        .map(|atom| [atom.x(), atom.y(), atom.z()])
+    let before: Vec<[f64; 3]> = (0..frame.atom_data.len())
+        .map(|index| frame.xyz_at(index))
         .collect();
     let handle = (&mut frame as *mut ConFrame).cast::<RKRConFrame>();
     let mut tensor: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
@@ -82,8 +79,8 @@ fn an_import_from_the_exported_tensor_leaves_the_atoms_on_the_column() {
         rkr_dlpack_delete(tensor);
     }
     let column = frame.positions.f64_slice().expect("f64 positions");
-    for (i, atom) in frame.atom_data.iter().enumerate() {
-        let xyz = [atom.x(), atom.y(), atom.z()];
+    for i in 0..frame.atom_data.len() {
+        let xyz = frame.xyz_at(i);
         assert_eq!(xyz, before[i], "atom {i} moved");
         assert_eq!(xyz, column[i * 3..i * 3 + 3], "atom {i} left the column");
     }

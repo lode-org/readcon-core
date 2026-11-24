@@ -61,10 +61,10 @@ fn bits(frames: &[ConFrame]) -> Vec<u64> {
             out.push(value.to_bits());
         }
         out.push(frame.atom_data.len() as u64);
-        for atom in &frame.atom_data {
-            out.push(atom.x().to_bits());
-            out.push(atom.y().to_bits());
-            out.push(atom.z().to_bits());
+        for (coord_i0, atom) in frame.atom_data.iter().enumerate() {
+            out.push(frame.x_at(coord_i0).to_bits());
+            out.push(frame.y_at(coord_i0).to_bits());
+            out.push(frame.z_at(coord_i0).to_bits());
             if let Some(velocity) = atom.velocity() {
                 out.extend(velocity.map(|value| value.to_bits()));
             }

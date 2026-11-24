@@ -596,7 +596,8 @@ class TestConFrameConstructor:
         assert float(xyz[0, 0]) == pytest.approx(float(pos[0, 0]))
         xyz[0, 0] = -999.0
         assert float(fr.xyz[0, 0]) == -999.0
-        assert float(fr.atoms[0].x) == pytest.approx(0.6394, abs=1e-3)
+        assert float(fr.atoms[0].x) == pytest.approx(-999.0)
+        assert float(fr.coords_array()[0, 0]) == pytest.approx(-999.0)
 
     def test_coords_array_matches_atoms_after_full_frame_load(self):
         path = _resource("tiny_multi_cuh2.con")

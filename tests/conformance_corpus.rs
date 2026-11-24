@@ -316,10 +316,8 @@ fn assert_matches_golden(case_id: &str, frame: &ConFrame, golden: &serde_json::V
     assert_eq!(symbols.len(), n_atoms, "{case_id}: symbols length");
 
     let got_fixed: Vec<[bool; 3]> = frame.atom_data.iter().map(|a| a.fixed()).collect();
-    let got_positions: Vec<[f64; 3]> = frame
-        .atom_data
-        .iter()
-        .map(|a| [a.x(), a.y(), a.z()])
+    let got_positions: Vec<[f64; 3]> = (0..frame.atom_data.len())
+        .map(|index| frame.xyz_at(index))
         .collect();
     let got_ids: Vec<u64> = frame.atom_data.iter().map(|a| a.atom_id).collect();
     let got_symbols: Vec<String> = frame

@@ -63,10 +63,17 @@ VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
 # history that gen_spec_supp.py --measure reads from spec.org at each release tag.
 NO_BUILD = {
     "evidence/results/e4_cells.csv",
-    f"data/spec/spec-measurement-{VERSION}.json",
+    *(
+        f"data/spec/{p.name}"
+        for p in (CPC / "data" / "spec").glob("spec-measurement-*.json")
+    ),
     "data/spec/versions.json",
     "data/spec/clause_coverage.json",
     f"data/spec/clause_coverage-{VERSION}.json",
+    *(
+        f"data/spec/{p.name}"
+        for p in (CPC / "data" / "spec").glob("clause_coverage-*.json")
+    ),
     # Stored tables the restored figures draw. The database rows come from
     # readcon-db, and these files carry no readcon-core provenance block.
     "data/db/dedup.json",
@@ -84,16 +91,14 @@ NO_BUILD = {
     "data/eon/readcon_pins.json",
     "data/peers/releases.json",
 }
-
-
 def no_build(rel: str) -> bool:
     return rel in NO_BUILD or rel.startswith(
         (
             f"data/spec/clause_coverage-{VERSION}-",
+            f"data/spec/spec-measurement-{VERSION}-",
             "data/referee_probes",
         )
     )
-
 
 # Record directories copied verbatim from lode-org/readcon-db: their build is a readcon-db commit, not a readcon-core build.
 EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/", "data/db33/")
@@ -137,6 +142,7 @@ RECORD_NAMES = (
         r"data/spec/mutant_differential\.json",
         "Specification campaign, mutant differential",
     ),
+    (r"data/spec/spec-measurement-[^/]+\.json", "Specification measurement"),
     (r"data/spec/version_drift\.json", "Specification campaign, version drift"),
     (r"data/survey_frame\.json", "Survey frame"),
     (r"src/figures/generated/survey_frame\.con", "Survey frame, CON text"),
@@ -624,6 +630,14 @@ def carrier(rel: str) -> tuple[str, str] | None:
             and data.get("tree_commit")
         ):
             return "commit", rel
+        if (
+            isinstance(data, dict)
+            and isinstance(data.get("measured_at"), dict)
+            and data["measured_at"].get("commit")
+            and isinstance(data.get("tree"), dict)
+            and data["tree"].get("release")
+        ):
+            return "measured_commit", rel
     start = path if path.is_dir() else path.parent
     for parent in (start, *start.parents):
         if parent == CPC or not parent.is_relative_to(CPC):
@@ -855,6 +869,16 @@ def build_of(kind: str, rel: str) -> Build | None:
         return Build(
             data["readcon_version"],
             provenance.library_digest_at(data["tree_commit"]),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+    if kind == "measured_commit":
+        return Build(
+            data["tree"]["release"],
+            provenance.library_digest_at(data["measured_at"]["commit"]),
             None,
             None,
             None,

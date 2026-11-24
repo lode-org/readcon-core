@@ -35,6 +35,7 @@ import ast
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -70,6 +71,66 @@ def final_count() -> int:
 
 
 FINAL_RECORD = final_record(max(final_count(), 1))
+
+
+def default_paths(
+    root: Path | None = None,
+    repo: Path | None = None,
+    spec: Path | None = None,
+    version: str | None = None,
+) -> tuple[Path, Path]:
+    """Previous and newest blob-named coverage records for one spec.org."""
+    root = root or ROOT
+    repo_root = (repo or REPO).resolve()
+    spec_path = spec or (repo_root / "docs" / "orgmode" / "spec.org")
+    ver = (
+        version
+        if version is not None
+        else (repo_root / "VERSION").read_text(encoding="utf-8").strip()
+    )
+    spec_dir = root / "data" / "spec"
+    base = spec_dir / f"clause_coverage-{ver}.json"
+    blob8 = subprocess.run(
+        ["git", "-C", str(repo_root), "hash-object", str(spec_path)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()[:8]
+    by_blob = spec_dir / f"clause_coverage-{ver}-{blob8}.json"
+    if by_blob.is_file():
+        # A later record of the same spec names the one it supersedes; the
+        # newest is the end of that chain, whatever its file name sorts as.
+        later = {
+            path: json.loads(path.read_text(encoding="utf-8")).get("supersedes")
+            for path in spec_dir.glob(f"clause_coverage-{ver}-{blob8}-*.json")
+        }
+        previous, newest = base, by_blob
+        for _ in later:
+            name = newest.resolve().relative_to(repo_root).as_posix()
+            after = [path for path, prior in later.items() if prior == name]
+            if len(after) != 1:
+                sys.exit(
+                    f"{len(after)} records of data/spec supersede {newest.name}; "
+                    f"the {len(later) + 1} clause coverage records of spec "
+                    f"{blob8} must form one chain"
+                )
+            previous, newest = newest, after[0]
+        return previous, newest
+    if base.is_file():
+        existing = (
+            json.loads(base.read_text(encoding="utf-8")).get("spec", {}).get("sha256")
+        )
+        if existing != hashlib.sha256(spec_path.read_bytes()).hexdigest():
+            return base, by_blob
+        return spec_dir / "clause_coverage.json", base
+    return spec_dir / "clause_coverage.json", base
+
+
+def _default_paths() -> tuple[Path, Path]:
+    return default_paths()
+
+
+SUPERSEDES, OUT = _default_paths()
 MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)
@@ -323,7 +384,7 @@ def source(path: Path, named: dict[str, set[str]], known: set[str], **counts) ->
     }
 
 
-def build() -> dict:
+def build(supersedes: Path | None = None) -> dict:
     clauses = spec_clauses()
     known = {cid for cid, _ in clauses}
     c31, conf, probe = corpus31(), conformance(), probes()
@@ -365,7 +426,7 @@ def build() -> dict:
         "indep_reader": sum(e["indep_reader"] for e in entries),
         "uncovered": len(entries) - len(covered),
     }
-    return {
+    record = {
         "script": rel(Path(__file__)),
         "spec": {"path": rel(SPEC), "sha256": sha256(SPEC), "clauses": len(entries)},
         "sources": {
@@ -387,6 +448,16 @@ def build() -> dict:
         "totals": totals,
         "uncovered": [e["id"] for e in entries if "reason" in e],
         "clauses": entries,
+    }
+    if supersedes is None:
+        return record
+    return {
+        "supersedes": rel(supersedes),
+        "reason": (
+            f"Recounts specification coverage for readcon-core {VERSION} "
+            "without rewriting the previous measurement."
+        ),
+        **record,
     }
 
 

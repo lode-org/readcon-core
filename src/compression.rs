@@ -731,7 +731,14 @@ fn write_fused_frame(
                     if atom_from == 0 {
                         plain.extend_from_slice(header);
                     }
-                    plain.extend(crate::writer::format_coord_range(frame, atom_from, atom_to));
+                    match crate::writer::format_coord_range(frame, atom_from, atom_to) {
+                        Ok(rows) => plain.extend(rows),
+                        Err(err) => {
+                            *slots[index].lock().unwrap() =
+                                Some(Err(io::Error::other(err.to_string())));
+                            continue;
+                        }
+                    }
                     let plain_len = plain.len();
                     let encoded = if gzip {
                         gzip_member(&plain)
@@ -2417,10 +2424,8 @@ mod tests {
     }
 
     fn coords(frame: &crate::types::ConFrame) -> Vec<f64> {
-        frame
-            .atom_data
-            .iter()
-            .flat_map(|atom| [atom.x(), atom.y(), atom.z()])
+        (0..frame.atom_data.len())
+            .flat_map(|index| frame.xyz_at(index))
             .collect()
     }
 

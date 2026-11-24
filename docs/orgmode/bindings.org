@@ -253,7 +253,8 @@ readcon.atomic_number_to_symbol(93)     # "X"
   (v0.4.2+), vx, vy, vz, has_velocity, fx, fy, fz, has_forces,
   energy (v0.10.0+), has_energy (v0.10.0+).
   Data fields are writable.
-- =readcon.AtomView= / =readcon.AtomSequence= :: =frame[i]= and direct frame iteration return live =AtomView= objects
+- =readcon.AtomView= / =readcon.AtomSequence= ::
+  =frame[i]= and direct frame iteration return live =AtomView= objects
   backed by the frame's Rust columns. Assigning a view property updates both
   the frame and an already-materialized compatibility atom projection.
   =frame.atoms= is an =AtomSequence= whose indexing and iteration expose
@@ -266,8 +267,8 @@ readcon.atomic_number_to_symbol(93)     # "X"
   slice is an independent =ConFrame=.
 - =readcon.ConFrame= :: Constructable with cell, angles, atoms, and
   optional headers and metadata (v0.4.0+).  Properties: cell, angles,
-  atoms (live =AtomSequence=), has_velocities, has_forces, has_energies
-  (v0.10.0+), prebox_header, postbox_header, spec_version (v0.6.0+),
+  atoms (live =AtomSequence=), has_velocities, has_forces,
+  prebox_header, postbox_header, spec_version (v0.6.0+),
   metadata (v0.6.0+, live dict of native JSON-compatible values),
   energy, frame_index, time, timestep, neb_bead, neb_band,
   =source_text= and its alias =raw=.
@@ -301,6 +302,9 @@ readcon.atomic_number_to_symbol(93)     # "X"
   Frames yielded by non-streaming =iter_con= expose the exact consumed
   file substring through =source_text= / =raw=. Batch reads, constructed
   frames, streamed frames, slices, and mutated frames return =None=.
+  An edit through =atoms=, a held =Atom=, or =xyz= (an item store
+  or an assignment) is a mutation. Reading =atoms= or =xyz= leaves
+  the substring in place.
   The constructor and =from_ase()= raise =readcon.NonFiniteValue= (a
   =ValueError=) for a cell length or angle that is NaN or infinite, and
   for a =lattice_vectors= metadata matrix that holds one. The message names
@@ -754,7 +758,7 @@ include(FetchContent)
 FetchContent_Declare(
   readcon-core
   URL https://github.com/lode-org/readcon-core/releases/download/v@READCON_VERSION@/readcon-core-cxx-@READCON_VERSION@.tar.gz
-  URL_HASH SHA256=8e882b8b54d0b3e9f000ae248f9314010cc38a3cc4dccd931a7a01945b13d9f3
+  URL_HASH SHA256=2b72af19acc05f2cbc993dc1513dcba78718ee10ac01163e91280ad66e438f4c
 )
 FetchContent_MakeAvailable(readcon-core)
 target_link_libraries(my_app PRIVATE readcon-core::shared)

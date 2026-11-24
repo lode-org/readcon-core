@@ -215,21 +215,21 @@ if (root / spec_measurement).is_file():
     allow_exact.add(spec_measurement)
 else:
     print(f"PENDING: {spec_measurement} has not been measured")
+for extra in sorted(
+    (root / "paper/cpc/data/spec").glob(f"spec-measurement-{version}-*.json")
+):
+    allow_exact.add(extra.relative_to(root).as_posix())
 clause_coverage = f"paper/cpc/data/spec/clause_coverage-{version}.json"
 if (root / clause_coverage).is_file():
     allow_exact.add(clause_coverage)
 else:
     print(f"PENDING: {clause_coverage} has not been measured")
-allow_exact.update(
-    path.relative_to(root).as_posix()
-    for path in (root / "paper/cpc/data/spec").glob(
-        f"clause_coverage-{version}-*.json"
-    )
-)
-allow_exact.update(
-    path.relative_to(root).as_posix()
-    for path in (root / "paper/cpc/data").glob("referee_probes-*.json")
-)
+for extra in sorted(
+    (root / "paper/cpc/data/spec").glob(f"clause_coverage-{version}-*.json")
+):
+    allow_exact.add(extra.relative_to(root).as_posix())
+for extra in sorted((root / "paper/cpc/data").glob("referee_probes-*.json")):
+    allow_exact.add(extra.relative_to(root).as_posix())
 # Measured campaigns keep the package version they were timed with.
 # A later release must not rewrite that field to VERSION.
 recorded_results = {
