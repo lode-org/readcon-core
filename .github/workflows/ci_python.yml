@@ -99,9 +99,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - features: python,zstd,borrow-path-counts
+          - features: python,zstd,borrow-path-counts,race-hooks
             name: lean
-          - features: python,chemfiles-from-sources,zstd
+          - features: python,chemfiles-from-sources,zstd,race-hooks
             name: chemfiles
     steps:
       - uses: actions/checkout@v6
@@ -208,7 +208,7 @@ jobs:
         env:
           RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
         run: |
-          maturin develop --features 'python,zstd'
+          maturin develop --features 'python,zstd,race-hooks'
 
       - name: pytest tests/python
         env:
