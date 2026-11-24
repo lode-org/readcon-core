@@ -267,7 +267,7 @@ readcon.atomic_number_to_symbol(93)     # "X"
   slice is an independent =ConFrame=. =left + right= returns a new
   frame with those atoms followed by =right= (a =ConFrame= or an
   iterable of atoms) in that same type-group order, without building
-  =.atoms=.
+  the operands' =.atoms=.
 - =readcon.ConFrame= :: Constructable with cell, angles, atoms, and
   optional headers and metadata (v0.4.0+).  Properties: cell, angles,
   atoms (live =AtomSequence=), has_velocities, has_forces,

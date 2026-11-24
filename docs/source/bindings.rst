@@ -309,6 +309,7 @@ Types
     frame with those atoms followed by ``right`` (a ``ConFrame`` or an
     iterable of atoms) in that same type-group order, without building
     ``.atoms``.
+    the operands' ``.atoms``.
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and
     optional headers and metadata (v0.4.0+).  Properties: cell, angles,
