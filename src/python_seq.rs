@@ -709,8 +709,10 @@ impl PyConFrame {
                 })
                 .collect());
         }
+        // Positions were moved into xyz, the slab, or the position store.
+        // The column is empty, so the single-atom lookup fills coordinates.
         Ok((0..self.n_atoms())
-            .map(|i| self.store_snap_unchecked(i))
+            .map(|i| self.snap_unchecked(py, i))
             .collect())
     }
 
