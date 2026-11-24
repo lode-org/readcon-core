@@ -154,6 +154,11 @@ def test_develop_pin_recorder_has_guard_and_one_retry():
     assert workflow.count("git push origin HEAD:develop") == 2
     assert "git add -- \"${pin_paths[@]}\"" in workflow
     assert "bash scripts/check_cxx_wrap_pin.sh --strict" in workflow
+    assert "statuses: write" in workflow
+    assert 'context="cxx wrap pin"' in workflow
+    assert 'state=success' in workflow
+    assert 'state=failure' in workflow
+    assert "gh api --method POST" in workflow
     assert "git rebase" not in workflow
     assert "commit --amend" not in workflow
 

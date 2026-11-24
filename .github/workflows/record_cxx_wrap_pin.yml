@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  statuses: write
 
 concurrency:
   group: record-cxx-wrap-pin-develop
@@ -143,9 +144,30 @@ jobs:
           create_commit
           git push origin HEAD:develop
 
-      - name: Check the recorded pin strictly
+      - name: Check and report the recorded pin
         env:
           CC: gcc
           CXX: g++
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
-        run: bash scripts/check_cxx_wrap_pin.sh --strict
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          bash scripts/check_cxx_wrap_pin.sh --strict
+          check_status=$?
+          set -e
+
+          if [[ "$check_status" -eq 0 ]]; then
+            state=success
+            description="The recorded cxx wrap pin is current"
+          else
+            state=failure
+            description="The recorded cxx wrap pin is stale"
+          fi
+
+          sha="$(git rev-parse HEAD)"
+          endpoint="repos/${GITHUB_REPOSITORY}/statuses/${sha}"
+          gh api --method POST "$endpoint" \
+            -f state="$state" \
+            -f context="cxx wrap pin" \
+            -f description="$description"
+          exit "$check_status"
