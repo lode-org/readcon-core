@@ -242,6 +242,8 @@ if (root / clause_sources).is_file():
     allow_exact.add(clause_sources)
 else:
     print(f"PENDING: {clause_sources} has not been measured")
+for later in sorted((root / "paper/cpc/data/spec").glob(f"clause_coverage-{version}-sources-*.json")):
+    allow_exact.add(later.relative_to(root).as_posix())
 # The like-for-like rows, samples and summary name the build they measured.
 # A later release must not rewrite those fields.
 allow_exact.update({
@@ -259,6 +261,10 @@ recorded_results = {
     "paper/cpc/data/spec/version_drift.json",
     "paper/cpc/data/spec/corpus_recount.json",
     "paper/cpc/data/spec/corpus_recount-2.json",
+    *(
+        later.relative_to(root).as_posix()
+        for later in sorted((root / "paper/cpc/data/spec").glob("corpus_recount-*.json"))
+    ),
 }
 skip_dirs = {
     ".git",
