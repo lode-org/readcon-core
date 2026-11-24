@@ -145,19 +145,19 @@ def test_cxx_wrap_pin_current_skips_only_an_unchanged_pin():
 
 
 def test_develop_pin_recorder_has_guard_and_one_retry():
-    workflow = (
-        ROOT / ".github" / "workflows" / "record_cxx_wrap_pin.yml"
-    ).read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "record_cxx_wrap_pin.yml").read_text(
+        encoding="utf-8"
+    )
     assert "permissions:\n  contents: write" in workflow
     assert "cancel-in-progress: false" in workflow
     assert "steps.loop-guard.outputs.skip != 'true'" in workflow
     assert workflow.count("git push origin HEAD:develop") == 2
-    assert "git add -- \"${pin_paths[@]}\"" in workflow
+    assert 'git add -- "${pin_paths[@]}"' in workflow
     assert "bash scripts/check_cxx_wrap_pin.sh --strict" in workflow
     assert "statuses: write" in workflow
     assert 'context="cxx wrap pin"' in workflow
-    assert 'state=success' in workflow
-    assert 'state=failure' in workflow
+    assert "state=success" in workflow
+    assert "state=failure" in workflow
     assert "gh api --method POST" in workflow
     assert "git rebase" not in workflow
     assert "commit --amend" not in workflow
