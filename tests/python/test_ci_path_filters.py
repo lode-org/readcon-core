@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -107,6 +108,52 @@ def test_cxx_wrap_pin_does_not_run_for_bench_only_changes():
     assert text.count("paths-ignore:") == 2
     assert text.count("- 'bench/**'") == 2
     assert "bash scripts/check_cxx_wrap_pin.sh" in text
+    assert "--pull-request" in text
+    assert "--strict" in text
+    assert "- main" in text
+    assert "- '**'" in text
+
+
+def test_cxx_wrap_pin_current_skips_only_an_unchanged_pin():
+    script = ROOT / "scripts" / "cxx-wrap-pin-current.sh"
+    pin = ROOT / "packaging" / "wrapdb" / "readcon-core.sha256"
+    original = pin.read_text(encoding="utf-8")
+    current = subprocess.run(
+        ["bash", str(script)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert current.returncode == 0
+    assert "current" in current.stdout
+
+    pin.write_text(original.rstrip() + "0\n", encoding="utf-8")
+    try:
+        stale = subprocess.run(
+            ["bash", str(script)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        pin.write_text(original, encoding="utf-8")
+    assert stale.returncode == 1
+    assert "needs recording" in stale.stdout
+
+
+def test_develop_pin_recorder_has_guard_and_one_retry():
+    workflow = (
+        ROOT / ".github" / "workflows" / "record_cxx_wrap_pin.yml"
+    ).read_text(encoding="utf-8")
+    assert "permissions:\n  contents: write" in workflow
+    assert "cancel-in-progress: false" in workflow
+    assert "steps.loop-guard.outputs.skip != 'true'" in workflow
+    assert workflow.count("git push origin HEAD:develop") == 2
+    assert "git rebase origin/develop" in workflow
+    assert "git add -- \"${pin_paths[@]}\"" in workflow
+    assert "bash scripts/check_cxx_wrap_pin.sh --strict" in workflow
 
 
 def test_release_branch_pushes_build_wheels_before_the_tag():
