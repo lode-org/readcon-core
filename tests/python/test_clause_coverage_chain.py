@@ -250,7 +250,9 @@ def test_repo_clause_coverage_resolves_to_terminal_record(tmp_path: Path) -> Non
     # named by git blob a8f263a2.
     spec = tmp_path / "spec.org"
     spec.write_bytes(
-        subprocess.check_output(["git", "-C", str(ROOT), "cat-file", "blob", "a8f263a2"])
+        subprocess.check_output(
+            ["git", "-C", str(ROOT), "cat-file", "blob", "a8f263a2"]
+        )
     )
     previous, newest = clause_coverage.default_paths(spec=spec)
     assert newest.name != f"clause_coverage-{version}-a8f263a2.json"
