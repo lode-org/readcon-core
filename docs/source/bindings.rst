@@ -305,7 +305,10 @@ Types
     ``insert()`` and ``extend()`` methods mutate the owning frame and preserve CON
     type-group order; an ``Atom`` already taken from ``frame.atoms`` that
     was not replaced or deleted stays part of the frame. A direct frame
-    slice is an independent ``ConFrame``.
+    slice is an independent ``ConFrame``. ``left + right`` returns a new
+    frame with those atoms followed by ``right`` (a ``ConFrame`` or an
+    iterable of atoms) in that same type-group order, without building
+    ``.atoms``.
 
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and

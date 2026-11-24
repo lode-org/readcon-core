@@ -1606,6 +1606,22 @@ impl PyConFrame {
         frame.replace_atoms(py, snaps)
     }
 
+    /// A new frame with these atoms followed by `other`.
+    ///
+    /// `other` is a `ConFrame` or an iterable of atoms. The stored order
+    /// is CON type-group order, the same order `append` uses.
+    fn __add__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let py = slf.py();
+        let frame = shared(slf)?;
+        let mut snaps = frame.snapshot_atoms(py)?;
+        if let Ok(other_frame) = other.cast::<PyConFrame>() {
+            snaps.extend(shared(other_frame)?.snapshot_atoms(py)?);
+        } else {
+            snaps.extend(snaps_from_iterable(other)?);
+        }
+        frame.assemble_like(py, snaps)
+    }
+
     // --- NumPy array views ---
     //
     // Until a structural sequence edit, a frame from the parser answers
