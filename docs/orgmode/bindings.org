@@ -253,7 +253,8 @@ readcon.atomic_number_to_symbol(93)     # "X"
   (v0.4.2+), vx, vy, vz, has_velocity, fx, fy, fz, has_forces,
   energy (v0.10.0+), has_energy (v0.10.0+).
   Data fields are writable.
-- =readcon.AtomView= / =readcon.AtomSequence= :: =frame[i]= and direct frame iteration return live =AtomView= objects
+- =readcon.AtomView= / =readcon.AtomSequence= ::
+  =frame[i]= and direct frame iteration return live =AtomView= objects
   backed by the frame's Rust columns. Assigning a view property updates both
   the frame and an already-materialized compatibility atom projection.
   =frame.atoms= is an =AtomSequence= whose indexing and iteration expose
