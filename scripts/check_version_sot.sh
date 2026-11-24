@@ -236,6 +236,10 @@ recorded_results = {
     "paper/cpc/data/spec/version_drift.json",
     "paper/cpc/data/spec/corpus_recount.json",
     "paper/cpc/data/spec/corpus_recount-2.json",
+    *(
+        later.relative_to(root).as_posix()
+        for later in sorted((root / "paper/cpc/data/spec").glob("corpus_recount-*.json"))
+    ),
 }
 skip_dirs = {
     ".git",
