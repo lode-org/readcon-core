@@ -112,6 +112,7 @@ def test_cxx_wrap_pin_does_not_run_for_bench_only_changes():
     assert "--strict" in text
     assert "- main" in text
     assert "- '**'" in text
+    assert "permissions:\n  contents: read" in text
 
 
 def test_cxx_wrap_pin_current_skips_only_an_unchanged_pin():

@@ -19,6 +19,9 @@ on:
       - 'paper/**'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: cxx-wrap-pin-${{ github.ref }}
   cancel-in-progress: false
