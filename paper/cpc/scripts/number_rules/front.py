@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 import scipy.constants
+from scipy.constants import _codata
 from numbers_lib import Rule, grep, jget, text
 
 DOC = "rg_main.tex"
@@ -128,8 +129,24 @@ ANGLE_LIMIT = float(grep("/src/parser.rs", r"\*angle >= ([\d.]+)\)"))
 
 def si_factor(name: str) -> float:
     """``si_factor`` of the base unit ``name`` in src/units.rs."""
-    pattern = rf'name: "{re.escape(name)}",\s*value: unit\(([\d_.e+-]+),'
-    return float(grep("/src/units.rs", pattern).replace("_", ""))
+    expression = grep(
+        "/src/units.rs",
+        rf'name: "{re.escape(name)}",\s*value: unit\(([\w_.+-]+),',
+    )
+    try:
+        return float(expression.replace("_", ""))
+    except ValueError:
+        symbol = grep(
+            "/src/units.rs",
+            rf"const {re.escape(expression)}: f64 = metrology::(\w+);",
+        )
+        codata_name = {
+            "AMU": "atomic mass constant",
+            "E_CHARGE": "elementary charge",
+        }.get(symbol)
+        if codata_name is None:
+            raise SystemExit(f"src/units.rs: unsupported metrology constant {symbol}")
+        return float(_codata._physical_constants_2018[codata_name][0])
 
 
 ANGSTROM_M = si_factor("angstrom")

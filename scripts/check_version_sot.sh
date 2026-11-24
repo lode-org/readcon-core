@@ -228,6 +228,8 @@ for extra in sorted(
     (root / "paper/cpc/data/spec").glob(f"clause_coverage-{version}-*.json")
 ):
     allow_exact.add(extra.relative_to(root).as_posix())
+for extra in sorted((root / "paper/cpc/data").glob("referee_probes-*.json")):
+    allow_exact.add(extra.relative_to(root).as_posix())
 # Measured campaigns keep the package version they were timed with.
 # A later release must not rewrite that field to VERSION.
 recorded_results = {

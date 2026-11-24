@@ -74,9 +74,14 @@ fn spec_violations_rejected() {
         &v,
         r#"{"con_spec_version":3,"units":{"length":"angstrom"}}"#,
     );
-    // Unsupported spec versions
-    assert_invalid(&v, r#"{"con_spec_version":1}"#);
+    // The schema does not name the majors a reader supports. That is
+    // CON-line2.6. Major 4 still requires units.length and units.energy.
+    assert_valid(&v, r#"{"con_spec_version":1}"#);
     assert_invalid(&v, r#"{"con_spec_version":4}"#);
+    assert_valid(
+        &v,
+        r#"{"con_spec_version":4,"units":{"length":"angstrom","energy":"eV"}}"#,
+    );
     // pbc must have exactly three booleans
     assert_invalid(&v, r#"{"con_spec_version":2,"pbc":[true,true]}"#);
     // Dtypes without a host are rejected in storage_dtypes

@@ -503,7 +503,7 @@ A later minor therefore never makes a reader reject a file that an earlier minor
 Each accepted specification change includes corpus tests.
 
 {\small
-\begin{longtable}{@{}lllp{0.44\linewidth}@{}}
+\begin{longtable}{@{}llp{0.25\linewidth}p{0.42\linewidth}@{}}
 \caption{CON versions.
 A row with an unmarked date takes its version, date and change from the version history of the specification.
 Its release is the first readcon-core release whose specification lists that version with that date, and version 1 is the text eOn writes.

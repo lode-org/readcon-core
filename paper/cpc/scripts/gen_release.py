@@ -11,8 +11,8 @@ a later tree.  The script stops unless
 - the commit's ``docs/orgmode/spec.org`` blob can be hashed.
 
 When a tag of that version names the commit, the role is a release commit
-and the tag sentence names the tag.  Otherwise the role is a candidate
-commit and the tag sentence says this commit is not a release tag.
+and the tag sentence names the tag. Otherwise the role is a measured commit
+and the tag sentence says no release tag names it.
 ``\\rcMeasuredVersion`` is that Cargo.toml version.  ``\\rcMeasuredSpecBlob``
 is the commit's spec.org blob.
 ``\\readconpbccommit`` (per-axis periodic flags in the Python binding) and
@@ -108,8 +108,8 @@ def identity() -> dict:
         role = "release commit"
         tagstate = f"Tag {tag} names this commit."
     else:
-        role = "candidate commit"
-        tagstate = "This commit is not a release tag."
+        role = "measured commit"
+        tagstate = "No release tag names this commit."
     return {
         "commit": commit,
         "digest": digest,

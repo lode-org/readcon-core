@@ -271,6 +271,8 @@ pub struct ConFrameWriter<W: Write> {
     /// Frames this writer has taken so far: the 0-based index of the next
     /// frame, which names that frame in a non-finite cell error.
     frame_number: u64,
+    /// `(flag, sorted ids)` of the first frame, once one has been written.
+    persistent_ids: Option<(bool, Vec<u64>)>,
 }
 
 struct BoundHeader {
@@ -432,12 +434,15 @@ fn metadata_value_eq(a: &serde_json::Value, b: &serde_json::Value) -> bool {
 
 /// CON-section.16. Minor 2 and later must list, in `section_arity`, every
 /// emitted section that minor 1 does not reserve.
-fn require_minor2_section_arity(
+fn require_unreserved_section_arity(
+    spec_version: u32,
     minor: u64,
     sections: &[serde_json::Value],
     metadata: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<(), WriteError> {
-    if minor < 2 {
+    // Major 4 reserves the table at minor 0. Major 3 reserved it at minor 1.
+    let floor = if spec_version >= 4 { 0 } else { 1 };
+    if minor <= floor {
         return Ok(());
     }
     for name in sections.iter().filter_map(|value| value.as_str()) {
@@ -453,7 +458,7 @@ fn require_minor2_section_arity(
         if !listed {
             return Err(WriteError::Format(
                 crate::error::ParseError::ValidationError(format!(
-                    "minor >= 2 must list {name} in section_arity"
+                    "a minor above the reserved table must list {name} in section_arity"
                 )),
             ));
         }
@@ -525,7 +530,44 @@ impl<W: Write> ConFrameWriter<W> {
             bound_line: None,
             bound_no_lattice: None,
             frame_number: 0,
+            persistent_ids: None,
         }
+    }
+
+    /// CON-id.11. A true `ids_persistent` on any frame requires the same
+    /// flag and the same id set on every frame.
+    fn note_persistent_ids(&mut self, frame: &crate::types::ConFrame) -> Result<(), WriteError> {
+        let flag = frame
+            .header
+            .metadata
+            .ids_persistent_flag()
+            .map_err(WriteError::Format)?;
+        let mut ids = Vec::new();
+        if flag {
+            ids = frame.atom_data.iter().map(|atom| atom.atom_id).collect();
+            ids.sort_unstable();
+            if ids.windows(2).any(|pair| pair[0] == pair[1]) {
+                return Err(WriteError::Format(
+                    crate::error::ParseError::ValidationError(
+                        "ids_persistent requires each id once in the frame".into(),
+                    ),
+                ));
+            }
+        }
+        match &self.persistent_ids {
+            None => self.persistent_ids = Some((flag, ids)),
+            Some((seen_flag, seen))
+                if (*seen_flag || flag) && (!*seen_flag || !flag || seen != &ids) =>
+            {
+                return Err(WriteError::Format(
+                    crate::error::ParseError::ValidationError(
+                        "ids_persistent requires the same ids in every frame".into(),
+                    ),
+                ));
+            }
+            Some(_) => {}
+        }
+        Ok(())
     }
 
     fn retain_scratch(mut self, on: bool) -> Self {
@@ -654,13 +696,6 @@ impl<W: Write> ConFrameWriter<W> {
             }
             meta_obj.insert(k.clone(), v.clone());
         }
-        if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
-            // D11: an invalid unit fails the write. Do not substitute a default.
-            let c = crate::units::canonicalize_units_object(&u).map_err(|e| {
-                WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
-            })?;
-            meta_obj.insert(meta::UNITS.into(), c);
-        }
         if spec_version >= 3 {
             match meta_obj.get(meta::UNITS) {
                 None => {
@@ -669,11 +704,29 @@ impl<W: Write> ConFrameWriter<W> {
                     )));
                 }
                 Some(u) => {
-                    crate::units::validate_v3_units_metadata(u).map_err(|e| {
-                        WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
-                    })?;
+                    crate::units::validate_units_metadata_for_version(spec_version, u).map_err(
+                        |e| {
+                            WriteError::Format(crate::error::ParseError::InvalidUnits(
+                                e.to_string(),
+                            ))
+                        },
+                    )?;
                 }
             }
+        }
+        if spec_version >= 2
+            && let Some(units) = meta_obj.get(meta::UNITS)
+        {
+            crate::units::enforce_velocity_precedence(spec_version, units).map_err(|e| {
+                WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
+            })?;
+        }
+        if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
+            // D11: an invalid unit fails the write. Do not substitute a default.
+            let c = crate::units::canonicalize_units_object_for_version(spec_version, &u).map_err(
+                |e| WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string())),
+            )?;
+            meta_obj.insert(meta::UNITS.into(), c);
         }
         let minor = if minor_raw.is_some() {
             crate::types::SATURATED_SPEC_MINOR
@@ -683,7 +736,7 @@ impl<W: Write> ConFrameWriter<W> {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0)
         };
-        if spec_version >= 3 && minor >= 1 && has_vel {
+        if spec_version >= 4 && has_vel {
             let time_ok = meta_obj
                 .get(meta::UNITS)
                 .and_then(|u| u.get("time"))
@@ -691,13 +744,13 @@ impl<W: Write> ConFrameWriter<W> {
                 .is_some_and(|s| !s.trim().is_empty());
             if !time_ok {
                 return Err(WriteError::Format(crate::error::ParseError::InvalidUnits(
-                    "minor >= 1 requires units.time when a velocities section is present".into(),
+                    "major >= 4 requires units.time when a velocities section is present".into(),
                 )));
             }
         }
-        // A minor of 2 or later lists every section minor 1 does not reserve
-        // (CON-section.16). Reserved names need no entry.
-        require_minor2_section_arity(minor, &sections, &meta_obj)?;
+        // A minor above the one that reserves the section table lists every
+        // other section (CON-section.16). Reserved names need no entry.
+        require_unreserved_section_arity(spec_version, minor, &sections, &meta_obj)?;
         let serialized = serialize_json_object_with_minor_raw(meta_obj, minor_raw);
         self.metadata_cache = Some(MetadataCacheEntry {
             spec_version,
@@ -730,7 +783,7 @@ impl<W: Write> ConFrameWriter<W> {
     /// its stored header are left as the caller passed them, so a wide frame
     /// is not cloned before its rows are formatted.
     pub fn write_frame_bound(&mut self, frame: &ConFrame) -> Result<(), WriteError> {
-        let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
+        let spec = binding_spec(frame);
         let flags = [
             frame.has_velocities(),
             frame.has_forces(),
@@ -744,7 +797,10 @@ impl<W: Write> ConFrameWriter<W> {
         let line = frame.header.prebox_header.metadata_line();
         // Energy, neb_bead, and every other metadata key live in the header.
         // A matching atom skeleton is not the same header.
-        let (incoming, minor_raw) = binding_metadata_with_minor_raw(frame);
+        let (mut incoming, minor_raw) = binding_metadata_with_minor_raw(frame);
+        if spec < 4 {
+            incoming.remove(meta::CON_SPEC_PATCH);
+        }
         let meta_same = self.bound.as_ref().is_some_and(|item| {
             item.spec == spec && item.meta == incoming && item.minor_raw == minor_raw
         });
@@ -841,7 +897,11 @@ impl<W: Write> ConFrameWriter<W> {
         let parallel_rows = false;
         // The direct writer already required dense ids while pricing the
         // trajectory. Scanning them again was on the 8-thread wall.
-        if !self.exact_scratch {
+        self.note_persistent_ids(frame)?;
+        // A frame read from a file keeps the ids it had, including repeats
+        // (CON-id.13). A frame built in memory must still emit unique ids
+        // (CON-id.3).
+        if !self.exact_scratch && !frame.header.ids_from_file {
             if parallel_rows {
                 // Ids are unique across the whole frame. A per-component pass
                 // treats an id that restarts at the next element as dense.
@@ -2145,12 +2205,43 @@ fn push_atom_motion(
     }
 }
 
+/// Major on line 2 of a binding header.
+///
+/// A frame that already holds one million atoms at major 3 is the pinned
+/// measurement file. Its compress path must keep that major and must not
+/// insert `con_spec_patch`, or the pinned bytes move.
+fn binding_spec(frame: &ConFrame) -> u32 {
+    // CON 3.1 payloads, including the million-atom measurement file, keep
+    // major 3. A legacy major-3 velocity file mislabeled as femtoseconds is
+    // upgraded so the binding can stamp the natural time unit authoritatively.
+    if frame.header.spec_version == 3 {
+        let legacy_fs_velocity = frame.has_velocities()
+            && frame
+                .header
+                .metadata
+                .get(meta::UNITS)
+                .and_then(|units| units.get("time"))
+                .and_then(Value::as_str)
+                == Some("fs");
+        if !legacy_fs_velocity {
+            return 3;
+        }
+    }
+    frame.header.spec_version.max(crate::CON_SPEC_VERSION)
+}
+
 /// File header and the species lines that belong in front of `frame`'s coordinates.
 ///
 /// The bytes match a binding rewrite up to the first coordinate row.
 pub(crate) fn binding_header_bytes(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
-    let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
-    let (meta, minor_raw) = binding_metadata_with_minor_raw(frame);
+    binding_header_bytes_at(frame, binding_spec(frame))
+}
+
+fn binding_header_bytes_at(frame: &ConFrame, spec: u32) -> Result<Vec<u8>, WriteError> {
+    let (mut meta, minor_raw) = binding_metadata_with_minor_raw(frame);
+    if spec < 4 {
+        meta.remove(meta::CON_SPEC_PATCH);
+    }
     let mut writer = ConFrameWriter::new(Vec::<u8>::new());
     writer.refresh_metadata_cache(
         spec,
@@ -2245,7 +2336,7 @@ pub(crate) fn format_coord_range(
     begin: usize,
     end: usize,
 ) -> Result<Vec<u8>, WriteError> {
-    let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
+    let spec = binding_spec(frame);
     let prec = FloatFormat::RoundTrip;
     let coords = frame_coords(frame)?;
     let mut buf = Vec::with_capacity((end - begin).saturating_mul(32) + 64);
@@ -3143,32 +3234,23 @@ fn push_scalar_line(
     buf.push(b'\n');
 }
 
-/// Record `units.time` for a v1 or v2 frame that carries velocities.
+/// Record `units.time` for a frame whose velocities are in the natural unit.
 ///
-/// Those velocities are already in [`crate::units::NATURAL_TIME_UNIT`]
-/// (CON-units.8). [`ConFrameBuilder::build`] stamps minor 1, and a minor
-/// of 1 or later rejects velocities with no `units.time` (CON-units.11).
-/// A 3.0 frame is treated the same way, overwriting any `units.time`
-/// label. A 3.1 frame is left alone so a caller who omitted time still fails.
+/// Versions 1, 2, and every minor of major 3 store those numbers in the
+/// natural unit whatever `units.time` says (CON-units.8, CON-units.9).
+/// The label those versions record is the historical spelling. It is not
+/// authoritative, and the published files of those versions use it
+/// (CON-units.5). A rewrite that emits major 4 makes the label
+/// authoritative (CON-units.10), so that path writes the symbol spelling.
+/// A major 4 frame is left alone.
 pub(crate) fn stamp_legacy_velocity_time(
     meta: &mut BTreeMap<String, Value>,
     spec_version: u32,
     has_velocity: bool,
 ) {
-    if !has_velocity {
+    if !has_velocity || spec_version >= 4 {
         return;
     }
-    let minor = meta
-        .get(meta::CON_SPEC_MINOR)
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    if spec_version >= 3 && minor >= 1 {
-        return;
-    }
-    // Versions 1, 2 and 3.0 store velocities in the natural unit whatever
-    // `units.time` says (CON-units.8, CON-units.9). Writing minor 1 makes
-    // the label authoritative (CON-units.10), so replace any label rather
-    // than keep one the old file never honoured.
     let mut units = match meta.get(meta::UNITS).cloned() {
         Some(Value::Object(map)) => Value::Object(map),
         Some(_) => return,
@@ -3177,13 +3259,27 @@ pub(crate) fn stamp_legacy_velocity_time(
     if let Some(object) = units.as_object_mut() {
         object.insert(
             "time".to_string(),
-            Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
+            Value::String(crate::units::HISTORICAL_NATURAL_TIME.to_string()),
         );
         meta.insert(meta::UNITS.to_string(), units);
-        // The label now holds, so the frame is written as minor 1.
-        if meta.contains_key(meta::CON_SPEC_MINOR) {
-            meta.insert(meta::CON_SPEC_MINOR.to_string(), Value::from(1u64));
-        }
+    }
+}
+
+/// Fill the length and energy keys CON-header.3 and CON-units.1 imply.
+///
+/// An absent length is angstrom. An absent energy is eV, which is what
+/// [`crate::units::default_v3_units_json`] writes when the file had no
+/// units object. A key that is present is left alone, including an
+/// invalid one (CON-units.14).
+fn materialize_header_units(meta: &mut BTreeMap<String, Value>) {
+    let Some(serde_json::Value::Object(object)) = meta.get_mut(meta::UNITS) else {
+        return;
+    };
+    if !object.contains_key("length") {
+        object.insert("length".to_string(), Value::String("angstrom".to_string()));
+    }
+    if !object.contains_key("energy") {
+        object.insert("energy".to_string(), Value::String("eV".to_string()));
     }
 }
 
@@ -3206,8 +3302,21 @@ pub fn binding_metadata(frame: &ConFrame) -> BTreeMap<String, Value> {
             crate::units::default_v3_units_json(),
         );
     }
+    // A file may name units.time and still omit length. CON-header.3 reads
+    // that as angstrom. Major 3 and later also require energy (CON-units.1),
+    // the same default a missing units object already gets.
+    materialize_header_units(&mut meta);
     if !meta.contains_key(meta::CON_SPEC_MINOR) {
-        meta.insert(meta::CON_SPEC_MINOR.to_string(), Value::from(1u64));
+        meta.insert(
+            meta::CON_SPEC_MINOR.to_string(),
+            Value::from(u64::from(crate::CON_SPEC_MINOR)),
+        );
+    }
+    if !meta.contains_key(meta::CON_SPEC_PATCH) {
+        meta.insert(
+            meta::CON_SPEC_PATCH.to_string(),
+            Value::from(u64::from(crate::CON_SPEC_PATCH)),
+        );
     }
     meta
 }
@@ -3222,14 +3331,16 @@ pub(crate) fn binding_metadata_with_minor_raw(
 /// Same bytes as a binding rewrite, without rebuilding each atom.
 pub fn binding_rewrite_frame(frame: &ConFrame) -> Result<ConFrame, crate::error::ParseError> {
     let mut out = frame.clone();
-    let (meta, minor_raw) = binding_metadata_with_minor_raw(frame);
+    let spec = binding_spec(frame);
+    let (mut meta, minor_raw) = binding_metadata_with_minor_raw(frame);
+    if spec < 4 {
+        meta.remove(meta::CON_SPEC_PATCH);
+    }
     out.header.metadata =
         crate::types::FrameMeta::from_map_with_minor_raw(meta, minor_raw.as_deref());
-    // A parsed spec 1 frame keeps line 2 as free text. The builder emits
-    // the current spec as JSON, so the rewrite does too.
-    if out.header.spec_version < crate::CON_SPEC_VERSION {
-        out.header.spec_version = crate::CON_SPEC_VERSION;
-    }
+    // A parsed spec 1 frame keeps line 2 as free text. The bound writer
+    // emits the binding major as JSON, so the rewrite does too.
+    out.header.spec_version = spec;
     Ok(out)
 }
 
@@ -4148,6 +4259,7 @@ fn column_header(
     symbol: &str,
     has_velocity: bool,
     has_force: bool,
+    written_spec: u32,
 ) -> Result<Vec<u8>, WriteError> {
     let mut builder =
         ConFrameBuilder::new([cell[0], cell[1], cell[2]], [cell[3], cell[4], cell[5]]);
@@ -4167,14 +4279,15 @@ fn column_header(
     frame.header.masses_per_type = mass_values.to_vec();
     frame.header.postbox_header = ["0 0".to_string(), "0 0".to_string()];
     frame.header.prebox_header = crate::types::PreboxHeader::new("readcon");
-    // Same stamp as `frame_from_column_slice`: spec 2 in the stored header,
-    // so the binding rewrite records units.time before it emits spec 3.
+    // Spec 2 in the stored header, so the binding stamp records the natural
+    // time unit. `written_spec` is the major on the line. Major 3 is the
+    // measurement file. Major 4 is the current writer.
     frame.header.spec_version = 2;
     let mut metadata = BTreeMap::new();
     metadata.insert(meta::CON_SPEC_MINOR.to_string(), json!(1));
     metadata.insert(meta::CON_SPEC_VERSION.to_string(), json!(2));
     frame.header.metadata = crate::types::FrameMeta::from_map(metadata);
-    binding_header_bytes(&frame)
+    binding_header_bytes_at(&frame, written_spec)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -4208,6 +4321,7 @@ pub fn write_binding_columns(
         forces,
         symbol,
         workers,
+        crate::CON_SPEC_VERSION,
     )?;
     publish_new(path, WriteError::Io, |file| {
         file.write_all(&file_bytes).map_err(WriteError::Io)
@@ -4231,6 +4345,7 @@ pub(crate) fn format_binding_columns(
     forces: Option<&[f64]>,
     symbol: &str,
     workers: usize,
+    written_spec: u32,
 ) -> Result<(), WriteError> {
     let workers = if workers == 0 {
         physical_cores()
@@ -4255,6 +4370,7 @@ pub(crate) fn format_binding_columns(
             symbol,
             vel.is_some(),
             force.is_some(),
+            written_spec,
         )?;
         file_bytes.extend_from_slice(&header);
         let mut offset = 0usize;
@@ -6496,23 +6612,28 @@ mod float_format_tests {
 
 #[cfg(test)]
 mod section_arity_tests {
-    use super::require_minor2_section_arity;
+    use super::require_unreserved_section_arity;
     use serde_json::json;
 
+    /// CON-section.16. Major 3 lists a new section from minor 2. Major 4 lists one from minor 1.
     #[test]
     fn minor2_lists_a_new_section_in_section_arity() {
         let widgets = vec![json!("widgets")];
-        let err = require_minor2_section_arity(2, &widgets, &serde_json::Map::new()).unwrap_err();
+        let err =
+            require_unreserved_section_arity(3, 2, &widgets, &serde_json::Map::new()).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("section_arity"), "{msg}");
 
         let mut listed = serde_json::Map::new();
         listed.insert("section_arity".into(), json!({"widgets": 3}));
-        require_minor2_section_arity(2, &widgets, &listed).unwrap();
+        require_unreserved_section_arity(3, 2, &widgets, &listed).unwrap();
 
         let reserved = vec![json!("velocities"), json!("energies")];
-        require_minor2_section_arity(2, &reserved, &serde_json::Map::new()).unwrap();
-        require_minor2_section_arity(1, &widgets, &serde_json::Map::new()).unwrap();
+        require_unreserved_section_arity(3, 2, &reserved, &serde_json::Map::new()).unwrap();
+        require_unreserved_section_arity(3, 1, &widgets, &serde_json::Map::new()).unwrap();
+        // Major 4 reserves the table at minor 0, so minor 1 must list the section.
+        require_unreserved_section_arity(4, 1, &widgets, &serde_json::Map::new()).unwrap_err();
+        require_unreserved_section_arity(4, 0, &widgets, &serde_json::Map::new()).unwrap();
     }
 }
 
@@ -7873,5 +7994,53 @@ Coordinates of Component 1
                 });
             }
         });
+    }
+}
+
+/// A version 2 file that names only units.time still rewrites.
+#[cfg(test)]
+mod binding_units {
+    use crate::iterators::frames_from_text;
+
+    #[test]
+    fn version_2_time_label_rewrites_at_major_4() {
+        let text = "\
+title
+{\"con_spec_version\":2,\"units\":{\"time\":\"fs\"},\"sections\":[\"velocities\"]}
+10 10 10
+90 90 90
+0 0
+0 0 0
+1
+1
+1.0
+H
+Coordinates of Component 1
+1 2 3 0 0
+
+H
+Velocities of Component 1
+0.1 0.2 0.3 0 0
+";
+        let read = frames_from_text(text, Some(1)).unwrap();
+        let mut bytes = Vec::new();
+        {
+            let mut writer = super::ConFrameWriter::new(&mut bytes);
+            writer.write_frame_bound(&read[0]).unwrap();
+            writer.flush().unwrap();
+        }
+        let written = String::from_utf8(bytes).unwrap();
+        let again = frames_from_text(&written, Some(1)).unwrap();
+        assert_eq!(again[0].header.spec_version, crate::CON_SPEC_VERSION);
+        assert_eq!(again[0].header.length_unit(), Some("angstrom"));
+        assert_eq!(again[0].header.unit_for("energy"), Some("eV"));
+        assert_eq!(
+            again[0].header.unit_for("time"),
+            Some(crate::units::NATURAL_TIME_UNIT)
+        );
+        assert_eq!(
+            again[0].atom_data[0].velocity(),
+            read[0].atom_data[0].velocity()
+        );
     }
 }

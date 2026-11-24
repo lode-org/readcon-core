@@ -1,6 +1,7 @@
 # Project-specific
 benches/results/
 *.profraw
+*.rcidx
 compile_commands.json
 addl/referenceImpls/eon_cpp/bench_con_reader
 uv.lock

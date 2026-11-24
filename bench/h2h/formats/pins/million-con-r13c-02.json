@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "reason": "The CON 4 lexical writer changes the generated one-million-atom fixture.",
+  "supersedes": {
+    "bytes": 85299775,
+    "sha256": "870aa66fb624b876d881c2e42494cd6e3fa0f140614e4b6f878c1033eb15a146"
+  },
+  "con": {
+    "bytes": 85299775,
+    "sha256": "a423f1a2dbdd07b0dddc283c75e83aac20c5a6698affb6f130aab685aa3dfd6c"
+  }
+}
