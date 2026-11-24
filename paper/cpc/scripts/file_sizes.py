@@ -33,6 +33,7 @@ from __future__ import annotations
 import csv
 import gzip
 import hashlib
+import io
 import json
 import os
 import sys
@@ -176,17 +177,29 @@ def main() -> None:
                 )
                 path.unlink()
                 print(f"{payload}, {label}: {raw} bytes", flush=True)
-    with OUT.open("w", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
-        out.writeheader()
-        out.writerows(rows)
+    buffer = io.StringIO(newline="")
+    csv_out = csv.DictWriter(buffer, fieldnames=list(rows[0]), lineterminator="\n")
+    csv_out.writeheader()
+    csv_out.writerows(rows)
+    csv_text = buffer.getvalue()
+    suffix = hashlib.sha256(csv_text.encode()).hexdigest()[:12]
+    out = (
+        OUT
+        if "BENCH_SIZES_CSV" in os.environ
+        else OUT.with_name(f"{OUT.stem}-{suffix}{OUT.suffix}")
+    )
+    metadata = out.with_suffix(".json")
+    for record_path in (out, metadata):
+        if record_path.exists():
+            raise SystemExit(f"refusing to overwrite record {record_path}")
+    out.write_text(csv_text, encoding="utf-8")
     import provenance
 
-    OUT.with_suffix(".json").write_text(
+    metadata.write_text(
         json.dumps(
             {
                 "script": "paper/cpc/scripts/file_sizes.py",
-                "csv": OUT.name,
+                "csv": out.name,
                 "payloads_sha256_without_provenance": without_provenance_sha256(
                     PAYLOADS
                 ),
@@ -196,7 +209,7 @@ def main() -> None:
         )
         + "\n"
     )
-    print(OUT.read_text())
+    print(csv_text)
 
 
 def tex_int(n: int) -> str:

@@ -50,7 +50,7 @@ pub extern "C" fn rkr_abi_stamp() -> *const c_char {
 /// `CON_SPEC_VERSION`). Both macros are emitted into the C header for
 /// the convenience of either naming convention; they always carry the
 /// same value.
-pub const RKR_CON_SPEC_VERSION: u32 = 3;
+pub const RKR_CON_SPEC_VERSION: u32 = 4;
 /// Returns the spec version at runtime (for dynamically linked consumers).
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_con_spec_version() -> u32 {
@@ -1022,16 +1022,12 @@ fn c_iterator_from_source(
     let source = Box::new(source);
     let source_ptr = Box::into_raw(source);
     let bytes = unsafe { (*source_ptr).as_slice() };
-    if !utf8_checked && std::str::from_utf8(bytes).is_err() {
-        unsafe {
-            drop(Box::from_raw(source_ptr));
-        }
-        return ptr::null_mut();
-    }
-    // SAFETY: either the caller checked these bytes or the scan above did.
-    // The iterator borrows them for as long as `source_ptr` is alive.
-    let text: &'static str = unsafe { std::str::from_utf8_unchecked(bytes) };
-    let iterator = Box::new(ConFrameIterator::new(text));
+    let _ = utf8_checked;
+    // SAFETY: the iterator borrows these bytes for as long as `source_ptr`
+    // is alive. A non-UTF-8 byte is reported when the parser reaches it
+    // (CON-file.1, CON-num.10), not by rejecting the whole buffer.
+    let bytes: &'static [u8] = unsafe { std::slice::from_raw_parts(bytes.as_ptr(), bytes.len()) };
+    let iterator = Box::new(ConFrameIterator::from_bytes(bytes));
     let c_iterator = Box::new(CConFrameIterator {
         iterator: Box::into_raw(iterator),
         file_contents: source_ptr,
@@ -1088,15 +1084,6 @@ pub unsafe extern "C" fn read_con_file_iterator(
             return ptr::null_mut();
         }
     };
-    if let Err(e) = std::str::from_utf8(owned.as_slice()) {
-        set_last_error(
-            RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
-            &e.to_string(),
-            0,
-            0,
-        );
-        return ptr::null_mut();
-    }
     c_iterator_from_source(owned, true)
 }
 
@@ -1147,11 +1134,7 @@ pub unsafe extern "C" fn read_con_buffer_iterator(
         return c_iterator_from_owned_string(String::new());
     }
     let slice = unsafe { std::slice::from_raw_parts(data, len) };
-    let contents = match std::str::from_utf8(slice) {
-        Ok(s) => s.to_owned(),
-        Err(_) => return null_err::<_>(RKRStatus::RKR_STATUS_INVALID_UTF8),
-    };
-    c_iterator_from_owned_string(contents)
+    c_iterator_from_source(crate::compression::ByteSource::Buf(slice.to_vec()), true)
 }
 /// Reads the next frame from the iterator, returning an opaque handle.
 /// The caller OWNS the returned handle and must free it with `free_rkr_frame`.
@@ -1169,8 +1152,8 @@ pub unsafe extern "C" fn con_frame_iterator_next(
     match iter.next() {
         Some(Ok(frame)) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
         Some(Err(e)) => {
-            let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
+            let line = iter.error_line(&e);
+            let located = crate::error::LocatedParseError::new(e, line, iter.frame_index());
             null_located(&located)
         }
         None => ptr::null_mut(),
@@ -1192,8 +1175,8 @@ pub unsafe extern "C" fn con_frame_iterator_forward(iterator: *mut CConFrameIter
     match iter.forward() {
         Some(Ok(())) => RKRStatus::RKR_STATUS_SUCCESS,
         Some(Err(e)) => {
-            let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
+            let line = iter.error_line(&e);
+            let located = crate::error::LocatedParseError::new(e, line, iter.frame_index());
             note_located(&located)
         }
         None => note(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
@@ -1219,8 +1202,8 @@ pub unsafe extern "C" fn con_frame_iterator_skip(
     match iter.skip_frames(n) {
         Ok(skipped) => skipped,
         Err(e) => {
-            let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
+            let line = iter.error_line(&e);
+            let located = crate::error::LocatedParseError::new(e, line, iter.frame_index());
             note_located(&located);
             usize::MAX
         }
@@ -1245,16 +1228,16 @@ pub unsafe extern "C" fn con_frame_iterator_nth(
         Ok(skipped) if skipped == index => {}
         Ok(_) => return null_err::<_>(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
         Err((_failed_at, e)) => {
-            let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
+            let line = iter.error_line(&e);
+            let located = crate::error::LocatedParseError::new(e, line, iter.frame_index());
             return null_located(&located);
         }
     }
     match iter.next() {
         Some(Ok(frame)) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
         Some(Err(e)) => {
-            let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
+            let line = iter.error_line(&e);
+            let located = crate::error::LocatedParseError::new(e, line, iter.frame_index());
             null_located(&located)
         }
         None => null_err::<_>(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
@@ -4261,7 +4244,7 @@ pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
 }
 /// Sets the units object on an existing frame builder.
 /// `units_json` is a JSON object, for example
-/// `{"length":"angstrom","energy":"eV","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}`.
+/// `{"length":"angstrom","energy":"eV","mass":"amu","time":"(u*Å^2/eV)^0.5"}`.
 /// Returns `RKR_STATUS_SUCCESS` on success, `RKR_STATUS_INVALID_JSON` when
 /// the text is not a JSON object, or `RKR_STATUS_VALIDATION_ERROR` when a
 /// unit expression is not valid.
@@ -4306,6 +4289,26 @@ pub unsafe extern "C" fn rkr_frame_builder_set_con_spec_minor(
     }
     let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
     builder.set_con_spec_minor(minor);
+    note(RKRStatus::RKR_STATUS_SUCCESS)
+}
+/// Sets the major the built frame writes on line 2.
+/// `0` writes the current major. `3` writes a CON 3 frame, as a binding
+/// rewrite of a major-3 file does. A major above the current one makes
+/// `rkr_frame_builder_build` fail.
+/// Returns `RKR_STATUS_SUCCESS` on success.
+///
+/// # Safety
+/// builder_handle must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_builder_set_spec_version(
+    builder_handle: *mut RKRConFrameBuilder,
+    version: u32,
+) -> RKRStatus {
+    if builder_handle.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let builder = unsafe { &mut *(builder_handle as *mut ConFrameBuilder) };
+    builder.spec_version(version);
     note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 /// Sets a numeric metadata key on an existing frame builder.
@@ -7314,10 +7317,7 @@ Coordinates of Component 1
         let text = unsafe { CStr::from_ptr(json) }.to_str().unwrap();
         assert!(text.contains(r#""length":"angstrom""#), "{text}");
         assert!(text.contains(r#""energy":"eV""#), "{text}");
-        assert!(
-            text.contains(r#""time":"(amu*angstrom^2/eV)^0.5""#),
-            "{text}"
-        );
+        assert!(text.contains("\"time\":\"(u*Å^2/eV)^0.5\""), "{text}");
         unsafe {
             rkr_free_string(json);
             free_rkr_frame(frame);
@@ -7337,7 +7337,9 @@ Coordinates of Component 1
             .to_str()
             .unwrap()
             .to_string();
-        assert!(text.contains(r#""con_spec_minor":1"#), "{text}");
+        assert!(text.contains(r#""con_spec_version":4"#), "{text}");
+        assert!(text.contains(r#""con_spec_minor":0"#), "{text}");
+        assert!(text.contains(r#""con_spec_patch":4"#), "{text}");
         unsafe {
             rkr_free_string(json);
             free_rkr_frame(frame);
@@ -8257,7 +8259,12 @@ Coordinates of Component 1
 
             let rewritten = unsafe { rkr_frame_binding_rewrite(first) };
             assert!(!rewritten.is_null(), "{name} binding rewrite failed");
-            assert_eq!(rkr_frame_spec_version(rewritten), 3);
+            let rewrite_major = if expect_major == 3 {
+                3
+            } else {
+                crate::CON_SPEC_VERSION
+            };
+            assert_eq!(rkr_frame_spec_version(rewritten), rewrite_major);
             let rw_meta = unsafe { rkr_frame_metadata_json(rewritten) };
             assert!(!rw_meta.is_null());
             let rw_str = unsafe { CStr::from_ptr(rw_meta) }.to_str().unwrap();
@@ -8598,7 +8605,7 @@ Coordinates of Component 1
                 "{rewritten_meta}"
             );
             assert!(
-                rewritten_meta.contains("\"time\":\"fs\""),
+                rewritten_meta.contains(crate::units::HISTORICAL_NATURAL_TIME),
                 "{rewritten_meta}"
             );
             unsafe {
@@ -8617,11 +8624,9 @@ Coordinates of Component 1
             std::fs::write(&path, no_time).unwrap();
             let c_path = CString::new(path.to_str().unwrap()).unwrap();
             let frame = unsafe { rkr_read_first_frame(c_path.as_ptr()) };
-            assert!(frame.is_null(), "{digits}");
-            let err = unsafe { &*rkr_last_error() };
-            assert_eq!(err.code, RKRStatus::RKR_STATUS_PARSE_ERROR as i32);
-            let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
-            assert!(msg.contains("InvalidUnits"), "{digits}: {msg}");
+            assert!(!frame.is_null(), "{digits}");
+            assert_eq!(rkr_frame_spec_version(frame), 3);
+            unsafe { free_rkr_frame(frame) };
 
             let mut builder = test_builder_handle();
             let json = c_string(&format!(

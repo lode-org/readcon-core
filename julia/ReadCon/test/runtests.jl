@@ -112,8 +112,11 @@ end
         @test_throws ReadCon.ReadConError read_con("/nonexistent/path.con")
     end
 
-    @testset "v3.0 velocity rewrite stamps natural time" begin
+    # Every minor of major 3 stores velocities in the natural unit (CON-units.8,
+    # CON-units.9), as Rust `binding_metadata` and `binding_spec` write them.
+    @testset "v3 velocity rewrite stamps natural time" begin
         natural = "(amu*angstrom^2/eV)^0.5"
+        symbol = "(u*Å^2/eV)^0.5"
         function velocity_frame(metadata_line::String)
             lines = [
                 "seed",
@@ -151,26 +154,38 @@ end
         missing = "{\"con_spec_version\":3,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}"
         written, reread = round_trip(missing)
         @test occursin("\"time\":\"$natural\"", written)
-        @test occursin("\"con_spec_minor\":1", written)
+        @test occursin("\"con_spec_minor\":0", written)
+        @test occursin("\"con_spec_version\":3", written)
         @test reread[1].atoms[1].vx ≈ 0.1
 
+        # A legacy fs label moves the frame to major 4 with the symbol
+        # spelling (CON-units.19).
         labelled = "{\"con_spec_version\":3,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
         written_fs, reread_fs = round_trip(labelled)
-        @test occursin("\"time\":\"$natural\"", written_fs)
+        @test occursin("\"time\":\"$symbol\"", written_fs)
+        @test occursin("\"con_spec_version\":4", written_fs)
         @test !occursin("\"time\":\"fs\"", written_fs)
         @test reread_fs[1].atoms[1].vx ≈ 0.1
 
         minor0 = "{\"con_spec_version\":3,\"con_spec_minor\":0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
         written0, reread0 = round_trip(minor0)
-        @test occursin("\"time\":\"$natural\"", written0)
-        @test occursin("\"con_spec_minor\":1", written0)
-        @test !occursin("\"con_spec_minor\":0", written0)
+        @test occursin("\"time\":\"$symbol\"", written0)
+        @test occursin("\"con_spec_minor\":0", written0)
         @test reread0[1].atoms[1].vx ≈ 0.1
 
         minor1 = "{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
-        written_minor, _ = round_trip(minor1)
-        @test occursin("\"time\":\"fs\"", written_minor)
-        @test !occursin(natural, written_minor)
+        written_minor, reread_minor = round_trip(minor1)
+        @test occursin("\"time\":\"$symbol\"", written_minor)
+        @test occursin("\"con_spec_minor\":1", written_minor)
+        @test !occursin("\"time\":\"fs\"", written_minor)
+        @test reread_minor[1].atoms[1].vx ≈ 0.1
+
+        # Any other label stays major 3 and records the historical spelling.
+        minor1_ps = "{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"ps\"}}"
+        written_ps, reread_ps = round_trip(minor1_ps)
+        @test occursin("\"time\":\"$natural\"", written_ps)
+        @test occursin("\"con_spec_version\":3", written_ps)
+        @test reread_ps[1].atoms[1].vx ≈ 0.1
 
         # A multi-byte unit label is inside the units object. The scan must
         # step by character, not by byte, or rewriting the time label throws.
@@ -179,6 +194,21 @@ end
         @test occursin("\"time\":\"$natural\"", written_ang)
         @test occursin("\"length\":\"angstrom\"", written_ang)
         @test reread_ang[1].atoms[1].vx ≈ 0.1
+
+        # A major-3 frame without velocities keeps major 3, minor 0, and no patch.
+        patch = "{\"con_spec_version\":3,\"con_spec_patch\":2,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}"
+        written_patch = mktemp() do src, io
+            write(io, replace(velocity_frame(patch), r"\n\nH\nVelocities of Component 1\n.*"s => "\n"))
+            close(io)
+            frames = read_con(src)
+            mktemp() do dst, out
+                close(out)
+                write_con(dst, frames)
+                read(dst, String)
+            end
+        end
+        @test split(written_patch, '\n')[2] ==
+            "{\"con_spec_minor\":0,\"con_spec_version\":3,\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\"}}"
     end
 
     @testset "Header strings" begin
@@ -414,7 +444,7 @@ end
         forty = "1000000000000000000000000000000000000007"
         three_hundred = "1" * "0"^298 * "7"
         four_hundred = "1" * "0"^398 * "7"
-        natural = "(amu*angstrom^2/eV)^0.5"
+        symbol = "(u*Å^2/eV)^0.5"
 
         @test ReadCon._json_u64("{\"con_spec_minor\":7}", "con_spec_minor") == UInt64(7)
         @test ReadCon._json_u64("{}", "con_spec_minor") == UInt64(0)
@@ -523,29 +553,35 @@ end
             end
         end
 
+        # Major 3 keeps the huge minor and moves an fs label to the symbol
+        # spelling under major 4. Major 4 keeps the fs label.
         huge_meta = "{\"con_spec_version\":3,\"con_spec_minor\":$two64,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
         written = round_trip(huge_meta)
         @test occursin("\"con_spec_minor\":$two64", written)
-        @test occursin("\"time\":\"fs\"", written)
-        @test !occursin(natural, written)
+        @test occursin("\"time\":\"$symbol\"", written)
+        @test !occursin("\"time\":\"fs\"", written)
 
-        for digits in (plus1, last_finite)
-            with_time = "{\"con_spec_version\":3,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+        for digits in (plus1, last_finite), major in (3, 4)
+            with_time = "{\"con_spec_version\":$major,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
             written = round_trip(with_time)
             @test occursin("\"con_spec_minor\":$digits", written)
-            @test occursin("\"time\":\"fs\"", written)
-            @test !occursin(natural, written)
+            @test occursin("\"con_spec_version\":4", written)
+            @test occursin(major == 3 ? "\"time\":\"$symbol\"" : "\"time\":\"fs\"", written)
 
-            no_time = "{\"con_spec_version\":3,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}"
+            no_time = "{\"con_spec_version\":$major,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}"
             frames = mktemp() do src, io
                 write(io, velocity_text(no_time))
                 close(io)
                 read_con(src)
             end
-            @test isempty(frames)
-            err = ReadCon.last_error()
-            @test occursin("InvalidUnits", err.message)
-            @test occursin("units.time", err.message)
+            if major == 3
+                @test length(frames) == 1
+            else
+                @test isempty(frames)
+                err = ReadCon.last_error()
+                @test occursin("InvalidUnits", err.message)
+                @test occursin("units.time", err.message)
+            end
         end
         frames = mktemp() do src, io
             over = "{\"con_spec_version\":3,\"con_spec_minor\":$overflow,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
@@ -609,13 +645,13 @@ end
                 ("", ""),
                 false,
                 false,
-                UInt32(3),
+                UInt32(4),
                 metadata_line,
                 nothing, nothing, nothing, nothing, nothing, nothing,
             )
         end
         for digits in (plus1, last_finite)
-            with_time = "{\"con_spec_version\":3,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
+            with_time = "{\"con_spec_version\":4,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
             written = mktemp() do path, io
                 close(io)
                 write_con(path, [constructed(with_time, true)])
@@ -623,20 +659,18 @@ end
             end
             @test occursin("\"con_spec_minor\":$digits", written)
             @test occursin("\"time\":\"fs\"", written)
-            @test !occursin(natural, written)
+            @test !occursin(symbol, written)
 
-            no_time = "{\"con_spec_version\":3,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}"
-            err = try
-                mktemp() do path, io
-                    close(io)
-                    write_con(path, [constructed(no_time, true)])
-                end
-                nothing
-            catch e
-                e
+            # The builder stamps the natural unit on a frame built without
+            # units.time, as in Rust, C, and Python.
+            no_time = "{\"con_spec_version\":4,\"con_spec_minor\":$digits,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}"
+            written = mktemp() do path, io
+                close(io)
+                write_con(path, [constructed(no_time, true)])
+                read(path, String)
             end
-            @test err isa ReadCon.ReadConError
-            @test occursin("units.time", err.message)
+            @test occursin("\"con_spec_minor\":$digits", written)
+            @test occursin("\"time\":\"$symbol\"", written)
         end
         over_meta = "{\"con_spec_version\":3,\"con_spec_minor\":$overflow,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
         over_write = try
@@ -708,13 +742,15 @@ end
                 @test err.code == -3
                 @test isempty(written[])
                 @test frame.metadata_json == meta
-                @test ReadCon._legacy_velocity_units(frame) == (meta, false)
-                @test !occursin(natural, first(ReadCon._legacy_velocity_units(frame)))
+                major = ReadCon._binding_major(frame)
+                @test ReadCon._legacy_velocity_units(frame, major) == (meta, false)
+                @test !occursin(natural, first(ReadCon._legacy_velocity_units(frame, major)))
             end
         end
         zero_meta = "{\"con_spec_version\":3,\"con_spec_minor\":0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"time\":\"fs\"}}"
-        stamped, _ = ReadCon._legacy_velocity_units(frame_with(zero_meta))
-        @test occursin("\"con_spec_minor\":1", stamped)
+        zero_frame = frame_with(zero_meta)
+        stamped, _ = ReadCon._legacy_velocity_units(zero_frame, ReadCon._binding_major(zero_frame))
+        @test occursin("\"con_spec_minor\":0", stamped)
         @test occursin(natural, stamped)
     end
 
@@ -741,33 +777,30 @@ end
             end
             return split(text, '\n')[2]
         end
-        stamped_units = "\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"time\":\"$natural\"}"
-        fs_units = "\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"time\":\"fs\"}"
-        head = "{\"con_spec_minor\":1,\"con_spec_version\":3,\"sections\":[\"velocities\"],"
-        # An escaped minor 1 names the time unit, as in Rust, C, Python, and RPC.
+        historical_units = "\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"time\":\"$natural\"}"
+        symbol_units = "\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"time\":\"(u*Å^2/eV)^0.5\"}"
+        v3 = "\"con_spec_version\":3,\"sections\":[\"velocities\"],"
+        v4 = "\"con_spec_patch\":4,\"con_spec_version\":4,\"sections\":[\"velocities\"],"
+        # An escaped minor is the top-level minor, as in Rust, C, Python, and RPC.
+        # An fs label moves major 3 to major 4. Without one the frame stays
+        # major 3 with the historical natural spelling.
         @test line2_of("{\"con_spec_version\":3,\"\\u0063on_spec_minor\":1,$with_time}") ==
-            head * fs_units * "}"
-        err = try
-            line2_of("{\"con_spec_version\":3,\"\\u0063on_spec_minor\":1,$no_time}")
-            nothing
-        catch e
-            e
-        end
-        @test err isa ReadCon.ReadConError
-        @test occursin("units.time", err.message)
-        # An escaped minor 0 is promoted like a plain one.
+            "{\"con_spec_minor\":1," * v4 * symbol_units * "}"
+        @test line2_of("{\"con_spec_version\":3,\"\\u0063on_spec_minor\":1,$no_time}") ==
+            "{\"con_spec_minor\":1," * v3 * historical_units * "}"
         @test line2_of("{\"con_spec_version\":3,\"\\u0063on_spec_minor\":0,$with_time}") ==
-            head * stamped_units * "}"
+            "{\"con_spec_minor\":0," * v4 * symbol_units * "}"
         # Nested keys do not set the minor and keep their values.
-        for units in (with_time, no_time)
+        for (units, tail) in ((with_time, v4 * symbol_units), (no_time, v3 * historical_units))
+            head = "{\"con_spec_minor\":0," * tail
             @test line2_of("{\"con_spec_version\":3,\"x\":{\"con_spec_minor\":1},$units}") ==
-                head * stamped_units * ",\"x\":{\"con_spec_minor\":1}}"
+                head * ",\"x\":{\"con_spec_minor\":1}}"
             @test line2_of(
                 "{\"con_spec_version\":3,\"x\":{\"con_spec_minor\":2},\"con_spec_minor\":0,$units}",
-            ) == head * stamped_units * ",\"x\":{\"con_spec_minor\":2}}"
+            ) == head * ",\"x\":{\"con_spec_minor\":2}}"
             @test line2_of(
                 "{\"con_spec_version\":3,\"x\":{\"con_spec_minor\":0},\"con_spec_minor\":0,$units}",
-            ) == head * stamped_units * ",\"x\":{\"con_spec_minor\":0}}"
+            ) == head * ",\"x\":{\"con_spec_minor\":0}}"
         end
     end
 
@@ -805,7 +838,7 @@ end
         end
         constructed(line2::String) = ConFrame(
             (10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom], true,
-            ("", ""), ("", ""), false, false, UInt32(3), line2,
+            ("", ""), ("", ""), false, false, UInt32(4), line2,
             nothing, nothing, nothing, nothing, nothing, nothing,
         )
         @testset "$(case["name"])" for case in cases
@@ -850,7 +883,7 @@ end
             end
             if case["read_w"] == "ok"
                 frames = read_line2(case["line2_w"])
-                @test written_line2(frames) == case["binding_w"]
+                @test written_line2(frames) == case["binding_n"]
             end
         end
     end

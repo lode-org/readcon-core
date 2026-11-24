@@ -234,7 +234,7 @@ fn builder_bulk_setters_getters_and_metrics() {
         free_rkr_frame(frame);
     }
 
-    assert_eq!(rkr_con_spec_version(), 3);
+    assert_eq!(rkr_con_spec_version(), 4);
     let ver = unsafe { CStr::from_ptr(rkr_library_version()) };
     assert!(!ver.to_bytes().is_empty());
     let sym = CString::new("Cu").unwrap();

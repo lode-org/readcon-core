@@ -1309,13 +1309,35 @@ impl PyConFrame {
         let snaps = snaps_from_iterable(atoms)?;
         let prebox_header = prebox_header.unwrap_or_default();
         let postbox_header = postbox_header.unwrap_or_default();
-        let (meta, minor_raw) = match metadata {
+        let (mut meta, minor_raw) = match metadata {
             Some(obj) => {
                 let (map, minor_raw) = py_metadata_to_json_map_with_minor(obj)?;
                 (map, minor_raw)
             }
             None => (BTreeMap::new(), None),
         };
+        // In-memory velocities are natural-unit numbers. A major 4 frame
+        // needs units.time before a reader trusts the label (CON-units.3).
+        if snaps.iter().any(|atom| atom.velocity.is_some()) {
+            let time_ok = meta
+                .get(meta::UNITS)
+                .and_then(|units| units.get("time"))
+                .and_then(Value::as_str)
+                .is_some_and(|unit| !unit.trim().is_empty());
+            if !time_ok {
+                let mut units = meta
+                    .get(meta::UNITS)
+                    .cloned()
+                    .unwrap_or_else(crate::units::default_v3_units_json);
+                if let Some(object) = units.as_object_mut() {
+                    object.insert(
+                        "time".to_string(),
+                        Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
+                    );
+                    meta.insert(meta::UNITS.to_string(), units);
+                }
+            }
+        }
         let mut inner = frame_for_storage(
             cell,
             angles,
@@ -1382,6 +1404,12 @@ impl PyConFrame {
     #[getter]
     fn spec_version(slf: &Bound<'_, Self>) -> PyResult<u32> {
         Ok(shared(slf)?.spec_version)
+    }
+
+    #[setter]
+    fn set_spec_version(slf: &Bound<'_, Self>, value: u32) -> PyResult<()> {
+        exclusive(slf)?.spec_version = value;
+        Ok(())
     }
 
     /// Sequence of this frame's `Atom` projection. Its structural edits
@@ -3046,7 +3074,7 @@ impl PyConFrame {
         let atoms_are_truth = self.atoms_ready.load(std::sync::atomic::Ordering::Acquire);
         let atoms = self.py_atoms(py)?;
         // v1 and v2 velocities are in the natural time unit (CON-units.8).
-        // The builder writes minor 1, which requires units.time (CON-units.11).
+        // The builder writes major 4, which requires units.time (CON-units.11).
         crate::writer::stamp_legacy_velocity_time(
             &mut meta,
             self.spec_version,
@@ -3055,6 +3083,7 @@ impl PyConFrame {
 
         let mut builder = ConFrameBuilder::new(self.cell, self.angles);
         builder
+            .spec_version(self.spec_version)
             .prebox_header(self.prebox_header[0].as_str())
             .postbox_header(self.postbox_header.clone())
             .metadata(meta);
@@ -3274,6 +3303,7 @@ fn frame_from_arrays(
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: true,
+            ids_from_file: false,
         },
         atom_data,
         column_tails: Vec::new(),
@@ -3660,14 +3690,25 @@ impl SharedColumn {
 /// untorn value from that array, but different elements can come from
 /// different stores.
 #[pyfunction]
-#[pyo3(signature = (path, columns, symbol="Cu", n_threads=None))]
+#[pyo3(signature = (path, columns, symbol="Cu", n_threads=None, spec_version=None))]
 fn write_columns(
     py: Python<'_>,
     path: &str,
     columns: &Bound<'_, PyDict>,
     symbol: &str,
     n_threads: Option<usize>,
+    spec_version: Option<u32>,
 ) -> PyResult<()> {
+    let written_spec = match spec_version {
+        None => crate::CON_SPEC_VERSION,
+        Some(version) if version == 3 || version == crate::CON_SPEC_VERSION => version,
+        Some(version) => {
+            return Err(PyValueError::new_err(format!(
+                "spec_version must be 3 or {}, not {version}",
+                crate::CON_SPEC_VERSION
+            )));
+        }
+    };
     let positions = columns
         .get_item("positions")?
         .ok_or_else(|| PyValueError::new_err("positions"))?;
@@ -3787,6 +3828,7 @@ fn write_columns(
                 forces,
                 symbol,
                 workers,
+                written_spec,
             )
         })
         .map_err(|err| PyIOError::new_err(err.to_string()))?;
@@ -5130,9 +5172,6 @@ fn read_con_string(
         .detach(|| {
             crate::iterators::frames_from_bytes_phased(contents.as_bytes(), n_threads).map_err(
                 |e| {
-                    if utf8_failure(&e) {
-                        return CountFail::Io(e.to_string());
-                    }
                     let located =
                         crate::iterators::frames_from_text_located(contents, n_threads).err();
                     if let Some(loc) = located {
@@ -5198,6 +5237,9 @@ struct PyConFrameIterator {
     line_base: u32,
     /// 0-based index of the frame the cursor points at.
     frame_index: u64,
+    /// CON-id.11 across frames. Each `next` builds a fresh cursor, so the
+    /// id set cannot live on that cursor.
+    persistent_ids: Option<crate::types::PersistentIds>,
 }
 
 enum FrameSource {
@@ -5230,8 +5272,8 @@ fn file_line(line_base: u32, cursor_line: u32) -> u32 {
     }
 }
 
-fn newlines_in(text: &str) -> u32 {
-    text.bytes().filter(|&byte| byte == b'\n').count() as u32
+fn newlines_in(bytes: &[u8]) -> u32 {
+    bytes.iter().filter(|&&byte| byte == b'\n').count() as u32
 }
 
 #[pymethods]
@@ -5247,6 +5289,16 @@ impl PyConFrameIterator {
                 let reader = reader.get_mut().unwrap_or_else(|e| e.into_inner());
                 return match py.detach(|| reader.next()) {
                     Some(Ok(frame)) => {
+                        if let Err(error) =
+                            crate::types::observe_persistent_ids(&mut self.persistent_ids, &frame)
+                        {
+                            return Err(parse_err_in_frame(
+                                py,
+                                &error,
+                                error.line().max(1),
+                                self.frame_index,
+                            ));
+                        }
                         self.frame_index = self.frame_index.saturating_add(1);
                         Ok(Some(PyConFrame::from_owned(py, frame)?))
                     }
@@ -5255,20 +5307,27 @@ impl PyConFrameIterator {
                 };
             }
         };
-        if *pos >= contents.as_str().len() {
+        if *pos >= contents.as_bytes().len() {
             return Ok(None);
         }
         // An empty line 1 is the user line (CON-header.4). The core iterator
         // owns that boundary and trailing whitespace. The cursor is rebuilt
         // on the remainder, so the file line is `line_base` plus its line.
-        let slice = &contents.as_str()[*pos..];
-        let mut iter = ConFrameIterator::new(slice);
-        match iter.next_with_raw_span(slice) {
-            Some(Ok((frame, span))) => {
-                let source_text = span.to_owned();
-                let consumed =
-                    (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
-                let lines = newlines_in(span);
+        // Bytes, so a bad byte inside a field is that field's error.
+        let slice = &contents.as_bytes()[*pos..];
+        let mut iter = ConFrameIterator::from_bytes(slice);
+        match iter.next_with_end() {
+            Some(Ok((frame, consumed))) => {
+                let source_text = std::str::from_utf8(&slice[..consumed])
+                    .ok()
+                    .map(str::to_owned);
+                if let Err(error) =
+                    crate::types::observe_persistent_ids(&mut self.persistent_ids, &frame)
+                {
+                    let line = file_line(self.line_base, iter.error_line(&error));
+                    return Err(parse_err_in_frame(py, &error, line, self.frame_index));
+                }
+                let lines = newlines_in(&slice[..consumed]);
                 *pos += consumed;
                 self.line_base = self.line_base.saturating_add(lines);
                 self.frame_index = self.frame_index.saturating_add(1);
@@ -5278,15 +5337,15 @@ impl PyConFrameIterator {
                 Ok(Some(PyConFrame::from_owned_with_source(
                     py,
                     frame,
-                    Some(source_text),
+                    source_text,
                 )?))
             }
             Some(Err(e)) => {
-                let line = file_line(self.line_base, iter.lines.line_no());
+                let line = file_line(self.line_base, iter.error_line(&e));
                 Err(parse_err_in_frame(py, &e, line, self.frame_index))
             }
             None => {
-                *pos = contents.as_str().len();
+                *pos = contents.as_bytes().len();
                 Ok(None)
             }
         }
@@ -5308,11 +5367,11 @@ impl PyConFrameIterator {
                 };
             }
         };
-        if *pos >= contents.as_str().len() {
+        if *pos >= contents.as_bytes().len() {
             return Ok(false);
         }
-        let slice = &contents.as_str()[*pos..];
-        let mut iter = ConFrameIterator::new(slice);
+        let slice = &contents.as_bytes()[*pos..];
+        let mut iter = ConFrameIterator::from_bytes(slice);
         match iter.forward() {
             Some(Ok(())) => {
                 let consumed = iter.byte_pos();
@@ -5326,7 +5385,7 @@ impl PyConFrameIterator {
                 Ok(true)
             }
             Some(Err(e)) => {
-                let line = file_line(self.line_base, iter.lines.line_no());
+                let line = file_line(self.line_base, iter.error_line(&e));
                 Err(parse_err_in_frame(py, &e, line, self.frame_index))
             }
             None => Ok(false),
@@ -5395,6 +5454,7 @@ fn iter_con(py: Python<'_>, path: &str, mmap: bool, stream: bool) -> PyResult<Py
         source,
         line_base: 0,
         frame_index: 0,
+        persistent_ids: None,
     })
 }
 
@@ -5412,6 +5472,7 @@ fn iter_con_string(contents: &str) -> PyResult<PyConFrameIterator> {
         ),
         line_base: 0,
         frame_index: 0,
+        persistent_ids: None,
     })
 }
 
@@ -5722,9 +5783,9 @@ fn con_frame_list_stored(
                 && !py_frame
                     .atoms_ready
                     .load(std::sync::atomic::Ordering::Acquire)
-                && let Some((meta, minor_raw)) = metadata_edit(py, py_frame, frame)?
+                && let Some(prepared) = binding_frame(py, py_frame, frame)?
             {
-                install_metadata(&mut owned, meta, minor_raw.as_deref());
+                owned = prepared;
             }
             out.push(owned);
             continue;
@@ -5965,7 +6026,7 @@ fn write_owned_compressed(
             writer.write_frame_bound(stored_frame(frame))?;
         }
         writer.flush().map_err(crate::writer::WriteError::Io)?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(feature = "zstd"))]
     {
@@ -5977,6 +6038,7 @@ fn write_owned_compressed(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_owned_frames(
     path: &Path,
     frames: &[Option<ConFrame>],
@@ -6010,7 +6072,7 @@ fn write_owned_frames(
         ),
         OutputCodec::Plain => {
             let workers = n_threads.unwrap_or(1);
-            let refs: Vec<&ConFrame> = frames.iter().map(|slot| stored_frame(slot)).collect();
+            let refs: Vec<&ConFrame> = frames.iter().map(stored_frame).collect();
             if rewrite {
                 return crate::writer::rewrite_frame_refs_to_path(
                     path, &refs, workers, precision, canonical, true, keep_spare,
@@ -6040,6 +6102,7 @@ fn write_owned_frames(
 /// A `read_con` result still holds every frame. Format and write them
 /// under the list's read lock, without the GIL while Python cannot reach
 /// the coordinate slab. Nothing is cloned.
+#[allow(clippy::too_many_arguments)]
 fn write_stored_list(
     py: Python<'_>,
     path: &str,
@@ -6144,6 +6207,7 @@ fn detach_append_frame_refs(
     .map_err(|err| write_err_to_py(py, err))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn detach_compressed_frame_refs(
     py: Python<'_>,
     path: &str,
@@ -6472,6 +6536,7 @@ fn write_con(
 /// Collective write: every rank passes its own frames (possibly none)
 /// and the file holds them in rank order.
 #[cfg(feature = "mpi")]
+#[allow(clippy::too_many_arguments)]
 fn write_con_mpi(
     py: Python<'_>,
     path: &str,
@@ -6685,6 +6750,45 @@ fn install_metadata(frame: &mut ConFrame, meta: BTreeMap<String, Value>, minor_r
     frame.header.metadata = crate::types::FrameMeta::from_map_with_minor_raw(meta, minor_raw);
 }
 
+/// Copy a major chosen on the Python frame onto the parsed frame.
+///
+/// `spec_version` is stored beside `inner`. A lazy write emits `inner`,
+/// so the choice is dropped until `.atoms` rebuilds the frame. A major
+/// below 4 records the historical natural time unit, which is what
+/// `to_con_frame` stamps before `binding_spec` decides the line.
+fn install_selected_major(frame: &mut ConFrame, spec: u32) {
+    if frame.header.spec_version == spec {
+        return;
+    }
+    frame.header.spec_version = spec;
+    if !frame.has_velocities() || spec >= 4 {
+        return;
+    }
+    let minor_raw = frame.header.metadata.huge_minor_raw().map(str::to_owned);
+    let mut meta = frame.header.metadata.to_map();
+    crate::writer::stamp_legacy_velocity_time(&mut meta, spec, true);
+    frame.header.metadata =
+        crate::types::FrameMeta::from_map_with_minor_raw(meta, minor_raw.as_deref());
+}
+
+/// `Some` when the metadata dict or the selected major differs from `inner`.
+fn binding_frame(
+    py: Python<'_>,
+    frame: &PyConFrame,
+    inner: &ConFrame,
+) -> PyResult<Option<ConFrame>> {
+    let edit = metadata_edit(py, frame, inner)?;
+    if edit.is_none() && inner.header.spec_version == frame.spec_version {
+        return Ok(None);
+    }
+    let mut owned = inner.clone();
+    if let Some((meta, minor_raw)) = edit {
+        install_metadata(&mut owned, meta, minor_raw.as_deref());
+    }
+    install_selected_major(&mut owned, frame.spec_version);
+    Ok(Some(owned))
+}
+
 fn detach_stamped_pyframe<W>(
     py: Python<'_>,
     mut writer: ConFrameWriter<W>,
@@ -6697,13 +6801,11 @@ where
         && let Some(inner) = frame.inner.as_ref()
     {
         let snapshot = frame.coords_shared().then(|| snapshot_pyframe(py, frame));
-        if let Some((meta, minor_raw)) = metadata_edit(py, frame, inner)? {
-            let mut owned = snapshot
-                .as_ref()
-                .and_then(|snapshot| snapshot.slots()[0].as_ref())
-                .unwrap_or(inner)
-                .clone();
-            install_metadata(&mut owned, meta, minor_raw.as_deref());
+        let base = snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.slots()[0].as_ref())
+            .unwrap_or(inner);
+        if let Some(owned) = binding_frame(py, frame, base)? {
             return detach_refs(py, &[&owned], false, move |refs| {
                 write_stamped_frame(&mut writer, refs[0]).map_err(|err| err.to_string())?;
                 Ok::<_, String>(writer)
@@ -6750,8 +6852,8 @@ fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
 
 struct BorrowedFrames<'py> {
     held: Vec<Shared<'py, PyConFrame>>,
-    /// Parsed frames with the live metadata dict copied on. Empty when
-    /// no frame's metadata was edited, so `refs` borrows `inner`.
+    /// Parsed frames with a metadata edit or a selected major copied on.
+    /// Empty when every frame can be borrowed, so `refs` borrows `inner`.
     owned: Vec<ConFrame>,
 }
 
@@ -6852,7 +6954,7 @@ fn borrow_unmodified_frames<'py>(
             return Ok(None);
         }
         let inner = frame.inner.as_ref().expect("unmodified frame");
-        edits.push(metadata_edit(py, &frame, inner)?);
+        edits.push(binding_frame(py, &frame, inner)?);
         held.push(frame);
     }
     if held.is_empty() {
@@ -6861,13 +6963,9 @@ fn borrow_unmodified_frames<'py>(
     let owned = if edits.iter().any(Option::is_some) {
         held.iter()
             .zip(edits)
-            .map(|(frame, edit)| {
-                let inner = frame.inner.as_ref().expect("unmodified frame");
-                let mut owned = inner.clone();
-                if let Some((meta, minor_raw)) = edit {
-                    install_metadata(&mut owned, meta, minor_raw.as_deref());
-                }
-                owned
+            .map(|(frame, edit)| match edit {
+                Some(owned) => owned,
+                None => frame.inner.as_ref().expect("unmodified frame").clone(),
             })
             .collect()
     } else {
@@ -7078,9 +7176,35 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
             .and_then(|units| units.get(quantity))
             .and_then(Value::as_str)
             .unwrap_or(target);
-        crate::units::unit_conversion_factor(source, target)
+        crate::units::unit_conversion_factor_for_version(frame.spec_version, source, target)
             .map_err(|error| PyValueError::new_err(error.to_string()))
     };
+    let has_velocities = if frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+        frame.py_atoms(py)?.iter().any(PyAtomDatum::has_velocity)
+    } else {
+        frame
+            .inner
+            .as_ref()
+            .is_some_and(|inner| inner.has_velocities())
+    };
+    if has_velocities && frame.spec_version < 4 {
+        if let Some(unit) = metadata
+            .get(meta::UNITS)
+            .and_then(|units| units.get("time"))
+            .and_then(Value::as_str)
+            .filter(|unit| !unit.is_empty())
+        {
+            // CON-units.9: the label is not applied. A unit that is not a
+            // time is ignored and does not warn. The natural spelling is the
+            // unit the numbers were already read in.
+            let warns = !crate::units::is_natural_time_spelling(unit)
+                && crate::units::validate_unit_for_quantity("time", unit).is_ok();
+            if warns {
+                py.import("warnings")?
+                    .call_method1("warn", (format!("units.time {unit} is not applied"),))?;
+            }
+        }
+    }
     let length_scale = scale("length", "angstrom")?;
     let energy_scale = scale("energy", "eV")?;
     let mass_scale = scale("mass", "amu")?;
@@ -7853,31 +7977,22 @@ fn read_conbin_columns(py: Python<'_>, path: &str, n_threads: usize) -> PyResult
     } else {
         None
     };
-    let mass_ptr = match mapped
+    let mass_ptr = mapped
         .masses_f64()
         .map_err(|e| PyIOError::new_err(e.to_string()))?
-    {
-        Some(mass) => Some((ptr(mass), mass.len())),
-        None => None,
-    };
-    let cell_ptr = match mapped.cell_f64().map_err(|e| cell_err_to_py(py, &e))? {
-        Some(cell) => Some((ptr(cell), cell.len())),
-        None => None,
-    };
-    let id_ptr = match mapped
+        .map(|mass| (ptr(mass), mass.len()));
+    let cell_ptr = mapped
+        .cell_f64()
+        .map_err(|e| cell_err_to_py(py, &e))?
+        .map(|cell| (ptr(cell), cell.len()));
+    let id_ptr = mapped
         .atom_ids()
         .map_err(|e| PyIOError::new_err(e.to_string()))?
-    {
-        Some(ids) => Some((ids.as_ptr() as usize, ids.len())),
-        None => None,
-    };
-    let mask_ptr = match mapped
+        .map(|ids| (ids.as_ptr() as usize, ids.len()));
+    let mask_ptr = mapped
         .fixed_masks()
         .map_err(|e| PyIOError::new_err(e.to_string()))?
-    {
-        Some(masks) => Some((masks.as_ptr() as usize, masks.len())),
-        None => None,
-    };
+        .map(|masks| (masks.as_ptr() as usize, masks.len()));
     let owner = Py::new(py, ConBinMapping { map: mapped.map })?;
     let base = owner.bind(py).clone();
     let dict = PyDict::new(py);
@@ -8241,9 +8356,8 @@ fn class_err_to_py(
 }
 
 fn parse_err_to_py(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64) -> PyErr {
-    if utf8_failure(err) {
-        return PyIOError::new_err(err.to_string());
-    }
+    // A bad line is ValidationError on its own line (CON-file.1). Dropping
+    // the class and the line made the entry points disagree.
     class_err_to_py(py, err.class_name(), err.to_string(), line, frame_index)
 }
 
@@ -8251,10 +8365,6 @@ fn parse_err_to_py(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64
 /// A non-finite cell error that does not name a frame names this one.
 fn parse_err_in_frame(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64) -> PyErr {
     parse_err_to_py(py, &err.clone().in_frame(frame_index), line, frame_index)
-}
-
-fn utf8_failure(err: &ParseError) -> bool {
-    matches!(err, ParseError::ValidationError(msg) if msg.contains("invalid UTF-8"))
 }
 
 fn located_to_py(err: crate::error::LocatedParseError) -> PyErr {
@@ -8297,13 +8407,7 @@ fn load_err_to_py(err: crate::iterators::LoadError) -> PyErr {
     match err {
         LoadError::Io(io) => PyIOError::new_err(io.to_string()),
         LoadError::Utf8(utf) => PyIOError::new_err(utf.to_string()),
-        LoadError::Parse(located) => {
-            if utf8_failure(&located.error) {
-                PyIOError::new_err(located.error.to_string())
-            } else {
-                located_to_py(located)
-            }
-        }
+        LoadError::Parse(located) => located_to_py(located),
         LoadError::Empty => {
             Python::attach(|py| parse_err_to_py(py, &ParseError::IncompleteHeader, 1, 0))
         }
@@ -8349,11 +8453,11 @@ fn count_fail_located(located: &crate::error::LocatedParseError) -> CountFail {
 /// from the parse that failed. The line and frame are already on that
 /// error, so this does not open the path again.
 fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
-    if err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("invalid UTF-8") {
-        return CountFail::Io(err.to_string());
-    }
     if let Some(located) = err.downcast_ref::<crate::error::LocatedParseError>() {
         return count_fail_located(located);
+    }
+    if err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("invalid UTF-8") {
+        return CountFail::Io(err.to_string());
     }
     if let Some(parse) = err.downcast_ref::<ParseError>() {
         return CountFail::Parse {
@@ -8762,10 +8866,7 @@ fn py_text_frames<'py>(
             let row = pyo3::types::PyTuple::new(py, (0..n_atoms).map(|_| py_symbol.clone_ref(py)))?
                 .unbind();
             let n_frames = text.len() / stride;
-            return Ok(pyo3::types::PyList::new(
-                py,
-                (0..n_frames).map(|_| row.clone_ref(py)),
-            )?);
+            return pyo3::types::PyList::new(py, (0..n_frames).map(|_| row.clone_ref(py)));
         }
     }
     let mut intern = std::collections::HashMap::<&str, Py<pyo3::types::PyString>>::new();
@@ -9232,7 +9333,7 @@ impl SpeciesRow {
             let this = slf.borrow();
             (this.parent.clone_ref(py), this.frame)
         };
-        frame_matches(py, &parent.bind(py), frame, other)
+        frame_matches(py, parent.bind(py), frame, other)
     }
 
     fn __hash__(&self, py: Python<'_>) -> PyResult<isize> {
@@ -10299,7 +10400,7 @@ fn pwrite_all(file: &std::fs::File, buf: &[u8], mut offset: u64) -> std::io::Res
             written += n as usize;
             offset += n as u64;
         }
-        return Ok(());
+        Ok(())
     }
     #[cfg(windows)]
     {

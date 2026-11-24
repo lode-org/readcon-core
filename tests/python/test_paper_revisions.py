@@ -68,7 +68,7 @@ def test_measurement_exemption_requires_a_record_directory() -> None:
 def test_named_commits_and_tags_exist() -> None:
     macros = _macros()
     assert macros["readconversion"] == "0.17.3"
-    assert macros["readconcommitrole"] == "candidate commit"
+    assert macros["readconcommitrole"] == "measured commit"
     assert macros["readconversion"] == macros["rcMeasuredVersion"]
     assert "v0.17.4" not in (CPC / "release.tex").read_text(encoding="utf-8")
     if not _tags():
@@ -128,6 +128,13 @@ def _external_pin(lines: list[str], digest: str) -> bool:
 def _is_commit_or_tree(value: str) -> bool:
     kind = _git("cat-file", "-t", value)
     return kind.returncode == 0 and kind.stdout.strip() in {"commit", "tree"}
+
+
+def _is_named_spec_blob(lines: list[str], value: str) -> bool:
+    if not any('"spec_blob"' in line and value in line for line in lines):
+        return False
+    kind = _git("cat-file", "-t", value)
+    return kind.returncode == 0 and kind.stdout.strip() == "blob"
 
 
 # These records name the build that was measured, not this release.
@@ -345,6 +352,8 @@ def test_paper_sources_name_real_tags_and_commits() -> None:
         for value in seen:
             if _is_commit_or_tree(value):
                 continue
+            if _is_named_spec_blob(lines, value):
+                continue
             if _external_pin(lines, value):
                 continue
             missing.append(f"{rel}: {value}")
@@ -357,6 +366,27 @@ def test_shipped_spec_blob_is_the_measured_commit() -> None:
     release = (CPC / "release.tex").read_text(encoding="utf-8")
     assert r"\rcMeasuredSpecBlob" in release
     assert "rcReleaseSpecBlob" not in release
+
+    scripts_dir = ROOT / "paper" / "cpc" / "scripts"
+    import sys
+
+    sys.path.insert(0, str(scripts_dir))
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "gen_spec_supp", scripts_dir / "gen_spec_supp.py"
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        org = (ROOT / "docs" / "orgmode" / "spec.org").read_text(encoding="utf-8")
+        rows = module.history_rows(org)
+        versions = [row["version"] for row in rows]
+        assert "4.0.0" in versions and "4.0.4" in versions, versions
+        macros = module.spec_macros(org)
+        assert r"\newcommand{\specTextRelease}" in macros
+        assert module.release_rows(org)
+    finally:
+        sys.path.remove(str(scripts_dir))
 
 
 def test_measured_commit_matches_its_cargo_and_spec() -> None:
@@ -372,7 +402,7 @@ def test_measured_commit_matches_its_cargo_and_spec() -> None:
     assert spec.returncode == 0
     assert spec.stdout.strip().startswith(macros["rcMeasuredSpecBlob"])
     assert macros["rcMeasuredVersion"] == macros["readconversion"]
-    assert macros["readconcommitrole"] == "candidate commit"
+    assert macros["readconcommitrole"] == "measured commit"
 
 
 def test_recorded_tags_match_git() -> None:
@@ -408,3 +438,17 @@ def test_recorded_tags_match_git() -> None:
         if line.startswith("release_commit ")
     )
     assert tagged.stdout.strip() == named
+
+
+def test_provenance_uses_the_latest_library_source_commit() -> None:
+    path = ROOT / "paper" / "cpc" / "scripts" / "provenance.py"
+    spec = importlib.util.spec_from_file_location("paper_provenance", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    expected = _git(
+        "log", "-1", "--format=%H", "HEAD", "--", *module.LIBRARY_PATHS
+    ).stdout.strip()
+    identity = module.source_identity()
+    assert identity["source_commit"] == expected
+    assert module.library_digest_at(expected) == identity["library_digest"]

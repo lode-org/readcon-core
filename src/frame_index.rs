@@ -466,13 +466,13 @@ pub fn ranked_content_hash(parts: &[&[u8]]) -> u64 {
 
 /// Block hashes this slice can finish, plus the bytes that share a
 /// block with a neighbour. `offset` is the slice's position in the file.
-#[cfg(any(test, feature = "mpi"))]
+#[cfg(test)]
 pub(crate) struct SliceParts {
     pub hashed: Vec<(u64, u64)>,
     pub fragments: Vec<(u64, Vec<u8>)>,
 }
 
-#[cfg(any(test, feature = "mpi"))]
+#[cfg(test)]
 pub(crate) fn slice_block_parts(offset: u64, data: &[u8]) -> SliceParts {
     let mut hashed = Vec::new();
     let mut fragments = Vec::new();
@@ -687,10 +687,14 @@ pub(crate) fn write_sidecar_known(path: &Path, idx: &FrameIndex, content: u64) -
 /// not read again, and the hash for a write is taken from `text`.
 /// Write errors are ignored, so read-only directories still work.
 pub fn load_or_build(path: &Path, text: &str, write_back: bool) -> Result<FrameIndex, ParseError> {
-    if let Ok(bytes) = std::fs::read(sidecar_path(path))
-        && let Some(idx) = decode(&bytes, text)
-    {
-        return Ok(idx);
+    match std::fs::read(sidecar_path(path)) {
+        Ok(bytes) => {
+            if let Some(idx) = decode(&bytes, text) {
+                return Ok(idx);
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(ParseError::Io(err.to_string())),
     }
     let idx = FrameIndex::scan(text)?;
     if write_back {
@@ -863,6 +867,16 @@ mod tests {
         assert!(target <= len);
         let expected = (k as u128 * len as u128 / n_slices as u128) as usize;
         assert_eq!(target, expected);
+    }
+
+    #[test]
+    fn a_sidecar_that_cannot_be_read_is_an_io_error() {
+        let scratch = tempfile::tempdir().unwrap();
+        let con = scratch.path().join("t.con");
+        std::fs::write(&con, "not a frame").unwrap();
+        std::fs::create_dir(sidecar_path(&con)).unwrap();
+        let err = load_or_build(&con, "not a frame", false).unwrap_err();
+        assert!(matches!(err, ParseError::Io(_)), "{err}");
     }
 
     #[test]

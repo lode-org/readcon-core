@@ -59,6 +59,10 @@ pub mod meta {
     pub const CON_SPEC_VERSION: &str = "con_spec_version";
     /// Minor of a known major. Absent or 0 means minor 0 (CON-line2.10).
     pub const CON_SPEC_MINOR: &str = "con_spec_minor";
+    /// Patch of a known major.minor. Absent or 0 means patch 0 (CON-line2.15).
+    pub const CON_SPEC_PATCH: &str = "con_spec_patch";
+    /// When true, column-5 ids name the same atoms in every frame (CON-id.11).
+    pub const IDS_PERSISTENT: &str = "ids_persistent";
     /// Value-field counts for sections this reader may skip (CON-section.12).
     /// The flag and the optional id are not part of the count.
     pub const SECTION_ARITY: &str = "section_arity";
@@ -488,6 +492,18 @@ impl FrameMeta {
     pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
         self.ensure().get(key)
     }
+
+    /// `ids_persistent`, without keeping the parsed map on this frame.
+    pub(crate) fn ids_persistent_flag(&self) -> Result<bool, ParseError> {
+        self.with_map(|map| match map.get(meta::IDS_PERSISTENT) {
+            Some(value) if value.as_bool() == Some(true) => Ok(true),
+            Some(value) if value.as_bool() == Some(false) => Ok(false),
+            Some(_) => Err(ParseError::InvalidMetadataJson(
+                "ids_persistent must be a boolean".into(),
+            )),
+            None => Ok(false),
+        })
+    }
 }
 
 impl std::ops::Index<&str> for FrameMeta {
@@ -666,7 +682,7 @@ pub(crate) fn metadata_map_from_line(line: &str) -> BTreeMap<String, serde_json:
     }
     let spans = crate::parser::top_level_minor_spans(trimmed);
     let (sanitized, huge_minor) = crate::parser::sanitize_huge_con_spec_minor(trimmed, &spans);
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(sanitized.as_ref()) else {
+    let Ok(value) = crate::parser::parse_metadata_value(sanitized.as_ref()) else {
         return BTreeMap::new();
     };
     let Some(obj) = value.as_object() else {
@@ -723,6 +739,11 @@ pub struct FrameHeader {
     /// "key absent" (try blank-separator velocity detection). Cached at
     /// parse time so the section dispatch does not re-parse the JSON.
     pub(crate) sections_declared: bool,
+    /// The frame was read from a file, so a later write keeps each column-5
+    /// id, including a repeated one (CON-id.13). A frame built in memory
+    /// does not set this, and the writer still rejects a repeated id
+    /// (CON-id.3).
+    pub(crate) ids_from_file: bool,
 }
 
 impl PartialEq for FrameHeader {
@@ -882,13 +903,14 @@ impl FrameHeader {
                 "metadata units.{dimension} is missing"
             ))
         })?;
-        crate::units::unit_conversion_factor(from, to_unit)
+        crate::units::unit_conversion_factor_for_version(self.spec_version, from, to_unit)
     }
 
     /// Sets the unit system. Aliases are rewritten to preferred names
     /// (`A` → `angstrom`) so line 2 carries the contract spelling.
     pub fn set_units(&mut self, units: serde_json::Value) {
-        let stored = crate::units::canonicalize_units_object(&units).unwrap_or(units);
+        let stored = crate::units::canonicalize_units_object_for_version(self.spec_version, &units)
+            .unwrap_or(units);
         self.metadata.insert(meta::UNITS.into(), stored);
     }
 
@@ -1607,6 +1629,7 @@ impl ConFrame {
                 sections: read(&source.sections),
                 strict_validation: source.strict_validation,
                 sections_declared: source.sections_declared,
+                ids_from_file: source.ids_from_file,
             }
         };
         let mut view = unsafe {
@@ -2611,15 +2634,18 @@ pub fn check_lattice_finite(vecs: &[[f64; 3]; 3]) -> Result<(), ParseError> {
     Ok(())
 }
 
-/// Lattice vectors from lengths `|a| |b| |c|` and angles `alpha beta gamma`
-/// in degrees (CON-cell.6).
+/// Window on the binary64 radicand of `c_z` (CON-cell.7).
+/// A computed radicand greater than this negative bound is a real cell.
+/// A negative value inside the window sets `c_z` to 0.
+pub const CELL_CZ_ROUNDING: f64 = 1e-12;
+
+/// Radicand of `c_z` in binary64, with no fused multiply-add (CON-cell.7).
 ///
-/// `a = (|a|, 0, 0)`,
-/// `b = (|b| cos gamma, |b| sin gamma, 0)`,
-/// `c = (|c| cos beta, |c| (cos alpha - cos beta cos gamma) / sin gamma,
-/// |c| sqrt(1 - cos^2 beta - cy^2))` where `cy` is that middle term.
-pub fn cell_vectors(lengths: [f64; 3], angles_deg: [f64; 3]) -> [[f64; 3]; 3] {
-    let [a_len, b_len, c_len] = lengths;
+/// The operations, in order, are `cos` of each angle in radians, then
+/// `cy = (cos_alpha - cos_beta * cos_gamma) / sin_gamma`, then
+/// `1 - cos_beta * cos_beta - cy * cy`. Each product is its own statement
+/// so a multiply and an add are not contracted.
+pub fn cell_cz_squared(angles_deg: [f64; 3]) -> f64 {
     let alpha = angles_deg[0].to_radians();
     let beta = angles_deg[1].to_radians();
     let gamma = angles_deg[2].to_radians();
@@ -2627,14 +2653,95 @@ pub fn cell_vectors(lengths: [f64; 3], angles_deg: [f64; 3]) -> [[f64; 3]; 3] {
     let cos_beta = beta.cos();
     let cos_gamma = gamma.cos();
     let sin_gamma = gamma.sin();
-    let cy = (cos_alpha - cos_beta * cos_gamma) / sin_gamma;
-    let cz_sq = 1.0 - cos_beta * cos_beta - cy * cy;
-    // Orthogonal angles leave a rounding crumb below zero.
-    let cz = if cz_sq < 0.0 && cz_sq > -1e-12 {
-        0.0
+    let product = cos_beta * cos_gamma;
+    let cy = (cos_alpha - product) / sin_gamma;
+    let cos_beta_sq = cos_beta * cos_beta;
+    let cy_sq = cy * cy;
+    1.0 - cos_beta_sq - cy_sq
+}
+
+/// Id set seen while `ids_persistent` is in force (CON-id.11).
+pub(crate) struct PersistentIds {
+    first_flag: bool,
+    first_ids: Vec<u64>,
+    any_true: bool,
+}
+
+/// True when any frame sets `ids_persistent` to true.
+#[cfg(feature = "parallel")]
+pub(crate) fn persistent_ids_requested(frames: &[ConFrame]) -> bool {
+    frames
+        .iter()
+        .any(|frame| frame.header.metadata.ids_persistent_flag().unwrap_or(false))
+}
+
+/// Apply CON-id.11 to one more frame.
+pub(crate) fn observe_persistent_ids(
+    state: &mut Option<PersistentIds>,
+    frame: &ConFrame,
+) -> Result<(), ParseError> {
+    let flag = frame.header.metadata.ids_persistent_flag()?;
+    let mut ids: Vec<u64> = frame.atom_data.iter().map(|atom| atom.atom_id).collect();
+    ids.sort_unstable();
+    if flag && ids.windows(2).any(|pair| pair[0] == pair[1]) {
+        return Err(ParseError::ValidationError(
+            "ids_persistent requires each id once in the frame".into(),
+        ));
+    }
+    match state {
+        None => {
+            *state = Some(PersistentIds {
+                first_flag: flag,
+                first_ids: if flag { ids } else { Vec::new() },
+                any_true: flag,
+            });
+            Ok(())
+        }
+        Some(seen) => {
+            seen.any_true |= flag;
+            if seen.any_true && (!flag || !seen.first_flag || seen.first_ids != ids) {
+                Err(ParseError::ValidationError(
+                    "ids_persistent requires the same ids in every frame".into(),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
+/// `c_z` when the radicand is inside the CON-cell.7 window, else an error.
+pub fn require_real_cell(angles_deg: [f64; 3]) -> Result<f64, ParseError> {
+    let cz_sq = cell_cz_squared(angles_deg);
+    if cz_sq > -CELL_CZ_ROUNDING {
+        Ok(if cz_sq < 0.0 { 0.0 } else { cz_sq.sqrt() })
     } else {
-        cz_sq.sqrt()
-    };
+        Err(ParseError::ValidationError(
+            "cell angles have no real c vector".into(),
+        ))
+    }
+}
+
+/// Lattice vectors from lengths `|a| |b| |c|` and angles `alpha beta gamma`
+/// in degrees (CON-cell.6, CON-cell.7).
+///
+/// `a = (|a|, 0, 0)`,
+/// `b = (|b| cos gamma, |b| sin gamma, 0)`,
+/// `c = (|c| cos beta, |c| (cos alpha - cos beta cos gamma) / sin gamma,
+/// |c| * c_z)` where `c_z` is 0 inside the rounding window and the square
+/// root of the radicand otherwise. A radicand at or below `-CELL_CZ_ROUNDING`
+/// is not a real cell; callers that accept a frame use [`require_real_cell`].
+pub fn cell_vectors(lengths: [f64; 3], angles_deg: [f64; 3]) -> [[f64; 3]; 3] {
+    let [a_len, b_len, c_len] = lengths;
+    let alpha = angles_deg[0].to_radians();
+    let beta = angles_deg[1].to_radians();
+    let gamma = angles_deg[2].to_radians();
+    let cos_beta = beta.cos();
+    let cos_gamma = gamma.cos();
+    let sin_gamma = gamma.sin();
+    let product = cos_beta * cos_gamma;
+    let cy = (alpha.cos() - product) / sin_gamma;
+    let cz = require_real_cell(angles_deg).unwrap_or(f64::NAN);
     [
         [a_len, 0.0, 0.0],
         [b_len * cos_gamma, b_len * sin_gamma, 0.0],
@@ -3711,6 +3818,9 @@ pub struct ConFrameBuilder {
 
     metadata: BTreeMap<String, serde_json::Value>,
     minor_raw: Option<String>,
+    /// `0` writes [`crate::CON_SPEC_VERSION`]. A caller that reproduces an
+    /// older file, such as the r0174 CON 3.1 payloads, sets 3.
+    written_spec: u32,
 }
 
 impl Default for ConFrameBuilder {
@@ -3743,6 +3853,7 @@ impl Default for ConFrameBuilder {
             has_spreads: false,
             metadata: BTreeMap::new(),
             minor_raw: None,
+            written_spec: 0,
         }
     }
 }
@@ -3780,6 +3891,16 @@ impl ConFrameBuilder {
     pub fn try_new(cell: [f64; 3], angles: [f64; 3]) -> Result<Self, ParseError> {
         check_cell_finite(&cell, "cell", &angles, "angles")?;
         Ok(Self::new(cell, angles))
+    }
+
+    /// Write this major version instead of [`crate::CON_SPEC_VERSION`].
+    ///
+    /// `0` writes [`crate::CON_SPEC_VERSION`]. [`Self::build`] refuses a major
+    /// above it with [`ParseError::UnsupportedVersion`], because no reader of
+    /// this crate reads that file back.
+    pub fn spec_version(&mut self, version: u32) -> &mut Self {
+        self.written_spec = version;
+        self
     }
 
     /// Sets the user-facing pre-box header line. The JSON metadata line is
@@ -3848,11 +3969,15 @@ impl ConFrameBuilder {
     /// Sets `metadata["units"]` from a JSON object.
     ///
     /// Aliases are rewritten to preferred names. The natural time spelling
-    /// `(amu*angstrom^2/eV)^0.5` is kept byte for byte (CON-units.5, D10).
+    /// `(u*Å^2/eV)^0.5` is the symbol spelling (CON-units.5). The older mixed spelling is the same unit.
     /// This is the builder entry that C and C++ call. [`FrameHeader::set_units`]
     /// is the same contract on a frame that already exists.
     pub fn set_units(&mut self, units: serde_json::Value) -> Result<(), crate::error::ParseError> {
-        let stored = crate::units::canonicalize_units_object(&units)
+        let spec_version = match self.written_spec {
+            0 => crate::CON_SPEC_VERSION,
+            version => version,
+        };
+        let stored = crate::units::canonicalize_units_object_for_version(spec_version, &units)
             .map_err(|err| crate::error::ParseError::InvalidUnits(err.to_string()))?;
         self.metadata.insert(meta::UNITS.into(), stored);
         Ok(())
@@ -5096,7 +5221,9 @@ impl ConFrameBuilder {
     ///
     /// Returns [`crate::error::ParseError::MassMismatch`] when two atoms
     /// share a symbol and their masses differ by more than
-    /// [`Self::TYPE_MASS_ABS_TOL`].
+    /// [`Self::TYPE_MASS_ABS_TOL`]. Returns
+    /// [`crate::error::ParseError::UnsupportedVersion`] when
+    /// [`Self::spec_version`] named a major above [`crate::CON_SPEC_VERSION`].
     pub fn build(self) -> Result<ConFrame, crate::error::ParseError> {
         self.build_with_permutation().map(|(frame, _perm)| frame)
     }
@@ -5133,6 +5260,15 @@ impl ConFrameBuilder {
                 None => err,
             });
         }
+        let has_lattice = self.metadata.contains_key(meta::LATTICE_VECTORS);
+        crate::parser::reject_impossible_cell(self.angles, has_lattice)?;
+        let written_spec = match self.written_spec {
+            0 => crate::CON_SPEC_VERSION,
+            major if major > crate::CON_SPEC_VERSION => {
+                return Err(ParseError::UnsupportedVersion(major));
+            }
+            major => major,
+        };
         // Single-pass grouping: assign each atom a type index in encounter
         // order and bucket its position. The buckets preserve per-symbol
         // input order so the final flatten yields atoms grouped by type.
@@ -5282,17 +5418,55 @@ impl ConFrameBuilder {
         );
         let sections_declared = !sections.is_empty();
         let mut metadata = self.metadata;
+        if let Some(units) = metadata.get(meta::UNITS).cloned() {
+            let units = crate::units::canonicalize_units_object_for_version(written_spec, &units)
+                .map_err(|err| ParseError::InvalidUnits(err.to_string()))?;
+            metadata.insert(meta::UNITS.into(), units);
+        }
         // v3 writers always emit units (defaults if the caller omitted them).
-        if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::UNITS) {
+        if written_spec >= 3 && !metadata.contains_key(meta::UNITS) {
             metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
         }
-        // The builder, not the writer, stamps minor 1 on a v3 frame when
-        // the caller did not call set_con_spec_minor (D15).
-        if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::CON_SPEC_MINOR) {
+        // The builder, not the writer, stamps the current minor and patch
+        // on a major 4 frame when the caller did not set the keys (D15).
+        // A requested major 3 is the CON 3.1 writer: minor 1, no patch.
+        if written_spec >= 3 && !metadata.contains_key(meta::CON_SPEC_MINOR) {
+            let minor = if written_spec >= 4 {
+                crate::CON_SPEC_MINOR
+            } else {
+                1
+            };
+            metadata.insert(meta::CON_SPEC_MINOR.into(), serde_json::Value::from(minor));
+        }
+        if written_spec >= 4 && !metadata.contains_key(meta::CON_SPEC_PATCH) {
             metadata.insert(
-                meta::CON_SPEC_MINOR.into(),
-                serde_json::Value::from(crate::CON_SPEC_MINOR),
+                meta::CON_SPEC_PATCH.into(),
+                serde_json::Value::from(crate::CON_SPEC_PATCH),
             );
+        }
+        // In-memory velocities are in the natural time unit. Major 4
+        // requires units.time when a velocities section is present
+        // (CON-units.3, CON-units.11). A major 3 file keeps the time label
+        // the caller set, which for a reproduction is the historical spelling.
+        if has_vel && written_spec >= 4 {
+            let time_ok = metadata
+                .get(meta::UNITS)
+                .and_then(|units| units.get("time"))
+                .and_then(|value| value.as_str())
+                .is_some_and(|unit| !unit.trim().is_empty());
+            if !time_ok {
+                let mut units = metadata
+                    .get(meta::UNITS)
+                    .cloned()
+                    .unwrap_or_else(crate::units::default_v3_units_json);
+                if let Some(object) = units.as_object_mut() {
+                    object.insert(
+                        "time".to_string(),
+                        serde_json::Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
+                    );
+                    metadata.insert(meta::UNITS.into(), units);
+                }
+            }
         }
         use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
         let dt = StorageDtypes::from_metadata(&metadata).unwrap_or_default();
@@ -5365,11 +5539,12 @@ impl ConFrameBuilder {
             natm_types: type_order.len(),
             natms_per_type: type_counts,
             masses_per_type: type_masses,
-            spec_version: crate::CON_SPEC_VERSION,
+            spec_version: written_spec,
             metadata: FrameMeta::from_map_with_minor_raw(metadata, self.minor_raw.as_deref()),
             sections,
             strict_validation,
             sections_declared,
+            ids_from_file: false,
         };
 
         Ok((
@@ -6102,6 +6277,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.energy(), None);
         header.set_energy(-42.5);
@@ -6123,6 +6299,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.potential_type(), None);
         header.set_potential("EMT", serde_json::json!({"cutoff": 6.0}));
@@ -6148,6 +6325,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         header.set_frame_index(5);
         header.set_time(2.5);
@@ -6262,6 +6440,30 @@ mod tests {
         assert!((to_nm - 0.1).abs() < 1e-12);
         let x_nm = frame.x_at(0) * to_nm;
         assert!((x_nm - 0.1).abs() < 1e-12);
+        let units = serde_json::json!({
+            "length": "angstrom",
+            "energy": "eV",
+            "time": crate::units::HISTORICAL_NATURAL_TIME
+        });
+        for (major, expected) in [
+            (3, crate::units::HISTORICAL_NATURAL_TIME),
+            (4, crate::units::NATURAL_TIME_UNIT),
+        ] {
+            for set_spec_first in [true, false] {
+                let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+                if set_spec_first {
+                    builder.spec_version(major);
+                }
+                builder.set_units(units.clone()).unwrap();
+                if !set_spec_first {
+                    builder.spec_version(major);
+                }
+                builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+                let frame = builder.build().unwrap();
+                assert_eq!(frame.header.spec_version, major);
+                assert_eq!(frame.header.units().unwrap()["time"], expected);
+            }
+        }
     }
 
     #[test]
@@ -6279,6 +6481,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.units(), None);
         header.set_units(serde_json::json!({"length": "angstrom", "energy": "eV"}));
@@ -6302,6 +6505,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.pbc(), None);
         header.set_pbc([true, true, false]);
@@ -6323,6 +6527,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.lattice_vectors(), None);
         let vecs = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 20.0]];
@@ -6752,7 +6957,7 @@ mod tests {
             .next()
             .unwrap()
             .unwrap();
-        assert_eq!(parsed.header.spec_version, 3);
+        assert_eq!(parsed.header.spec_version, 4);
         assert_eq!(parsed.length_unit(), Some("angstrom"));
     }
 

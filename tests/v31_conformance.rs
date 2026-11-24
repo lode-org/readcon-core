@@ -564,7 +564,10 @@ fn v31_writer_requires_time_when_velocities_are_present() {
     builder
         .add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0)
         .with_velocity([0.1, 0.0, 0.0]);
-    let frame = builder.build().unwrap();
+    let mut frame = builder.build().unwrap();
+    let mut units = frame.header.units().cloned().unwrap();
+    units.as_object_mut().unwrap().remove("time");
+    frame.header.set_units(units);
     let mut buf = Vec::new();
     let err = ConFrameWriter::new(&mut buf)
         .write_frame(&frame)
@@ -963,7 +966,11 @@ fn velocity_time_follows_the_minor() {
         NATURAL_TIME_UNIT
     );
     meta.insert("con_spec_minor".into(), serde_json::json!(1));
-    assert_eq!(velocity_file_time_unit(3, &meta, None).unwrap(), "fs");
+    assert_eq!(
+        velocity_file_time_unit(3, &meta, None).unwrap(),
+        NATURAL_TIME_UNIT
+    );
+    assert_eq!(velocity_file_time_unit(4, &meta, None).unwrap(), "fs");
 
     let minor0 = "\
 PRE
@@ -988,7 +995,7 @@ Velocities of Component 1
 
     let minor1_no_time = "\
 PRE
-{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"},\"sections\":[\"velocities\"]}
+{\"con_spec_version\":4,\"con_spec_minor\":0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"},\"sections\":[\"velocities\"]}
 10 10 10
 90 90 90
 A
@@ -1031,7 +1038,8 @@ Coordinates of Component 1
 fn unit_vocabulary_includes_mol() {
     validate_unit_for_quantity("energy", "kcal/mol").unwrap();
     validate_unit_for_quantity("energy", "kJ/mol").unwrap();
-    validate_unit_for_quantity("energy", "KCAL/MOL").unwrap();
+    // CON-units.16 matches the listed spellings exactly. KCAL is not one of them.
+    assert!(validate_unit_for_quantity("energy", "KCAL/MOL").is_err());
     let groups = [
         (
             "length",
@@ -1040,7 +1048,8 @@ fn unit_vocabulary_includes_mol() {
                 "meter",
                 "metre",
                 "angstrom",
-                "a",
+                "Angstrom",
+                "A",
                 "å",
                 "Å",
                 "nm",
@@ -1051,9 +1060,15 @@ fn unit_vocabulary_includes_mol() {
         ),
         (
             "energy",
-            &["j", "joule", "ev", "mev", "hartree", "ha", "kcal", "kj"][..],
+            &[
+                "J", "j", "joule", "eV", "ev", "meV", "mev", "MeV", "hartree", "Ha", "kcal", "kJ",
+                "kj",
+            ][..],
         ),
-        ("mass", &["kg", "kilogram", "u", "amu", "dalton", "da"][..]),
+        (
+            "mass",
+            &["kg", "kilogram", "u", "Da", "amu", "AMU", "dalton"][..],
+        ),
         (
             "time",
             &[
@@ -1072,13 +1087,14 @@ fn unit_vocabulary_includes_mol() {
         for name in names {
             validate_unit_for_quantity(quantity, name)
                 .unwrap_or_else(|err| panic!("{name}: {err}"));
-            let upper = name.to_ascii_uppercase();
-            validate_unit_for_quantity(quantity, &upper)
-                .unwrap_or_else(|err| panic!("{upper}: {err}"));
         }
     }
+    // CON-units.16. These three are SI spellings and are not folded.
+    assert!(validate_unit_for_quantity("length", "a").is_err());
+    assert!(validate_unit_for_quantity("energy", "ha").is_err());
+    assert!(validate_unit_for_quantity("mass", "da").is_err());
     parse_unit_expression("mol").unwrap();
-    parse_unit_expression("MOL").unwrap();
+    assert!(parse_unit_expression("MOL").is_err());
 }
 
 /// CON-frame.1, CON-frame.3, CON-frame.7.

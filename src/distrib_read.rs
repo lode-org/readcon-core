@@ -311,11 +311,24 @@ fn sniff(path: &Path) -> std::io::Result<Compression> {
 /// Rank 0: read the file and scan or load its index.
 fn root_index(path: &Path, write_sidecar: bool) -> Result<(FileContents, FrameIndex), String> {
     let fc = compression::read_file_contents(path).map_err(|e| e.to_string())?;
-    let idx = {
-        let text = fc.as_str_sliced().map_err(|e| e.to_string())?;
-        let mapped = matches!(fc, FileContents::Mapped(_));
-        frame_index::load_or_build(path, text, write_sidecar && mapped)
-            .map_err(|e| e.to_string())?
+    let mapped = matches!(fc, FileContents::Mapped(_));
+    let text = fc.as_str_sliced().map_err(|e| e.to_string())?;
+    // A checked scan refuses to store an index that stops at a bad frame.
+    // The read still has to parse that frame: its start is in the unchecked
+    // scan, and the span parser reports the file line.
+    let idx = match frame_index::load_or_build(path, text, write_sidecar && mapped) {
+        Ok(idx) => idx,
+        Err(crate::error::ParseError::Io(msg)) => return Err(msg),
+        Err(_) => {
+            let offsets = crate::iterators::frame_start_offsets(text);
+            if offsets.is_empty() {
+                return Err("no frames found in file".into());
+            }
+            FrameIndex {
+                offsets: offsets.into_iter().map(|offset| offset as u64).collect(),
+                data_len: text.len() as u64,
+            }
+        }
     };
     Ok((fc, idx))
 }

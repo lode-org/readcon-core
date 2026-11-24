@@ -40,6 +40,10 @@ while read -r commit; do
         [[ -z "$status" ]] && continue
         case "$status" in
             A)
+                # A record the series adds and the tip removes never lands.
+                if ! git -C "$ROOT" cat-file -e "$TIP:$path" 2>/dev/null; then
+                    continue
+                fi
                 tip_blob="$(git -C "$ROOT" rev-parse "$TIP:$path")"
                 commit_blob="$(git -C "$ROOT" rev-parse "$commit:$path")"
                 if [[ "$commit_blob" != "$tip_blob" ]]; then

@@ -1,0 +1,9 @@
+{
+  "id": "energy-matches-rows",
+  "n_atoms": 2,
+  "spec_version": 4,
+  "fixed": [[false, false, false], [false, false, false]],
+  "positions": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+  "atom_ids": [1, 2],
+  "symbols": ["H", "H"]
+}

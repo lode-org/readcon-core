@@ -28,6 +28,7 @@ struct Case {
     kind: Kind,
     error: Option<String>,
     expect_fixed: Option<[bool; 3]>,
+    line: Option<u32>,
 }
 
 fn corpus_root() -> PathBuf {
@@ -65,6 +66,7 @@ fn variant_name(err: &ParseError) -> &'static str {
         ParseError::InvalidCount(_) => "InvalidCount",
         ParseError::InvalidUnits(_) => "InvalidUnits",
         ParseError::UnsupportedVersion(_) => "UnsupportedVersion",
+        ParseError::Io(_) => "Io",
     }
 }
 
@@ -118,6 +120,7 @@ fn parse_manifest(text: &str) -> Vec<Case> {
                 },
                 error: None,
                 expect_fixed: None,
+                line: None,
             });
             continue;
         }
@@ -140,6 +143,12 @@ fn parse_manifest(text: &str) -> Vec<Case> {
             "error" => case.error = Some(unquote(val)),
             "notes" => {}
             "expect_fixed" => case.expect_fixed = Some(parse_bool3(val)),
+            "line" => {
+                case.line = Some(
+                    val.parse()
+                        .unwrap_or_else(|_| panic!("manifest line {}: bad line {val}", idx + 1)),
+                );
+            }
             other => panic!("manifest line {}: unknown key {other}", idx + 1),
         }
     }
@@ -373,7 +382,8 @@ fn conformance_corpus_matches_manifest() {
         let fixture = root.join(&case.path);
         let body = fs::read_to_string(&fixture)
             .unwrap_or_else(|e| panic!("{}: read {}: {e}", case.id, fixture.display()));
-        let parsed = ConFrameIterator::new(&body).next();
+        let mut iter = ConFrameIterator::new(&body);
+        let parsed = iter.next();
         match case.kind {
             Kind::Valid => {
                 let frame = parsed
@@ -414,6 +424,9 @@ fn conformance_corpus_matches_manifest() {
                 let got = variant_name(&err);
                 let want = case.error.as_deref().unwrap();
                 assert_eq!(got, want, "{}: typed ParseError mismatch ({err})", case.id);
+                if let Some(want_line) = case.line {
+                    assert_eq!(iter.error_line(&err), want_line, "{}: line", case.id);
+                }
             }
         }
     }
