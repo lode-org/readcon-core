@@ -119,7 +119,11 @@ def sha256(path: Path) -> str:
 
 
 def rel(path: Path) -> str:
-    return path.resolve().relative_to(REPO).as_posix()
+    resolved = path.resolve()
+    repo = REPO.resolve()
+    if resolved.is_relative_to(repo):
+        return resolved.relative_to(repo).as_posix()
+    return f"paper/cpc/scripts/{path.name}"
 
 
 def spec_clauses() -> list[tuple[str, str]]:
@@ -271,7 +275,7 @@ def source(path: Path, named: dict[str, set[str]], known: set[str], **counts) ->
     }
 
 
-def build() -> dict:
+def build(supersedes: Path = SUPERSEDES) -> dict:
     clauses = spec_clauses()
     known = {cid for cid, _ in clauses}
     c31, conf, probe = corpus31(), conformance(), probes()
@@ -314,7 +318,7 @@ def build() -> dict:
         "uncovered": len(entries) - len(covered),
     }
     return {
-        "supersedes": rel(SUPERSEDES),
+        "supersedes": rel(supersedes),
         "reason": (
             f"Recounts specification coverage for readcon-core {VERSION} "
             "without rewriting the previous measurement."
@@ -343,7 +347,7 @@ def build() -> dict:
     }
 
 
-def macros(record: dict) -> str:
+def macros(record: dict, out: Path = OUT) -> str:
     t = record["totals"]
     values = {
         "clauseTotal": t["clauses"],
@@ -355,7 +359,7 @@ def macros(record: dict) -> str:
         "clauseTested": t["tests"],
     }
     return (
-        f"% Written by paper/cpc/scripts/clause_coverage.py from data/spec/{OUT.name}.\n"
+        f"% Written by paper/cpc/scripts/clause_coverage.py from data/spec/{out.name}.\n"
         + "".join(
             f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
         )
@@ -387,10 +391,14 @@ def main() -> int:
     )
     args = parser.parse_args()
     if args.macros:
-        MACROS.write_text(macros(json.loads(args.out.read_text())))
+        MACROS.write_text(
+            macros(json.loads(args.out.read_text(encoding="utf-8")), args.out),
+            encoding="utf-8",
+        )
         print(f"wrote {provenance.portable(MACROS)}")
         return 0
-    record = build()
+    supersedes = OUT if args.out.resolve() != OUT.resolve() else SUPERSEDES
+    record = build(supersedes=supersedes)
     t = record["totals"]
     print(
         f"{t['clauses']} clauses: {t['covered']} named by a corpus file, probe or test "
@@ -400,8 +408,11 @@ def main() -> int:
     if args.check:
         stale = [
             path.name
-            for path, want in ((args.out, text(record)), (MACROS, macros(record)))
-            if not path.is_file() or path.read_text() != want
+            for path, want in (
+                (args.out, text(record)),
+                (MACROS, macros(record, args.out)),
+            )
+            if not path.is_file() or path.read_text(encoding="utf-8") != want
         ]
         if stale:
             print(
@@ -411,9 +422,30 @@ def main() -> int:
             return 1
         print(f"{args.out.name} and {MACROS.name} match the sources")
         return 0
-    args.out.write_text(text(record))
-    MACROS.write_text(macros(record))
-    print(f"wrote {provenance.portable(args.out)} and {provenance.portable(MACROS)}")
+    target = args.out
+    if target.resolve() == OUT.resolve():
+        if target.is_file() and target.read_text(encoding="utf-8") == text(record):
+            MACROS.write_text(macros(record, target), encoding="utf-8")
+            print(
+                f"wrote {provenance.portable(target)} and {provenance.portable(MACROS)}"
+            )
+            return 0
+        if target.is_file():
+            n = 2
+            spec_dir = target.parent
+            candidate = spec_dir / f"clause_coverage-{VERSION}-sources-{n}.json"
+            while candidate.is_file():
+                n += 1
+                candidate = spec_dir / f"clause_coverage-{VERSION}-sources-{n}.json"
+            record = build(supersedes=target)
+            target = candidate
+    elif target.is_file():
+        sys.exit(f"refusing to rewrite {provenance.portable(target)}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("x", encoding="utf-8") as handle:
+        handle.write(text(record))
+    MACROS.write_text(macros(record, target), encoding="utf-8")
+    print(f"wrote {provenance.portable(target)} and {provenance.portable(MACROS)}")
     return 0
 
 
