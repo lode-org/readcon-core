@@ -1143,6 +1143,8 @@ def compile_test(fragment: Path) -> None:
 
 
 def main() -> None:
+    global VERSIONS
+
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -1170,6 +1172,7 @@ def main() -> None:
     if args.measure:
         measure()
         return
+    VERSIONS = active_versions_file()
     rows = release_rows(SPEC.read_text())
     outputs = {
         VERSIONS_OUT: versions_table(rows),
