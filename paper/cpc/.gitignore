@@ -33,8 +33,6 @@ src/figures/generated/*
 !src/figures/generated/clauses_macros.tex
 src/rg_main.pdf
 src/rg_supp.pdf
-src/figures/generated/work/
-src/figures/generated/*.aux
 evidence/work/
 .pixi/
 __pycache__/
