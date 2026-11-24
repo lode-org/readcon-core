@@ -2,8 +2,9 @@
 
 ``read_con``, ``iter_con``, ``read_first_frame``, and ``read_con_string``
 move positions out of the frame column before ``.atoms`` exists. Slice,
-append, insert, extend, deletion, item assignment, equality, and
-concatenation all snapshot that column. They must return the coordinates
+append, insert, extend, deletion, item assignment, equality,
+concatenation, and addition all snapshot that column. They must return the
+coordinates
 ``xyz`` already shows.
 """
 
@@ -45,6 +46,18 @@ def _rows(frame) -> np.ndarray:
 
 def _symbols(frame) -> list[str]:
     return [str(frame.symbols[i]) for i in range(len(frame))]
+
+
+def _grouped(symbols: list[str], coords: np.ndarray) -> np.ndarray:
+    """CON type-group order: first-seen symbol, then encounter order."""
+    order: list[str] = []
+    buckets: dict[str, list[np.ndarray]] = {}
+    for symbol, row in zip(symbols, coords, strict=True):
+        if symbol not in buckets:
+            order.append(symbol)
+            buckets[symbol] = []
+        buckets[symbol].append(row)
+    return np.vstack([np.vstack(buckets[symbol]) for symbol in order])
 
 
 def _fresh_he() -> object:
@@ -106,6 +119,28 @@ class TestSnapshotBeforeAtoms:
         got = _rows(frame)
         expect[1] = [9.0, 8.0, 7.0]
         assert got == pytest.approx(expect)
+
+    def test_add(self, reader: str) -> None:
+        left = _load(reader)
+        right = _load(reader)
+        assert left.atoms_materialized is False
+        assert right.atoms_materialized is False
+        added = left + right
+        assert left.atoms_materialized is False
+        assert right.atoms_materialized is False
+        base = np.asarray(left.xyz)
+        expect = _grouped(_symbols(left) + _symbols(right), np.vstack((base, base)))
+        assert _rows(added) == pytest.approx(expect)
+
+    def test_add_iterable(self, reader: str) -> None:
+        left = _load(reader)
+        expect = np.array(left.xyz, copy=True)
+        assert left.atoms_materialized is False
+        added = left + [_fresh_he()]
+        assert left.atoms_materialized is False
+        got = _rows(added)
+        assert got[: len(expect)] == pytest.approx(expect)
+        assert got[-1] == pytest.approx([1.5, 2.5, 3.5])
 
     def test_eq(self, reader: str) -> None:
         frame = _load(reader)
