@@ -50,12 +50,7 @@ SKIP_DIRS = {"target", "build", "__pycache__"}
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
 SPEC_DIGEST = hashlib.sha256(SPEC.read_bytes()).hexdigest()
 SUPERSEDES = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}.json"
-OUT = (
-    ROOT
-    / "data"
-    / "spec"
-    / f"clause_coverage-{VERSION}-{SPEC_DIGEST[:8]}.json"
-)
+OUT = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}-{SPEC_DIGEST[:8]}.json"
 
 
 def recounts() -> list[Path]:
@@ -73,6 +68,8 @@ def latest() -> Path:
     """The newest committed recount, or OUT when there is none."""
     chain = recounts()
     return chain[-1] if chain else OUT
+
+
 MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)
