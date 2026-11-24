@@ -1,11 +1,10 @@
 """Sequence ops on a parsed frame must see live coordinates.
 
 ``read_con``, ``iter_con``, ``read_first_frame``, and ``read_con_string``
-move positions out of the frame column before ``.atoms`` exists. Slice,
-append, insert, extend, deletion, item assignment, equality,
-concatenation, and addition all snapshot that column. They must return the
-coordinates
-``xyz`` already shows.
+move positions out of the frame column before ``.atoms`` exists.
+Slice, append, insert, extend, deletion, and item assignment all
+snapshot that column, as do equality, concatenation, and addition.
+They must return the coordinates ``xyz`` already shows.
 """
 
 from __future__ import annotations

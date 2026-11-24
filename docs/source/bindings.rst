@@ -308,7 +308,7 @@ Types
     slice is an independent ``ConFrame``. ``left + right`` returns a new
     frame with those atoms followed by ``right`` (a ``ConFrame`` or an
     iterable of atoms) in that same type-group order, without building
-    ``.atoms``.
+    the operands' ``.atoms``.
 
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and
