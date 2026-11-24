@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -57,3 +59,102 @@ def test_wrap_sidecar_mismatch_fails_before_packaging(mode: str):
     assert "wrap hash" in result.stderr
     assert "sidecar" in result.stderr
     assert "Packaging readcon-core" not in result.stdout + result.stderr
+
+
+def recorder_functions() -> str:
+    workflow = (ROOT / ".github" / "workflows" / "record_cxx_wrap_pin.yml").read_text(
+        encoding="utf-8"
+    )
+    step = workflow.index("      - name: Record and push the pin")
+    start = workflow.index("          pin_paths=(", step)
+    end = workflow.index("\n          set +e\n          record_and_commit", start)
+    return textwrap.dedent(workflow[start:end])
+
+
+@pytest.mark.parametrize(
+    ("record_body", "current_status", "changed", "expected", "error"),
+    [
+        (
+            "exit 0\n",
+            1,
+            "docs/orgmode/bindings.org\nunexpected.txt\n",
+            1,
+            "Unexpected recorder change: unexpected.txt",
+        ),
+        (
+            'printf "partial\\n" > partial-pin\nexit 7\n',
+            1,
+            "docs/orgmode/bindings.org\n",
+            1,
+            "",
+        ),
+        ("exit 0\n", 0, "", 0, ""),
+    ],
+)
+def test_recorder_failures_never_create_a_commit(
+    tmp_path: Path,
+    record_body: str,
+    current_status: int,
+    changed: str,
+    expected: int,
+    error: str,
+) -> None:
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "record-cxx-wrap.sh").write_text(record_body, encoding="utf-8")
+    (scripts / "cxx-wrap-pin-current.sh").write_text(
+        f"exit {current_status}\n", encoding="utf-8"
+    )
+
+    marker = tmp_path / "commit-called"
+    harness = tmp_path / "run-recorder.sh"
+    harness.write_text(
+        "set -euo pipefail\n"
+        + recorder_functions()
+        + textwrap.dedent(
+            """
+
+            git() {
+              if [[ "$1" == "diff" && "$2" == "--name-only" ]]; then
+                printf '%s' "${GIT_DIFF_OUTPUT:-}"
+                return 0
+              fi
+              return 1
+            }
+
+            create_commit() {
+              printf 'called\\n' > "$COMMIT_MARKER"
+              return 0
+            }
+
+            set +e
+            record_and_commit
+            rc=$?
+            set -e
+            case "$rc" in
+              0) exit 0 ;;
+              2) exit 0 ;;
+              *) exit 1 ;;
+            esac
+            """
+        ),
+        encoding="utf-8",
+    )
+    env = {
+        **os.environ,
+        "COMMIT_MARKER": str(marker),
+        "GIT_DIFF_OUTPUT": changed,
+    }
+    result = subprocess.run(
+        ["bash", str(harness)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == expected
+    assert not marker.exists()
+    if error:
+        assert error in result.stderr
