@@ -619,8 +619,18 @@ def second_text_change(changes: list[dict], texts: dict[str, str]) -> str:
     return " ".join(parts)
 
 
+def _unreleased_history() -> list[dict]:
+    return [
+        {"version": row["version"], "date": row["date"]}
+        for row in history_rows(SPEC.read_text(encoding="utf-8"))
+        if row["version"] != "1"
+    ]
+
+
 def measurement_record() -> dict:
     record = json.loads(VERSIONS.read_text())
+    if not SPEC.is_file():
+        return record
     contents = SPEC.read_bytes()
     spec_blob = hashlib.sha1(
         f"blob {len(contents)}\0".encode() + contents
@@ -628,23 +638,20 @@ def measurement_record() -> dict:
     tree = record["tree"]
     release = package_version()
     tagged_releases = {entry["tag"] for entry in record["tags"]}
-    if (
+    live_untagged = (
         not tree["tagged"]
         and tree["release"] == release
-        and tree.get("spec_blob") == spec_blob
         and f"v{release}" not in tagged_releases
-    ):
-        if VERSIONS == MEASUREMENT:
-            record["tree"] = {
-                "release": release,
-                "tagged": False,
-                "spec_blob": spec_blob,
-            }
-        record["unreleased_history"] = [
-            {"version": row["version"], "date": row["date"]}
-            for row in history_rows(SPEC.read_text(encoding="utf-8"))
-            if row["version"] != "1"
-        ]
+    )
+    if VERSIONS == MEASUREMENT and live_untagged:
+        record["tree"] = {
+            "release": release,
+            "tagged": False,
+            "spec_blob": spec_blob,
+        }
+        record["unreleased_history"] = _unreleased_history()
+    elif live_untagged and tree.get("spec_blob") == spec_blob:
+        record["unreleased_history"] = _unreleased_history()
     return record
 
 
