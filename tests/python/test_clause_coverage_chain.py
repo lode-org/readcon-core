@@ -63,7 +63,11 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
     _write_json(
         base,
         {
-            "spec": {"path": "docs/orgmode/spec.org", "sha256": "0" * 64, "clauses": 99},
+            "spec": {
+                "path": "docs/orgmode/spec.org",
+                "sha256": "0" * 64,
+                "clauses": 99,
+            },
             "totals": {"clauses": 99, "covered": 50},
         },
     )
@@ -71,7 +75,11 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
         head,
         {
             "supersedes": f"paper/cpc/data/spec/{base.name}",
-            "spec": {"path": "docs/orgmode/spec.org", "sha256": spec_sha, "clauses": 100},
+            "spec": {
+                "path": "docs/orgmode/spec.org",
+                "sha256": spec_sha,
+                "clauses": 100,
+            },
             "totals": {"clauses": 100, "covered": 80},
         },
     )
@@ -79,7 +87,11 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
         middle,
         {
             "supersedes": f"paper/cpc/data/spec/{head.name}",
-            "spec": {"path": "docs/orgmode/spec.org", "sha256": spec_sha, "clauses": 100},
+            "spec": {
+                "path": "docs/orgmode/spec.org",
+                "sha256": spec_sha,
+                "clauses": 100,
+            },
             "totals": {"clauses": 100, "covered": 85},
         },
     )
@@ -87,7 +99,11 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
         tail,
         {
             "supersedes": f"paper/cpc/data/spec/{middle.name}",
-            "spec": {"path": "docs/orgmode/spec.org", "sha256": spec_sha, "clauses": 128},
+            "spec": {
+                "path": "docs/orgmode/spec.org",
+                "sha256": spec_sha,
+                "clauses": 128,
+            },
             "totals": {"clauses": 128, "covered": 105},
         },
     )
@@ -106,7 +122,17 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
     )
     _write_json(
         data / "corpus_paths.json",
-        {"results": {"totals": {"files": 10, "reads": 20, "match": 20, "differ": 0, "files_differ": []}}},
+        {
+            "results": {
+                "totals": {
+                    "files": 10,
+                    "reads": 20,
+                    "match": 20,
+                    "differ": 0,
+                    "files_differ": [],
+                }
+            }
+        },
     )
     _write_json(data / "every_path.json", {"results": {"totals": {"inputs": 5}}})
     _write_json(
@@ -115,9 +141,19 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
     )
     _write_json(
         data / "corpus_crosscheck.json",
-        {"groups": {"all": {"readers": {"readcon": {"disagreements": 0, "not_followed": 0, "crashes": 0}}}}},
+        {
+            "groups": {
+                "all": {
+                    "readers": {
+                        "readcon": {"disagreements": 0, "not_followed": 0, "crashes": 0}
+                    }
+                }
+            }
+        },
     )
-    _write_json(data / "referee_probes.json", {"summary": {"probes": 3, "failed_probes": []}})
+    _write_json(
+        data / "referee_probes.json", {"summary": {"probes": 3, "failed_probes": []}}
+    )
 
     (src / "commit.tex").write_text("", encoding="utf-8")
     (src / "release.tex").write_text("", encoding="utf-8")
@@ -146,7 +182,9 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
 def test_check_conformance_reads_terminal_supersedes_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    check_manuscript = _load("check_manuscript_under_test", SCRIPTS / "check_manuscript.py")
+    check_manuscript = _load(
+        "check_manuscript_under_test", SCRIPTS / "check_manuscript.py"
+    )
     repo, cpc, src, generated, _, _ = _fixture_tree(
         tmp_path, macro_clauses=128, macro_covered=105
     )
@@ -163,7 +201,9 @@ def test_check_conformance_reads_terminal_supersedes_record(
 def test_check_conformance_rejects_macros_matching_non_terminal_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    check_manuscript = _load("check_manuscript_under_test", SCRIPTS / "check_manuscript.py")
+    check_manuscript = _load(
+        "check_manuscript_under_test", SCRIPTS / "check_manuscript.py"
+    )
     repo, cpc, src, generated, _, tail = _fixture_tree(
         tmp_path, macro_clauses=100, macro_covered=80
     )
@@ -182,7 +222,9 @@ def test_check_conformance_rejects_macros_matching_non_terminal_record(
 
 
 def test_default_paths_rejects_fork_and_orphan(tmp_path: Path) -> None:
-    clause_coverage = _load("clause_coverage_under_test", SCRIPTS / "clause_coverage.py")
+    clause_coverage = _load(
+        "clause_coverage_under_test", SCRIPTS / "clause_coverage.py"
+    )
     repo, cpc, _, _, head, tail = _fixture_tree(
         tmp_path, macro_clauses=128, macro_covered=105
     )
@@ -200,7 +242,9 @@ def test_default_paths_rejects_fork_and_orphan(tmp_path: Path) -> None:
 
 
 def test_repo_clause_coverage_resolves_to_terminal_record() -> None:
-    clause_coverage = _load("clause_coverage_under_test", SCRIPTS / "clause_coverage.py")
+    clause_coverage = _load(
+        "clause_coverage_under_test", SCRIPTS / "clause_coverage.py"
+    )
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     previous, newest = clause_coverage.default_paths()
     assert newest.name != f"clause_coverage-{version}-a8f263a2.json"
