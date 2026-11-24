@@ -305,7 +305,10 @@ Types
     ``insert()`` and ``extend()`` methods mutate the owning frame and preserve CON
     type-group order; an ``Atom`` already taken from ``frame.atoms`` that
     was not replaced or deleted stays part of the frame. A direct frame
-    slice is an independent ``ConFrame``.
+    slice is an independent ``ConFrame``. ``left + right`` returns a new
+    frame with those atoms followed by ``right`` (a ``ConFrame`` or an
+    iterable of atoms) in that same type-group order, without building
+    the operands' ``.atoms``.
 
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and
@@ -852,7 +855,7 @@ CMake FetchContent
     FetchContent_Declare(
       readcon-core
       URL https://github.com/lode-org/readcon-core/releases/download/v0.24.0/readcon-core-cxx-0.24.0.tar.gz
-      URL_HASH SHA256=0be304599b747b53e4321d1366b9371e62f064c0a2dd53d4ba2d21c7ac3accc7
+      URL_HASH SHA256=00e68d34705c2150da461c27e976c0de20b18ddb56e80945078eb39ab4dbade2
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(my_app PRIVATE readcon-core::shared)
