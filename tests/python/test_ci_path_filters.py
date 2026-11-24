@@ -151,9 +151,24 @@ def test_develop_pin_recorder_has_guard_and_one_retry():
     assert "cancel-in-progress: false" in workflow
     assert "steps.loop-guard.outputs.skip != 'true'" in workflow
     assert workflow.count("git push origin HEAD:develop") == 2
-    assert "git rebase origin/develop" in workflow
     assert "git add -- \"${pin_paths[@]}\"" in workflow
     assert "bash scripts/check_cxx_wrap_pin.sh --strict" in workflow
+    assert "git rebase" not in workflow
+    assert "commit --amend" not in workflow
+
+    retry = workflow.split(
+        'echo "develop moved; resetting and retrying once."',
+        maxsplit=1,
+    )[1]
+    commands = (
+        "git fetch origin develop",
+        "git reset --hard origin/develop",
+        "if ! record_pin; then",
+        "create_commit",
+        "git push origin HEAD:develop",
+    )
+    positions = [retry.index(command) for command in commands]
+    assert positions == sorted(positions)
 
 
 def test_release_branch_pushes_build_wheels_before_the_tag():

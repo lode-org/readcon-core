@@ -111,34 +111,36 @@ jobs:
             done < <(git diff --name-only)
           }
 
-          refresh_commit() {
+          record_pin() {
             bash scripts/record-cxx-wrap.sh
             validate_changes
             if bash scripts/cxx-wrap-pin-current.sh; then
-              return 0
+              return 1
             fi
-            git add -- "${pin_paths[@]}"
-            git -c commit.gpgsign=false commit --amend --no-edit
           }
 
-          bash scripts/record-cxx-wrap.sh
-          validate_changes
-          if bash scripts/cxx-wrap-pin-current.sh; then
+          create_commit() {
+            git add -- "${pin_paths[@]}"
+            git -c commit.gpgsign=false commit \
+              -m "chore(packaging): re-record cxx wrap pin"
+          }
+
+          if ! record_pin; then
             exit 0
           fi
-
-          git add -- "${pin_paths[@]}"
-          git -c commit.gpgsign=false commit \
-            -m "chore(packaging): re-record cxx wrap pin"
+          create_commit
 
           if git push origin HEAD:develop; then
             exit 0
           fi
 
-          echo "develop moved; rebasing and retrying once."
+          echo "develop moved; resetting and retrying once."
           git fetch origin develop
-          git rebase origin/develop
-          refresh_commit
+          git reset --hard origin/develop
+          if ! record_pin; then
+            exit 0
+          fi
+          create_commit
           git push origin HEAD:develop
 
       - name: Check the recorded pin strictly
