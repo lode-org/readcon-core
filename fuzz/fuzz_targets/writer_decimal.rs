@@ -100,12 +100,12 @@ fuzz_target!(|data: &[u8]| {
     assert_eq!(tokens.len(), values.len() * 3);
     for (index, value) in values.iter().copied().enumerate() {
         let atom = &parsed[0].atom_data[index];
-        assert_eq!(atom.x().to_bits(), value.to_bits(), "x bits {value}");
+        assert_eq!(parsed[0].x_at(index).to_bits(), value.to_bits(), "x bits {value}");
         assert_eq!(tokens[index * 3], ryu_spell(value), "x spelling {value}");
         let y = if index % 2 == 0 { -0.0f64 } else { 0.25 };
-        assert_eq!(atom.y().to_bits(), y.to_bits());
+        assert_eq!(parsed[0].y_at(index).to_bits(), y.to_bits());
         assert_eq!(tokens[index * 3 + 1], ryu_spell(y));
-        assert_eq!(atom.z().to_bits(), 1.0f64.to_bits());
+        assert_eq!(parsed[0].z_at(index).to_bits(), 1.0f64.to_bits());
         assert_eq!(tokens[index * 3 + 2], ryu_spell(1.0));
     }
 });

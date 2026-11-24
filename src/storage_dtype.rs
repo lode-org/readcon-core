@@ -230,7 +230,7 @@ pub enum Array2Storage {
 pub type FloatArray2 = Array2Storage;
 
 /// An absent 2-D section. Empty stays a null pointer instead of a 56-byte header.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Optional2 {
     inner: Option<Box<Array2Storage>>,
 }
@@ -440,14 +440,46 @@ impl Array2Storage {
         }
     }
 
+    /// Row-major `[x0, y0, z0, x1, ...]` doubles of a float64 `(n, 3)` block.
+    ///
+    /// `None` for another dtype, another column count, or a layout that is
+    /// not row-major. A Fortran-ordered `(n, 3)` block is contiguous, but its
+    /// memory order is column by column, so [`Self::f64_slice`] would hand
+    /// out the x values of every atom first.
+    pub fn f64_rows3(&self) -> Option<&[f64]> {
+        match self {
+            Self::F64(a) if a.ncols() == 3 && a.is_standard_layout() => a.as_slice(),
+            _ => None,
+        }
+    }
+
+    /// Row `i`, or `None` when `i` is past the last row or the block does
+    /// not have exactly three columns.
+    pub fn try_f64_row(&self, i: usize) -> Option<[f64; 3]> {
+        (i < self.nrows() && self.ncols() == 3).then(|| self.as_f64_row(i))
+    }
+
     /// Contiguous mutable f64 row-major slice when storage is float64.
     ///
     /// Shared `ArcArray` storage is copied before the mutable slice is
-    /// returned, so pointers derived here carry writable provenance for this
-    /// storage's allocation.
+    /// returned. The slice's borrow ends with the reference, so a pointer
+    /// saved from it is not a way to write the block later.
     pub fn f64_mut_slice(&mut self) -> Option<&mut [f64]> {
         match self {
             Self::F64(a) => a.as_slice_memory_order_mut(),
+            _ => None,
+        }
+    }
+
+    /// Writable pointer to the first element of a unique contiguous f64 block.
+    ///
+    /// [`Self::f64_slice`] retags that block as shared. A pointer saved from
+    /// the slice cannot be written afterwards. This is the array's own
+    /// pointer after the storage is made unique. A write through it stays
+    /// valid while the allocation stays where it is.
+    pub fn f64_allocation_ptr(&mut self) -> Option<*mut f64> {
+        match self {
+            Self::F64(array) if array.is_standard_layout() => Some(array.as_mut_ptr()),
             _ => None,
         }
     }
@@ -541,11 +573,12 @@ impl Array2Storage {
     pub fn set_f64_row(&mut self, i: usize, v: [f64; 3]) {
         match self {
             Self::F64(a) => {
-                // Contiguous (N,3) layout: three stores at i*3 without ndarray
-                // row view machinery on the coordinate hot path.
-                if a.ncols() == 3
-                    && let Some(s) = a.as_slice_memory_order_mut()
-                {
+                // Row-major (N,3) layout: three stores at i*3 without ndarray
+                // row view machinery on the coordinate hot path. A
+                // Fortran-ordered block is contiguous too, but row i is not
+                // at i*3 there.
+                let row_major = a.ncols() == 3 && a.is_standard_layout();
+                if let Some(s) = row_major.then(|| a.as_slice_mut()).flatten() {
                     let o = i * 3;
                     s[o] = v[0];
                     s[o + 1] = v[1];
@@ -1036,6 +1069,40 @@ impl IdArray1 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fortran_rows(rows: &[[f64; 3]]) -> Array2Storage {
+        use ndarray::ShapeBuilder;
+        let n = rows.len();
+        let mut column_major = Vec::with_capacity(n * 3);
+        for axis in 0..3 {
+            column_major.extend(rows.iter().map(|row| row[axis]));
+        }
+        let array = ndarray::Array2::from_shape_vec((n, 3).f(), column_major).unwrap();
+        Array2Storage::F64(array.into_shared())
+    }
+
+    #[test]
+    fn set_f64_row_writes_the_row_of_a_fortran_ordered_block() {
+        let mut block = fortran_rows(&[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]);
+        block.set_f64_row(0, [7.0, 8.0, 9.0]);
+        assert_eq!(block.as_f64_row(0), [7.0, 8.0, 9.0]);
+        assert_eq!(block.as_f64_row(1), [4.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    fn rows3_is_row_major_three_column_f64_only() {
+        let fortran = fortran_rows(&[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]);
+        assert!(fortran.f64_slice().is_some());
+        assert!(fortran.f64_rows3().is_none());
+        let narrow = Array2Storage::from_f64_row_major(4, 1, vec![1.0, 2.0, 3.0, 4.0]);
+        assert!(narrow.f64_rows3().is_none());
+        assert_eq!(narrow.try_f64_row(0), None);
+        let rows = Array2Storage::from_f64_row_major(1, 3, vec![1.0, 2.0, 3.0]);
+        assert_eq!(rows.f64_rows3(), Some(&[1.0, 2.0, 3.0][..]));
+        assert_eq!(rows.try_f64_row(0), Some([1.0, 2.0, 3.0]));
+        assert_eq!(rows.try_f64_row(1), None);
+        assert_eq!(Array2Storage::zeros_f64(0, 3).try_f64_row(0), None);
+    }
 
     #[test]
     fn all_hosted_kinds_allocate_2d_and_dlpack() {

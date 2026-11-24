@@ -765,10 +765,9 @@ def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 
 
 def package_version() -> str:
-    found = re.search(r'^version = "([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M)
-    if found is None:
-        raise SystemExit("Cargo.toml names no package version")
-    return found.group(1)
+    # VERSION, not Cargo.toml: the branch history check reads the release
+    # back from <measured commit>:VERSION.
+    return (ROOT / "VERSION").read_text().strip()
 
 
 def versions_record() -> dict:
@@ -819,9 +818,13 @@ def versions_record() -> dict:
 
 def measure(commit: str | None = None) -> None:
     spec_rel = SPEC.relative_to(ROOT).as_posix()
+    # The record pairs the release in VERSION with the spec.org blob, so the
+    # measured commit is the last one to change either file.
     measured_commit = (
         commit
-        or git("log", "-n", "1", "--format=%H", "HEAD", "--", spec_rel).stdout.strip()
+        or git(
+            "log", "-n", "1", "--format=%H", "HEAD", "--", spec_rel, "VERSION"
+        ).stdout.strip()
     )
     record = versions_record()
     versions = {

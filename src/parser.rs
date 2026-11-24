@@ -322,9 +322,14 @@ pub(crate) fn parallel_coord_rows(
                 *((ids_ptr as *mut u64).add(row)) = atom_id;
                 *((flags_ptr as *mut [bool; 3]).add(row)) = fixed;
                 if let Some(shares) = shares.as_mut() {
-                    let slot = (xyz_ptr as *mut f64).add(row * 3);
-                    let atom =
-                        crate::types::AtomDatum::at_slot(shares.take(), slot, fixed, atom_id);
+                    let atom = crate::types::AtomDatum::coords(
+                        shares.take(),
+                        xyz[0],
+                        xyz[1],
+                        xyz[2],
+                        fixed,
+                        atom_id,
+                    );
                     (*(atoms_ptr as *mut std::mem::MaybeUninit<crate::types::AtomDatum>).add(row))
                         .write(atom);
                 }
@@ -407,7 +412,14 @@ pub(crate) fn parse_coord_run(
             *ids.add(row) = atom_id;
             *flags.add(row) = fixed;
             if let Some(shares) = shares.as_mut() {
-                let atom = crate::types::AtomDatum::at_slot(shares.take(), dest, fixed, atom_id);
+                let atom = crate::types::AtomDatum::coords(
+                    shares.take(),
+                    xyz_row[0],
+                    xyz_row[1],
+                    xyz_row[2],
+                    fixed,
+                    atom_id,
+                );
                 (*atoms.add(row)).write(atom);
             }
         }
@@ -3162,21 +3174,15 @@ where
 {
     let workers = wide_workers();
     if workers >= 2 && n >= 4096 {
-        if let Some(mut block) =
+        if let Some(block) =
             lines.try_take_coord_block(n, spec_version, global_atom_idx, symbol, workers)
         {
-            let base = pos_flat.len();
-            // Keep a reservation that covers the whole frame. Replacing it
-            // with a shorter block makes the next species group reallocate
-            // under live pointers.
+            // Keep a reservation that covers the whole frame so the next
+            // species group does not allocate a second positions buffer.
             if pos_flat.is_empty() && block.xyz.capacity() >= pos_flat.capacity() {
                 *pos_flat = block.xyz;
             } else {
                 pos_flat.extend_from_slice(&block.xyz);
-            }
-            let ptr = pos_flat.as_mut_ptr();
-            for (i, atom) in block.atoms.iter_mut().enumerate() {
-                atom.retarget(unsafe { ptr.add(base + i * 3) });
             }
             if ids.is_empty() {
                 *ids = block.ids;
@@ -3198,11 +3204,11 @@ where
             note_not_sequential_plain();
         }
         let sym = shares.take();
-        let index = pos_flat.len() / 3;
         pos_flat.extend_from_slice(&xyz);
-        let slot = unsafe { pos_flat.as_mut_ptr().add(index * 3) };
         ids.push(atom_id);
-        atom_data.push(AtomDatum::at_slot(sym, slot, fixed, atom_id));
+        atom_data.push(AtomDatum::coords(
+            sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
+        ));
         global_atom_idx += 1;
     }
     Ok(global_atom_idx)
@@ -5067,14 +5073,16 @@ Velocities of Component 1
             .next()
             .expect("frame")
             .expect("parse");
-        let soa = frame.velocities.f64_slice().expect("f64 column");
-        let mut packed = Vec::with_capacity(soa.len());
-        for atom in &frame.atom_data {
-            packed.extend_from_slice(&atom.velocity().expect("velocity"));
+        {
+            let soa = frame.velocities.f64_slice().expect("f64 column");
+            let mut packed = Vec::with_capacity(soa.len());
+            for atom in &frame.atom_data {
+                packed.extend_from_slice(&atom.velocity().expect("velocity"));
+            }
+            assert_eq!(soa, packed.as_slice());
+            assert_eq!(soa, &[0.125, -0.25, 0.5, -0.125, 0.25, -0.5][..]);
+            assert_eq!(frame.atom_data[0].velocity_slot(), soa.as_ptr());
         }
-        assert_eq!(soa, packed.as_slice());
-        assert_eq!(soa, &[0.125, -0.25, 0.5, -0.125, 0.25, -0.5][..]);
-        assert_eq!(frame.atom_data[0].velocity_slot(), soa.as_ptr());
         frame.atom_data[0].set_velocity(Some([9.0, 8.0, 7.0]));
         assert_eq!(frame.velocities.as_f64_row(0), [9.0, 8.0, 7.0]);
         assert_eq!(frame.velocities.as_f64_row(1), [-0.125, 0.25, -0.5]);
@@ -5106,14 +5114,16 @@ Forces of Component 1
             .next()
             .expect("frame")
             .expect("parse");
-        let soa = frame.forces.f64_slice().expect("f64 column");
-        let mut packed = Vec::with_capacity(soa.len());
-        for atom in &frame.atom_data {
-            packed.extend_from_slice(&atom.force().expect("force"));
+        {
+            let soa = frame.forces.f64_slice().expect("f64 column");
+            let mut packed = Vec::with_capacity(soa.len());
+            for atom in &frame.atom_data {
+                packed.extend_from_slice(&atom.force().expect("force"));
+            }
+            assert_eq!(soa, packed.as_slice());
+            assert_eq!(soa, &[0.1, 0.2, 0.3, -0.4, 0.5, -0.6][..]);
+            assert_eq!(frame.atom_data[0].force_slot(), soa.as_ptr());
         }
-        assert_eq!(soa, packed.as_slice());
-        assert_eq!(soa, &[0.1, 0.2, 0.3, -0.4, 0.5, -0.6][..]);
-        assert_eq!(frame.atom_data[0].force_slot(), soa.as_ptr());
         frame.atom_data[1].set_force(Some([1.0, 2.0, 3.0]));
         assert_eq!(frame.forces.as_f64_row(1), [1.0, 2.0, 3.0]);
     }
@@ -5281,7 +5291,7 @@ Forces of Component 1
     }
 
     #[test]
-    fn atoms_keep_their_coordinates_when_positions_are_not_f64() {
+    fn accessors_read_the_positions_column_when_it_is_not_f64() {
         use crate::storage_dtype::ElementKind;
         let rows = [[0.5, -1.25, 3.0], [1.0e-3, 2.5e4, -7.75]];
         for &kind in ElementKind::all_hosted() {
@@ -5303,8 +5313,12 @@ Forces of Component 1
                 .expect("frame")
                 .expect("parse");
             assert_eq!(frame.positions.kind(), kind);
-            for (i, atom) in frame.atom_data.iter().enumerate() {
-                assert_eq!([atom.x(), atom.y(), atom.z()], rows[i], "{kind:?} atom {i}");
+            for i in 0..frame.atom_data.len() {
+                assert_eq!(
+                    frame.xyz_at(i),
+                    frame.positions.as_f64_row(i),
+                    "{kind:?} atom {i}"
+                );
             }
         }
     }
@@ -5535,6 +5549,7 @@ Forces of Component 1
     }
 
     #[test]
+    /// CON-line2.14 rejects a repeated top-level `con_spec_minor` key.
     fn test_invalid_con_spec_minor_and_duplicate_semantics() {
         for bad in [
             "-1",

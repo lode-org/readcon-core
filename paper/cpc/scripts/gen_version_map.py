@@ -91,6 +91,17 @@ NO_BUILD = {
     "data/eon/readcon_pins.json",
     "data/peers/releases.json",
 }
+# A measurement of a later spec.org of the same release is named by its blob.
+NO_BUILD |= {
+    p.relative_to(CPC).as_posix()
+    for p in (CPC / "data" / "spec").glob(f"spec-measurement-{VERSION}-*.json")
+}
+# A clause recount after the release record is named by its specification
+# digest and likewise carries no build.
+NO_BUILD |= {
+    p.relative_to(CPC).as_posix()
+    for p in (CPC / "data" / "spec").glob(f"clause_coverage-{VERSION}-*.json")
+}
 # Record directories copied verbatim from lode-org/readcon-db: their build is a readcon-db commit, not a readcon-core build.
 EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/", "data/db33/")
 HOST_BUILD_KEYS = ("readcon_core", "readcon_sha", "rustc", "python")

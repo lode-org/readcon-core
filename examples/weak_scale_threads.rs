@@ -155,12 +155,12 @@ fn frame_fingerprint(frames: &[readcon_core::types::ConFrame]) -> u64 {
         acc = acc
             .wrapping_mul(0x100000001b3)
             .wrapping_add(frame.atom_data.len() as u64);
-        for atom in &frame.atom_data {
+        for (coord_i0, atom) in frame.atom_data.iter().enumerate() {
             acc = acc
                 .wrapping_mul(0x100000001b3)
-                .wrapping_add(atom.x().to_bits())
-                .wrapping_add(atom.y().to_bits())
-                .wrapping_add(atom.z().to_bits())
+                .wrapping_add(frame.x_at(coord_i0).to_bits())
+                .wrapping_add(frame.y_at(coord_i0).to_bits())
+                .wrapping_add(frame.z_at(coord_i0).to_bits())
                 .wrapping_add(atom.atom_id);
         }
     }

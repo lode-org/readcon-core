@@ -3,6 +3,7 @@
 import os
 import tempfile
 
+import numpy as np
 import pytest
 import readcon
 
@@ -514,3 +515,101 @@ class TestSourceText:
         assert built == src
         assert built.source_text is None
         assert src.raw
+
+
+def _frames_with_live_xyz():
+    """Parsed frames whose ``xyz`` is the coordinate buffer, not a snapshot."""
+    path = _resource("tiny_cuh2.con")
+    text = _file_text("tiny_cuh2.con")
+    return [
+        readcon.read_con(path)[0],
+        next(readcon.iter_con(path)),
+        readcon.read_con_string(text)[0],
+        readcon.read_first_frame(path),
+    ]
+
+
+class TestAtomXyzAgreement:
+    """``atoms``, a held ``Atom``, and ``xyz`` are one coordinate store."""
+
+    def test_xyz_store_after_atoms_reaches_the_write(self, tmp_path):
+        for frame in _frames_with_live_xyz():
+            frame.atoms
+            held = frame.atoms[0]
+            before = float(held.x)
+            frame.xyz[0, 0] = before + 4.25
+            assert held.x == pytest.approx(before + 4.25)
+            assert float(frame.xyz[0, 0]) == pytest.approx(before + 4.25)
+            assert frame.atoms[0].x == pytest.approx(before + 4.25)
+            assert frame[0].x == pytest.approx(before + 4.25)
+            parsed = round_trip(frame)
+            assert parsed[0].x == pytest.approx(before + 4.25)
+
+    def test_held_atom_edit_shows_in_xyz_and_the_write(self):
+        for frame in _frames_with_live_xyz():
+            frame.atoms
+            held = frame.atoms[0]
+            other = float(frame.xyz[1, 0])
+            held.x = 8.75
+            held.y = -2.5
+            assert float(frame.xyz[0, 0]) == pytest.approx(8.75)
+            assert float(frame.xyz[0, 1]) == pytest.approx(-2.5)
+            assert frame.atoms[0] is held
+            assert frame[0].x == pytest.approx(8.75)
+            assert float(frame.coords_array()[0, 0]) == pytest.approx(8.75)
+            parsed = round_trip(frame)
+            assert parsed[0].x == pytest.approx(8.75)
+            assert parsed[0].y == pytest.approx(-2.5)
+            assert parsed[1].x == pytest.approx(other)
+
+    def test_assigning_xyz_updates_atoms_and_the_write(self):
+        frame = readcon.read_con(_resource("tiny_multi_cuh2.con"))[0]
+        frame.atoms
+        updated = np.array(frame.xyz, copy=True)
+        updated[0, 0] = 6.5
+        updated[1, 2] = -1.25
+        frame.xyz = updated
+        assert frame.atoms[0].x == pytest.approx(6.5)
+        assert float(frame.xyz[1, 2]) == pytest.approx(-1.25)
+        held = frame.atoms[1]
+        held.z = 3.25
+        assert float(frame.xyz[1, 2]) == pytest.approx(3.25)
+        parsed = round_trip(frame)
+        assert parsed[0].x == pytest.approx(6.5)
+        assert parsed[1].z == pytest.approx(3.25)
+
+    def test_atom_and_xyz_edits_drop_source_text(self):
+        path = _resource("tiny_cuh2.con")
+
+        frame = next(readcon.iter_con(path))
+        assert frame.source_text
+        frame.atoms
+        assert frame.source_text
+        assert frame.raw
+
+        frame = next(readcon.iter_con(path))
+        assert frame.source_text
+        frame.atoms
+        frame.atoms[0].x = frame.atoms[0].x + 1.0
+        assert frame.source_text is None
+        assert frame.raw is None
+
+        frame = next(readcon.iter_con(path))
+        assert frame.source_text
+        frame.xyz[0, 0] = float(frame.xyz[0, 0]) + 1.0
+        assert frame.source_text is None
+        assert frame.raw is None
+
+        frame = next(readcon.iter_con(path))
+        assert frame.source_text
+        updated = np.array(frame.xyz, copy=True)
+        updated[0, 2] = float(updated[0, 2]) + 1.0
+        frame.xyz = updated
+        assert frame.source_text is None
+        assert frame.raw is None
+
+        frame = next(readcon.iter_con(path))
+        assert frame.source_text
+        frame.atoms[0].symbol = "Ag"
+        assert frame.source_text is None
+        assert frame.raw is None

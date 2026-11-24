@@ -170,7 +170,7 @@ fn writing_positions_leaves_an_earlier_export_unchanged() {
     assert_eq!(values(after, 9), values(new_values, 9));
     let frame = unsafe { &*(handle as *const ConFrame) };
     assert_eq!(data(after), rows_ptr(&frame.positions));
-    assert_eq!(frame.atom_data[2].x(), 7.0);
+    assert_eq!(frame.x_at(2), 7.0);
     unsafe {
         rkr_dlpack_delete(held);
         rkr_dlpack_delete(new_values);
@@ -181,7 +181,7 @@ fn writing_positions_leaves_an_earlier_export_unchanged() {
 }
 
 #[test]
-fn a_rust_set_x_on_a_parsed_frame_shows_in_an_earlier_export() {
+fn a_store_into_the_shared_export_shows_on_the_frame() {
     let text = std::fs::read_to_string("resources/test/tiny_cuh2.con").unwrap();
     let parsed = readcon_core::iterators::ConFrameIterator::new(&text)
         .next()
@@ -190,7 +190,12 @@ fn a_rust_set_x_on_a_parsed_frame_shows_in_an_earlier_export() {
     let handle = Box::into_raw(Box::new(parsed)) as *mut RKRConFrame;
     let held = export(handle, rkr_frame_positions_dlpack_ex, ptr::null());
     let frame = unsafe { &mut *(handle as *mut ConFrame) };
-    frame.atom_data[0].set_x(42.0);
+    // The export is the positions column. A store through that pointer is
+    // what a later read of the frame returns. `set_x_at` copies a column
+    // an export still shares, so the in-place store is this pointer.
+    assert_eq!(data(held), rows_ptr(&frame.positions));
+    unsafe { (data(held) as *mut f64).write(42.0) };
+    assert_eq!(frame.x_at(0), 42.0);
     assert_eq!(values(held, 1), [42.0]);
     unsafe {
         rkr_dlpack_delete(held);

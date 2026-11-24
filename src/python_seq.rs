@@ -86,9 +86,9 @@ fn snap_from_datum(atom: &PyAtomDatum) -> AtomSnap {
     };
     AtomSnap {
         symbol: atom.symbol.clone(),
-        x: atom.x,
-        y: atom.y,
-        z: atom.z,
+        x: atom.read_coord(0),
+        y: atom.read_coord(1),
+        z: atom.read_coord(2),
         fixed: atom.fixed,
         atom_id: atom.atom_id,
         mass: atom.mass.unwrap_or(0.0),
@@ -151,6 +151,8 @@ fn datum_from_snap(snap: &AtomSnap) -> PyAtomDatum {
         sx,
         sy,
         sz,
+        coord: None,
+        edits: 0,
     }
 }
 
@@ -238,10 +240,10 @@ fn snap_from_frame(frame: &ConFrame, index: usize) -> AtomSnap {
     let atom = &frame.atom_data[index];
     let [x, y, z] = if n > 0 && frame.positions.nrows() == n {
         frame.positions.as_f64_row(index)
-    } else if n == 0 {
-        [0.0; 3]
     } else {
-        [atom.x(), atom.y(), atom.z()]
+        // The column was moved into the store or a NumPy view. Callers
+        // that can see that buffer fill these in afterwards.
+        [0.0; 3]
     };
     AtomSnap {
         symbol: atom.symbol.to_string(),
@@ -614,6 +616,7 @@ impl PyConFrame {
     /// Drop the iterator's source substring. A later write would not emit it.
     fn note_mutated(&mut self) {
         self.source_text = None;
+        self.source_coord_hash = None;
     }
 
     fn ensure_index(&self, index: usize) -> PyResult<()> {
@@ -650,7 +653,43 @@ impl PyConFrame {
         {
             return snap_from_datum(&atom);
         }
-        self.store_snap_unchecked(index)
+        let mut snap = self.store_snap_unchecked(index);
+        let n = self.n_atoms();
+        if n > 0 && self.store().positions.nrows() != n {
+            let xyz = self.live_xyz(py, index);
+            snap.x = xyz[0];
+            snap.y = xyz[1];
+            snap.z = xyz[2];
+        }
+        snap
+    }
+
+    /// Coordinates of one atom from the store, the slab, or the owned array.
+    fn live_xyz(&self, py: Python<'_>, index: usize) -> [f64; 3] {
+        if let Some(owned) = &self.xyz_owned
+            && let Some(xyz) = load_numpy_triple(owned.bind(py), index * 3)
+        {
+            return xyz;
+        }
+        if let Some(slab) = &self.slab
+            && let Some(xyz) = load_numpy_triple(
+                slab.bind(py),
+                (self.slab_index * self.n_atoms + index) * 3,
+            )
+        {
+            return xyz;
+        }
+        if let Some(store) = &self.store
+            && let Some(xyz) = store.get().load_triple(self.slab_index, index)
+        {
+            return xyz;
+        }
+        if let Some(frame) = &self.inner
+            && frame.positions.nrows() > index
+        {
+            return frame.xyz_at(index);
+        }
+        [0.0; 3]
     }
 
     fn store_snap_unchecked(&self, index: usize) -> AtomSnap {
@@ -850,6 +889,7 @@ impl PyConFrame {
             columns: pyo3::sync::PyOnceLock::new(),
             xyz_owned: None,
             source_text: None,
+            source_coord_hash: None,
         })
     }
 
@@ -866,46 +906,31 @@ impl PyConFrame {
         let dt = self.dtypes();
         let cached_value = if use_columns {
             let frame = self.store_mut();
-            if frame.positions.nrows() != n {
-                frame.positions = FloatArray2::zeros(dt.positions, n, 3);
-                for i in 0..n {
-                    let atom = &frame.atom_data[i];
-                    frame
-                        .positions
-                        .set_f64_row(i, [atom.x(), atom.y(), atom.z()]);
-                }
-            }
             let stored =
                 set_row_component(&mut frame.positions, n, index, axis, value, dt.positions);
-            let atom = &mut frame.atom_data[index];
-            atom.set_x(stored[0]);
-            atom.set_y(stored[1]);
-            atom.set_z(stored[2]);
             stored[axis]
         } else {
-            let atom = &mut self.store_mut().atom_data[index];
-            match axis {
-                0 => atom.set_x(value),
-                1 => atom.set_y(value),
-                2 => atom.set_z(value),
-                _ => {}
-            }
             self.write_view_component(py, index, axis, value)?;
+            if let Some(store) = &self.store {
+                store
+                    .get()
+                    .store_component(self.slab_index, index, axis, value);
+            }
             value
         };
         self.update_cached_atom(py, index, |atom| match axis {
-            0 => atom.x = cached_value,
-            1 => atom.y = cached_value,
-            2 => atom.z = cached_value,
+            0 => atom.write_coord(0, cached_value),
+            1 => atom.write_coord(1, cached_value),
+            2 => atom.write_coord(2, cached_value),
             _ => {}
         })?;
         self.note_mutated();
         Ok(())
     }
 
-    /// `read_con` keeps coordinates in a NumPy slab or an owned array.
-    /// Atom pointers usually alias that memory. Write the array as well so a
-    /// view edit is visible when the pointer addresses a different box.
+    /// `read_con` keeps coordinates in the position store, a NumPy slab, or
+    /// an owned array. Atoms store no pointer. Write that buffer so a view
+    /// edit is what a later read of `xyz` sees.
     fn write_view_component(
         &self,
         py: Python<'_>,
@@ -913,31 +938,18 @@ impl PyConFrame {
         axis: usize,
         value: f64,
     ) -> PyResult<()> {
-        if let Some(owned) = &self.xyz_owned {
-            let arr = owned.bind(py);
-            let n = arr.shape()[0];
-            if index < n {
-                unsafe {
-                    let slice = arr.as_slice_mut().map_err(|err| {
-                        PyValueError::new_err(format!("xyz is not contiguous: {err}"))
-                    })?;
-                    slice[index * 3 + axis] = value;
-                }
-            }
+        if let Some(owned) = &self.xyz_owned
+            && index < self.n_atoms
+        {
+            store_numpy_component(owned.bind(py), index * 3 + axis, value)
+                .map_err(|()| PyValueError::new_err("xyz is not contiguous"))?;
         }
-        if let Some(slab) = &self.slab {
-            let arr = slab.bind(py);
-            let shape = arr.shape();
-            let n = shape[1];
-            if index < n && self.slab_index < shape[0] {
-                unsafe {
-                    let slice = arr.as_slice_mut().map_err(|err| {
-                        PyValueError::new_err(format!("coordinate slab is not contiguous: {err}"))
-                    })?;
-                    let offset = (self.slab_index * n + index) * 3 + axis;
-                    slice[offset] = value;
-                }
-            }
+        if let Some(slab) = &self.slab
+            && index < self.n_atoms
+        {
+            let at = (self.slab_index * self.n_atoms + index) * 3 + axis;
+            store_numpy_component(slab.bind(py), at, value)
+                .map_err(|()| PyValueError::new_err("coordinate slab is not contiguous"))?;
         }
         Ok(())
     }
@@ -967,6 +979,9 @@ impl PyConFrame {
         let (created, stored) = {
             let frame = self.store_mut();
             if matches!(which, VecSection::Velocity | VecSection::Force) {
+                // A column view handed to Python shares the block. The row
+                // store below would copy it and leave atom slots on the
+                // view's block.
                 frame.unshare_slot_columns();
             }
             let kind = vec_kind(which, &dt);

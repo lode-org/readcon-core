@@ -75,7 +75,6 @@ fn wide_two_species_keeps_its_coordinates() {
     let frame = &frames[0];
     assert_eq!(frame.atom_data.len(), per_type * 2);
     let check = |index: usize| {
-        let atom = &frame.atom_data[index];
         let (species, local) = if index < per_type {
             (0usize, index)
         } else {
@@ -83,9 +82,9 @@ fn wide_two_species_keeps_its_coordinates() {
         };
         let x = coord(0, local + species * per_type, 0);
         assert!(
-            (atom.x() - x).abs() < 1e-8,
+            (frame.x_at(index) - x).abs() < 1e-8,
             "atom {index} x {} expected {x}",
-            atom.x()
+            frame.x_at(index)
         );
         assert!((frame.positions.as_f64_row(index)[0] - x).abs() < 1e-8);
     };
@@ -100,7 +99,7 @@ fn child() {
     let before = vm_hwm_kib();
     let frames = readcon_core::iterators::read_all_frames(Path::new(&path)).unwrap();
     let after = vm_hwm_kib();
-    let sum: f64 = frames.iter().map(|frame| frame.atom_data[0].x()).sum();
+    let sum: f64 = frames.iter().map(|frame| frame.x_at(0)).sum();
     println!("frames={}", frames.len());
     println!("added_kib={}", after.saturating_sub(before));
     println!("sum={sum}");
