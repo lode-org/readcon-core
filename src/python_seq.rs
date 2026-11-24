@@ -5,6 +5,8 @@
 use std::sync::Arc;
 
 use pyo3::exceptions::PyIndexError;
+#[cfg(feature = "race-hooks")]
+use pyo3::sync::MutexExt;
 use pyo3::types::PySliceIndices;
 
 use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
@@ -655,17 +657,22 @@ impl PyConFrame {
         snap_from_frame(self.store(), index)
     }
 
-    fn snapshot_atoms(&self, py: Python<'_>) -> Vec<AtomSnap> {
-        let cached = self.atoms_ready.load(std::sync::atomic::Ordering::Acquire);
-        (0..self.n_atoms())
-            .map(|i| {
-                let mut snap = self.snap_unchecked(py, i);
-                if cached {
+    fn snapshot_atoms(&self, py: Python<'_>) -> PyResult<Vec<AtomSnap>> {
+        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            let list = self.atoms.bind(py);
+            return Ok(read_atom_list(list)?
+                .into_iter()
+                .enumerate()
+                .map(|(i, atom)| {
+                    let mut snap = snap_from_datum(&atom);
                     snap.origin = Some(i);
-                }
-                snap
-            })
-            .collect()
+                    snap
+                })
+                .collect());
+        }
+        Ok((0..self.n_atoms())
+            .map(|i| self.store_snap_unchecked(i))
+            .collect())
     }
 
     /// Index of `obj` when it is one of this frame's cached `Atom` objects.
@@ -831,6 +838,7 @@ impl PyConFrame {
             postbox_header: self.postbox_header.clone(),
             atoms: py_atoms_to_list(py, &atoms)?,
             atoms_ready: std::sync::atomic::AtomicBool::new(true),
+            atoms_fills: std::sync::atomic::AtomicUsize::new(0),
             atoms_init: std::sync::Mutex::new(()),
             spec_version: self.spec_version,
             metadata,
@@ -958,6 +966,9 @@ impl PyConFrame {
         }
         let (created, stored) = {
             let frame = self.store_mut();
+            if matches!(which, VecSection::Velocity | VecSection::Force) {
+                frame.unshare_slot_columns();
+            }
             let kind = vec_kind(which, &dt);
             let arr = vec_array_mut(frame, which);
             let created = arr.nrows() != n;
@@ -1067,7 +1078,7 @@ impl PyConFrame {
 
     fn set_symbol_at(&mut self, py: Python<'_>, index: usize, symbol: String) -> PyResult<()> {
         self.ensure_index(index)?;
-        let mut snaps = self.snapshot_atoms(py);
+        let mut snaps = self.snapshot_atoms(py)?;
         snaps[index].symbol = symbol;
         self.replace_atoms(py, snaps)
     }
@@ -1128,15 +1139,19 @@ impl PyConFrame {
         n > 0 && arr.len() == n
     }
 
-    fn picked_snaps(&self, py: Python<'_>, indices: &PySliceIndices) -> Vec<AtomSnap> {
-        let all = self.snapshot_atoms(py);
+    fn picked_snaps(
+        &self,
+        py: Python<'_>,
+        indices: &PySliceIndices,
+    ) -> PyResult<Vec<AtomSnap>> {
+        let all = self.snapshot_atoms(py)?;
         let mut picked = Vec::with_capacity(indices.slicelength);
         let mut i = indices.start;
         for _ in 0..indices.slicelength {
             picked.push(all[i as usize].clone());
             i += indices.step;
         }
-        picked
+        Ok(picked)
     }
 
     fn set_slice_snaps(
@@ -1153,7 +1168,7 @@ impl PyConFrame {
                 indices.slicelength
             )));
         }
-        let mut snaps = self.snapshot_atoms(py);
+        let mut snaps = self.snapshot_atoms(py)?;
         if indices.step == 1 {
             let start = indices.start as usize;
             for (k, (snap, origin)) in incoming.iter_mut().enumerate() {
@@ -1178,7 +1193,7 @@ impl PyConFrame {
 
     fn del_at(&mut self, py: Python<'_>, index: usize) -> PyResult<()> {
         self.ensure_index(index)?;
-        let mut snaps = self.snapshot_atoms(py);
+        let mut snaps = self.snapshot_atoms(py)?;
         snaps.remove(index);
         self.replace_atoms(py, snaps)
     }
@@ -1193,28 +1208,28 @@ impl PyConFrame {
         }
         drop_at.sort_unstable();
         drop_at.dedup();
-        let mut snaps = self.snapshot_atoms(py);
+        let mut snaps = self.snapshot_atoms(py)?;
         for idx in drop_at.into_iter().rev() {
             snaps.remove(idx);
         }
         self.replace_atoms(py, snaps)
     }
 
-    fn same_physical(&self, py: Python<'_>, other: &Self) -> bool {
+    fn same_physical(&self, py: Python<'_>, other: &Self) -> PyResult<bool> {
         if self.cell != other.cell || self.angles != other.angles {
-            return false;
+            return Ok(false);
         }
-        let a = self.snapshot_atoms(py);
+        let a = self.snapshot_atoms(py)?;
         // A held `Atom` can change between two reads of one frame.
         let b = if std::ptr::eq(self, other) {
             a.clone()
         } else {
-            other.snapshot_atoms(py)
+            other.snapshot_atoms(py)?
         };
-        a.len() == b.len()
+        Ok(a.len() == b.len()
             && a.iter()
                 .zip(b.iter())
-                .all(|(x, y)| same_physical_atom(x, y))
+                .all(|(x, y)| same_physical_atom(x, y)))
     }
 }
 
@@ -1647,7 +1662,7 @@ struct PyAtomSeq {
 #[pymethods]
 impl PyAtomSeq {
     fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
-        Ok(shared(self.frame.bind(py))?.n_atoms())
+        Ok(shared(self.frame.bind(py))?.atom_count(py))
     }
 
     fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyIterator>> {
@@ -1690,7 +1705,7 @@ impl PyAtomSeq {
             // `atoms[i] = atoms[i]` refills that object instead of detaching
             // it. Another slot, or another frame, stays a copy.
             carry_own_slot(&mut snap, cached, i);
-            let mut snaps = frame.snapshot_atoms(py);
+            let mut snaps = frame.snapshot_atoms(py)?;
             snaps[i] = snap;
             return frame.replace_atoms(py, snaps);
         }
@@ -1718,7 +1733,7 @@ impl PyAtomSeq {
     fn append(&self, py: Python<'_>, atom: &Bound<'_, PyAny>) -> PyResult<()> {
         let snap = snap_from_bound(atom)?;
         let mut frame = exclusive(self.frame.bind(py))?;
-        let mut snaps = frame.snapshot_atoms(py);
+        let mut snaps = frame.snapshot_atoms(py)?;
         snaps.push(snap);
         frame.replace_atoms(py, snaps)
     }
@@ -1728,7 +1743,7 @@ impl PyAtomSeq {
     fn insert(&self, py: Python<'_>, index: isize, atom: &Bound<'_, PyAny>) -> PyResult<()> {
         let snap = snap_from_bound(atom)?;
         let mut frame = exclusive(self.frame.bind(py))?;
-        let mut snaps = frame.snapshot_atoms(py);
+        let mut snaps = frame.snapshot_atoms(py)?;
         let n = snaps.len() as isize;
         let mut i = if index < 0 { index + n } else { index };
         if i < 0 {
@@ -1744,16 +1759,305 @@ impl PyAtomSeq {
     fn extend(&self, py: Python<'_>, atoms: &Bound<'_, PyAny>) -> PyResult<()> {
         let extra = snaps_from_iterable(atoms)?;
         let mut frame = exclusive(self.frame.bind(py))?;
-        let mut snaps = frame.snapshot_atoms(py);
+        let mut snaps = frame.snapshot_atoms(py)?;
         snaps.extend(extra);
         frame.replace_atoms(py, snaps)
+    }
+
+    #[pyo3(signature = (index = -1))]
+    fn pop(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
+        let mut frame = exclusive(self.frame.bind(py))?;
+        frame.ensure_atoms(py)?;
+        let n = frame.atom_count(py) as isize;
+        let i = if index < 0 { index + n } else { index };
+        if i < 0 || i >= n {
+            return Err(PyIndexError::new_err("ConFrame index out of range"));
+        }
+        let index = i as usize;
+        let popped = frame.atoms.bind(py).get_item(index)?.unbind();
+        let mut snaps = frame.snapshot_atoms(py)?;
+        snaps.remove(index);
+        frame.replace_atoms(py, snaps)?;
+        Ok(popped)
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         Ok(format!(
             "AtomSequence(n={})",
-            shared(self.frame.bind(py))?.n_atoms()
+            shared(self.frame.bind(py))?.atom_count(py)
         ))
+    }
+}
+
+#[cfg(feature = "race-hooks")]
+const RACE_READY: u8 = 0;
+#[cfg(feature = "race-hooks")]
+const RACE_ACTIVE: u8 = 1;
+#[cfg(feature = "race-hooks")]
+const RACE_CLOSED: u8 = 2;
+
+#[cfg(feature = "race-hooks")]
+fn validate_race_atom_spread(atom: &PyAtomDatum) -> PyResult<()> {
+    if atom.has_spread() {
+        let row = [
+            atom.sx.unwrap_or(0.0),
+            atom.sy.unwrap_or(0.0),
+            atom.sz.unwrap_or(0.0),
+        ];
+        if !row.iter().all(|v| v.is_finite() && *v >= 0.0) {
+            return Err(PyValueError::new_err(
+                "spread components must be finite and non-negative",
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "race-hooks")]
+fn validate_race_atoms(atoms: &[PyAtomDatum]) -> PyResult<()> {
+    let mut seen_ids = std::collections::HashSet::with_capacity(atoms.len());
+    let mut species_masses: std::collections::HashMap<&str, f64> = std::collections::HashMap::new();
+    for atom in atoms {
+        validate_race_atom_spread(atom)?;
+        if !seen_ids.insert(atom.atom_id) {
+            return Err(PyValueError::new_err(format!(
+                "duplicate atom_id {} in race list",
+                atom.atom_id
+            )));
+        }
+        let mass = atom.mass.unwrap_or(0.0);
+        match species_masses.get(atom.symbol.as_str()) {
+            Some(&first) => {
+                if (mass - first).abs() > ConFrameBuilder::TYPE_MASS_ABS_TOL {
+                    return Err(PyValueError::new_err(format!(
+                        "atoms of type {} have inconsistent masses",
+                        atom.symbol
+                    )));
+                }
+            }
+            None => {
+                species_masses.insert(atom.symbol.as_str(), mass);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Scoped, validated handle for racing in-place atom-list mutations against
+/// concurrent frame readers on free-threaded builds.
+///
+/// Registered only with the `race-hooks` feature. A release module does
+/// not export it.
+#[cfg(feature = "race-hooks")]
+#[pyclass(name = "_AtomListRace")]
+struct PyAtomListRace {
+    frame: Py<PyConFrame>,
+    state: std::sync::atomic::AtomicU8,
+    /// One mutator at a time. Readers take the list critical section only.
+    write: std::sync::Mutex<()>,
+}
+
+#[cfg(feature = "race-hooks")]
+impl PyAtomListRace {
+    fn ensure_active(&self) -> PyResult<()> {
+        if self.state.load(std::sync::atomic::Ordering::Acquire) != RACE_ACTIVE {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "atom list race handle is not active",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Take the writer lock without blocking the interpreter, then confirm
+    /// `__exit__` has not already resynced the frame.
+    ///
+    /// Nothing that can run caller code may happen while the guard is held.
+    fn write_guard(&self, py: Python<'_>) -> PyResult<std::sync::MutexGuard<'_, ()>> {
+        let guard = self
+            .write
+            .lock_py_attached(py)
+            .unwrap_or_else(|err| err.into_inner());
+        self.ensure_active()?;
+        Ok(guard)
+    }
+}
+
+#[cfg(feature = "race-hooks")]
+#[pymethods]
+impl PyAtomListRace {
+    fn __enter__<'py>(slf: Bound<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        {
+            let this = slf.borrow();
+            this.state
+                .compare_exchange(
+                    RACE_READY,
+                    RACE_ACTIVE,
+                    std::sync::atomic::Ordering::AcqRel,
+                    std::sync::atomic::Ordering::Acquire,
+                )
+                .map_err(|_| {
+                    pyo3::exceptions::PyRuntimeError::new_err(
+                        "atom list race handle cannot be re-entered",
+                    )
+                })?;
+            let frame = match this.frame.try_borrow(py) {
+                Ok(frame) => frame,
+                Err(err) => {
+                    this.state
+                        .store(RACE_CLOSED, std::sync::atomic::Ordering::Release);
+                    return Err(err.into());
+                }
+            };
+            if let Err(err) = frame.ensure_atoms(py) {
+                this.state
+                    .store(RACE_CLOSED, std::sync::atomic::Ordering::Release);
+                return Err(err);
+            }
+        }
+        Ok(slf)
+    }
+
+    #[pyo3(signature = (_exc_type=None, _exc_val=None, _exc_tb=None))]
+    fn __exit__(
+        &self,
+        py: Python<'_>,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc_val: Option<&Bound<'_, PyAny>>,
+        _exc_tb: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<bool> {
+        let _write = self
+            .write
+            .lock_py_attached(py)
+            .unwrap_or_else(|err| err.into_inner());
+        let state = self.state.load(std::sync::atomic::Ordering::Acquire);
+        if state == RACE_ACTIVE {
+            let mut frame = self.frame.try_borrow_mut(py)?;
+            let snaps = frame.snapshot_atoms(py)?;
+            frame.replace_atoms(py, snaps)?;
+            self.state
+                .store(RACE_CLOSED, std::sync::atomic::Ordering::Release);
+        } else if state == RACE_READY {
+            let _ = self.state.compare_exchange(
+                RACE_READY,
+                RACE_CLOSED,
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+            );
+        }
+        Ok(false)
+    }
+
+    fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
+        self.ensure_active()?;
+        Ok(self.frame.try_borrow(py)?.atom_count(py))
+    }
+
+    fn replace(&self, py: Python<'_>, atoms: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.ensure_active()?;
+        let mut datums = Vec::new();
+        let fresh = PyList::empty(py);
+        for item in atoms.try_iter()? {
+            let item = item?;
+            let datum = item
+                .cast::<PyAtomDatum>()
+                .map_err(|_| {
+                    PyTypeError::new_err("ConFrame atom cache must hold readcon.Atom objects")
+                })?
+                .try_borrow()?
+                .clone();
+            datums.push(datum);
+            fresh.append(item)?;
+        }
+        validate_race_atoms(&datums)?;
+        let _write = self.write_guard(py)?;
+        let frame = self.frame.try_borrow(py)?;
+        let list = frame.atoms.bind(py);
+        list.as_any()
+            .set_item(PySlice::new(py, 0, isize::MAX, 1), &fresh)?;
+        Ok(())
+    }
+
+    fn append(&self, py: Python<'_>, atom: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.ensure_active()?;
+        let datum = atom
+            .cast::<PyAtomDatum>()
+            .map_err(|_| PyTypeError::new_err("ConFrame atom cache must hold readcon.Atom objects"))?
+            .try_borrow()?
+            .clone();
+        validate_race_atom_spread(&datum)?;
+        let incoming_mass = datum.mass.unwrap_or(0.0);
+        let _write = self.write_guard(py)?;
+        let frame = self.frame.try_borrow(py)?;
+        for existing in read_atom_list(frame.atoms.bind(py))? {
+            if existing.atom_id == datum.atom_id {
+                return Err(PyValueError::new_err(format!(
+                    "duplicate atom_id {} in race list",
+                    datum.atom_id
+                )));
+            }
+            if existing.symbol == datum.symbol {
+                let first = existing.mass.unwrap_or(0.0);
+                if (incoming_mass - first).abs() > ConFrameBuilder::TYPE_MASS_ABS_TOL {
+                    return Err(PyValueError::new_err(format!(
+                        "atoms of type {} have inconsistent masses",
+                        datum.symbol
+                    )));
+                }
+            }
+        }
+        frame.atoms.bind(py).append(atom)
+    }
+
+    fn pop(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.ensure_active()?;
+        let _write = self.write_guard(py)?;
+        let frame = self.frame.try_borrow(py)?;
+        Ok(frame.atoms.bind(py).as_any().call_method0("pop")?.unbind())
+    }
+}
+
+/// Run `callback` while this thread holds a borrow of `frame`.
+///
+/// A list-race edit that overlaps the borrow returns an error. It does
+/// not panic. Test helper, registered only with `race-hooks`.
+#[cfg(feature = "race-hooks")]
+#[pyfunction]
+#[pyo3(signature = (frame, callback, exclusive_borrow = false))]
+fn _hold_frame_borrow(
+    frame: &Bound<'_, PyConFrame>,
+    callback: &Bound<'_, PyAny>,
+    exclusive_borrow: bool,
+) -> PyResult<()> {
+    if exclusive_borrow {
+        let _guard = exclusive(frame)?;
+        callback.call0()?;
+    } else {
+        let _guard = shared(frame)?;
+        callback.call0()?;
+    }
+    Ok(())
+}
+
+/// Put `value` on the materialized atom list without checking its type.
+///
+/// A later snapshot then reports the list error instead of ignoring it.
+/// Test helper, registered only with `race-hooks`.
+#[cfg(feature = "race-hooks")]
+#[pyfunction]
+fn _append_foreign_atom(frame: &Bound<'_, PyConFrame>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    let this = shared(frame)?;
+    this.ensure_atoms(frame.py())?;
+    this.atoms.bind(frame.py()).append(value)
+}
+
+#[cfg(feature = "race-hooks")]
+#[pyfunction]
+fn _atom_list_race(frame: Py<PyConFrame>) -> PyAtomListRace {
+    PyAtomListRace {
+        frame,
+        state: std::sync::atomic::AtomicU8::new(RACE_READY),
+        write: std::sync::Mutex::new(()),
     }
 }
 
@@ -1764,7 +2068,7 @@ impl PyConFrame {
             Err(_) => return Ok(false),
         };
         Ok(self
-            .snapshot_atoms(item.py())
+            .snapshot_atoms(item.py())?
             .iter()
             .any(|snap| same_physical_atom(snap, &wanted)))
     }
@@ -1793,7 +2097,7 @@ fn sequence_getitem(
     if let Ok(slice) = key.cast::<PySlice>() {
         let frame = shared(frame_obj.bind(py))?;
         let indices = slice_indices(slice, frame.n_atoms())?;
-        let snaps = frame.picked_snaps(py, &indices);
+        let snaps = frame.picked_snaps(py, &indices)?;
         let sliced = frame.assemble_like(py, snaps)?;
         return Ok(Py::new(py, sliced)?.into_any());
     }

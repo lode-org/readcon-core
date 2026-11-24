@@ -587,7 +587,17 @@ returns its parse buffer; a longer read packs the frames once, on the
 first call, and the frames then read that array. =masses= is =(frames, atoms)=, =fixed=
 is =(frames, atoms, 3)= with =1.0= on a held axis, and =cell= is
 =(frames, 6)=. =velocities= and =forces= are present when any frame has
-that section. Indexing a frame takes it out of the list, and =columns()=
+that section. =atom_ids= and =atomic_numbers= are =(frames, atoms)=
+uint64 copies. =symbols= is an object array of that shape, one Python
+string per species run. =read_con_string= returns the same list, so
+=columns()= on it carries those keys. =iter_con_string(text)= yields
+frames whose per-frame getters read the same columns. Those id,
+velocity, and force arrays are read-only views until =.atoms= is
+built. A store raises =ValueError=. After that list exists, =vel=,
+=frc=, =mass_column=, =composition_formula=, and =len= follow it,
+including an edit, a pop, an append, or an insert. A metadata edit
+made before =.atoms= is what =write_con= writes. Indexing a frame
+takes it out of the list, and =columns()=
 then raises =OSError=. Call =columns()= first.
 
 =write_columns= writes that dict. Every atom uses =symbol=. The arrays
