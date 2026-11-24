@@ -241,12 +241,18 @@ def test_default_paths_rejects_fork_and_orphan(tmp_path: Path) -> None:
     assert tail.is_file()
 
 
-def test_repo_clause_coverage_resolves_to_terminal_record() -> None:
+def test_repo_clause_coverage_resolves_to_terminal_record(tmp_path: Path) -> None:
     clause_coverage = _load(
         "clause_coverage_under_test", SCRIPTS / "clause_coverage.py"
     )
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-    previous, newest = clause_coverage.default_paths()
+    # The live spec.org is a later blob. The committed chain is the one
+    # named by git blob a8f263a2.
+    spec = tmp_path / "spec.org"
+    spec.write_bytes(
+        subprocess.check_output(["git", "-C", str(ROOT), "cat-file", "blob", "a8f263a2"])
+    )
+    previous, newest = clause_coverage.default_paths(spec=spec)
     assert newest.name != f"clause_coverage-{version}-a8f263a2.json"
     chain = [newest]
     cur = newest
