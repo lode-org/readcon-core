@@ -114,15 +114,23 @@ def measurement_path(version: str | None = None, blob: str | None = None) -> Pat
 
 
 def active_versions_file() -> Path:
-    path = measurement_path()
-    if path.is_file():
-        return path
-    if MEASUREMENT.is_file():
-        return MEASUREMENT
-    return LEGACY_VERSIONS
+    blob = _spec_blob()
+    path = measurement_path(blob=blob)
+    if not path.is_file():
+        raise SystemExit(
+            f"no specification measurement for {SPEC.relative_to(ROOT)} "
+            f"blob {blob[:8]}: run gen_spec_supp.py --measure"
+        )
+    recorded = json.loads(path.read_text()).get("tree", {}).get("spec_blob")
+    if recorded != blob:
+        raise SystemExit(
+            f"{path.relative_to(ROOT)} records spec blob {recorded}, "
+            f"not {blob}: run gen_spec_supp.py --measure"
+        )
+    return path
 
 
-VERSIONS = active_versions_file()
+VERSIONS = measurement_path()
 RELEASE = r"[0-9]+\.[0-9]+\.[0-9]+"
 CLAUSE_ID = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) ::", re.M)
 CLAUSE_LINE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+ :: .*)$")
@@ -1139,6 +1147,8 @@ def compile_test(fragment: Path) -> None:
 
 
 def main() -> None:
+    global VERSIONS
+
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -1166,6 +1176,7 @@ def main() -> None:
     if args.measure:
         measure()
         return
+    VERSIONS = active_versions_file()
     rows = release_rows(SPEC.read_text())
     outputs = {
         VERSIONS_OUT: versions_table(rows),
