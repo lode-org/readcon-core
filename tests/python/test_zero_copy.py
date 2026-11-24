@@ -753,8 +753,7 @@ def test_atom_edit_after_view_keeps_slots_on_the_frame(getter):
 
     def bytes_of(frames):
         return [
-            (f.velocities_array().tobytes(), f.forces_array().tobytes())
-            for f in frames
+            (f.velocities_array().tobytes(), f.forces_array().tobytes()) for f in frames
         ]
 
     clean = bytes_of(others)

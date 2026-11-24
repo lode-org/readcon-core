@@ -347,7 +347,9 @@ def test_concurrent_atom_edits_store_whole_doubles(tmp_path: Path, source: str) 
                 whole = (xs >= 0) & (xs < rounds) & (xs == np.floor(xs))
                 ok = (xs == start[:, 0]) | whole
                 assert ok.all(), xs[~ok]
-                assert np.array_equal(np.asarray(frame.coords_array())[:, 1], start[:, 1])
+                assert np.array_equal(
+                    np.asarray(frame.coords_array())[:, 1], start[:, 1]
+                )
         except BaseException as exc:  # noqa: BLE001
             errors.append(exc)
 
