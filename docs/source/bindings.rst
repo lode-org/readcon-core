@@ -310,8 +310,8 @@ Types
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and
     optional headers and metadata (v0.4.0+).  Properties: cell, angles,
-    atoms (live ``AtomSequence``), has\_velocities, has\_forces, has\_energies
-    (v0.10.0+), prebox\_header, postbox\_header, spec\_version (v0.6.0+),
+    atoms (live ``AtomSequence``), has\_velocities, has\_forces,
+    prebox\_header, postbox\_header, spec\_version (v0.6.0+),
     metadata (v0.6.0+, live dict of native JSON-compatible values),
     energy, frame\_index, time, timestep, neb\_bead, neb\_band,
     ``source_text`` and its alias ``raw``.
@@ -345,6 +345,9 @@ Types
     Frames yielded by non-streaming ``iter_con`` expose the exact consumed
     file substring through ``source_text`` / ``raw``. Batch reads, constructed
     frames, streamed frames, slices, and mutated frames return ``None``.
+    An edit through ``atoms``, a held ``Atom``, or ``xyz`` (an item store
+    or an assignment) is a mutation. Reading ``atoms`` or ``xyz`` leaves
+    the substring in place.
     The constructor and ``from_ase()`` raise ``readcon.NonFiniteValue`` (a
     ``ValueError``) for a cell length or angle that is NaN or infinite, and
     for a ``lattice_vectors`` metadata matrix that holds one. The message names
