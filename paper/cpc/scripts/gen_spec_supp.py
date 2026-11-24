@@ -983,6 +983,33 @@ def split_rows(block: str) -> list[list[str]]:
     return rows
 
 
+def p_spec(widths: list[float], least: list[int]) -> str:
+    """Column fractions of \\linewidth.
+
+    TABLE_CHARS underestimates a footnotesize word, so a short capitalised
+    header was wider than its column. 56 such characters fill the preprint
+    line. Extra width is taken from the widest column that can spare it.
+    """
+    word = 56
+    fracs = [
+        float(f"{max(w / TABLE_CHARS, m / word):.2f}")
+        for w, m in zip(widths, least)
+    ]
+    mins = [float(f"{m / word:.2f}") for m in least]
+    limit = 1.0 - 0.04 * len(fracs)
+    overflow = sum(fracs) - limit
+    for _ in range(20):
+        if overflow <= 0.001:
+            break
+        i = max(range(len(fracs)), key=lambda k: fracs[k] - mins[k])
+        room = fracs[i] - mins[i]
+        if room <= 0.001:
+            break
+        fracs[i] = float(f"{fracs[i] - min(room, overflow):.2f}")
+        overflow = sum(fracs) - limit
+    return "".join(f"p{{{f:.2f}\\linewidth}}" for f in fracs)
+
+
 def tabular(match: re.Match) -> str:
     """A pandoc longtable as a tabular; a p column is never narrower than its longest word."""
     head = split_rows(match["head"])
@@ -1009,7 +1036,7 @@ def tabular(match: re.Match) -> str:
             if sum(extra)
             else least
         )
-        spec = "".join(f"p{{{w / TABLE_CHARS:.2f}\\linewidth}}" for w in widths)
+        spec = p_spec(widths, least)
         end, lead = " \\tabularnewline", "\\raggedright "
     lines = [
         "\\begin{center}",
@@ -1240,12 +1267,14 @@ def main() -> None:
         f"% Written by paper/cpc/scripts/gen_spec_supp.py --as-is from {records} ({pandoc_version()}).\n"
         f"% Not included: {', '.join(INFORMATIVE)}, and the two sentences of the units section that round\n"
         "% the parsed natural time unit and its difference from eOn; velocity_case.py prints both values.\n"
-        "% Code words such as IncompleteSection have no break point; the local tolerance lets a line\n"
-        "% stretch rather than run into the margin.\n"
-        "\\begingroup\n\\tolerance=1000\n"
+        "% Code words such as IncompleteSection have no break point; emergency stretch\n"
+        "% lets that line break short of the margin.\n"
+        "\\begingroup\n\\tolerance=9999\n\\emergencystretch=3em\n"
         "\\providecommand{\\tightlist}{\\setlength{\\itemsep}{0pt}\\setlength{\\parskip}{0pt}}\n\n"
     )
-    outputs[OUT] = header + tex.rstrip("\n") + "\n\\endgroup\n"
+    # End the paragraph first. Otherwise the last line is broken after \\endgroup,
+    # outside this tolerance, and a code span runs past the margin.
+    outputs[OUT] = header + tex.rstrip("\n") + "\n\\par\n\\endgroup\n"
     if args.check:
         stale = [
             p.relative_to(ROOT).as_posix()
