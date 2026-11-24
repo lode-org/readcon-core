@@ -1,0 +1,149 @@
+name: record cxx wrap pin
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: write
+
+concurrency:
+  group: record-cxx-wrap-pin-develop
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out develop
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          ref: develop
+
+      - name: Install Rust 1.88
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: 1.88.0
+
+      - name: Detect an automation pin commit
+        id: loop-guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          pin_paths=(
+            docs/orgmode/bindings.org
+            docs/orgmode/getting-started.org
+            docs/source/bindings.rst
+            docs/source/getting-started.rst
+            packaging/wrapdb/readcon-core.sha256
+            packaging/wrapdb/readcon-core.wrap
+          )
+          mapfile -t changed < <(
+            git diff-tree --no-commit-id --name-only -r HEAD
+          )
+          only_pin=true
+          if [[ "${#changed[@]}" -eq 0 ]]; then
+            only_pin=false
+          fi
+          for path in "${changed[@]}"; do
+            found=false
+            for pin in "${pin_paths[@]}"; do
+              if [[ "$path" == "$pin" ]]; then
+                found=true
+                break
+              fi
+            done
+            if [[ "$found" == false ]]; then
+              only_pin=false
+              break
+            fi
+          done
+          author="$(git show -s --format='%an <%ae>' HEAD)"
+          if [[ "$only_pin" == true ]] \
+            && [[ "$author" == \
+              "Rohit Goswami <rgoswami@ieee.org>" ]]
+          then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Head is an automation-only pin commit; skipping."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Record and push the pin
+        if: steps.loop-guard.outputs.skip != 'true'
+        env:
+          CC: gcc
+          CXX: g++
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+          GIT_AUTHOR_NAME: Rohit Goswami
+          GIT_AUTHOR_EMAIL: rgoswami@ieee.org
+          GIT_COMMITTER_NAME: Rohit Goswami
+          GIT_COMMITTER_EMAIL: rgoswami@ieee.org
+        shell: bash
+        run: |
+          set -euo pipefail
+          pin_paths=(
+            docs/orgmode/bindings.org
+            docs/orgmode/getting-started.org
+            docs/source/bindings.rst
+            docs/source/getting-started.rst
+            packaging/wrapdb/readcon-core.sha256
+            packaging/wrapdb/readcon-core.wrap
+          )
+
+          validate_changes() {
+            local path
+            while IFS= read -r path; do
+              local found=false
+              local pin
+              for pin in "${pin_paths[@]}"; do
+                if [[ "$path" == "$pin" ]]; then
+                  found=true
+                  break
+                fi
+              done
+              if [[ "$found" == false ]]; then
+                echo "Unexpected recorder change: $path" >&2
+                return 1
+              fi
+            done < <(git diff --name-only)
+          }
+
+          refresh_commit() {
+            bash scripts/record-cxx-wrap.sh
+            validate_changes
+            if bash scripts/cxx-wrap-pin-current.sh; then
+              return 0
+            fi
+            git add -- "${pin_paths[@]}"
+            git -c commit.gpgsign=false commit --amend --no-edit
+          }
+
+          bash scripts/record-cxx-wrap.sh
+          validate_changes
+          if bash scripts/cxx-wrap-pin-current.sh; then
+            exit 0
+          fi
+
+          git add -- "${pin_paths[@]}"
+          git -c commit.gpgsign=false commit \
+            -m "chore(packaging): re-record cxx wrap pin"
+
+          if git push origin HEAD:develop; then
+            exit 0
+          fi
+
+          echo "develop moved; rebasing and retrying once."
+          git fetch origin develop
+          git rebase origin/develop
+          refresh_commit
+          git push origin HEAD:develop
+
+      - name: Check the recorded pin strictly
+        env:
+          CC: gcc
+          CXX: g++
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+        run: bash scripts/check_cxx_wrap_pin.sh --strict
