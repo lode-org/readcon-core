@@ -834,16 +834,6 @@ def measure(commit: str | None = None) -> None:
     The record pairs the release in VERSION with the spec.org blob, so the
     measured commit is the last one to change either file.
     """
-    version = (ROOT / "VERSION").read_text().strip()
-    stored = SPEC_DATA / f"spec-measurement-{version}.json"
-    # Each rerun supersedes the newest file of the chain:
-    # -measured.json, then -measured-2.json, and so on.
-    previous, out, n = None, stored, 1
-    while out.is_file():
-        previous = out
-        suffix = "measured" if n == 1 else f"measured-{n}"
-        out = SPEC_DATA / f"spec-measurement-{version}-{suffix}.json"
-        n += 1
     spec_rel = (
         SPEC.relative_to(ROOT).as_posix()
         if SPEC.is_relative_to(ROOT)
@@ -859,6 +849,15 @@ def measure(commit: str | None = None) -> None:
     if not re.fullmatch(r"[0-9a-f]{40}", measured_commit):
         raise SystemExit("git did not return a commit")
     body = versions_record()
+    stored = measurement_path(body["tree"]["release"], body["tree"]["spec_blob"])
+    # Each rerun on the same (release, spec_blob) supersedes the newest file
+    # of its chain: -measured.json, then -measured-2.json, and so on.
+    previous, out, n = None, stored, 1
+    while out.is_file():
+        previous = out
+        suffix = "measured" if n == 1 else f"measured-{n}"
+        out = stored.with_name(f"{stored.stem}-{suffix}.json")
+        n += 1
     versions = {
         "generator": "paper/cpc/scripts/gen_spec_supp.py --measure",
         "measured_at": {"commit": measured_commit},
