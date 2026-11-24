@@ -141,3 +141,25 @@ def test_a_db33_record_without_a_build_key_names_its_readcon_db_commit(
     )
     assert "readcon-core" not in heading
     assert version_map.from_provenance(record["provenance"], record) is None
+
+
+def test_blob_named_spec_measurement_is_not_an_extra_library_record(
+    version_map, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = "data/spec/spec-measurement-0.24.0.json"
+    by_blob = "data/spec/spec-measurement-0.24.0-a8f263a2.json"
+    ordinary = "data/test_run.json"
+    build = version_map.Build("0.17.4", "ab" * 32, None, None, None, None, None)
+    monkeypatch.setattr(
+        version_map,
+        "record_places",
+        lambda: ({base: [], by_blob: [], ordinary: []}, []),
+    )
+    monkeypatch.setattr(version_map, "carrier", lambda rel: ("record", rel))
+    monkeypatch.setattr(version_map, "build_of", lambda _kind, _rel: build)
+
+    assert base in version_map.NO_BUILD
+    assert by_blob in version_map.NO_BUILD
+    macros = version_map.library_macros()
+    assert r"\newcommand{\rcRecordDigestCount}{1}" in macros
+    assert r"\newcommand{\rcDigestRecordCount}{1}" in macros

@@ -30,10 +30,9 @@ src/figures/generated/*
 !src/figures/generated/dlpack_macros.tex
 !src/figures/generated/version_map.tex
 !src/figures/generated/library_macros.tex
+!src/figures/generated/clauses_macros.tex
 src/rg_main.pdf
 src/rg_supp.pdf
-src/figures/generated/work/
-src/figures/generated/*.aux
 evidence/work/
 .pixi/
 __pycache__/
