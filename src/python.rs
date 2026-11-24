@@ -116,7 +116,9 @@ fn fnv_mix(hash: u64, value: f64) -> u64 {
 fn hash_coords(ptr: *const f64, n: usize) -> u64 {
     let mut hash = FNV_OFFSET;
     for index in 0..n {
-        hash = fnv_mix(hash, unsafe { crate::types::atomic_load_f64(ptr.add(index)) });
+        hash = fnv_mix(hash, unsafe {
+            crate::types::atomic_load_f64(ptr.add(index))
+        });
     }
     hash
 }
@@ -2293,7 +2295,9 @@ impl PyConFrame {
         if let Some(owned) = &self.xyz_owned {
             let bound = owned.bind(py);
             if !bound.is_c_contiguous() {
-                return Err(PyValueError::new_err("frame coordinates are not contiguous"));
+                return Err(PyValueError::new_err(
+                    "frame coordinates are not contiguous",
+                ));
             }
             let ptr = bound.data();
             return Ok(Some((bound.clone().unbind().into_any(), ptr)));
@@ -7117,7 +7121,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         slab_index: 0,
         xyz_owned: None,
         source_text: None,
-            source_coord_hash: None,
+        source_coord_hash: None,
     })
 }
 
