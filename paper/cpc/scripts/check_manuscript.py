@@ -1149,11 +1149,11 @@ def check_conformance() -> str:
     every = json.loads((ROOT / "data" / "every_path.json").read_text())["results"][
         "totals"
     ]
-    version = (ROOT.parents[1] / "VERSION").read_text().strip()
-    coverage_record = f"clause_coverage-{version}-sources.json"
-    clauses = json.loads((ROOT / "data" / "spec" / coverage_record).read_text())[
-        "totals"
-    ]
+    import clause_coverage
+
+    _, coverage_path = clause_coverage.default_paths(root=ROOT, repo=REPO)
+    coverage_record = coverage_path.name
+    clauses = json.loads(coverage_path.read_text(encoding="utf-8"))["totals"]
     mutants = json.loads(
         (ROOT / "data" / "spec" / "mutant_differential.json").read_text()
     )["totals"]

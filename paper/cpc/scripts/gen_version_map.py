@@ -67,6 +67,10 @@ NO_BUILD = {
     "data/spec/versions.json",
     "data/spec/clause_coverage.json",
     f"data/spec/clause_coverage-{VERSION}.json",
+    *(
+        f"data/spec/{p.name}"
+        for p in (CPC / "data" / "spec").glob("clause_coverage-*.json")
+    ),
     # Stored tables the restored figures draw. The database rows come from
     # readcon-db, and these files carry no readcon-core provenance block.
     "data/db/dedup.json",
