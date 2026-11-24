@@ -253,7 +253,8 @@ readcon.atomic_number_to_symbol(93)     # "X"
   (v0.4.2+), vx, vy, vz, has_velocity, fx, fy, fz, has_forces,
   energy (v0.10.0+), has_energy (v0.10.0+).
   Data fields are writable.
-- =readcon.AtomView= / =readcon.AtomSequence= :: =frame[i]= and direct frame iteration return live =AtomView= objects
+- =readcon.AtomView= / =readcon.AtomSequence= ::
+  =frame[i]= and direct frame iteration return live =AtomView= objects
   backed by the frame's Rust columns. Assigning a view property updates both
   the frame and an already-materialized compatibility atom projection.
   =frame.atoms= is an =AtomSequence= whose indexing and iteration expose
@@ -757,7 +758,7 @@ include(FetchContent)
 FetchContent_Declare(
   readcon-core
   URL https://github.com/lode-org/readcon-core/releases/download/v@READCON_VERSION@/readcon-core-cxx-@READCON_VERSION@.tar.gz
-  URL_HASH SHA256=23eafc33e04559eb3365f39179577fdd2163374b8414c66286c533b09b8a114d
+  URL_HASH SHA256=8f41479b1864b949b4d3c5ffd80e928b426784a6ef54c0a817a82747f6681c8f
 )
 FetchContent_MakeAvailable(readcon-core)
 target_link_libraries(my_app PRIVATE readcon-core::shared)

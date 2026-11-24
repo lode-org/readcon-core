@@ -114,11 +114,16 @@ fn assert_frames(got: &[ConFrame], expect: &[ConFrame]) {
             assert_eq!(bits(*got_mass), bits(*expect_mass));
         }
         assert_eq!(got.atom_data.len(), expect.atom_data.len());
-        for (got_atom, expect_atom) in got.atom_data.iter().zip(expect.atom_data.iter()) {
+        for (coord_i0, (got_atom, expect_atom)) in got
+            .atom_data
+            .iter()
+            .zip(expect.atom_data.iter())
+            .enumerate()
+        {
             assert_eq!(got_atom.symbol.as_ref(), expect_atom.symbol.as_ref());
-            assert_eq!(bits(got_atom.x()), bits(expect_atom.x()));
-            assert_eq!(bits(got_atom.y()), bits(expect_atom.y()));
-            assert_eq!(bits(got_atom.z()), bits(expect_atom.z()));
+            assert_eq!(bits(got.x_at(coord_i0)), bits(expect.x_at(coord_i0)));
+            assert_eq!(bits(got.y_at(coord_i0)), bits(expect.y_at(coord_i0)));
+            assert_eq!(bits(got.z_at(coord_i0)), bits(expect.z_at(coord_i0)));
             assert_eq!(got_atom.fixed(), expect_atom.fixed());
             assert_eq!(got_atom.atom_id, expect_atom.atom_id);
             match (got_atom.velocity(), expect_atom.velocity()) {
@@ -266,8 +271,8 @@ proptest! {
         let mut expect_pos = Vec::new();
         let mut expect_vel = Vec::new();
         for frame in &frames {
-            for atom in &frame.atom_data {
-                expect_pos.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
+            for (coord_i1, atom) in frame.atom_data.iter().enumerate() {
+                expect_pos.extend_from_slice(&[frame.x_at(coord_i1), frame.y_at(coord_i1), frame.z_at(coord_i1)]);
                 expect_vel.extend_from_slice(&atom.velocity().unwrap_or([0.0; 3]));
             }
         }

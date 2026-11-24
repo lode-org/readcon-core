@@ -1018,7 +1018,7 @@ mod aos_soa_agreement_tests {
         }
         for (i, a) in fr.atom_data.iter().enumerate() {
             let p = fr.positions.as_f64_row(i);
-            assert_eq!([a.x(), a.y(), a.z()], p);
+            assert_eq!(fr.xyz_at(i), p);
             if let Some(v) = a.velocity() {
                 assert_eq!(v, fr.velocities.as_f64_row(i));
             }
@@ -1105,9 +1105,7 @@ mod aos_soa_agreement_tests {
         for i in 0..n {
             let atom = &frame.atom_data[i];
             let pos = frame.positions.as_f64_row(i);
-            assert_eq!(pos[0].to_bits(), atom.x().to_bits());
-            assert_eq!(pos[1].to_bits(), atom.y().to_bits());
-            assert_eq!(pos[2].to_bits(), atom.z().to_bits());
+            assert_eq!(pos, frame.xyz_at(i));
             let vel = atom.velocity().unwrap();
             let soa_v = frame.velocities.as_f64_row(i);
             assert_eq!(soa_v[0].to_bits(), vel[0].to_bits());
@@ -4019,18 +4017,9 @@ fn piped_stock_frames(
         ids.set_len(n);
         flags.set_len(n);
     }
-    let old = xyz.as_ptr();
     let positions = crate::storage_dtype::FloatArray2::from_f64_row_major(n, 3, xyz);
-    let mut atoms = owned_initialized_atoms(atoms, n);
+    let atoms = owned_initialized_atoms(atoms, n);
     crate::types::mark_uniform_symbol_drop(&atoms);
-    if let Some(slice) = positions.f64_slice() {
-        let new_ptr = slice.as_ptr() as *mut f64;
-        if !std::ptr::eq(new_ptr, old as *mut f64) {
-            for (index, atom) in atoms.iter_mut().enumerate() {
-                atom.retarget(unsafe { new_ptr.add(index * 3) });
-            }
-        }
-    }
     let frame = crate::types::con_frame_coords_only_with_ids(header, atoms, positions, ids);
     Ok(Some((vec![frame], alloc_s, scope_s)))
 }
@@ -4593,7 +4582,8 @@ fn frames_from_bytes_phased_located(
 ///
 /// `None` means the frames do not share one atom count. `workers >= 2`
 /// writes disjoint frame runs. The copy is bit-identical to reading
-/// each frame's `f64` positions in order.
+/// each frame's `f64` positions in order. A frame whose positions column
+/// is projected to another type contributes the coordinates of its atoms.
 pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<Vec<f64>> {
     if frames.is_empty() {
         return None;
@@ -4622,6 +4612,12 @@ pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<
     let write = |frame: &types::ConFrame, dest: &mut [f64]| {
         if let Some(src) = frame.positions.f64_slice() {
             dest.copy_from_slice(src);
+        } else if frame.atom_data.len() == n_atoms {
+            // A projected column holds the rounding of the values the atoms
+            // keep, and the writer spells the atoms.
+            for (index, slot) in dest.as_chunks_mut::<3>().0.iter_mut().enumerate() {
+                *slot = frame.xyz_at(index);
+            }
         } else {
             for (row, slot) in dest.as_chunks_mut::<3>().0.iter_mut().enumerate() {
                 slot.copy_from_slice(&frame.positions.as_f64_row(row));
@@ -4941,7 +4937,11 @@ mod parallel_strong_scale_tests {
         let atoms: Vec<_> = f
             .atom_data
             .iter()
-            .map(|a| (a.symbol.to_string(), a.x(), a.y(), a.z()))
+            .enumerate()
+            .map(|(i, a)| {
+                let xyz = f.xyz_at(i);
+                (a.symbol.to_string(), xyz[0], xyz[1], xyz[2])
+            })
             .collect();
         (f.atom_data.len(), atoms)
     }
@@ -5021,8 +5021,8 @@ mod parallel_strong_scale_tests {
         let sequential = super::frames_from_text(&text, None).unwrap();
         assert_eq!(sequential.len(), frames.len());
         assert_eq!(
-            sequential[0].atom_data[0].x(),
-            frames[0].atom_data[0].x(),
+            sequential[0].x_at(0),
+            frames[0].x_at(0),
             "default read changed a coordinate"
         );
     }
@@ -5167,10 +5167,15 @@ mod parallel_header_scan_tests {
                 assert_eq!(parsed.len(), serial.len());
                 let seq = frames_from_text(&wide, Some(1)).expect("serial parse");
                 assert_eq!(parsed.len(), seq.len());
-                assert_eq!(parsed[0].atom_data[0].x(), seq[0].atom_data[0].x());
+                assert_eq!(parsed[0].x_at(0), seq[0].x_at(0));
                 assert_eq!(
-                    parsed.last().unwrap().atom_data.last().unwrap().z(),
-                    seq.last().unwrap().atom_data.last().unwrap().z()
+                    parsed
+                        .last()
+                        .unwrap()
+                        .z_at(parsed.last().unwrap().atom_data.len() - 1),
+                    seq.last()
+                        .unwrap()
+                        .z_at(seq.last().unwrap().atom_data.len() - 1)
                 );
             }
         }
@@ -5931,8 +5936,7 @@ mod frame_equality_tests {
             let aos = if in_section {
                 frames[frame_i].atom_data[row].velocity().unwrap()
             } else {
-                let atom = &frames[frame_i].atom_data[row];
-                [atom.x(), atom.y(), atom.z()]
+                frames[frame_i].xyz_at(row)
             };
             for k in 0..3 {
                 assert_eq!(aos[k].to_bits(), got[k].to_bits());

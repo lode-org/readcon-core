@@ -64,7 +64,18 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 version = (root / "VERSION").read_text().strip()
-path = root / "paper/cpc/data/spec" / f"spec-measurement-{version}.json"
+spec_blob = subprocess.run(
+    ["git", "-C", str(root), "hash-object", str(root / "docs/orgmode/spec.org")],
+    capture_output=True,
+    text=True,
+    check=True,
+).stdout.strip()
+by_blob = root / "paper/cpc/data/spec" / f"spec-measurement-{version}-{spec_blob[:8]}.json"
+path = (
+    by_blob
+    if by_blob.is_file()
+    else root / "paper/cpc/data/spec" / f"spec-measurement-{version}.json"
+)
 if not path.is_file():
     print(f"PENDING: {path.name} has not been measured")
     raise SystemExit(0)

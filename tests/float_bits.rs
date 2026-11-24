@@ -21,8 +21,12 @@ fn corpus_coordinate_rows_match_std_parse() {
             .collect();
         let mut from_atoms = Vec::new();
         for frame in &frames {
-            for atom in &frame.atom_data {
-                from_atoms.push((atom.x().to_bits(), atom.y().to_bits(), atom.z().to_bits()));
+            for coord_i0 in 0..frame.atom_data.len() {
+                from_atoms.push((
+                    frame.x_at(coord_i0).to_bits(),
+                    frame.y_at(coord_i0).to_bits(),
+                    frame.z_at(coord_i0).to_bits(),
+                ));
             }
         }
         let mut from_std = Vec::new();
@@ -94,9 +98,13 @@ fn round_trip_writer_preserves_binary64_bits() {
         .expect("frame")
         .expect("parse");
     assert_eq!(back.atom_data.len(), values.len());
-    for (atom, value) in back.atom_data.iter().zip(values.iter().copied()) {
-        assert_eq!(atom.x().to_bits(), value.to_bits(), "{value:e}");
-        assert_eq!(atom.y().to_bits(), (-value).to_bits(), "{value:e}");
-        assert_eq!(atom.z().to_bits(), 0.0f64.to_bits());
+    for (coord_i1, value) in values.iter().copied().enumerate() {
+        assert_eq!(back.x_at(coord_i1).to_bits(), value.to_bits(), "{value:e}");
+        assert_eq!(
+            back.y_at(coord_i1).to_bits(),
+            (-value).to_bits(),
+            "{value:e}"
+        );
+        assert_eq!(back.z_at(coord_i1).to_bits(), 0.0f64.to_bits());
     }
 }

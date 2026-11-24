@@ -84,10 +84,45 @@ VERSIONS_OUT = PAPER_SRC / "figures" / "generated" / "versions_table.tex"
 MACROS_OUT = PAPER_SRC / "figures" / "generated" / "spec_macros.tex"
 SPEC_DATA = ROOT / "paper" / "cpc" / "data" / "spec"
 LEGACY_VERSIONS = SPEC_DATA / "versions.json"
-MEASUREMENT = SPEC_DATA / (
-    f"spec-measurement-{(ROOT / 'VERSION').read_text().strip()}.json"
-)
-VERSIONS = MEASUREMENT if MEASUREMENT.is_file() else LEGACY_VERSIONS
+VERSION = (ROOT / "VERSION").read_text().strip()
+MEASUREMENT = SPEC_DATA / f"spec-measurement-{VERSION}.json"
+
+
+def _spec_blob() -> str:
+    return subprocess.run(
+        ["git", "hash-object", str(SPEC)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+
+def measurement_path(version: str | None = None, blob: str | None = None) -> Path:
+    version = version or VERSION
+    blob = blob or _spec_blob()
+    base = SPEC_DATA / f"spec-measurement-{version}.json"
+    by_blob = SPEC_DATA / f"spec-measurement-{version}-{blob[:8]}.json"
+    if by_blob.is_file():
+        return by_blob
+    if base.is_file():
+        existing = json.loads(base.read_text()).get("tree", {}).get("spec_blob")
+        if existing == blob:
+            return base
+        return by_blob
+    return base
+
+
+def active_versions_file() -> Path:
+    path = measurement_path()
+    if path.is_file():
+        return path
+    if MEASUREMENT.is_file():
+        return MEASUREMENT
+    return LEGACY_VERSIONS
+
+
+VERSIONS = active_versions_file()
 RELEASE = r"[0-9]+\.[0-9]+\.[0-9]+"
 CLAUSE_ID = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) ::", re.M)
 CLAUSE_LINE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+ :: .*)$")
@@ -722,10 +757,9 @@ def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 
 
 def package_version() -> str:
-    found = re.search(r'^version = "([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M)
-    if found is None:
-        raise SystemExit("Cargo.toml names no package version")
-    return found.group(1)
+    # VERSION, not Cargo.toml: the branch history check reads the release
+    # back from <measured commit>:VERSION.
+    return (ROOT / "VERSION").read_text().strip()
 
 
 def versions_record() -> dict:
@@ -774,15 +808,27 @@ def versions_record() -> dict:
     }
 
 
-def measure() -> None:
+def measure(commit: str | None = None) -> None:
+    spec_rel = SPEC.relative_to(ROOT).as_posix()
+    # The record pairs the release in VERSION with the spec.org blob, so the
+    # measured commit is the last one to change either file.
+    measured_commit = (
+        commit
+        or git(
+            "log", "-n", "1", "--format=%H", "HEAD", "--", spec_rel, "VERSION"
+        ).stdout.strip()
+    )
+    record = versions_record()
     versions = {
         "generator": "paper/cpc/scripts/gen_spec_supp.py --measure",
-        **versions_record(),
+        "measured_at": {"commit": measured_commit},
+        **record,
     }
-    MEASUREMENT.parent.mkdir(parents=True, exist_ok=True)
-    MEASUREMENT.write_text(json.dumps(versions, indent=2) + "\n")
+    target = measurement_path(record["tree"]["release"], record["tree"]["spec_blob"])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(versions, indent=2) + "\n")
     print(
-        f"wrote {MEASUREMENT.relative_to(ROOT)}: {len(versions['tags'])} tags, "
+        f"wrote {target.relative_to(ROOT)}: {len(versions['tags'])} tags, "
         f"release {versions['tree']}"
     )
 

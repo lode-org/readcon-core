@@ -30,8 +30,8 @@ fuzz_target!(|data: &[u8]| {
     let mut expect_pos = Vec::new();
     let mut expect_vel = Vec::new();
     for frame in &frames {
-        for atom in &frame.atom_data {
-            expect_pos.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
+        for (coord_i0, atom) in frame.atom_data.iter().enumerate() {
+            expect_pos.extend_from_slice(&[frame.x_at(coord_i0), frame.y_at(coord_i0), frame.z_at(coord_i0)]);
             expect_vel.extend_from_slice(&atom.velocity().unwrap_or([0.0; 3]));
         }
     }

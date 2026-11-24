@@ -20,10 +20,10 @@ fn bits(frames: &[ConFrame]) -> Vec<u64> {
     let mut out = Vec::new();
     for frame in frames {
         out.push(frame.atom_data.len() as u64);
-        for atom in &frame.atom_data {
-            out.push(atom.x().to_bits());
-            out.push(atom.y().to_bits());
-            out.push(atom.z().to_bits());
+        for (coord_i0, atom) in frame.atom_data.iter().enumerate() {
+            out.push(frame.x_at(coord_i0).to_bits());
+            out.push(frame.y_at(coord_i0).to_bits());
+            out.push(frame.z_at(coord_i0).to_bits());
         }
     }
     out
@@ -86,9 +86,9 @@ fuzz_target!(|data: &[u8]| {
     let parsed = frames_from_bytes(valid.as_bytes(), Some(1)).expect("one row");
     assert_eq!(parsed.len(), 1);
     assert_eq!(parsed[0].atom_data.len(), 1);
-    assert_eq!(parsed[0].atom_data[0].x().to_bits(), 0.5f64.to_bits());
-    assert_eq!(parsed[0].atom_data[0].y().to_bits(), (-0.0f64).to_bits());
-    assert_eq!(parsed[0].atom_data[0].z().to_bits(), 1.25f64.to_bits());
+    assert_eq!(parsed[0].x_at(0).to_bits(), 0.5f64.to_bits());
+    assert_eq!(parsed[0].y_at(0).to_bits(), (-0.0f64).to_bits());
+    assert_eq!(parsed[0].z_at(0).to_bits(), 1.25f64.to_bits());
 
     let Ok(dir) = tempfile::tempdir() else {
         return;

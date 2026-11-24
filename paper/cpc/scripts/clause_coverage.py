@@ -18,7 +18,7 @@ names the id. A clause that no corpus file, probe or test names has its reason
 in REASONS; the script stops when such a clause has none, or when REASONS
 gives a reason for a clause that something names.
 
-    python paper/cpc/scripts/clause_coverage.py            # writes the versioned data/spec record
+    python paper/cpc/scripts/clause_coverage.py            # writes the next versioned data/spec record if the count moved
     python paper/cpc/scripts/clause_coverage.py --check    # writes nothing; exits 1 if the record or the TeX differs
     python paper/cpc/scripts/clause_coverage.py --macros   # writes only clauses_macros.tex, from the committed record
 
@@ -48,8 +48,28 @@ INDEP = ROOT / "scripts" / "indep_reader.py"
 TEST_ROOTS = ("tests", "src")
 SKIP_DIRS = {"target", "build", "__pycache__"}
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
-SUPERSEDES = ROOT / "data" / "spec" / "clause_coverage.json"
-OUT = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}.json"
+SPEC_DIGEST = hashlib.sha256(SPEC.read_bytes()).hexdigest()
+SUPERSEDES = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}.json"
+OUT = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}-{SPEC_DIGEST[:8]}.json"
+
+
+def recounts() -> list[Path]:
+    """The recounts of this version and specification, oldest first.
+
+    The first is OUT. A later one is OUT with -r<N>, N from 2, and supersedes
+    the one before it, so a recount never rewrites a committed record."""
+    chain = [OUT] if OUT.is_file() else []
+    while (later := OUT.with_name(f"{OUT.stem}-r{len(chain) + 1}.json")).is_file():
+        chain.append(later)
+    return chain
+
+
+def latest() -> Path:
+    """The newest committed recount, or OUT when there is none."""
+    chain = recounts()
+    return chain[-1] if chain else OUT
+
+
 MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)
@@ -269,7 +289,7 @@ def source(path: Path, named: dict[str, set[str]], known: set[str], **counts) ->
     }
 
 
-def build() -> dict:
+def build(supersedes: Path = SUPERSEDES) -> dict:
     clauses = spec_clauses()
     known = {cid for cid, _ in clauses}
     c31, conf, probe = corpus31(), conformance(), probes()
@@ -312,7 +332,7 @@ def build() -> dict:
         "uncovered": len(entries) - len(covered),
     }
     return {
-        "supersedes": rel(SUPERSEDES),
+        "supersedes": rel(supersedes),
         "reason": (
             f"Recounts specification coverage for readcon-core {VERSION} "
             "without rewriting the previous measurement."
@@ -341,7 +361,7 @@ def build() -> dict:
     }
 
 
-def macros(record: dict) -> str:
+def macros(record: dict, name: str) -> str:
     t = record["totals"]
     values = {
         "clauseTotal": t["clauses"],
@@ -353,7 +373,7 @@ def macros(record: dict) -> str:
         "clauseTested": t["tests"],
     }
     return (
-        f"% Written by paper/cpc/scripts/clause_coverage.py from data/spec/{OUT.name}.\n"
+        f"% Written by paper/cpc/scripts/clause_coverage.py from data/spec/{name}.\n"
         + "".join(
             f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
         )
@@ -369,8 +389,7 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        default=OUT,
-        help=f"record (default: {provenance.portable(OUT)})",
+        help=f"record (default: the newest {provenance.portable(OUT)} recount)",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -384,11 +403,20 @@ def main() -> int:
         help="write only the TeX, from the record at --out; the record and the library are not read again",
     )
     args = parser.parse_args()
+    chain = recounts()
     if args.macros:
-        MACROS.write_text(macros(json.loads(args.out.read_text())))
+        source = args.out or latest()
+        MACROS.write_text(macros(json.loads(source.read_text()), source.name))
         print(f"wrote {provenance.portable(MACROS)}")
         return 0
-    record = build()
+    if args.out is not None:
+        compared, before = args.out, SUPERSEDES
+    elif chain:
+        compared = chain[-1]
+        before = chain[-2] if len(chain) > 1 else SUPERSEDES
+    else:
+        compared, before = OUT, SUPERSEDES
+    record = build(before)
     t = record["totals"]
     print(
         f"{t['clauses']} clauses: {t['covered']} named by a corpus file, probe or test "
@@ -398,7 +426,10 @@ def main() -> int:
     if args.check:
         stale = [
             path.name
-            for path, want in ((args.out, text(record)), (MACROS, macros(record)))
+            for path, want in (
+                (compared, text(record)),
+                (MACROS, macros(record, compared.name)),
+            )
             if not path.is_file() or path.read_text() != want
         ]
         if stale:
@@ -407,11 +438,16 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"{args.out.name} and {MACROS.name} match the sources")
+        print(f"{compared.name} and {MACROS.name} match the sources")
         return 0
-    args.out.write_text(text(record))
-    MACROS.write_text(macros(record))
-    print(f"wrote {provenance.portable(args.out)} and {provenance.portable(MACROS)}")
+    target = compared
+    if args.out is None and chain and compared.read_text() != text(record):
+        target = OUT.with_name(f"{OUT.stem}-r{len(chain) + 1}.json")
+        record = build(compared)
+    if not target.is_file() or target.read_text() != text(record):
+        target.write_text(text(record))
+    MACROS.write_text(macros(record, target.name))
+    print(f"wrote {provenance.portable(target)} and {provenance.portable(MACROS)}")
     return 0
 
 

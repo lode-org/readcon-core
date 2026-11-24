@@ -15,8 +15,8 @@ fn touch(frames: &[ConFrame]) {
     for frame in frames {
         sum = sum.wrapping_add(frame.atom_data.len() as u64);
         sum = sum.wrapping_add(frame.header.natm_types as u64);
-        for atom in &frame.atom_data {
-            sum = sum.wrapping_add(atom.x().to_bits());
+        for (coord_i0, atom) in frame.atom_data.iter().enumerate() {
+            sum = sum.wrapping_add(frame.x_at(coord_i0).to_bits());
         }
     }
     std::hint::black_box(sum);

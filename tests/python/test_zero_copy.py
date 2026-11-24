@@ -730,3 +730,53 @@ def test_read_coords_arrays_are_the_moved_parse_buffers(tmp_path):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+@pytest.mark.parametrize("getter", ["velocities_array", "vel", "forces_array", "frc"])
+def test_atom_edit_after_view_keeps_slots_on_the_frame(getter):
+    """An atom edit must write the frame's column, not the view's copy.
+
+    The view's copy is freed with the view. A later edit through a slot
+    still aimed at it would write freed memory."""
+    path = os.path.join(ROOT, "test", "tiny_cuh2_vel_forces.con")
+    frame = readcon.read_con(path, n_threads=1)[0]
+    view = getattr(frame, getter)
+    view = view() if callable(view) else view
+    before = view.tobytes()
+    frame[0].vx = 123.0
+    frame[0].fx = 321.0
+    assert view.tobytes() == before
+
+    del view
+    gc.collect()
+    others = [readcon.read_con(path, n_threads=1)[0] for _ in range(64)]
+
+    def bytes_of(frames):
+        return [
+            (f.velocities_array().tobytes(), f.forces_array().tobytes()) for f in frames
+        ]
+
+    clean = bytes_of(others)
+    frame[1].vx = 55.0
+    frame[1].fx = 66.0
+    assert bytes_of(others) == clean
+    back = readcon.read_con_string(readcon.write_con_string([frame]))[0]
+    assert back.velocities_array()[:2, 0].tolist() == [123.0, 55.0]
+    assert back.forces_array()[:2, 0].tolist() == [321.0, 66.0]
+
+
+def test_atom_edit_after_reorder_like_and_view_keeps_the_view():
+    """A reordered frame owns its columns and its atoms address them."""
+    path = os.path.join(ROOT, "test", "tiny_cuh2_vel_forces.con")
+    frame = readcon.read_con(path, n_threads=1)[0]
+    reordered = readcon.reorder_like(frame, frame)
+    del frame
+    gc.collect()
+
+    view = reordered.velocities_array()
+    before = view.tobytes()
+    reordered[0].vx = 123.0
+    assert view.tobytes() == before
+    assert reordered.velocities_array()[0, 0] == 123.0
+    back = readcon.read_con_string(readcon.write_con_string([reordered]))[0]
+    assert back.velocities_array()[0, 0] == 123.0
