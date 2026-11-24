@@ -5364,9 +5364,9 @@ fn con_frame_list_stored(
                 && !py_frame
                     .atoms_ready
                     .load(std::sync::atomic::Ordering::Acquire)
-                && let Some((meta, minor_raw)) = metadata_edit(py, py_frame, frame)?
+                && let Some(prepared) = binding_frame(py, py_frame, frame)?
             {
-                install_metadata(&mut owned, meta, minor_raw.as_deref());
+                owned = prepared;
             }
             out.push(owned);
             continue;
@@ -6331,6 +6331,45 @@ fn install_metadata(frame: &mut ConFrame, meta: BTreeMap<String, Value>, minor_r
     frame.header.metadata = crate::types::FrameMeta::from_map_with_minor_raw(meta, minor_raw);
 }
 
+/// Copy a major chosen on the Python frame onto the parsed frame.
+///
+/// `spec_version` is stored beside `inner`. A lazy write emits `inner`,
+/// so the choice is dropped until `.atoms` rebuilds the frame. A major
+/// below 4 records the historical natural time unit, which is what
+/// `to_con_frame` stamps before `binding_spec` decides the line.
+fn install_selected_major(frame: &mut ConFrame, spec: u32) {
+    if frame.header.spec_version == spec {
+        return;
+    }
+    frame.header.spec_version = spec;
+    if !frame.has_velocities() || spec >= 4 {
+        return;
+    }
+    let minor_raw = frame.header.metadata.huge_minor_raw().map(str::to_owned);
+    let mut meta = frame.header.metadata.to_map();
+    crate::writer::stamp_legacy_velocity_time(&mut meta, spec, true);
+    frame.header.metadata =
+        crate::types::FrameMeta::from_map_with_minor_raw(meta, minor_raw.as_deref());
+}
+
+/// `Some` when the metadata dict or the selected major differs from `inner`.
+fn binding_frame(
+    py: Python<'_>,
+    frame: &PyConFrame,
+    inner: &ConFrame,
+) -> PyResult<Option<ConFrame>> {
+    let edit = metadata_edit(py, frame, inner)?;
+    if edit.is_none() && inner.header.spec_version == frame.spec_version {
+        return Ok(None);
+    }
+    let mut owned = inner.clone();
+    if let Some((meta, minor_raw)) = edit {
+        install_metadata(&mut owned, meta, minor_raw.as_deref());
+    }
+    install_selected_major(&mut owned, frame.spec_version);
+    Ok(Some(owned))
+}
+
 fn detach_stamped_pyframe<W>(
     py: Python<'_>,
     mut writer: ConFrameWriter<W>,
@@ -6396,8 +6435,8 @@ fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
 
 struct BorrowedFrames<'py> {
     held: Vec<Shared<'py, PyConFrame>>,
-    /// Parsed frames with the live metadata dict copied on. Empty when
-    /// no frame's metadata was edited, so `refs` borrows `inner`.
+    /// Parsed frames with a metadata edit or a selected major copied on.
+    /// Empty when every frame can be borrowed, so `refs` borrows `inner`.
     owned: Vec<ConFrame>,
 }
 
@@ -6501,7 +6540,7 @@ fn borrow_unmodified_frames<'py>(
             return Ok(None);
         }
         let inner = frame.inner.as_ref().expect("unmodified frame");
-        edits.push(metadata_edit(py, &frame, inner)?);
+        edits.push(binding_frame(py, &frame, inner)?);
         held.push(frame);
     }
     if held.is_empty() {
@@ -6510,13 +6549,9 @@ fn borrow_unmodified_frames<'py>(
     let owned = if edits.iter().any(Option::is_some) {
         held.iter()
             .zip(edits)
-            .map(|(frame, edit)| {
-                let inner = frame.inner.as_ref().expect("unmodified frame");
-                let mut owned = inner.clone();
-                if let Some((meta, minor_raw)) = edit {
-                    install_metadata(&mut owned, meta, minor_raw.as_deref());
-                }
-                owned
+            .map(|(frame, edit)| match edit {
+                Some(owned) => owned,
+                None => frame.inner.as_ref().expect("unmodified frame").clone(),
             })
             .collect()
     } else {
