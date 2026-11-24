@@ -761,7 +761,7 @@ include(FetchContent)
 FetchContent_Declare(
   readcon-core
   URL https://github.com/lode-org/readcon-core/releases/download/v@READCON_VERSION@/readcon-core-cxx-@READCON_VERSION@.tar.gz
-  URL_HASH SHA256=cfc97318215cf2501ad1980e1d3a986307a7582fe03856c1ae87c655f54c2ad1
+  URL_HASH SHA256=6e01bcc375a2d8063a276a29fc2182837dad141c45d845fb94d7249f483200f3
 )
 FetchContent_MakeAvailable(readcon-core)
 target_link_libraries(my_app PRIVATE readcon-core::shared)
