@@ -202,6 +202,17 @@ def write_tex(tex: Path, result: dict) -> None:
     (tex / "corpus_recount_macros.tex").write_text(macros(result), encoding="utf-8")
 
 
+def recount_paths(out: Path = OUT) -> tuple[Path | None, Path]:
+    """The newest stored recount in ``out`` (or None) and the next path a rerun writes."""
+    stored = out / "corpus_recount.json"
+    previous, target, n = None, stored, 1
+    while target.is_file():
+        previous = target
+        n += 1
+        target = out / f"corpus_recount-{n}.json"
+    return previous, target
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -221,17 +232,25 @@ def main() -> int:
     )
     args = ap.parse_args()
     out, tex = (args.out, args.out) if args.out else (OUT, TEX)
+    previous, record_out = recount_paths(out)
 
     if args.tables:
-        result = json.loads((out / "corpus_recount.json").read_text(encoding="utf-8"))
+        source = previous or (out / "corpus_recount.json")
+        result = json.loads(source.read_text(encoding="utf-8"))
         write_tex(tex, result)
         return 0
 
     result = run(args.tree)
+    if previous is not None:
+        supersedes = (
+            previous.resolve().relative_to(REPO.resolve()).as_posix()
+            if previous.resolve().is_relative_to(REPO.resolve())
+            else f"paper/cpc/data/spec/{previous.name}"
+        )
+        result = {"supersedes": supersedes, **result}
     out.mkdir(parents=True, exist_ok=True)
-    (out / "corpus_recount.json").write_text(
-        json.dumps(result, indent=2) + "\n", encoding="utf-8"
-    )
+    with record_out.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(result, indent=2) + "\n")
     if not args.no_tex:
         write_tex(tex, result)
 
