@@ -63,7 +63,10 @@ VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
 # history that gen_spec_supp.py --measure reads from spec.org at each release tag.
 NO_BUILD = {
     "evidence/results/e4_cells.csv",
-    f"data/spec/spec-measurement-{VERSION}.json",
+    *(
+        f"data/spec/{p.name}"
+        for p in (CPC / "data" / "spec").glob("spec-measurement-*.json")
+    ),
     "data/spec/versions.json",
     "data/spec/clause_coverage.json",
     f"data/spec/clause_coverage-{VERSION}.json",
