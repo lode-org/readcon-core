@@ -632,9 +632,7 @@ def measurement_record() -> dict:
     if not SPEC.is_file():
         return record
     contents = SPEC.read_bytes()
-    spec_blob = hashlib.sha1(
-        f"blob {len(contents)}\0".encode() + contents
-    ).hexdigest()
+    spec_blob = hashlib.sha1(f"blob {len(contents)}\0".encode() + contents).hexdigest()
     tree = record["tree"]
     release = package_version()
     tagged_releases = {entry["tag"] for entry in record["tags"]}
@@ -992,8 +990,7 @@ def p_spec(widths: list[float], least: list[int]) -> str:
     """
     word = 56
     fracs = [
-        float(f"{max(w / TABLE_CHARS, m / word):.2f}")
-        for w, m in zip(widths, least)
+        float(f"{max(w / TABLE_CHARS, m / word):.2f}") for w, m in zip(widths, least)
     ]
     mins = [float(f"{m / word:.2f}") for m in least]
     limit = 1.0 - 0.04 * len(fracs)
