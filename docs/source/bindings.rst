@@ -301,8 +301,8 @@ Types
     ``frame.atoms`` is an ``AtomSequence`` whose indexing and iteration expose
     the existing Python ``Atom`` projection used by earlier releases. Parsed
     column access does not materialize those objects; first access to
-    ``frame.atoms`` does. Its assignment, deletion, ``append()``, ``insert()``
-    and ``extend()`` methods mutate the owning frame and preserve CON
+    ``frame.atoms`` does. Its assignment, deletion, ``append()``, ``pop()``,
+    ``insert()`` and ``extend()`` methods mutate the owning frame and preserve CON
     type-group order; an ``Atom`` already taken from ``frame.atoms`` that
     was not replaced or deleted stays part of the frame. A direct frame
     slice is an independent ``ConFrame``.
@@ -321,16 +321,27 @@ Types
     set\_neb\_band(), atom\_index\_by\_id(id) (v0.10.0+),
     build\_atom\_id\_index() (v0.10.0+), coords\_array() (v0.10.0+),
     velocities\_array() (v0.10.0+), forces\_array() (v0.10.0+),
-    energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+).
-    For an unmodified parsed frame, ``vel``, ``frc``, ``mass_column`` and the
-    applicable ``\*_array()`` methods other than ``coords_array()`` are
-    read-only zero-copy views of parsed float64 columns; unsupported storage
-    dtypes or gathered fallback paths may allocate. ``.copy()`` gives a
-    writeable array. ``xyz`` is a writeable zero-copy coordinate view for a
-    parsed frame, and stores through it are visible to later writes.
-    Constructed frames and structurally edited frames may return owned arrays
-    instead. ``symbols`` (a ``FrameSymbols``) gives every atom's symbol as
-    interned runs without constructing per-atom Python objects.
+    energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+),
+    atomic\_numbers(), fixed\_mask\_array().
+    ``atoms_materialized`` is false until ``.atoms`` is built.
+    ``atoms_fill_count`` counts that build. The array getters above do
+    not increment it. For a frame from a read, ``vel``, ``frc``,
+    ``mass_column`` and, until ``.atoms`` is used, the ``\*_array()`` methods
+    other than ``coords_array()`` are read-only zero-copy views of the parsed
+    float64 columns. Unsupported storage dtypes or gathered fallback paths
+    may allocate. A store raises ``ValueError``, ``setflags(write=True)``
+    fails, and ``.copy()`` gives a writeable array.
+    ``xyz`` is a writeable zero-copy coordinate view for a parsed frame, and
+    stores through it are visible to later writes.
+    ``symbols`` (a ``FrameSymbols``) gives every atom's symbol as interned
+    runs without building ``atoms``, and ``symbols()`` returns an object
+    array from those runs. Once ``.atoms`` exists, those getters,
+    ``composition_formula``, ``atomic_numbers``, and ``fixed_mask_array``
+    follow it, including an edit, a pop, an append, or an insert.
+    ``len`` and ``repr`` follow that list, including a frame from
+    ``from_ase``. ``write_con`` writes the list and a metadata edit made
+    before ``.atoms`` exists.
+    Constructed frames and structurally edited frames may return owned arrays.
     Frames yielded by non-streaming ``iter_con`` expose the exact consumed
     file substring through ``source_text`` / ``raw``. Batch reads, constructed
     frames, streamed frames, slices, and mutated frames return ``None``.
@@ -354,6 +365,11 @@ Types
     With ``stream=True``, the iterator raises ``OSError`` for a parse error or invalid UTF-8 (Unicode Transformation Format, 8-bit) when it reaches the bad frame, after the frames before it.
     An input or output error from the file or the decoder raises ``OSError`` with a message that starts with ``read error:``, after the frames in the bytes read before it.
     Setting both ``mmap`` and ``stream`` raises ``ValueError``.
+
+``readcon.iter_con_string(text)``
+    The same iterator over CON text
+    the caller already holds. Each frame's array getters read the parsed
+    columns, as they do for ``iter_con`` and ``read_con_string``.
 
 ``readcon.symbol_to_atomic_number(symbol)``
     Atomic number for a
@@ -400,11 +416,17 @@ CUDA). Legacy
 
     frame = readcon.read_first_frame("trajectory.con")
 
+    atom_ids = frame.atom_ids_array()     # read-only uint64 view
+    assert atom_ids.flags.writeable is False
+    symbols = frame.symbols()             # object array, one str per species
+    atomic_numbers = frame.atomic_numbers()  # uint64 copy from the type table
+    fixed = frame.fixed_mask_array()      # uint8 (N, 3) copy; 1 means held
+    assert frame.atoms_materialized is False
+
     coords = frame.coords_array()         # ndarray (N, 3); inspect .dtype
     forces = frame.forces_array()         # Optional; None if absent
     velocities = frame.velocities_array()
     energies = frame.energies_array()     # Optional shape (N,)
-    atom_ids = frame.atom_ids_array()     # typically uint64
 
     # Zero-copy hand-off into torch via DLPack (dtype follows the tensor).
     coords_torch = torch.from_dlpack(coords)
@@ -827,7 +849,7 @@ CMake FetchContent
     FetchContent_Declare(
       readcon-core
       URL https://github.com/lode-org/readcon-core/releases/download/v0.24.0/readcon-core-cxx-0.24.0.tar.gz
-      URL_HASH SHA256=e9984cd70720801a1edaaa1503bfa2c641303aa891e3da4f18178c4316d8247a
+      URL_HASH SHA256=976d29bb5610a128640f06aa654c6cd25a29d07e737cb349f38f51e6d6a83254
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(my_app PRIVATE readcon-core::shared)

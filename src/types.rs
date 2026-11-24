@@ -2357,6 +2357,15 @@ impl AtomDatum {
             }
             return;
         }
+        if let Some(HeapTail::Column { force, .. }) = self.heap() {
+            if !force.is_null() {
+                if value.is_some() {
+                    self.ensure_tail().velocity = value;
+                    self.shrink_tail();
+                }
+                return;
+            }
+        }
         if matches!(self.heap(), Some(HeapTail::Full(_))) {
             self.ensure_tail().velocity = value;
             self.shrink_tail();
@@ -2698,7 +2707,7 @@ pub fn encode_fixed_bitmask(fixed: [bool; 3]) -> u8 {
 /// these as the source of truth for DLPack (`as_dlpack` exports **storage** dtype).
 /// Project in-memory representation with [`Self::project_storage_dtypes`]. On-disk CON
 /// text remains binary64. [`Self::atom_data`] is the AoS projection for the writer.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ConFrame {
     /// The `FrameHeader` containing the frame's metadata.
     pub header: FrameHeader,
@@ -2735,6 +2744,31 @@ pub struct ConFrame {
     /// Set while the frame is parsed. The eOn atom fill trusts it and does
     /// not walk the atoms again.
     pub(crate) sequential_plain: bool,
+}
+
+impl Clone for ConFrame {
+    /// Cloned atoms own their section tails (`AtomDatum::clone` clears
+    /// `TAIL_EXTERNAL`), so the clone must not inherit raw pointers into
+    /// the source frame's velocity or force columns.
+    fn clone(&self) -> Self {
+        Self {
+            header: self.header.clone(),
+            atom_data: self.atom_data.clone(),
+            column_tails: Vec::new(),
+            positions: self.positions.clone(),
+            velocities: self.velocities.clone(),
+            forces: self.forces.clone(),
+            atom_energies: self.atom_energies.clone(),
+            charges: self.charges.clone(),
+            spins: self.spins.clone(),
+            magmoms: self.magmoms.clone(),
+            displacements: self.displacements.clone(),
+            spreads: self.spreads.clone(),
+            masses: self.masses.clone(),
+            atom_ids: self.atom_ids.clone(),
+            sequential_plain: self.sequential_plain,
+        }
+    }
 }
 
 impl PartialEq for ConFrame {
@@ -2812,6 +2846,7 @@ impl ConFrame {
         if self.atom_data.len() != n {
             return;
         }
+        self.materialise_section_slots();
         let has_vel = self.velocities.nrows() == n;
         let has_frc = self.forces.nrows() == n;
         let has_eng = self.atom_energies.len() == n;
@@ -2860,6 +2895,9 @@ impl ConFrame {
     pub(crate) fn adopt_velocity_column(&mut self, data: Vec<f64>) {
         let n = self.atom_data.len();
         let kind = self.header.metadata.dtypes().velocities;
+        if kind != crate::storage_dtype::ElementKind::Float64 {
+            self.materialise_section_slots();
+        }
         self.velocities = store_rows(kind, n, data).into();
         self.bind_velocity_slots();
     }
@@ -2868,6 +2906,9 @@ impl ConFrame {
     pub(crate) fn adopt_force_column(&mut self, data: Vec<f64>) {
         let n = self.atom_data.len();
         let kind = self.header.metadata.dtypes().forces;
+        if kind != crate::storage_dtype::ElementKind::Float64 {
+            self.materialise_section_slots();
+        }
         self.forces = store_rows(kind, n, data).into();
         self.bind_force_slots();
     }
@@ -2922,6 +2963,38 @@ impl ConFrame {
             },
             ptr,
         );
+    }
+
+    /// Give the velocity and force columns their own allocation before an
+    /// in-place write, and move the atom slots with them.
+    ///
+    /// A NumPy view of a column holds a clone of it. Writing the shared
+    /// column copies it first, and the slots would keep addressing the
+    /// allocation the view owns, which is freed with the view.
+    #[cfg(any(feature = "python", test))]
+    pub(crate) fn unshare_slot_columns(&mut self) {
+        let n = self.atom_data.len();
+        if n == 0 || self.column_tails.len() != n {
+            return;
+        }
+        if self.velocities.nrows() == n
+            && let Some((old, new)) = unshare_rows(&mut self.velocities)
+        {
+            for tail in &mut self.column_tails {
+                if let HeapTail::Column { vel, .. } = tail {
+                    *vel = rebase_slot(*vel, &old, new);
+                }
+            }
+        }
+        if self.forces.nrows() == n
+            && let Some((old, new)) = unshare_rows(&mut self.forces)
+        {
+            for tail in &mut self.column_tails {
+                if let HeapTail::Column { force, .. } = tail {
+                    *force = rebase_slot(*force, &old, new);
+                }
+            }
+        }
     }
 
     fn point_column(&mut self, set: impl Fn(&mut HeapTail, *mut f64), base: *mut f64) {
@@ -3393,6 +3466,37 @@ fn arc_push_f64_1d(arr: &mut ndarray::ArcArray1<f64>, value: f64) {
         .push(ndarray::Axis(0), ndarray::aview0(&value))
         .expect("push failed");
     *arr = owned.into_shared();
+}
+
+/// The old byte range and new base of a packed f64 column that was shared
+/// and is now a private copy. `None` when it was already unique or is not
+/// packed f64.
+#[cfg(any(feature = "python", test))]
+fn unshare_rows(
+    column: &mut crate::storage_dtype::Array2Storage,
+) -> Option<(std::ops::Range<usize>, *mut f64)> {
+    let range = column.f64_slice()?.as_ptr_range();
+    let old = range.start as usize..range.end as usize;
+    let new = column.f64_mut_slice()?.as_mut_ptr();
+    (new as usize != old.start).then_some((old, new))
+}
+
+/// `slot` moved from the column range `old` to the same element at `new`.
+/// A null slot (section cleared for that atom) or a pointer outside `old`
+/// stays unchanged instead of underflowing.
+#[cfg(any(feature = "python", test))]
+fn rebase_slot(slot: *mut f64, old: &std::ops::Range<usize>, new: *mut f64) -> *mut f64 {
+    if slot.is_null() {
+        return slot;
+    }
+    let addr = slot as usize;
+    if !old.contains(&addr) {
+        return slot;
+    }
+    let offset = (addr - old.start) / std::mem::size_of::<f64>();
+    // SAFETY: `slot` addressed element `offset` within `old`, and the
+    // copy at `new` has the same shape.
+    unsafe { new.add(offset) }
 }
 
 #[derive(Debug, Clone)]
@@ -6524,5 +6628,87 @@ mod tests {
         assert_eq!(v[[1, 0]], 42.0);
         assert_eq!(v[[1, 1]], 43.0);
         assert_eq!(v[[1, 2]], 44.0);
+    }
+
+    #[test]
+    fn cloned_and_permuted_frame_clears_column_tails_and_unshares_safely() {
+        let text = std::fs::read_to_string("resources/test/tiny_cuh2_vel_forces.con").unwrap();
+        let frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .unwrap()
+            .unwrap();
+        assert!(!frame.column_tails.is_empty());
+
+        let cloned = frame.clone();
+        assert!(cloned.column_tails.is_empty());
+
+        let mut reordered = crate::correspondence::reorder_like(
+            &frame,
+            &frame,
+            crate::correspondence::IdentityCheck::Strict,
+        )
+        .unwrap();
+        assert!(reordered.column_tails.is_empty());
+        drop(frame);
+
+        let _shared_vel = reordered.velocities.clone();
+        reordered.unshare_slot_columns();
+        assert!(reordered.atom_data[0].velocity().is_some());
+    }
+
+    #[test]
+    fn set_velocity_on_forces_only_parsed_frame_preserves_force() {
+        let text = std::fs::read_to_string("resources/test/tiny_cuh2_forces.con").unwrap();
+        let mut frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .unwrap()
+            .unwrap();
+        let force0 = frame.atom_data[0].force().expect("parsed force");
+        let force1 = frame.atom_data[1].force().expect("parsed force");
+
+        frame.atom_data[0].set_velocity(None);
+        assert_eq!(frame.atom_data[0].force(), Some(force0));
+        assert_eq!(frame.atom_data[0].velocity(), None);
+
+        frame.atom_data[1].set_velocity(Some([1.5, -2.5, 3.5]));
+        assert_eq!(frame.atom_data[1].force(), Some(force1));
+        assert_eq!(frame.atom_data[1].velocity(), Some([1.5, -2.5, 3.5]));
+    }
+
+    #[test]
+    fn sync_atom_data_from_arrays_does_not_mutate_shared_column_view() {
+        let text = std::fs::read_to_string("resources/test/tiny_cuh2_vel_forces.con").unwrap();
+        let mut frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .unwrap()
+            .unwrap();
+        let shared_vel = frame.velocities.clone();
+        let before = shared_vel.as_f64_row(0);
+
+        frame.velocities.set_f64_row(0, [11.0, 22.0, 33.0]);
+        frame.sync_atom_data_from_arrays();
+
+        assert_eq!(shared_vel.as_f64_row(0), before);
+        drop(shared_vel);
+        assert_eq!(frame.atom_data[0].velocity(), Some([11.0, 22.0, 33.0]));
+    }
+
+    #[test]
+    fn unshare_moves_live_slots_off_a_shared_velocity_column() {
+        let text = std::fs::read_to_string("resources/test/tiny_cuh2_vel_forces.con").unwrap();
+        let mut frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .unwrap()
+            .unwrap();
+        let shared = frame.velocities.clone();
+        let before = shared.as_f64_row(0);
+        frame.unshare_slot_columns();
+        frame.atom_data[0].set_velocity(Some([123.0, 0.0, 0.0]));
+        assert_eq!(shared.as_f64_row(0), before);
+        assert_eq!(frame.atom_data[0].velocity(), Some([123.0, 0.0, 0.0]));
+        assert_eq!(frame.velocities.as_f64_row(0), [123.0, 0.0, 0.0]);
+        let slot = frame.atom_data[0].velocity_slot() as usize;
+        let range = frame.velocities.f64_slice().unwrap().as_ptr_range();
+        assert!(range.contains(&(slot as *const f64)));
     }
 }
