@@ -95,6 +95,10 @@ jobs:
           )
 
           validate_changes() {
+            local changed
+            changed="$(git diff --name-only)" || return 1
+            [[ -z "$changed" ]] && return 0
+
             local path
             while IFS= read -r path; do
               local found=false
@@ -109,40 +113,61 @@ jobs:
                 echo "Unexpected recorder change: $path" >&2
                 return 1
               fi
-            done < <(git diff --name-only)
+            done <<< "$changed"
           }
 
           record_pin() {
-            bash scripts/record-cxx-wrap.sh
-            validate_changes
+            bash scripts/record-cxx-wrap.sh || return 1
+            validate_changes || return 1
             if bash scripts/cxx-wrap-pin-current.sh; then
-              return 1
+              return 2
             fi
+            return 0
           }
 
           create_commit() {
-            git add -- "${pin_paths[@]}"
+            git add -- "${pin_paths[@]}" || return 1
             git -c commit.gpgsign=false commit \
-              -m "chore(packaging): re-record cxx wrap pin"
+              -m "chore(packaging): re-record cxx wrap pin" || return 1
           }
 
-          if ! record_pin; then
-            exit 0
-          fi
-          create_commit
+          record_and_commit() {
+            record_pin
+            local rc=$?
+            case "$rc" in
+              0) create_commit || return 1 ;;
+              2) return 2 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          set +e
+          record_and_commit
+          rc=$?
+          set -e
+          case "$rc" in
+            0) ;;
+            2) exit 0 ;;
+            *) exit 1 ;;
+          esac
 
           if git push origin HEAD:develop; then
             exit 0
           fi
 
           echo "develop moved; resetting and retrying once."
-          git fetch origin develop
-          git reset --hard origin/develop
-          if ! record_pin; then
-            exit 0
-          fi
-          create_commit
-          git push origin HEAD:develop
+          git fetch origin develop || exit 1
+          git reset --hard origin/develop || exit 1
+          set +e
+          record_and_commit
+          rc=$?
+          set -e
+          case "$rc" in
+            0) ;;
+            2) exit 0 ;;
+            *) exit 1 ;;
+          esac
+          git push origin HEAD:develop || exit 1
 
       - name: Check and report the recorded pin
         env:

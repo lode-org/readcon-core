@@ -161,6 +161,10 @@ def test_develop_pin_recorder_has_guard_and_one_retry():
     assert "gh api --method POST" in workflow
     assert "git rebase" not in workflow
     assert "commit --amend" not in workflow
+    assert "if ! record_pin" not in workflow
+    assert "bash scripts/record-cxx-wrap.sh || return 1" in workflow
+    assert "validate_changes || return 1" in workflow
+    assert "2) return 2" in workflow
 
     retry = workflow.split(
         'echo "develop moved; resetting and retrying once."',
@@ -169,8 +173,11 @@ def test_develop_pin_recorder_has_guard_and_one_retry():
     commands = (
         "git fetch origin develop",
         "git reset --hard origin/develop",
-        "if ! record_pin; then",
-        "create_commit",
+        "set +e",
+        "record_and_commit",
+        "rc=$?",
+        "set -e",
+        'case "$rc"',
         "git push origin HEAD:develop",
     )
     positions = [retry.index(command) for command in commands]
