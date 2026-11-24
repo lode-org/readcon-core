@@ -18,6 +18,42 @@ use crate::iterators::ConFrameIterator;
 use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
 
+/// Pointer to one atom's three coordinates in the frame's coordinate buffer.
+///
+/// The pointer is `Send` because the owner keeps that allocation alive and
+/// every access is an atomic `f64` load or store.
+#[derive(Copy, Clone)]
+struct SharedF64(*mut f64);
+unsafe impl Send for SharedF64 {}
+unsafe impl Sync for SharedF64 {}
+
+/// One atom's view of the frame coordinate buffer that `ConFrame.xyz` exposes.
+struct CoordLink {
+    /// Keeps the buffer alive for as long as this atom is held.
+    #[allow(dead_code)]
+    owner: Py<PyAny>,
+    ptr: SharedF64,
+}
+
+impl Clone for CoordLink {
+    fn clone(&self) -> Self {
+        Python::attach(|py| Self {
+            owner: self.owner.clone_ref(py),
+            ptr: self.ptr,
+        })
+    }
+}
+
+impl CoordLink {
+    fn read(&self, axis: usize) -> f64 {
+        unsafe { crate::types::atomic_load_f64(self.ptr.0.add(axis)) }
+    }
+
+    fn write(&self, axis: usize, value: f64) {
+        unsafe { crate::types::atomic_store_f64(self.ptr.0.add(axis), value) }
+    }
+}
+
 include!("python_borrow.rs");
 
 /// Python-visible atom data.
@@ -56,6 +92,73 @@ pub struct PyAtomDatum {
     pub sx: Option<f64>,
     pub sy: Option<f64>,
     pub sz: Option<f64>,
+    /// View of this atom's row in the frame coordinate buffer.
+    /// Absent for an `Atom` that is not stored in a frame.
+    coord: Option<CoordLink>,
+    /// Field writes on this object. A frame drops `source_text` when any
+    /// of its atoms has a non-zero count.
+    edits: u64,
+}
+
+fn edited<'py>(slf: &Bound<'py, PyAtomDatum>) -> PyResult<Exclusive<'py, PyAtomDatum>> {
+    let mut atom = exclusive(slf)?;
+    atom.edits = atom.edits.wrapping_add(1);
+    Ok(atom)
+}
+
+const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+const FNV_PRIME: u64 = 0x100000001b3;
+
+fn fnv_mix(hash: u64, value: f64) -> u64 {
+    hash.wrapping_mul(FNV_PRIME) ^ value.to_bits()
+}
+
+fn hash_coords(ptr: *const f64, n: usize) -> u64 {
+    let mut hash = FNV_OFFSET;
+    for index in 0..n {
+        hash = fnv_mix(hash, unsafe { crate::types::atomic_load_f64(ptr.add(index)) });
+    }
+    hash
+}
+
+fn published_source_text(slf: &Bound<'_, PyConFrame>) -> PyResult<Option<String>> {
+    let stale = {
+        let this = shared(slf)?;
+        if this.source_text.is_none() {
+            false
+        } else {
+            this.source_is_stale(slf.py())?
+        }
+    };
+    if stale {
+        exclusive(slf)?.note_mutated();
+    }
+    Ok(shared(slf)?.source_text.clone())
+}
+
+fn read_coord_array(value: &Bound<'_, PyAny>, n: usize) -> PyResult<Vec<f64>> {
+    let array = value.cast::<PyArray2<f64>>().map_err(|_| {
+        PyTypeError::new_err("frame.xyz assignment needs an (N, 3) float64 ndarray")
+    })?;
+    let shape = array.shape();
+    if shape.len() != 2 || shape[0] != n || shape[1] != 3 {
+        return Err(PyValueError::new_err(format!(
+            "frame.xyz assignment needs shape ({n}, 3)"
+        )));
+    }
+    if array.is_c_contiguous() {
+        let slice = unsafe { array.as_slice() }.map_err(|err| {
+            PyValueError::new_err(format!("frame.xyz assignment is not contiguous: {err}"))
+        })?;
+        return Ok(slice.to_vec());
+    }
+    let readonly = array.readonly();
+    let view = readonly.as_array();
+    let mut out = Vec::with_capacity(n.saturating_mul(3));
+    for row in view.rows() {
+        out.extend(row.iter().copied());
+    }
+    Ok(out)
 }
 
 #[pymethods]
@@ -116,6 +219,8 @@ impl PyAtomDatum {
             sx,
             sy,
             sz,
+            coord: None,
+            edits: 0,
         }
     }
 
@@ -126,40 +231,40 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_symbol(slf: &Bound<'_, Self>, value: String) -> PyResult<()> {
-        exclusive(slf)?.symbol = value;
+        edited(slf)?.symbol = value;
         Ok(())
     }
 
     #[getter]
     fn x(slf: &Bound<'_, Self>) -> PyResult<f64> {
-        Ok(shared(slf)?.x)
+        Ok(shared(slf)?.read_coord(0))
     }
 
     #[setter]
     fn set_x(slf: &Bound<'_, Self>, value: f64) -> PyResult<()> {
-        exclusive(slf)?.x = value;
+        edited(slf)?.write_coord(0, value);
         Ok(())
     }
 
     #[getter]
     fn y(slf: &Bound<'_, Self>) -> PyResult<f64> {
-        Ok(shared(slf)?.y)
+        Ok(shared(slf)?.read_coord(1))
     }
 
     #[setter]
     fn set_y(slf: &Bound<'_, Self>, value: f64) -> PyResult<()> {
-        exclusive(slf)?.y = value;
+        edited(slf)?.write_coord(1, value);
         Ok(())
     }
 
     #[getter]
     fn z(slf: &Bound<'_, Self>) -> PyResult<f64> {
-        Ok(shared(slf)?.z)
+        Ok(shared(slf)?.read_coord(2))
     }
 
     #[setter]
     fn set_z(slf: &Bound<'_, Self>, value: f64) -> PyResult<()> {
-        exclusive(slf)?.z = value;
+        edited(slf)?.write_coord(2, value);
         Ok(())
     }
 
@@ -170,7 +275,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_fixed(slf: &Bound<'_, Self>, value: [bool; 3]) -> PyResult<()> {
-        exclusive(slf)?.fixed = value;
+        edited(slf)?.fixed = value;
         Ok(())
     }
 
@@ -181,7 +286,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_atom_id(slf: &Bound<'_, Self>, value: u64) -> PyResult<()> {
-        exclusive(slf)?.atom_id = value;
+        edited(slf)?.atom_id = value;
         Ok(())
     }
 
@@ -192,7 +297,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_mass(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.mass = value;
+        edited(slf)?.mass = value;
         Ok(())
     }
 
@@ -203,7 +308,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_vx(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.vx = value;
+        edited(slf)?.vx = value;
         Ok(())
     }
 
@@ -214,7 +319,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_vy(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.vy = value;
+        edited(slf)?.vy = value;
         Ok(())
     }
 
@@ -225,7 +330,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_vz(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.vz = value;
+        edited(slf)?.vz = value;
         Ok(())
     }
 
@@ -236,7 +341,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_fx(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.fx = value;
+        edited(slf)?.fx = value;
         Ok(())
     }
 
@@ -247,7 +352,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_fy(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.fy = value;
+        edited(slf)?.fy = value;
         Ok(())
     }
 
@@ -258,7 +363,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_fz(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.fz = value;
+        edited(slf)?.fz = value;
         Ok(())
     }
 
@@ -272,7 +377,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_energy(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.energy = value;
+        edited(slf)?.energy = value;
         Ok(())
     }
 
@@ -283,7 +388,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_charge(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.charge = value;
+        edited(slf)?.charge = value;
         Ok(())
     }
 
@@ -294,7 +399,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_spin(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.spin = value;
+        edited(slf)?.spin = value;
         Ok(())
     }
 
@@ -305,7 +410,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_mx(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.mx = value;
+        edited(slf)?.mx = value;
         Ok(())
     }
 
@@ -316,7 +421,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_my(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.my = value;
+        edited(slf)?.my = value;
         Ok(())
     }
 
@@ -327,7 +432,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_mz(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.mz = value;
+        edited(slf)?.mz = value;
         Ok(())
     }
 
@@ -340,7 +445,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_dx(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.dx = value;
+        edited(slf)?.dx = value;
         Ok(())
     }
 
@@ -351,7 +456,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_dy(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.dy = value;
+        edited(slf)?.dy = value;
         Ok(())
     }
 
@@ -362,7 +467,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_dz(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.dz = value;
+        edited(slf)?.dz = value;
         Ok(())
     }
 
@@ -375,7 +480,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_sx(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.sx = value;
+        edited(slf)?.sx = value;
         Ok(())
     }
 
@@ -386,7 +491,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_sy(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.sy = value;
+        edited(slf)?.sy = value;
         Ok(())
     }
 
@@ -397,7 +502,7 @@ impl PyAtomDatum {
 
     #[setter]
     fn set_sz(slf: &Bound<'_, Self>, value: Option<f64>) -> PyResult<()> {
-        exclusive(slf)?.sz = value;
+        edited(slf)?.sz = value;
         Ok(())
     }
 
@@ -436,12 +541,39 @@ impl PyAtomDatum {
         let atom = shared(slf)?;
         Ok(format!(
             "Atom(symbol='{}', x={}, y={}, z={}, atom_id={})",
-            atom.symbol, atom.x, atom.y, atom.z, atom.atom_id
+            atom.symbol,
+            atom.read_coord(0),
+            atom.read_coord(1),
+            atom.read_coord(2),
+            atom.atom_id
         ))
     }
 }
 
 impl PyAtomDatum {
+    fn read_coord(&self, axis: usize) -> f64 {
+        if let Some(link) = &self.coord {
+            return link.read(axis);
+        }
+        match axis {
+            0 => self.x,
+            1 => self.y,
+            _ => self.z,
+        }
+    }
+
+    fn write_coord(&mut self, axis: usize, value: f64) {
+        if let Some(link) = &self.coord {
+            link.write(axis, value);
+            return;
+        }
+        match axis {
+            0 => self.x = value,
+            1 => self.y = value,
+            _ => self.z = value,
+        }
+    }
+
     fn is_fixed(&self) -> bool {
         self.fixed[0] || self.fixed[1] || self.fixed[2]
     }
@@ -515,6 +647,8 @@ impl PyAtomDatum {
             sx,
             sy,
             sz,
+            coord: None,
+            edits: 0,
         }
     }
 }
@@ -1094,6 +1228,9 @@ pub struct PyConFrame {
     /// Exact file substring from `iter_con`. `None` for a batch read,
     /// a constructed frame, a streamed frame, or a frame edited after read.
     source_text: Option<String>,
+    /// Coordinate-bit fingerprint taken when `source_text` was stored.
+    /// A later mismatch means an in-place `xyz` store edited the frame.
+    source_coord_hash: Option<u64>,
 }
 
 include!("python_seq.rs");
@@ -1162,6 +1299,7 @@ impl PyConFrame {
             columns: pyo3::sync::PyOnceLock::new(),
             xyz_owned: None,
             source_text: None,
+            source_coord_hash: None,
         })
     }
 
@@ -1202,13 +1340,13 @@ impl PyConFrame {
     /// whitespace that preceded it.
     #[getter]
     fn source_text(slf: &Bound<'_, Self>) -> PyResult<Option<String>> {
-        Ok(shared(slf)?.source_text.clone())
+        published_source_text(slf)
     }
 
     /// Alias of `source_text`.
     #[getter]
     fn raw(slf: &Bound<'_, Self>) -> PyResult<Option<String>> {
-        Ok(shared(slf)?.source_text.clone())
+        published_source_text(slf)
     }
 
     #[getter]
@@ -1429,7 +1567,8 @@ impl PyConFrame {
     /// one read shares the same base object, which owns those buffers, so
     /// a view stays valid after the list and the frame are gone. A later
     /// read of `xyz` views the same memory. The view is writeable and a
-    /// store into it is what a later write of the frame sees.
+    /// store into it is what a later write of the frame sees. Assigning
+    /// `xyz` copies an `(N, 3)` float64 array into that same buffer.
     /// `coords_array()` snapshots the live atom store, so AtomView edits show up.
     #[getter]
     fn xyz<'py>(slf: &Bound<'_, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
@@ -1445,6 +1584,20 @@ impl PyConFrame {
             return Ok(owned.bind(py).clone());
         }
         Self::coords_array(slf, py)
+    }
+
+    /// Replace the frame's coordinates from an `(N, 3)` float64 array.
+    ///
+    /// The values are written into the buffer `xyz` already views when
+    /// that buffer exists, so a held `Atom` and a later write see them.
+    #[setter]
+    fn set_xyz(slf: &Bound<'_, Self>, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let n = shared(slf)?.atom_count(py);
+        let values = read_coord_array(value, n)?;
+        let mut frame = exclusive(slf)?;
+        frame.overwrite_coords(py, &values)?;
+        frame.note_mutated();
+        Ok(())
     }
 
     /// Per-atom masses as a numpy `[N] float64` array.
@@ -1530,7 +1683,9 @@ impl PyConFrame {
         let atoms = this.py_atoms(py)?;
         Ok(filled_rows(
             py,
-            atoms.iter().map(|atom| [atom.x, atom.y, atom.z]),
+            atoms
+                .iter()
+                .map(|atom| [atom.read_coord(0), atom.read_coord(1), atom.read_coord(2)]),
         ))
     }
 
@@ -2399,6 +2554,7 @@ impl PyConFrame {
             columns: pyo3::sync::PyOnceLock::new(),
             xyz_owned,
             source_text: None,
+            source_coord_hash: None,
         })
     }
 
@@ -2409,6 +2565,9 @@ impl PyConFrame {
     ) -> PyResult<Self> {
         let mut out = Self::from_owned(py, frame)?;
         out.source_text = source_text;
+        if out.source_text.is_some() {
+            out.source_coord_hash = Some(out.coord_fingerprint(py)?);
+        }
         Ok(out)
     }
 
@@ -2460,6 +2619,7 @@ impl PyConFrame {
             columns: pyo3::sync::PyOnceLock::new(),
             xyz_owned: None,
             source_text: None,
+            source_coord_hash: None,
         })
     }
 
@@ -2495,6 +2655,7 @@ impl PyConFrame {
             columns: pyo3::sync::PyOnceLock::new(),
             xyz_owned: None,
             source_text: None,
+            source_coord_hash: None,
         })
     }
 
@@ -2538,10 +2699,138 @@ impl PyConFrame {
             let mass = per_atom_mass.get(i).copied().unwrap_or(0.0);
             list.append(PyAtomDatum::from_atom_with_mass(atom, mass))?;
         }
+        self.bind_coord_links(py)?;
         self.atoms_fills
             .fetch_add(1, std::sync::atomic::Ordering::Release);
         self.atoms_ready
             .store(true, std::sync::atomic::Ordering::Release);
+        Ok(())
+    }
+
+    /// The coordinate allocation `xyz` views, and a reference that keeps it alive.
+    fn canonical_owner(&self, py: Python<'_>) -> PyResult<Option<(Py<PyAny>, *mut f64)>> {
+        if let Some(store) = &self.store {
+            let bound = store.bind(py);
+            let ptr = {
+                let buffer = bound.get().buffers.get(self.slab_index).ok_or_else(|| {
+                    PyValueError::new_err("no coordinate buffer for this frame")
+                })?;
+                buffer.ptr
+            };
+            return Ok(Some((bound.clone().unbind().into_any(), ptr)));
+        }
+        if let Some(slab) = &self.slab {
+            let bound = slab.bind(py);
+            if !bound.is_c_contiguous() {
+                return Err(PyValueError::new_err("coordinate slab is not contiguous"));
+            }
+            let stride = self.n_atoms.saturating_mul(3);
+            let ptr = unsafe { bound.data().add(self.slab_index.saturating_mul(stride)) };
+            return Ok(Some((bound.clone().unbind().into_any(), ptr)));
+        }
+        if let Some(owned) = &self.xyz_owned {
+            let bound = owned.bind(py);
+            if !bound.is_c_contiguous() {
+                return Err(PyValueError::new_err("frame coordinates are not contiguous"));
+            }
+            let ptr = bound.data();
+            return Ok(Some((bound.clone().unbind().into_any(), ptr)));
+        }
+        Ok(None)
+    }
+
+    fn bind_coord_links(&self, py: Python<'_>) -> PyResult<()> {
+        let Some((owner, ptr)) = self.canonical_owner(py)? else {
+            return Ok(());
+        };
+        let n = self.atoms.bind(py).len();
+        if n > 0 {
+            crate::types::assert_atomic_f64_alignment(ptr);
+        }
+        let list = self.atoms.bind(py);
+        for index in 0..n {
+            let item = list.get_item(index)?;
+            let atom = item.cast::<PyAtomDatum>()?;
+            let mut atom = exclusive(&atom)?;
+            atom.coord = Some(CoordLink {
+                owner: owner.clone_ref(py),
+                ptr: SharedF64(unsafe { ptr.add(index.saturating_mul(3)) }),
+            });
+        }
+        Ok(())
+    }
+
+    fn coord_fingerprint(&self, py: Python<'_>) -> PyResult<u64> {
+        let n3 = self.atom_count(py).saturating_mul(3);
+        if n3 == 0 {
+            return Ok(FNV_OFFSET);
+        }
+        if let Some((_, ptr)) = self.canonical_owner(py)? {
+            crate::types::assert_atomic_f64_alignment(ptr);
+            return Ok(hash_coords(ptr, n3));
+        }
+        let Some(frame) = self.inner.as_ref() else {
+            return Ok(FNV_OFFSET);
+        };
+        let mut hash = FNV_OFFSET;
+        for atom in &frame.atom_data {
+            let src = atom.coord_ptr();
+            crate::types::assert_atomic_f64_alignment(src);
+            for axis in 0..3 {
+                hash = fnv_mix(hash, unsafe { crate::types::atomic_load_f64(src.add(axis)) });
+            }
+        }
+        Ok(hash)
+    }
+
+    fn source_is_stale(&self, py: Python<'_>) -> PyResult<bool> {
+        if let Some(expected) = self.source_coord_hash {
+            if self.coord_fingerprint(py)? != expected {
+                return Ok(true);
+            }
+        }
+        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            let list = self.atoms.bind(py);
+            for index in 0..list.len() {
+                let item = list.get_item(index)?;
+                let Ok(atom) = item.cast::<PyAtomDatum>() else {
+                    continue;
+                };
+                if shared(&atom)?.edits != 0 {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    fn overwrite_coords(&mut self, py: Python<'_>, values: &[f64]) -> PyResult<()> {
+        let n = values.len() / 3;
+        if let Some((_, ptr)) = self.canonical_owner(py)? {
+            if let Some(inner) = self.inner.as_mut() {
+                let drifted = inner
+                    .atom_data
+                    .first()
+                    .is_some_and(|atom| atom.coord_ptr() != ptr as *const f64);
+                if drifted {
+                    for (index, atom) in inner.atom_data.iter_mut().enumerate() {
+                        atom.retarget(unsafe { ptr.add(index.saturating_mul(3)) });
+                    }
+                }
+            }
+            if !values.is_empty() {
+                crate::types::assert_atomic_f64_alignment(ptr);
+            }
+            for (index, value) in values.iter().copied().enumerate() {
+                unsafe { crate::types::atomic_store_f64(ptr.add(index), value) };
+            }
+            return Ok(());
+        }
+        for index in 0..n {
+            self.set_position_axis(py, index, 0, values[index * 3])?;
+            self.set_position_axis(py, index, 1, values[index * 3 + 1])?;
+            self.set_position_axis(py, index, 2, values[index * 3 + 2])?;
+        }
         Ok(())
     }
 
@@ -2653,9 +2942,9 @@ impl PyConFrame {
             let mass = py_atom.mass.unwrap_or(0.0);
             builder.add_atom(
                 &py_atom.symbol,
-                py_atom.x,
-                py_atom.y,
-                py_atom.z,
+                py_atom.read_coord(0),
+                py_atom.read_coord(1),
+                py_atom.read_coord(2),
                 py_atom.fixed,
                 py_atom.atom_id,
                 mass,
@@ -6140,9 +6429,9 @@ fn ase_columns_from_atoms(
     for (index, atom) in atoms.iter().enumerate() {
         symbols.push(atom.symbol.clone());
         positions.push([
-            atom.x * length_scale,
-            atom.y * length_scale,
-            atom.z * length_scale,
+            atom.read_coord(0) * length_scale,
+            atom.read_coord(1) * length_scale,
+            atom.read_coord(2) * length_scale,
         ]);
         atom_ids.push(atom.atom_id);
         if let Some(dest) = masses.as_mut() {
@@ -6652,6 +6941,8 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
                 sx: None,
                 sy: None,
                 sz: None,
+                coord: None,
+                edits: 0,
             }
         })
         .collect();
@@ -6706,6 +6997,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         columns: pyo3::sync::PyOnceLock::new(),
         xyz_owned: None,
         source_text: None,
+            source_coord_hash: None,
     })
 }
 

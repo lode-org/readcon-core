@@ -310,8 +310,8 @@ Types
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and
     optional headers and metadata (v0.4.0+).  Properties: cell, angles,
-    atoms (live ``AtomSequence``), has\_velocities, has\_forces, has\_energies
-    (v0.10.0+), prebox\_header, postbox\_header, spec\_version (v0.6.0+),
+    atoms (live ``AtomSequence``), has\_velocities, has\_forces,
+    prebox\_header, postbox\_header, spec\_version (v0.6.0+),
     metadata (v0.6.0+, live dict of native JSON-compatible values),
     energy, frame\_index, time, timestep, neb\_bead, neb\_band,
     ``source_text`` and its alias ``raw``.
@@ -345,6 +345,9 @@ Types
     Frames yielded by non-streaming ``iter_con`` expose the exact consumed
     file substring through ``source_text`` / ``raw``. Batch reads, constructed
     frames, streamed frames, slices, and mutated frames return ``None``.
+    An edit through ``atoms``, a held ``Atom``, or ``xyz`` (an item store
+    or an assignment) is a mutation. Reading ``atoms`` or ``xyz`` leaves
+    the substring in place.
     The constructor and ``from_ase()`` raise ``readcon.NonFiniteValue`` (a
     ``ValueError``) for a cell length or angle that is NaN or infinite, and
     for a ``lattice_vectors`` metadata matrix that holds one. The message names
@@ -849,7 +852,7 @@ CMake FetchContent
     FetchContent_Declare(
       readcon-core
       URL https://github.com/lode-org/readcon-core/releases/download/v0.24.0/readcon-core-cxx-0.24.0.tar.gz
-      URL_HASH SHA256=976d29bb5610a128640f06aa654c6cd25a29d07e737cb349f38f51e6d6a83254
+      URL_HASH SHA256=23eafc33e04559eb3365f39179577fdd2163374b8414c66286c533b09b8a114d
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(my_app PRIVATE readcon-core::shared)
