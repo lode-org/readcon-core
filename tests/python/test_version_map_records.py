@@ -149,9 +149,7 @@ def test_blob_named_spec_measurement_is_not_an_extra_library_record(
     base = "data/spec/spec-measurement-0.24.0.json"
     by_blob = "data/spec/spec-measurement-0.24.0-a8f263a2.json"
     ordinary = "data/test_run.json"
-    build = version_map.Build(
-        "0.17.4", "ab" * 32, None, None, None, None, None
-    )
+    build = version_map.Build("0.17.4", "ab" * 32, None, None, None, None, None)
     monkeypatch.setattr(
         version_map,
         "record_places",

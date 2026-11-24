@@ -32,9 +32,7 @@ def test_a_stale_measurement_is_not_a_fallback(
     version = "9.9.9"
     current_blob = "ab" * 20
     base = data / f"spec-measurement-{version}.json"
-    base.write_text(
-        json.dumps({"tree": {"spec_blob": "cd" * 20}}), encoding="utf-8"
-    )
+    base.write_text(json.dumps({"tree": {"spec_blob": "cd" * 20}}), encoding="utf-8")
     legacy = data / "versions.json"
     legacy.write_text(
         json.dumps({"tree": {"spec_blob": current_blob}}), encoding="utf-8"
