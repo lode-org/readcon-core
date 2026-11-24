@@ -25,16 +25,9 @@ case "$mode" in
         ;;
 esac
 
-mismatch() {
-    local message="$1"
-    local annotation="file=packaging/wrapdb/readcon-core.sha256"
-    if [[ "$mode" == "--pull-request" ]]; then
-        echo "::warning ${annotation}::${message}"
-        echo "WARNING: ${message}" >&2
-        return 0
-    fi
-    echo "ERROR: ${message}" >&2
-    return 1
+structural_error() {
+    echo "ERROR: $1" >&2
+    exit 1
 }
 
 ver="$(tr -d '[:space:]' < VERSION)"
@@ -47,20 +40,12 @@ wrap_hash="$(
 wrap_hash="${wrap_hash#sha256:}"
 
 if [[ ! "$recorded" =~ ^[0-9a-f]{64}$ ]]; then
-    if mismatch \
+    structural_error \
         "recorded cxx pin '${recorded}' is not a 64-character sha256"
-    then
-        exit 0
-    fi
-    exit 1
 fi
 if [[ "$wrap_hash" != "$recorded" ]]; then
-    if mismatch \
+    structural_error \
         "wrap hash ${wrap_hash} and sidecar ${recorded} disagree"
-    then
-        exit 0
-    fi
-    exit 1
 fi
 
 out="$(scratch_dir)"
