@@ -108,10 +108,10 @@ fn same_bits(left: f64, right: f64) -> bool {
 
 pub fn assert_frame(got: &ConFrame, expect: &ConFrame) {
     assert_eq!(got.atom_data.len(), expect.atom_data.len());
-    for (got_atom, expect_atom) in got.atom_data.iter().zip(expect.atom_data.iter()) {
-        assert!(same_bits(got_atom.x(), expect_atom.x()));
-        assert!(same_bits(got_atom.y(), expect_atom.y()));
-        assert!(same_bits(got_atom.z(), expect_atom.z()));
+    for (coord_i0, (got_atom, expect_atom)) in got.atom_data.iter().zip(expect.atom_data.iter()).enumerate() {
+        assert!(same_bits(got.x_at(coord_i0), expect.x_at(coord_i0)));
+        assert!(same_bits(got.y_at(coord_i0), expect.y_at(coord_i0)));
+        assert!(same_bits(got.z_at(coord_i0), expect.z_at(coord_i0)));
         assert_eq!(got_atom.fixed(), expect_atom.fixed());
         match (got_atom.velocity(), expect_atom.velocity()) {
             (Some(got_v), Some(expect_v)) => {

@@ -112,10 +112,10 @@ fuzz_target!(|data: &[u8]| {
     assert_eq!(got.n_frames, frames_n as u64);
     let mut cursor = 0usize;
     for frame in &parsed {
-        for atom in &frame.atom_data {
-            assert_eq!(positions[cursor].to_bits(), atom.x().to_bits());
-            assert_eq!(positions[cursor + 1].to_bits(), atom.y().to_bits());
-            assert_eq!(positions[cursor + 2].to_bits(), atom.z().to_bits());
+        for (coord_i0, atom) in frame.atom_data.iter().enumerate() {
+            assert_eq!(positions[cursor].to_bits(), frame.x_at(coord_i0).to_bits());
+            assert_eq!(positions[cursor + 1].to_bits(), frame.y_at(coord_i0).to_bits());
+            assert_eq!(positions[cursor + 2].to_bits(), frame.z_at(coord_i0).to_bits());
             let velocity = atom.velocity().unwrap_or([0.0, 0.0, 0.0]);
             assert_eq!(velocities[cursor].to_bits(), velocity[0].to_bits());
             assert_eq!(velocities[cursor + 1].to_bits(), velocity[1].to_bits());

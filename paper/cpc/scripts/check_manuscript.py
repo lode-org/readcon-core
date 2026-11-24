@@ -1153,7 +1153,13 @@ def check_conformance() -> str:
 
     _, coverage_path = clause_coverage.default_paths(root=ROOT, repo=REPO)
     coverage_record = coverage_path.name
-    clauses = json.loads(coverage_path.read_text(encoding="utf-8"))["totals"]
+    clauses = (
+        json.loads(coverage_path.read_text(encoding="utf-8"))["totals"]
+        if coverage_path.is_file()
+        else None
+    )
+    if clauses is None:
+        bad.append(f"{coverage_record} is missing; run scripts/clause_coverage.py")
     mutants = json.loads(
         (ROOT / "data" / "spec" / "mutant_differential.json").read_text()
     )["totals"]
@@ -1162,18 +1168,22 @@ def check_conformance() -> str:
             f"mutant_differential.json: {mutants['unexplained']} cases no group explains"
         )
     values = macros()
-    for macro, value, record in (
+    macro_checks = [
         ("cthreeoneFiles", c31["files"], "corpus31-results.json"),
         ("cthreeoneMatch", c31["match"], "corpus31-results.json"),
         ("cpathsFiles", paths["files"], "corpus_paths.json"),
         ("cpathsReads", f"{paths['reads']:,}", "corpus_paths.json"),
         ("cpathsMatch", f"{paths['match']:,}", "corpus_paths.json"),
         ("everyPathInputs", f"{every['inputs']:,}", "every_path.json"),
-        ("clauseTotal", clauses["clauses"], coverage_record),
-        ("clauseCovered", clauses["covered"], coverage_record),
         ("mutantCases", f"{mutants['cases']:,}", "mutant_differential.json"),
         ("mutantSame", f"{mutants['same']:,}", "mutant_differential.json"),
-    ):
+    ]
+    if clauses is not None:
+        macro_checks[6:6] = [
+            ("clauseTotal", clauses["clauses"], coverage_record),
+            ("clauseCovered", clauses["covered"], coverage_record),
+        ]
+    for macro, value, record in macro_checks:
         if values.get(macro) != str(value):
             bad.append(f"\\{macro} is {values.get(macro)}; {record} gives {value}")
     cross = json.loads((ROOT / "data" / "corpus_crosscheck.json").read_text())

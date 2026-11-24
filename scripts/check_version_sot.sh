@@ -215,35 +215,19 @@ if (root / spec_measurement).is_file():
     allow_exact.add(spec_measurement)
 else:
     print(f"PENDING: {spec_measurement} has not been measured")
-# The measured file is the rerun of gen_spec_supp.py --measure. It names
-# the stored record in supersedes. The stored file stays byte-identical.
-spec_measured = f"paper/cpc/data/spec/spec-measurement-{version}-measured.json"
-if (root / spec_measured).is_file():
-    allow_exact.add(spec_measured)
-else:
-    print(f"PENDING: {spec_measured} has not been measured")
-# A later rerun writes -measured-<n>.json and supersedes the newest file.
-for later in sorted((root / "paper/cpc/data/spec").glob(f"spec-measurement-{version}-measured-*.json")):
-    allow_exact.add(later.relative_to(root).as_posix())
+for extra in sorted(
+    (root / "paper/cpc/data/spec").glob(f"spec-measurement-{version}-*.json")
+):
+    allow_exact.add(extra.relative_to(root).as_posix())
 clause_coverage = f"paper/cpc/data/spec/clause_coverage-{version}.json"
 if (root / clause_coverage).is_file():
     allow_exact.add(clause_coverage)
 else:
     print(f"PENDING: {clause_coverage} has not been measured")
-clause_recount = f"paper/cpc/data/spec/clause_coverage-{version}-recount.json"
-if (root / clause_recount).is_file():
-    allow_exact.add(clause_recount)
-else:
-    print(f"PENDING: {clause_recount} has not been measured")
-# The sources file is the count clause_coverage.py writes. The recount stays
-# byte-identical because it embeds the hand-entered REASONS text.
-clause_sources = f"paper/cpc/data/spec/clause_coverage-{version}-sources.json"
-if (root / clause_sources).is_file():
-    allow_exact.add(clause_sources)
-else:
-    print(f"PENDING: {clause_sources} has not been measured")
-for later in sorted((root / "paper/cpc/data/spec").glob(f"clause_coverage-{version}-sources-*.json")):
-    allow_exact.add(later.relative_to(root).as_posix())
+for extra in sorted(
+    (root / "paper/cpc/data/spec").glob(f"clause_coverage-{version}-*.json")
+):
+    allow_exact.add(extra.relative_to(root).as_posix())
 # The like-for-like rows, samples and summary name the build they measured.
 # A later release must not rewrite those fields.
 allow_exact.update({

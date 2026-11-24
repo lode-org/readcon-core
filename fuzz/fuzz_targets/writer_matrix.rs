@@ -151,10 +151,10 @@ fn frame_non_finite(frame: &ConFrame) -> bool {
     frame.header.boxl.iter().any(|v| !v.is_finite())
         || frame.header.angles.iter().any(|v| !v.is_finite())
         || frame.header.masses_per_type.iter().any(|v| !v.is_finite())
-        || frame.atom_data.iter().any(|atom| {
-            !atom.x().is_finite()
-                || !atom.y().is_finite()
-                || !atom.z().is_finite()
+        || frame.atom_data.iter().enumerate().any(|(coord_i0, atom)| {
+            !frame.x_at(coord_i0).is_finite()
+                || !frame.y_at(coord_i0).is_finite()
+                || !frame.z_at(coord_i0).is_finite()
                 || atom
                     .velocity()
                     .is_some_and(|v| v.iter().any(|n| !n.is_finite()))
@@ -188,11 +188,11 @@ fn assert_same(got: &[ConFrame], expect: &[ConFrame]) {
         {
             assert_eq!(bits(*got_mass), bits(*expect_mass));
         }
-        for (got_atom, expect_atom) in got.atom_data.iter().zip(expect.atom_data.iter()) {
+        for (coord_i1, (got_atom, expect_atom)) in got.atom_data.iter().zip(expect.atom_data.iter()).enumerate() {
             assert_eq!(got_atom.symbol.as_ref(), expect_atom.symbol.as_ref());
-            assert_eq!(bits(got_atom.x()), bits(expect_atom.x()));
-            assert_eq!(bits(got_atom.y()), bits(expect_atom.y()));
-            assert_eq!(bits(got_atom.z()), bits(expect_atom.z()));
+            assert_eq!(bits(got.x_at(coord_i1)), bits(expect.x_at(coord_i1)));
+            assert_eq!(bits(got.y_at(coord_i1)), bits(expect.y_at(coord_i1)));
+            assert_eq!(bits(got.z_at(coord_i1)), bits(expect.z_at(coord_i1)));
             assert_eq!(got_atom.fixed(), expect_atom.fixed());
             assert_eq!(got_atom.atom_id, expect_atom.atom_id);
             match (got_atom.velocity(), expect_atom.velocity()) {
@@ -324,8 +324,8 @@ fuzz_target!(|data: &[u8]| {
         let mut expect_pos = Vec::new();
         let mut expect_vel = Vec::new();
         for frame in &frames {
-            for atom in &frame.atom_data {
-                expect_pos.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
+            for (coord_i2, atom) in frame.atom_data.iter().enumerate() {
+                expect_pos.extend_from_slice(&[frame.x_at(coord_i2), frame.y_at(coord_i2), frame.z_at(coord_i2)]);
                 expect_vel.extend_from_slice(&atom.velocity().unwrap_or([0.0; 3]));
             }
         }

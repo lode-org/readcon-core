@@ -99,7 +99,7 @@ reads back as the same binary64 value.
         );
         assert!(scratches(&dir).is_empty());
         let back = read_first_frame(&path).unwrap();
-        assert_eq!(back.atom_data[0].x(), 1.5);
+        assert_eq!(back.x_at(0), 1.5);
         let _ = fs::remove_dir_all(&dir);
     }
 

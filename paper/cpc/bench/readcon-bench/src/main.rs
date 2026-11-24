@@ -147,11 +147,11 @@ fn hash_frame(hasher: &mut Sha256, frame: &ConFrame) {
     feed_str(hasher, &meta);
     hash_soa(hasher, frame);
     feed_u64(hasher, frame.atom_data.len() as u64);
-    for atom in &frame.atom_data {
+    for (coord_i0, atom) in frame.atom_data.iter().enumerate() {
         feed_str(hasher, atom.symbol.as_ref());
-        feed_f64(hasher, atom.x());
-        feed_f64(hasher, atom.y());
-        feed_f64(hasher, atom.z());
+        feed_f64(hasher, frame.x_at(coord_i0));
+        feed_f64(hasher, frame.y_at(coord_i0));
+        feed_f64(hasher, frame.z_at(coord_i0));
         hasher.update([
             u8::from(atom.fixed()[0]),
             u8::from(atom.fixed()[1]),
@@ -261,13 +261,10 @@ fn dump(path: &str) -> Result<(), String> {
 
 fn frame_json(frame: &ConFrame) -> Value {
     let units = frame.header.metadata.get("units").cloned().unwrap_or(Value::Null);
-    let atoms: Vec<Value> = frame
-        .atom_data
-        .iter()
-        .map(|atom| {
+    let atoms: Vec<Value> = frame.atom_data.iter().enumerate().map(|(coord_i1, atom)| {
             json!({
                 "symbol": atom.symbol.as_ref(),
-                "xyz": [atom.x(), atom.y(), atom.z()],
+                "xyz": [frame.x_at(coord_i1), frame.y_at(coord_i1), frame.z_at(coord_i1)],
                 "fixed": atom.fixed(),
                 "id": atom.atom_id,
                 "velocity": atom.velocity(),

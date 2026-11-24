@@ -179,12 +179,21 @@ MEASUREMENT_RECORDS = frozenset(
         # The model release is PET-MAD-S 1.1.0. The record keeps the
         # upstream file token, which is not a tag of this repository.
         "paper/cpc/data/claisen/results.json",
-        f"paper/cpc/data/spec/clause_coverage-{CURRENT_VERSION}.json",
+        *(
+            p.relative_to(ROOT).as_posix()
+            for p in sorted(
+                (ROOT / "paper" / "cpc" / "data" / "spec").glob("clause_coverage*.json")
+            )
+        ),
         "paper/cpc/data/spec/mutant_differential.json",
-        f"paper/cpc/data/spec/spec-measurement-{CURRENT_VERSION}.json",
-        # Reruns name the specification blobs they measured, not commits.
-        f"paper/cpc/data/spec/spec-measurement-{CURRENT_VERSION}-measured.json",
-        f"paper/cpc/data/spec/spec-measurement-{CURRENT_VERSION}-measured-2.json",
+        *(
+            p.relative_to(ROOT).as_posix()
+            for p in sorted(
+                (ROOT / "paper" / "cpc" / "data" / "spec").glob(
+                    "spec-measurement-*.json"
+                )
+            )
+        ),
         "paper/cpc/data/spec/versions.json",
         "paper/cpc/data/survey_frame.json",
         "paper/cpc/data/worked_example.json",

@@ -32,6 +32,7 @@ import ast
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -54,11 +55,12 @@ MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 def default_paths(
     root: Path | None = None,
     repo: Path | None = None,
+    spec: Path | None = None,
     version: str | None = None,
 ) -> tuple[Path, Path]:
-    """The superseded record and the current sources record of ``data/spec``."""
     root = root or ROOT
     repo_root = (repo or REPO).resolve()
+    spec_path = spec or (repo_root / "docs" / "orgmode" / "spec.org")
     ver = (
         version
         if version is not None
@@ -66,39 +68,84 @@ def default_paths(
     )
     spec_dir = root / "data" / "spec"
     base = spec_dir / f"clause_coverage-{ver}.json"
+    blob8 = (
+        subprocess.run(
+            ["git", "-C", str(repo_root), "hash-object", str(spec_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()[:8]
+        if spec_path.is_file()
+        else None
+    )
+    by_blob = spec_dir / f"clause_coverage-{ver}-{blob8}.json" if blob8 else None
+    if by_blob is not None and by_blob.is_file():
+        # A later record of the same spec names the one it supersedes; the
+        # newest is the end of that chain, whatever its file name sorts as.
+        later = {
+            path: json.loads(path.read_text(encoding="utf-8")).get("supersedes")
+            for path in spec_dir.glob(f"clause_coverage-{ver}-{blob8}-*.json")
+        }
+        previous, newest = base, by_blob
+        for _ in later:
+            name = (
+                newest.resolve().relative_to(repo_root).as_posix()
+                if newest.resolve().is_relative_to(repo_root)
+                else f"paper/cpc/data/spec/{newest.name}"
+            )
+            after = [path for path, prior in later.items() if prior == name]
+            if len(after) != 1:
+                sys.exit(
+                    f"{len(after)} records of data/spec supersede {newest.name}; "
+                    f"the {len(later) + 1} clause coverage records of spec "
+                    f"{blob8} must form one chain"
+                )
+            previous, newest = newest, after[0]
+        return previous, newest
     sources = spec_dir / f"clause_coverage-{ver}-sources.json"
-    later = {
+    sources_later = {
         path: json.loads(path.read_text(encoding="utf-8")).get("supersedes")
         for path in sorted(spec_dir.glob(f"clause_coverage-{ver}-sources-*.json"))
     }
-    if not later:
-        return base, sources
-    if not sources.is_file():
-        sys.exit(
-            f"{sources.name} is missing while {len(later)} later sources records exist"
-        )
-    previous, newest = base, sources
-    for _ in later:
-        name = (
-            newest.resolve().relative_to(repo_root).as_posix()
-            if newest.resolve().is_relative_to(repo_root)
-            else f"paper/cpc/data/spec/{newest.name}"
-        )
-        after = [path for path, prior in later.items() if prior == name]
-        if len(after) != 1:
+    if sources.is_file() or sources_later or not spec_path.is_file():
+        if not sources_later:
+            return base, sources
+        if not sources.is_file():
             sys.exit(
-                f"{len(after)} records of data/spec supersede {newest.name}; "
-                f"the {len(later) + 1} clause coverage sources records of "
-                f"{ver} must form one chain"
+                f"{sources.name} is missing while {len(sources_later)} later sources records exist"
             )
-        previous, newest = newest, after[0]
-    return previous, newest
+        previous, newest = base, sources
+        for _ in sources_later:
+            name = (
+                newest.resolve().relative_to(repo_root).as_posix()
+                if newest.resolve().is_relative_to(repo_root)
+                else f"paper/cpc/data/spec/{newest.name}"
+            )
+            after = [path for path, prior in sources_later.items() if prior == name]
+            if len(after) != 1:
+                sys.exit(
+                    f"{len(after)} records of data/spec supersede {newest.name}; "
+                    f"the {len(sources_later) + 1} clause coverage sources records of "
+                    f"{ver} must form one chain"
+                )
+            previous, newest = newest, after[0]
+        return previous, newest
+    if base.is_file():
+        existing = (
+            json.loads(base.read_text(encoding="utf-8")).get("spec", {}).get("sha256")
+        )
+        if existing != hashlib.sha256(spec_path.read_bytes()).hexdigest():
+            assert by_blob is not None
+            return base, by_blob
+        return spec_dir / "clause_coverage.json", base
+    return spec_dir / "clause_coverage.json", base
 
 
-# The versioned file is the stored measurement. The recount embeds the
-# hand-entered REASONS text, so a later count is a new file and the recount
-# stays byte-identical.
-SUPERSEDES, OUT = default_paths()
+def _default_paths() -> tuple[Path, Path]:
+    return default_paths()
+
+
+SUPERSEDES, OUT = _default_paths()
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)
 ID = re.compile(r"CON-[a-z][a-z0-9]*\.[0-9]+")
@@ -475,12 +522,29 @@ def main() -> int:
             )
             return 0
         if target.is_file():
-            n = 2
             spec_dir = target.parent
-            candidate = spec_dir / f"clause_coverage-{VERSION}-sources-{n}.json"
-            while candidate.is_file():
-                n += 1
+            if target.name.startswith(f"clause_coverage-{VERSION}-sources"):
+                n = 2
                 candidate = spec_dir / f"clause_coverage-{VERSION}-sources-{n}.json"
+                while candidate.is_file():
+                    n += 1
+                    candidate = spec_dir / f"clause_coverage-{VERSION}-sources-{n}.json"
+            else:
+                blob8 = subprocess.run(
+                    ["git", "-C", str(REPO), "hash-object", str(SPEC)],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout.strip()[:8]
+                n = max(
+                    2,
+                    len(list(spec_dir.glob(f"clause_coverage-{VERSION}-{blob8}-*.json")))
+                    + 2,
+                )
+                candidate = spec_dir / f"clause_coverage-{VERSION}-{blob8}-r{n}.json"
+                while candidate.is_file():
+                    n += 1
+                    candidate = spec_dir / f"clause_coverage-{VERSION}-{blob8}-r{n}.json"
             record = build(supersedes=target)
             target = candidate
     elif target.is_file():
