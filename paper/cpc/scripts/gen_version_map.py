@@ -128,7 +128,10 @@ RECORD_NAMES = (
     (r"data/failure/version_safety\.csv", "Failure campaign, version safety"),
     (r"data/restart_walls/restart_walls\.(?:csv|json)", "Restart wall times"),
     (r"data/sizes\.csv", "File sizes"),
-    (r"data/spec/corpus_recount\.json", "Specification campaign, corpus recount"),
+    (
+        r"data/spec/corpus_recount(?:-\d+)?\.json",
+        "Specification campaign, corpus recount",
+    ),
     (
         r"data/spec/mutant_differential\.json",
         "Specification campaign, mutant differential",
