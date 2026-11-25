@@ -25,7 +25,6 @@ auto/
 bench/work/
 # Timing and evidence records are inputs of scripts/regen_paper.py.
 src/figures/generated/*
-figures/generated/
 !src/figures/generated/survey_frame.con
 !src/figures/generated/restart.pdf
 !src/figures/generated/dlpack_macros.tex
