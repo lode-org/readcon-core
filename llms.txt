@@ -1,0 +1,18 @@
+# readcon-core
+
+> Reference implementation of the versioned .con and .convel atomistic checkpoint formats, in Rust with C, C++, Python, Julia and Fortran bindings.
+
+- Documentation: https://lode-org.github.io/readcon-core/
+- Repository: https://github.com/lode-org/readcon-core
+
+## Docs (org sources)
+
+- [index](https://github.com/lode-org/readcon-core/blob/develop/docs/orgmode/index.org)
+- [getting-started](https://github.com/lode-org/readcon-core/blob/develop/docs/orgmode/getting-started.org)
+- [tutorial](https://github.com/lode-org/readcon-core/blob/develop/docs/orgmode/tutorial.org)
+- [howto](https://github.com/lode-org/readcon-core/blob/develop/docs/orgmode/howto.org)
+- [spec](https://github.com/lode-org/readcon-core/blob/develop/docs/orgmode/spec.org)
+- [bindings](https://github.com/lode-org/readcon-core/blob/develop/docs/orgmode/bindings.org)
+- [migrate](https://github.com/lode-org/readcon-core/blob/develop/docs/orgmode/migrate.org)
+- [faq](https://github.com/lode-org/readcon-core/blob/develop/docs/orgmode/faq.org)
+- [architecture](https://github.com/lode-org/readcon-core/blob/develop/docs/orgmode/architecture.org)
