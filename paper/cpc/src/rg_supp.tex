@@ -407,7 +407,10 @@ Extended XYZ is the text format to compare with CON on drift between readers, be
 We gave seven three-atom files (Table~\ref{tab:drift}) to \(\driftAllPaths\) reader paths from \(\driftAllLibraries\) libraries, and on the reference frame the \(\driftXyzPaths\) extended XYZ paths, from \(\driftXyzLibraries\) libraries, return \(\driftXyzOutcomes\) different outcomes.
 That grammar admits a \texttt{d} or \texttt{D} exponent and reads \texttt{T}, \texttt{true}, \texttt{True} and \texttt{TRUE} as true, and the paths split on both files.
 It leaves open whether a comment line that is not key-value pairs makes a file plain XYZ or an error, and on such a file the C parser of libAtoms departs from the default periodicity while its Python parser fails.
-OVITO 3.17.0, released 2026-10-21, writes the periodicity of the cell as \texttt{pbc} in its extended XYZ files, but those files name no velocity time unit and have no place for a per-component constraint \cite{ovitoNewFeatures31702026}.
+OVITO 3.17.0, released 2026-10-21, writes the periodicity of the cell as \texttt{pbc} in its extended XYZ files, but those files name no velocity time unit and keep a per-component constraint only in a column whose name the writer chooses \cite{ovitoNewFeatures31702026}.
+The reader of that release follows the current extended XYZ specification.
+It accepts whitespace around the equals sign, escape sequences in quoted strings and array values, imports the logical values of the comment line as Booleans, and loads string columns as particle properties \cite{ovitoNewFeatures31702026}.
+Table~\ref{tab:drift} gives the outcomes of the earlier reader of Section~\ref{sec:supp-versions}.
 
 \FloatBarrier \section{Records beside the checkpoint}\label{sec:supp-neighbors} Table~\ref{tab:compare} answers four questions for the checkpoint and for the other routes of Table~\ref{tab:survey}.
 Restart-exact means binary64 coordinates, the per-component mask, the identifier and the periodic flags all come back.
