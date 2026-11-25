@@ -35,7 +35,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import FancyBboxPatch, Polygon
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "figures" / "generated"
+OUT = ROOT / "src" / "figures" / "generated"
 
 TEAL = RUHI_COLORS["teal"]
 SKY = RUHI_COLORS["sky"]
