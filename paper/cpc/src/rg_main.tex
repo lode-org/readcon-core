@@ -605,6 +605,8 @@ A computed barrier can be reproduced from a file only when every reader returns 
 
 CON 3.1 takes that route for the saddle-search checkpoint.
 H5MD and extended XYZ are the nearest formats, and the h5py and ASE routes of Section~\ref{sec:cases} carry all four fields through a convention added on top of each, but that convention lives in one reader again.
+The biophysics module of H5MD takes the same route for topology, force-field parameters and simulation parameters, with a validator that checks a file against the specification alone \cite{johanssonH5mdBiophysicsModule2026}.
+Each of its corruptions injects one defect into a valid file written by GROMACS and names the finding that the validator must raise, which is the role of the illegal files of the CON corpus.
 The drift between published readcon-core wheels in Section~\ref{sec:conformance} is the same failure inside one project, and the corpus and the version rule of Eq.~\eqref{eq:version} contain it, since every case that a release decides enters the text and the corpus, and a later minor never makes a reader reject a file that an earlier minor requires it to accept.
 The cost is a text format, whose file sizes and read times Figure~\ref{fig:pareto} sets beside those of the binary formats, and readcon-db keeps a shuffled, compressed cache for campaigns where storage matters.
 
