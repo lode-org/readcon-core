@@ -197,4 +197,3 @@ def test_spec_edit_measure_then_generate_in_temp_copy(tmp_path: Path) -> None:
         check=False,
     )
     assert checked.returncode == 0, checked.stdout + checked.stderr
-

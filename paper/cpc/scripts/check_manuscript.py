@@ -1375,7 +1375,7 @@ def check_version_doi() -> str:
             f"VERSION is {version}; this tree records DOI {doi} and origin has no tag {tag}"
         )
     form = (ROOT / "packet" / "CPC-FORM.md").read_text()
-    if "This commit is not a release tag." not in form:
+    if "No release tag names this commit." not in form:
         fail(
             f"VERSION is {version}; origin has no tag {tag} and the form does not say this commit is not a release tag"
         )

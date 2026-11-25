@@ -1,4 +1,4 @@
-"""clause_coverage.py appends a superseding sources record and never rewrites a stored one."""
+"""clause_coverage.py appends a superseding final record and never rewrites a stored one."""
 
 from __future__ import annotations
 
@@ -24,7 +24,9 @@ def _load():
     return module
 
 
-def _configure(module, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, count: int = 10):
+def _configure(
+    module, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, count: int = 10
+):
     repo = tmp_path / "repo"
     root = repo / "paper" / "cpc"
     spec_dir = root / "data" / "spec"
@@ -39,16 +41,14 @@ def _configure(module, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, count: i
     monkeypatch.setattr(module, "ROOT", root)
     monkeypatch.setattr(module, "VERSION", "0.1.0")
     monkeypatch.setattr(module, "MACROS", macros)
+    monkeypatch.setattr(module, "RECORD_DIR", spec_dir)
+    monkeypatch.setattr(module, "LEGACY_RECORD", base)
 
     state = {"rust_tests": count}
 
-    def fake_build(supersedes: Path = module.SUPERSEDES) -> dict:
+    def fake_build(supersedes: Path | None = None) -> dict:
+        assert supersedes is None
         return {
-            "supersedes": module.rel(supersedes),
-            "reason": (
-                "Recounts specification coverage for readcon-core 0.1.0 "
-                "without rewriting the previous measurement."
-            ),
             "sources": {
                 "tests": {
                     "roots": ["tests", "src"],
@@ -85,71 +85,69 @@ def test_clause_coverage_appends_superseding_records_without_rewriting(
     module = _load()
     repo, root, spec_dir, macros, state = _configure(module, tmp_path, monkeypatch, 10)
 
-    def refresh_defaults() -> None:
-        sup, out = module.default_paths(root=root, repo=repo, version="0.1.0")
-        monkeypatch.setattr(module, "SUPERSEDES", sup)
-        monkeypatch.setattr(module, "OUT", out)
+    def run(*args: str) -> int:
+        monkeypatch.setattr("sys.argv", ["clause_coverage.py", *args])
+        return module.main()
 
-    refresh_defaults()
-    monkeypatch.setattr("sys.argv", ["clause_coverage.py"])
-    assert module.main() == 0
+    def paths() -> tuple[Path, Path]:
+        return module.default_paths(root=root, repo=repo, version="0.1.0")
 
-    first = spec_dir / "clause_coverage-0.1.0-sources.json"
+    # Without --record only the TeX is written.
+    assert run() == 0
+    assert macros.is_file()
+    assert not list(spec_dir.glob("clause_coverage-0.1.0-spec-major*.json"))
+
+    assert run("--record") == 0
+    first = spec_dir / "clause_coverage-0.1.0-spec-major.json"
     assert first.is_file()
     first_bytes = first.read_bytes()
     assert json.loads(first.read_text(encoding="utf-8"))["supersedes"] == (
         "paper/cpc/data/spec/clause_coverage-0.1.0.json"
     )
-    assert "from data/spec/clause_coverage-0.1.0-sources.json." in macros.read_text(
-        encoding="utf-8"
-    )
+    assert "from the live tree." in macros.read_text(encoding="utf-8")
 
-    # Running again with identical sources writes only macros and adds no new record.
-    refresh_defaults()
-    assert module.main() == 0
+    # Recording again with identical sources adds no new record.
+    assert run("--record") == 0
     assert first.read_bytes() == first_bytes
-    assert not (spec_dir / "clause_coverage-0.1.0-sources-2.json").exists()
+    assert not (spec_dir / "clause_coverage-0.1.0-spec-major-2.json").exists()
 
-    # When sources change, --check fails on the stale terminal record, and running
-    # without --check appends -sources-2.json while leaving -sources.json untouched.
+    # When sources change, --check fails on the stale final record, and
+    # --record appends spec-major-2.json while leaving spec-major.json untouched.
     state["rust_tests"] = 12
-    refresh_defaults()
-    monkeypatch.setattr("sys.argv", ["clause_coverage.py", "--check"])
-    assert module.main() == 1
-
-    monkeypatch.setattr("sys.argv", ["clause_coverage.py"])
-    assert module.main() == 0
-    second = spec_dir / "clause_coverage-0.1.0-sources-2.json"
+    assert run("--check") == 1
+    assert run("--record") == 0
+    second = spec_dir / "clause_coverage-0.1.0-spec-major-2.json"
     assert second.is_file()
     assert first.read_bytes() == first_bytes
     second_bytes = second.read_bytes()
     assert json.loads(second.read_text(encoding="utf-8"))["supersedes"] == (
-        "paper/cpc/data/spec/clause_coverage-0.1.0-sources.json"
+        "paper/cpc/data/spec/clause_coverage-0.1.0-spec-major.json"
     )
-    assert "from data/spec/clause_coverage-0.1.0-sources-2.json." in macros.read_text(
-        encoding="utf-8"
-    )
+    assert paths() == (first, second)
+    assert run("--check") == 0
 
-    refresh_defaults()
-    assert module.SUPERSEDES == first
-    assert module.OUT == second
-    monkeypatch.setattr("sys.argv", ["clause_coverage.py", "--check"])
-    assert module.main() == 0
-
-    # A third change appends -sources-3.json superseding -sources-2.json.
+    # A third change appends spec-major-3.json superseding spec-major-2.json.
     state["rust_tests"] = 15
-    monkeypatch.setattr("sys.argv", ["clause_coverage.py"])
-    assert module.main() == 0
-    third = spec_dir / "clause_coverage-0.1.0-sources-3.json"
+    assert run("--record") == 0
+    third = spec_dir / "clause_coverage-0.1.0-spec-major-3.json"
     assert third.is_file()
     assert first.read_bytes() == first_bytes
     assert second.read_bytes() == second_bytes
     assert json.loads(third.read_text(encoding="utf-8"))["supersedes"] == (
-        "paper/cpc/data/spec/clause_coverage-0.1.0-sources-2.json"
+        "paper/cpc/data/spec/clause_coverage-0.1.0-spec-major-2.json"
     )
-    refresh_defaults()
-    assert module.SUPERSEDES == second
-    assert module.OUT == third
+    assert paths() == (second, third)
+    assert [p.name for p in module.final_chain()] == [
+        first.name,
+        second.name,
+        third.name,
+    ]
+
+    # An explicit --out that names a stored record with other bytes is refused.
+    state["rust_tests"] = 16
+    with pytest.raises(SystemExit, match="refusing to overwrite committed record"):
+        run("--record", "--out", str(second))
+    assert second.read_bytes() == second_bytes
 
 
 def test_default_paths_rejects_broken_supersedes_chain(
@@ -157,16 +155,16 @@ def test_default_paths_rejects_broken_supersedes_chain(
 ) -> None:
     module = _load()
     repo, root, spec_dir, _, _ = _configure(module, tmp_path, monkeypatch, 10)
-    (spec_dir / "clause_coverage-0.1.0-sources.json").write_text(
+    (spec_dir / "clause_coverage-0.1.0-spec-major.json").write_text(
         json.dumps({"supersedes": "paper/cpc/data/spec/clause_coverage-0.1.0.json"})
         + "\n",
         encoding="utf-8",
     )
     for n in (2, 3):
-        (spec_dir / f"clause_coverage-0.1.0-sources-{n}.json").write_text(
+        (spec_dir / f"clause_coverage-0.1.0-spec-major-{n}.json").write_text(
             json.dumps(
                 {
-                    "supersedes": "paper/cpc/data/spec/clause_coverage-0.1.0-sources.json"
+                    "supersedes": "paper/cpc/data/spec/clause_coverage-0.1.0-spec-major.json"
                 }
             )
             + "\n",
