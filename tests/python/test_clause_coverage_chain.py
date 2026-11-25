@@ -241,6 +241,33 @@ def test_default_paths_rejects_fork_and_orphan(tmp_path: Path) -> None:
     assert tail.is_file()
 
 
+def test_repo_clause_coverage_resolves_to_terminal_record() -> None:
+    clause_coverage = _load(
+        "clause_coverage_under_test", SCRIPTS / "clause_coverage.py"
+    )
+    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    spec_dir = ROOT / "paper" / "cpc" / "data" / "spec"
+    # The chain named by git blob a8f263a2 forks at its r6 record, which
+    # stored records keep. The live spec.org resolves through the final
+    # spec-major chain.
+    previous, newest = clause_coverage.default_paths()
+    assert newest.name not in _children(spec_dir)
+    assert newest == clause_coverage.FINAL_RECORD
+    assert newest == clause_coverage.record_for_sources()[0]
+    chain = [newest]
+    cur = newest
+    while True:
+        prior_rel = json.loads(cur.read_text(encoding="utf-8")).get("supersedes")
+        if not prior_rel:
+            break
+        cur = ROOT / prior_rel
+        chain.append(cur)
+    names = [p.name for p in chain]
+    assert f"clause_coverage-{version}-spec-major.json" in names
+    assert f"clause_coverage-{version}.json" in names
+    assert previous == chain[1]
+
+
 def _walk_back(path: Path) -> list[Path]:
     chain = [path]
     while prior := json.loads(chain[-1].read_text(encoding="utf-8")).get("supersedes"):
