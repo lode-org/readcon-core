@@ -336,15 +336,18 @@ def test_repo_final_clause_coverage_chain_is_linear() -> None:
     assert finals
     tip = finals[-1]
     assert clause_coverage.FINAL_RECORD == tip
-    recounts = [p for p in finals if clause_coverage.is_capi(p)]
-    majors = len(finals) - len(recounts)
-    assert (
-        finals[majors - 1].name == f"clause_coverage-{version}-spec-major-{majors}.json"
+    names = [p.name for p in finals]
+    assert all(clause_coverage.record_series(p) for p in finals)
+    assert names.count(tip.name) == 1
+    assert f"clause_coverage-{version}-spec-major-10.json" in names
+    assert f"clause_coverage-{version}-capi-r1.json" in names
+    assert names.index(f"clause_coverage-{version}-capi-r1.json") == (
+        names.index(f"clause_coverage-{version}-spec-major-10.json") + 1
     )
-    assert finals[majors:] == recounts
-    assert [p.name for p in recounts] == [
-        f"clause_coverage-{version}-capi-r{k}.json" for k in range(1, len(recounts) + 1)
-    ]
+    # The older -r2 recount supersedes the legacy record beside spec-major and
+    # has no series name, so it is a side record and never final.
+    assert (spec_dir / f"clause_coverage-{version}-r2.json").is_file()
+    assert f"clause_coverage-{version}-r2.json" not in names
     assert clause_coverage.default_paths() == (
         finals[-2] if len(finals) > 1 else spec_dir / f"clause_coverage-{version}.json",
         tip,
