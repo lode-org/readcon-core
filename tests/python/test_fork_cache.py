@@ -34,10 +34,11 @@ _WRONG_PID = 72
 _CHILD_TIMEOUT = 20.0
 
 
-def _child(source: str, destination: str) -> None:
+def _child(source: str, destination: str) -> int:
     frames = readcon.read_con(source, n_threads=2)
     frames[0].atoms[0].x = 1.5
     readcon.write_con(destination, frames, n_threads=2)
+    return 0
 
 
 def _exercise(start_method: str, tmp_path: Path) -> None:
@@ -135,6 +136,26 @@ def _namespace_root(source: str, destination: str) -> int:
     builder = _forked(lambda: _pid_one_builder(source, destination))
     code = _wait(builder, 2 * _CHILD_TIMEOUT)
     return _BUILDER_HUNG if code is None else code
+
+
+def test_plain_fork_child_rebuilds_the_pool(tmp_path: Path) -> None:
+    """Exercise the fork fallback without user or PID namespaces."""
+    if _tsan_loaded():
+        pytest.skip("TSan does not support new threads after a multi-threaded fork")
+    if not hasattr(os, "fork"):
+        pytest.skip("needs os.fork")
+    source = tmp_path / "frames.con"
+    _write_frames(source)
+    parent_out = tmp_path / "parent.con"
+    frames = readcon.read_con(str(source), n_threads=2)
+    readcon.write_con(str(parent_out), frames, n_threads=2)
+    destination = tmp_path / "plain-fork.con"
+    child = _forked(lambda: _child(str(source), str(destination)))
+    code = _wait(child, _CHILD_TIMEOUT)
+    assert code is not None, "the plain-fork child reused the parent's pool"
+    assert code == 0
+    written = readcon.read_con(str(destination))
+    assert written[0].atoms[0].x == 1.5
 
 
 def test_fork_child_with_the_builders_pid_rebuilds_the_pool(tmp_path: Path) -> None:
