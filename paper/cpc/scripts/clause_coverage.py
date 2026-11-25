@@ -23,12 +23,12 @@ gives a reason for a clause that something names.
     python paper/cpc/scripts/clause_coverage.py --macros   # writes only clauses_macros.tex, from the committed recount
 
 It also writes clauses_macros.tex, the counts the paper prints. A committed
-final record is never rewritten: when the sources change, --record writes
-clause_coverage-<version>-spec-major-<n>.json, which supersedes record n - 1,
-and --check compares the newest one. The C ABI gate recounts continue the
-same chain as clause_coverage-<version>-capi-r<k>.json: recount 1
-supersedes the last spec-major record, recount k supersedes recount k - 1,
-and once a recount exists --record appends the next one.
+final record is never rewritten: when the sources change, --record appends a
+record that supersedes the newest one, and --check compares the newest. A
+final record is spec-major[-n] or <series>-r<n>; --series names the series to
+extend (default: the series of the newest record). The order of the chain is
+the order of the supersedes links from the legacy record, not the series
+names, so a series that lands before or after another one stays one chain.
 """
 
 from __future__ import annotations
@@ -444,9 +444,8 @@ def main() -> int:
         help="write the final record as well as the live TeX",
     )
     parser.add_argument(
-        "--capi",
-        action="store_true",
-        help="with --record, append a C ABI recount rather than a spec-major record",
+        "--series",
+        help="with --record, the series of the record it appends (default: that of the newest record)",
     )
     args = parser.parse_args()
     chain = recounts()
