@@ -41,7 +41,9 @@ Generated frames live under `bench/ecosystem/work/` and are ignored by Git.
 Sizes are 1,000, 10,000, 100,000, and 1,000,000 atoms.
 
 For item 2, pointer equality was asserted for every size for NumPy,
-PyTorch, and JAX. JAX uses `copy=False` and x64 mode. CuPy was not run.
+PyTorch, and JAX. JAX uses `copy=False` and x64 mode. Each explicit-copy
+arm performs one copy (`torch.tensor`, `jnp.array(..., copy=True)`, or
+`np.array(..., copy=True)`). CuPy was not run.
 For item 3, a file requesting `storage_dtypes.positions=float32` is read
 through the C API. Direct float32 DLPack export is compared with float64
 DLPack export followed by `astype(float32)`. For item 4, each timed arm
@@ -69,10 +71,10 @@ Medians are milliseconds. Ratio is the first arm divided by its comparator.
 | 2 | torch DLPack / torch copy | 10,000 | 0.001124 | 0.006592 | 0.1704 |
 | 2 | torch DLPack / torch copy | 100,000 | 0.001732 | 0.027771 | 0.0624 |
 | 2 | torch DLPack / torch copy | 1,000,000 | 0.006492 | 0.204037 | 0.0318 |
-| 2 | JAX DLPack / explicit copy | 1,000 | 0.045468 | 0.031766 | 1.4313 |
-| 2 | JAX DLPack / explicit copy | 10,000 | 0.055626 | 0.055088 | 1.0098 |
-| 2 | JAX DLPack / explicit copy | 100,000 | 0.096821 | 0.977080 | 0.0991 |
-| 2 | JAX DLPack / explicit copy | 1,000,000 | 0.121788 | 6.809362 | 0.0179 |
+| 2 | JAX DLPack / explicit copy | 1,000 | pending rerun | pending rerun | pending rerun |
+| 2 | JAX DLPack / explicit copy | 10,000 | pending rerun | pending rerun | pending rerun |
+| 2 | JAX DLPack / explicit copy | 100,000 | pending rerun | pending rerun | pending rerun |
+| 2 | JAX DLPack / explicit copy | 1,000,000 | pending rerun | pending rerun | pending rerun |
 | 2 | NumPy DLPack / NumPy copy | 1,000 | 0.000372 | 0.000945 | 0.3934 |
 | 2 | NumPy DLPack / NumPy copy | 10,000 | 0.000376 | 0.004918 | 0.0764 |
 | 2 | NumPy DLPack / NumPy copy | 100,000 | 0.001043 | 0.163884 | 0.0064 |
@@ -86,8 +88,12 @@ Medians are milliseconds. Ratio is the first arm divided by its comparator.
 | 4 | readcon TensorBlock / ASE TensorBlock | 100,000 | 12.917369 | 82.507692 | 0.1566 |
 | 4 | readcon TensorBlock / ASE TensorBlock | 1,000,000 | 162.013881 | 955.342921 | 0.1696 |
 
-The complete medians, quartiles, IQRs, statuses, and comparator ratios are in
-`summary.csv`. Every individual sample is in `results.csv`.
+The JAX explicit-copy arm previously copied with NumPy and then with JAX.
+That double copy produced the withdrawn speedup (roughly 55x at one
+million atoms). Those figures are pending a rerun. The JAX rows in
+`summary.csv` and `results.csv` are that double-copy run and are not a
+current result. Other medians, quartiles, IQRs, statuses, and comparator
+ratios are in `summary.csv`. Every individual sample is in `results.csv`.
 
 ## Reproduction
 
