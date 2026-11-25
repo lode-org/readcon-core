@@ -1197,14 +1197,13 @@ reject(
     "explicit",
     "JSON con_spec_version 0 or 1 is UnsupportedVersion; version 1 exists only as non-JSON line 2.",
 )
-reject(
+accept(
     "json_version_4.con",
     con("corpus31 major 4", obj('"con_spec_version":4', '"con_spec_minor":0', U31)),
-    "UnsupportedVersion",
-    2,
-    "CON-line2.6",
+    1,
+    "CON-line2.6, CON-status.1",
     "explicit",
-    "Unknown major 4 is UnsupportedVersion.",
+    "Major 4 is the current major. CON-line2.6 rejects an unknown major, and CON-status.1 requires every minor of major 4 to be accepted.",
 )
 accept(
     "v31_version_float.con",

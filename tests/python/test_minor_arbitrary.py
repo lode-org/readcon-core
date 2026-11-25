@@ -753,10 +753,7 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     # change from BASE rejection to accepted 2^64, and Python enables the zstd
     # files. Every other verdict that differs from BASE is the one
     # manifest.toml gives, except where CON 4 decides the file otherwise.
-    con4_accepts = {
-        # Major 4 is the current major, so CON-line2.6 does not reject it.
-        "json_version_4.con": 4,
-    }
+    con4_accepts = {}
     bom = "CON validation failed: frame begins with a byte-order mark"
     con4_messages = {
         "v31_bom.con": bom,
@@ -847,6 +844,7 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     # them in every mode, and the manifest records that rejection.
     assert sorted(manifest_diffs) == [
         "d02_legacy_velocity_no_time.convel",
+        "json_version_4.con",
         "v31_convel_no_time.convel",
         "v31_coord_label_mismatch.con",
         "v31_label_coordinates_1_xyz.con",
