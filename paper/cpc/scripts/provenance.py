@@ -109,11 +109,13 @@ def newer_sources(built: Path, root: Path = REPO) -> list[str]:
 def source_identity() -> dict:
     """The library digest, and the commit whose library files equal the working tree, if one does.
 
-    That commit is the tag of the version in Cargo.toml when the tag holds these
-    files, and otherwise HEAD when HEAD holds them; ``source_tag`` is None for
-    HEAD.  Blob hashes of the working files are compared with the commit's tree,
-    so the answer does not depend on what the index holds.  When neither holds
-    them, tag and commit are None and the digest alone names the sources.
+    The candidates, in order, are the tag of the version in Cargo.toml, the
+    latest commit that touched the library paths, and HEAD. The first whose
+    tree holds these files is the commit. ``source_tag`` is that tag when the
+    tag is the one that matched, and None for the other two. Blob hashes of
+    the working files are compared with the commit's tree, so the answer does
+    not depend on what the index holds. When none of the three holds them,
+    tag and commit are None and the digest alone names the sources.
     """
     files = library_files()
     identity = {
