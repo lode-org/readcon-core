@@ -8283,7 +8283,8 @@ fn frame_for_compute<'a>(
 /// Minimum-image displacement of each reference atom toward the atom in
 /// `other` with the same `atom_id`. Shape `(N, 3)`, reference order.
 ///
-/// The cell and the periodic flags are the reference frame's.
+/// The cell and the periodic flags are the reference frame's. An open
+/// axis is not wrapped through the full inverse of that cell.
 #[pyfunction]
 #[pyo3(signature = (reference, other, *, strict=true))]
 fn minimum_image_displacements<'py>(

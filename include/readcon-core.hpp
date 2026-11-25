@@ -287,7 +287,8 @@ class ConFrame {
     ConFrame reorder_like(const ConFrame &other, bool strict = true) const;
 
     /// Minimum-image displacement of each atom toward the same id in
-    /// `other`. The cell is this frame's.
+    /// `other`. The cell is this frame's. An open axis is not wrapped
+    /// through the full 3D inverse.
     std::vector<std::array<double, 3>>
     minimum_image_displacements(const ConFrame &other, bool strict = true) const;
 

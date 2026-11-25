@@ -237,6 +237,8 @@ fn write_correspondence_outs(
 
 /// Row-major `(N, 3)` minimum-image displacements of frame A's atoms
 /// toward the same `atom_id` in frame B. The cell is frame A's.
+/// An open axis is not wrapped through the full 3D inverse; only the
+/// periodic lattice vectors are searched.
 /// `out_len` counts doubles and must be at least `3 * N`.
 ///
 /// # Safety
