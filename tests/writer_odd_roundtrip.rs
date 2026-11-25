@@ -39,6 +39,20 @@ fn odd_f64() -> impl Strategy<Value = f64> {
     ]
 }
 
+/// A cell length the reader accepts: positive, or a zero that leaves the axis
+/// unset. The builder marks no axis periodic, so zero is legal here.
+fn odd_length() -> impl Strategy<Value = f64> {
+    prop_oneof![
+        1 => Just(0.0),
+        1 => Just(-0.0),
+        1 => Just(f64::MIN_POSITIVE),
+        1 => Just(f64::MAX),
+        1 => Just(f64::from_bits(1)),
+        1 => Just(f64::from_bits(0x000f_ffff_ffff_ffff)),
+        8 => 1.0f64..1000.0,
+    ]
+}
+
 fn symbol(id: usize) -> String {
     let id = (id % 24) as u8;
     let first = b'A' + (id % 26);
@@ -155,8 +169,8 @@ fn zstd_drop_reads_back_one_frame() {
             &[coords],
             &[fixed],
             &[12.0],
-            &[[10.0, 11.0, 12.0]],
-            &[[90.0, 90.0, 90.0]],
+            &[[10.0, f64::MAX, -0.0]],
+            &[[90.0, f64::from_bits(1), 90.0]],
             &[Some(vel)],
         );
         let dir = tempfile::tempdir().unwrap();
@@ -189,8 +203,8 @@ proptest! {
             1..4,
         ),
         masses in prop::collection::vec(odd_f64(), 24),
-        cells in prop::collection::vec(prop::array::uniform3(1.0f64..1000.0), 1..4),
-        angles in prop::collection::vec(Just([90.0, 90.0, 90.0]), 1..4),
+        cells in prop::collection::vec(prop::array::uniform3(odd_length()), 1..4),
+        angles in prop::collection::vec(prop::array::uniform3(80.0f64..100.0), 1..4),
         with_velocity in prop::collection::vec(any::<bool>(), 1..4),
         vel in prop::collection::vec(
             prop::collection::vec(prop::array::uniform3(odd_f64()), 1..5),
