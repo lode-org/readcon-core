@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministically generate tests/fixtures/base_oracle_9aff911e.json from BASE 9aff911e."""
+"""Deterministically generate tests/fixtures/base_oracle_9aff911e.json from BASE 4093f911c4fe."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-EXPECTED_BASE_COMMIT = "9aff911e809390163d2d7b08671145ad99f24496"
+EXPECTED_BASE_COMMIT = "4093f911c4fe7f81ad7d69521c6b321e00cc535d"
 EXPECTED_BASE_TREE = "d775f9f7fda1ddff5becaea3e1b1545b1d1ba053"
 
 FORTY_DIGITS = "1000000000000000000000000000000000000007"
@@ -218,7 +218,7 @@ def main() -> int:
         "--base-repo",
         type=Path,
         required=True,
-        help="Path to clean checkout of BASE commit 9aff911e",
+        help="Path to clean checkout of BASE commit 4093f911c4fe",
     )
     parser.add_argument(
         "--out",

@@ -1,0 +1,42 @@
+{
+ "provenance": {
+  "build": {
+   "readcon_version": "0.24.0",
+   "readcon_module": "site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
+   "readcon_module_sha256": "981753b81f656c414749cb01650b1e9676b8391ca826353603f15e77ebbe2b18",
+   "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+   "newer_sources": [],
+   "library_digest": "96bd63cbcfaaa42a53e84b119c2ddc4e1a04e0a11887aeadee292477b5c18799",
+   "source_files": 55,
+   "source_tag": null,
+   "source_commit": "aa9b840bd47f0353a6de498fd1db9cf669e3ad63"
+  },
+  "host": {
+   "kernel": "6.12.113+",
+   "uname_m": "x86_64",
+   "nproc": 8,
+   "family": "6",
+   "model": "207",
+   "cpu_model": "Intel Xeon Processor",
+   "mhz": 2400.0,
+   "mem_kb": 49342816
+  },
+  "peers": {
+   "ase": "3.29.0",
+   "numpy": "2.5.5",
+   "scipy": "1.18.1",
+   "python": "3.12.3"
+  }
+ },
+ "c_abi": {
+  "binary": "target/release/libreadcon_core.so",
+  "binary_sha256": "67afb6885334735abb95f8ddb6f5ebde6873751d498ecd0b19abd80f5736d251",
+  "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+  "newer_sources": [],
+  "library_digest": "96bd63cbcfaaa42a53e84b119c2ddc4e1a04e0a11887aeadee292477b5c18799",
+  "source_files": 55,
+  "source_tag": null,
+  "source_commit": "aa9b840bd47f0353a6de498fd1db9cf669e3ad63"
+ },
+ "source": "resources/test/tiny_cuh2.convel"
+}

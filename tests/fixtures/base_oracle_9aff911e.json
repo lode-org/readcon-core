@@ -4216,7 +4216,7 @@
     }
   },
   "provenance": {
-    "base_commit": "9aff911e809390163d2d7b08671145ad99f24496",
+    "base_commit": "4093f911c4fe7f81ad7d69521c6b321e00cc535d",
     "base_commit_date_utc": "2026-11-19T11:45:16-06:00",
     "base_tree": "d775f9f7fda1ddff5becaea3e1b1545b1d1ba053",
     "generator_script": "tests/fixtures/generate_base_oracle.py",

@@ -240,6 +240,26 @@ recorded_results = {
         later.relative_to(root).as_posix()
         for later in sorted((root / "paper/cpc/data/spec").glob("corpus_recount-*.json"))
     ),
+    # Append-only remeasurements. The unversioned 0.17.4 files stay put and
+    # do not name this package version.
+    *(
+        later.relative_to(root).as_posix()
+        for later in sorted((root / "paper/cpc/data").glob("survey_frame-*.json"))
+    ),
+    *(
+        later.relative_to(root).as_posix()
+        for later in sorted(
+            (root / "paper/cpc/data/failure").glob("version_safety-*.json")
+        )
+    ),
+    *(
+        later.relative_to(root).as_posix()
+        for later in sorted((root / "paper/cpc/data").glob("test_run-*.json"))
+    ),
+    *(
+        later.relative_to(root).as_posix()
+        for later in sorted((root / "paper/cpc/data/failure").glob("matrix-*.json"))
+    ),
 }
 skip_dirs = {
     ".git",

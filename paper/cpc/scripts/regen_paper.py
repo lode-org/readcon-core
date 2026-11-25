@@ -60,10 +60,12 @@ SOURCE_DATE_EPOCH = "1793404800"
 
 MEASURE = [
     ["scripts/failure_matrix.py"],
+    # data/survey_frame-<Cargo.toml version>.json and survey_frame.con
     ["scripts/survey_listing.py"],
     ["scripts/worked_example.py"],
     ["scripts/drift.py"],
     ["scripts/con_openers.py"],
+    # data/failure/version_safety-<readcon version>.csv and the JSON sidecar
     ["scripts/version_safety.py"],
     ["scripts/spec_corpus_recount.py"],
     ["scripts/restart_formats.py"],

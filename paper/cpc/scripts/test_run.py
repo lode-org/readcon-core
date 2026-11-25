@@ -14,7 +14,9 @@ The record keeps what it printed for each of the four files.
 The checkout is a clone of the release commit of ``src/commit.tex`` with this ``paper/cpc`` directory
 in it, the layout of the supplementary material.  The run stops unless the checkout is at that commit
 and its ``Cargo.toml`` carries the version of ``src/release.tex``.  ``--tables`` writes the listing
-from the committed record, after it checks that the record names the commit and the frame of the paper.
+from ``data/test_run.json``. That file is the 0.17.3 run and is not rewritten. Its commit must be
+the release commit. The frame hash is the one in the newest record that supersedes it, which names
+the frame now on disk.
 
     python3 paper/cpc/scripts/test_run.py --checkout DIR --toolchain 1.88.0
     python3 paper/cpc/scripts/test_run.py --tables
@@ -212,6 +214,34 @@ def macros(record: dict) -> str:
     )
 
 
+def test_run_chain() -> list[tuple[Path, dict]]:
+    """``data/test_run.json``, then each record that supersedes the one before it.
+
+    The first record is the 0.17.3 run, and its frame hash is the frame of that
+    run. A later record names the frame on disk. The chain is linear.
+    """
+    path = RECORD
+    chain = [(path, json.loads(path.read_text()))]
+    seen = {path.relative_to(ROOT).as_posix()}
+    while True:
+        rel = chain[-1][0].relative_to(ROOT).as_posix()
+        nxt = []
+        for candidate in sorted((ROOT / "data").glob("test_run-*.json")):
+            key = candidate.relative_to(ROOT).as_posix()
+            if key in seen:
+                continue
+            body = json.loads(candidate.read_text())
+            if body.get("supersedes") == rel:
+                nxt.append((candidate, body))
+        if not nxt:
+            return chain
+        if len(nxt) != 1:
+            names = ", ".join(item[0].name for item in nxt)
+            raise SystemExit(f"more than one test run supersedes {rel}: {names}")
+        seen.add(nxt[0][0].relative_to(ROOT).as_posix())
+        chain.append(nxt[0])
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument(
@@ -229,9 +259,16 @@ def main() -> None:
     )
     args = ap.parse_args()
     if args.tables:
-        record = json.loads(RECORD.read_text())
-        if record["tree_commit"] != commit() or record["input_sha256"] != frame_sha():
-            raise SystemExit("data/test_run.json names another commit or another frame")
+        chain = test_run_chain()
+        legacy_path, legacy = chain[0]
+        latest_path, latest = chain[-1]
+        # The printed run stays the 0.17.3 record. Its frame hash is not the
+        # file on disk; the superseding record carries that hash.
+        if legacy["tree_commit"] != commit():
+            raise SystemExit(f"{legacy_path.name} names another commit")
+        if latest["input_sha256"] != frame_sha():
+            raise SystemExit(f"{latest_path.name} names another frame")
+        record = legacy
     else:
         if args.checkout is None:
             raise SystemExit("--checkout is required to run the example")
