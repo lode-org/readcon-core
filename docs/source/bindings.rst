@@ -315,6 +315,9 @@ Types
     optional headers and metadata (v0.4.0+).  Properties: cell, angles,
     atoms (live sequence of views), has\_velocities, has\_forces, has\_energies
     (v0.10.0+), prebox\_header, postbox\_header, spec\_version (v0.6.0+),
+    ``cell_matrix`` (3×3, rows are lattice vectors, the same matrix as
+    ``FrameHeader::cell_matrix``), ``pbc_effective`` (a list of three booleans, one per axis; a
+    missing ``pbc`` key is fully periodic),
     atoms (live ``AtomSequence``), has\_velocities, has\_forces,
     prebox\_header, postbox\_header, spec\_version (v0.6.0+),
     metadata (v0.6.0+, live dict of native JSON-compatible values),
