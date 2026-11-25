@@ -8,7 +8,6 @@ use std::path::Path;
 use crate::error::LocatedParseError;
 use crate::iterators::{ConFrameIterator, read_all_frames_phased};
 
-#[allow(dead_code)]
 struct Entry {
     file: String,
     accept: bool,
@@ -75,11 +74,12 @@ fn serial(bytes: &[u8]) -> Verdict {
         match item {
             Ok(_) => frames += 1,
             Err(error) => {
+                let line = iter.error_line(&error);
                 return Verdict {
                     accept: false,
                     frames: 0,
                     error: error.class_name().to_string(),
-                    line: iter.lines.line_no(),
+                    line,
                 };
             }
         }
@@ -147,23 +147,45 @@ mod harness {
         assert!(status.success(), "make_corpus31.py failed");
     }
 
-    /// The parallel scan and the serial iterator read the same sections.
+    fn merged_manifest() -> Vec<Entry> {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let base = root.join("paper/cpc/data/corpus31/manifest.toml");
+        let mut entries = parse_manifest(&std::fs::read_to_string(&base).unwrap());
+        let overlay = root.join("paper/cpc/data/corpus31/manifest-r1t-overlay.toml");
+        if overlay.is_file() {
+            for row in parse_manifest(&std::fs::read_to_string(&overlay).unwrap()) {
+                if let Some(slot) = entries.iter_mut().find(|entry| entry.file == row.file) {
+                    *slot = row;
+                } else {
+                    entries.push(row);
+                }
+            }
+        }
+        entries
+    }
+
+    /// Every corpus file is the merged manifest plus the r1t overlay.
     ///
-    /// The class is the scan. The line the specification names is checked
-    /// once every arm reports that line.
+    /// The serial cursor and each thread count must report that verdict.
+    /// A disagreement fails the test. The reader is not a source of the
+    /// expected class or line.
     #[test]
-    fn corpus31_thread_arms_agree() {
+    fn corpus31_matches_the_merged_manifest() {
         let dir = tempfile::tempdir().expect("tempdir");
         generate_corpus(dir.path());
-        let manifest_path =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("paper/cpc/data/corpus31/manifest.toml");
-        let entries = parse_manifest(&std::fs::read_to_string(&manifest_path).unwrap());
+        let entries = merged_manifest();
         assert_eq!(entries.len(), 143);
-        let mut arm_splits = Vec::new();
+        let mut misses = Vec::new();
         for entry in &entries {
             let path = dir.path().join(&entry.file);
             let bytes = crate::compression::read_bytes_owned(&path)
                 .unwrap_or_else(|err| panic!("{}: {err}", entry.file));
+            let expected = Verdict {
+                accept: entry.accept,
+                frames: entry.frames,
+                error: entry.error.clone(),
+                line: entry.line,
+            };
             let arms = [
                 serial(bytes.as_slice()),
                 phased(&path, None),
@@ -171,15 +193,11 @@ mod harness {
                 phased(&path, Some(2)),
                 phased(&path, Some(8)),
             ];
-            let same = |arm: &Verdict| {
-                arm.accept == arms[0].accept
-                    && arm.frames == arms[0].frames
-                    && arm.error == arms[0].error
-            };
-            if arms.iter().any(|arm| !same(arm)) {
-                arm_splits.push(format!(
-                    "{} serial={} auto={} t1={} t2={} t8={}",
+            if arms.iter().any(|arm| arm != &expected) {
+                misses.push(format!(
+                    "{} want={} serial={} auto={} t1={} t2={} t8={}",
                     entry.file,
+                    show(&expected),
                     show(&arms[0]),
                     show(&arms[1]),
                     show(&arms[2]),
@@ -189,9 +207,9 @@ mod harness {
             }
         }
         assert!(
-            arm_splits.is_empty(),
-            "thread arms disagree:\n{}",
-            arm_splits.join("\n")
+            misses.is_empty(),
+            "manifest disagreements:\n{}",
+            misses.join("\n")
         );
     }
 }
