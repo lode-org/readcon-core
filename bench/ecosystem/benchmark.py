@@ -278,7 +278,41 @@ def measure_pair(
             )
 
 
+def _library_cuda(module_name: str) -> bool | None:
+    """True or False from a device probe, or None if the library is missing."""
+    try:
+        module = __import__(module_name)
+    except ImportError:
+        return None
+    if module_name == "torch":
+        return bool(module.cuda.is_available())
+    for device in module.devices():
+        platform_name = str(getattr(device, "platform", "")).lower()
+        kind = str(getattr(device, "device_kind", "")).lower()
+        label = str(device).lower()
+        if platform_name in {"cuda", "gpu"} or "cuda" in kind or "cuda" in label:
+            return True
+    return False
+
+
+def cuda_export_status() -> str:
+    """Status for a CUDA arm this harness does not time.
+
+    NO_CUDA when torch or JAX imports and neither reports a CUDA device.
+    NOT_TIMED when a CUDA device is visible. NOT_PROBED when neither
+    library can be imported.
+    """
+    torch_cuda = _library_cuda("torch")
+    jax_cuda = _library_cuda("jax")
+    if torch_cuda is True or jax_cuda is True:
+        return "NOT_TIMED"
+    if torch_cuda is None and jax_cuda is None:
+        return "NOT_PROBED"
+    return "NO_CUDA"
+
+
 def no_cuda_rows(rows: list[Row]) -> None:
+    status = cuda_export_status()
     arms = (
         "positions_readcon_cuda",
         "positions_numpy_cupy",
@@ -299,7 +333,7 @@ def no_cuda_rows(rows: list[Row]) -> None:
                         repeat,
                         None,
                         "cuda",
-                        "NO_CUDA",
+                        status,
                     )
                 )
 
@@ -321,6 +355,7 @@ def item_two(rows: list[Row], readcon, paths) -> dict[str, bool]:
 
     jax.config.update("jax_enable_x64", True)
     pointer_checks: dict[str, bool] = {}
+    cuda_status = cuda_export_status()
     for n in SIZES:
         frame = readcon.read_con(str(paths[n, "float64"]))[0]
         base = np.ascontiguousarray(frame.xyz)
@@ -397,7 +432,7 @@ def item_two(rows: list[Row], readcon, paths) -> dict[str, bool]:
                     repeat,
                     None,
                     "cuda",
-                    "NO_CUDA",
+                    cuda_status,
                 )
             )
     return pointer_checks
