@@ -4450,7 +4450,7 @@ pub fn parse_frame_header<'a>(
     } else {
         pbc_marked
     };
-    crate::types::validate_read_cell(&boxl, &angles, marked_periodic)?;
+    crate::types::validate_read_cell(&boxl, &angles, marked_periodic, has_lattice)?;
     let postbox1 = lines
         .next()
         .ok_or(ParseError::IncompleteHeader)?

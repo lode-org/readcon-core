@@ -864,7 +864,7 @@ fn peek_first_coord_line(bytes: &[u8]) -> Option<PeekedHeader> {
     skip_line(bytes, &mut pos).ok()?;
     let meta = read_line(bytes, &mut pos).ok()?;
     spec_version(meta).ok()?;
-    let marked_periodic = marked_periodic_axes(meta).ok()?;
+    let (marked_periodic, has_lattice) = marked_periodic_axes(meta).ok()?;
     let stock = stock_meta_line(meta);
     let box_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
     let boxl = parse_line_of_n_f64(box_line, 3).ok()?;
@@ -874,6 +874,7 @@ fn peek_first_coord_line(bytes: &[u8]) -> Option<PeekedHeader> {
         &[boxl[0], boxl[1], boxl[2]],
         &[angles[0], angles[1], angles[2]],
         marked_periodic,
+        has_lattice,
     )
     .ok()?;
     skip_line(bytes, &mut pos).ok()?;
@@ -1558,7 +1559,7 @@ fn parse_one_frame(
     skip_line(bytes, pos)?;
     let meta = read_line(bytes, pos)?;
     let spec = spec_version(meta)?;
-    let marked_periodic = marked_periodic_axes(meta)?;
+    let (marked_periodic, has_lattice) = marked_periodic_axes(meta)?;
     let mut stock = stock_meta_line(meta);
     let box_line = utf8_line(read_line(bytes, pos)?)?;
     let boxl = parse_cell_line(box_line, "boxl")?;
@@ -1568,6 +1569,7 @@ fn parse_one_frame(
         &[boxl[0], boxl[1], boxl[2]],
         &[angles[0], angles[1], angles[2]],
         marked_periodic,
+        has_lattice,
     )?;
     out.cells.extend_from_slice(&boxl);
     out.cells.extend_from_slice(&angles);
@@ -1708,19 +1710,20 @@ fn stock_meta_line(line: &[u8]) -> bool {
     line == STOCK_V2 || line == STOCK_V3
 }
 
-fn marked_periodic_axes(line: &[u8]) -> Result<[bool; 3], ParseError> {
+fn marked_periodic_axes(line: &[u8]) -> Result<([bool; 3], bool), ParseError> {
     let line = trim_ascii(line);
     if !line.starts_with(b"{") {
-        return Ok([false; 3]);
+        return Ok(([false; 3], false));
     }
     let value: serde_json::Value = serde_json::from_slice(line)
         .map_err(|error| ParseError::InvalidMetadataJson(error.to_string()))?;
     let object = value
         .as_object()
         .ok_or_else(|| ParseError::InvalidMetadataJson("metadata must be an object".into()))?;
-    Ok(crate::types::marked_periodic_axes(
-        object.get("pbc"),
-        object.contains_key("lattice_vectors"),
+    let has_lattice = object.contains_key("lattice_vectors");
+    Ok((
+        crate::types::marked_periodic_axes(object.get("pbc"), has_lattice),
+        has_lattice,
     ))
 }
 

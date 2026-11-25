@@ -293,6 +293,18 @@ fn all_read_modes_refuse_zero_lengths_only_on_marked_periodic_axes() {
     ));
 }
 
+/// With `lattice_vectors` present, lines 3-4 do not decide the cell, so an
+/// impossible or negative line is read, not refused.
+#[test]
+fn all_read_modes_leave_lines_3_4_alone_when_lattice_vectors_decide() {
+    let lattice = r#""lattice_vectors":[[10,0,0],[0,10,0],[0,0,10]]"#;
+    let meta = format!(r#"{{"con_spec_version":2,{lattice}}}"#);
+    assert_all_read_modes_accept(&frame_text_with_meta(&meta, "10 10 10", "10 10 170", 1));
+    assert_all_read_modes_accept(&frame_text_with_meta(&meta, "-1 10 10", "90 90 90", 1));
+    let periodic = format!(r#"{{"con_spec_version":2,"pbc":[true,true,true],{lattice}}}"#);
+    assert_all_read_modes_accept(&frame_text_with_meta(&periodic, "0 0 0", "90 90 90", 1));
+}
+
 #[test]
 fn all_read_modes_accept_a_flat_cell_on_the_triangle_boundary() {
     assert_all_read_modes_accept(&frame_text("10 10 10", "60 60 120", 1));

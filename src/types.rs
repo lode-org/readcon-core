@@ -2757,13 +2757,19 @@ pub(crate) fn marked_periodic_axes(
 
 /// Validate a cell read from lines 3 and 4.
 ///
+/// A `lattice_vectors` key decides the cell (CON-cell.1), and CON-cell.7
+/// applies only when it is absent, so `has_lattice` skips every check.
 /// A zero length leaves that axis unset. It is refused only on an axis
 /// `marked_periodic` names. A cell with every length positive must be real.
 pub(crate) fn validate_read_cell(
     lengths: &[f64; 3],
     angles_deg: &[f64; 3],
     marked_periodic: [bool; 3],
+    has_lattice: bool,
 ) -> Result<(), ParseError> {
+    if has_lattice {
+        return Ok(());
+    }
     if lengths.iter().any(|length| *length < 0.0) {
         return Err(ParseError::ValidationError(
             "cell lengths must be non-negative".to_string(),
@@ -5384,6 +5390,7 @@ impl ConFrameBuilder {
                 self.metadata.get(meta::PBC),
                 self.metadata.contains_key(meta::LATTICE_VECTORS),
             ),
+            self.metadata.contains_key(meta::LATTICE_VECTORS),
         )?;
         let written_spec = match self.written_spec {
             0 => crate::CON_SPEC_VERSION,
@@ -7732,16 +7739,29 @@ mod tests {
 
     #[test]
     fn read_cell_validation_accepts_zero_length_unset_cell() {
-        validate_read_cell(&[-0.0, 0.0, -0.0], &[90.0; 3], [false; 3])
+        validate_read_cell(&[-0.0, 0.0, -0.0], &[90.0; 3], [false; 3], false)
             .expect("zero-length right-angle sentinel must stay valid");
         validate_read_cell(
             &[10.0, 10.0, 0.0],
             &[90.0, 90.0, 60.0],
             [true, true, false],
+            false,
         )
         .expect("an unset nonperiodic axis must stay valid");
-        validate_read_cell(&[10.0, 10.0, 0.0], &[90.0; 3], [true; 3])
+        validate_read_cell(&[10.0, 10.0, 0.0], &[90.0; 3], [true; 3], false)
             .expect_err("a zero length on a periodic axis is refused");
+    }
+
+    #[test]
+    fn read_cell_validation_defers_to_lattice_vectors() {
+        let lattice_decides =
+            |lengths, angles| validate_read_cell(lengths, angles, [false; 3], true);
+        lattice_decides(&[10.0; 3], &[10.0, 10.0, 170.0])
+            .expect("CON-cell.7 does not apply with lattice_vectors");
+        lattice_decides(&[-1.0, 10.0, 10.0], &[90.0; 3])
+            .expect("lines 3-4 do not decide the cell with lattice_vectors");
+        validate_read_cell(&[10.0; 3], &[10.0, 10.0, 170.0], [false; 3], false)
+            .expect_err("without lattice_vectors the cell must be real");
     }
 
     #[test]
