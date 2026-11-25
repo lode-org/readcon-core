@@ -806,11 +806,6 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     manifest_diffs = []
     for name, expected in c31_oracle.items():
         p = str(corpus_dir / name)
-        if name == "d13_blank_symbol_energies.con":
-            assert expected["status"] == "ok"
-            with pytest.raises(readcon.IncompleteSection):
-                readcon.read_con(p)
-            continue
         if name in ("d14_minor_2pow64.con", "v2_minor_2pow64.con"):
             assert expected["status"] == "err"
             frames = readcon.read_con(p)
@@ -867,9 +862,13 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
             assert str(exc_info.value) == message, name
     assert sorted(huge_minor_diffs) == ["d14_minor_2pow64.con", "v2_minor_2pow64.con"]
     assert sorted(con4_diffs) == sorted(con4_accepts)
-    # The spec-following reader matches the oracle except these
-    # coordinate-label files, which the manifest rejects.
-    assert len(manifest_diffs) == 3
+    # The oracle still accepts these coordinate labels. CON-coord.1 rejects
+    # them in every mode, and the manifest records that rejection.
+    assert sorted(manifest_diffs) == [
+        "v31_coord_label_mismatch.con",
+        "v31_label_coordinates_1_xyz.con",
+        "v31_label_coordinates_2.con",
+    ]
 
 
 @pytest.mark.parametrize(
