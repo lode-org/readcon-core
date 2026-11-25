@@ -122,7 +122,7 @@ PY
             -- -D warnings
         cargo test --locked
         bash scripts/run_doc_examples.sh
-        bash scripts/check_cxx_wrap_pin.sh
+        bash scripts/check_cxx_wrap_pin.sh --pull-request
     )
 
     git -C "$ROOT" worktree remove --force "$worktree"
