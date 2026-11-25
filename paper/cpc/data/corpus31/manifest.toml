@@ -47,12 +47,11 @@ reason = "Minor 1 velocities section with units.time fs, which is authoritative 
 
 [[file]]
 file = "v31_convel_no_time.convel"
-expected = "reject"
-error = "InvalidUnits"
-line = 2
-clause = "CON-units.11"
+expected = "accept"
+frames = 1
+clause = "CON-units.9"
 basis = "explicit"
-reason = "Minor 1 frame whose line 2 declares a velocities section and carries no units.time."
+reason = "Minor 1 declares a velocities section and omits units.time. CON-units.9 says a missing units.time must not reject any minor of major 3."
 
 [[file]]
 file = "v31_legacy_velocity_time.convel"
