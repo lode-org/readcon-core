@@ -327,15 +327,13 @@ accept(
     "No sections key: the blank line that begins a complete velocity block opens the legacy velocity section "
     "(Sections), whose velocities are in units.time fs.",
 )
-reject(
+accept(
     "v31_legacy_velocity_no_time.convel",
     con("corpus31 minor-1 legacy velocity block, no time", obj(M31, U30), tail=VEL2),
-    "InvalidUnits",
-    14,
-    "CON-section.1, CON-units.11",
+    1,
+    "CON-section.1, CON-units.9",
     "explicit",
-    "No sections key and no units.time at minor 1. The blank line 14 begins a complete velocity block, so the "
-    "frame has a velocities section from that line and fails CON-units.11 there.",
+    "No sections key. The blank line opens a legacy velocity block. CON-units.9 says a missing units.time must not reject that minor-1 frame.",
 )
 accept(
     "v30_convel_fs.convel",
