@@ -35,5 +35,33 @@
       "version": "0.0.2",
       "date": "2026-04-29"
     }
+  ],
+  "metatensor-core": [
+    {
+      "url": "https://api.github.com/repos/metatensor/metatensor/releases/456636429",
+      "tag_prefix": "metatensor-core-v",
+      "tag_version": "0.2.7",
+      "published_at": "2026-11-24T10:57:34Z",
+      "version": "0.2.7",
+      "date": "2026-11-24"
+    }
+  ],
+  "d-SEAMS": [
+    {
+      "url": "https://api.github.com/repos/d-SEAMS/seams-core/releases/448128582",
+      "tag_prefix": "v",
+      "tag_version": "2.14.0",
+      "published_at": "2026-11-17T04:24:32Z",
+      "version": "2.14.0",
+      "date": "2026-11-17"
+    },
+    {
+      "url": "https://api.github.com/repos/d-SEAMS/seams-core/releases/451597320",
+      "tag_prefix": "v",
+      "tag_version": "2.14.1",
+      "published_at": "2026-11-19T16:16:21Z",
+      "version": "2.14.1",
+      "date": "2026-11-19"
+    }
   ]
 }
