@@ -181,7 +181,11 @@ TT_ESCAPES = {
 TABLE_CHARS = 74
 EQUATION_CHARS = 40
 BREAKABLE_CHARS = 20
-EXAMPLE_STYLE = r"basicstyle=\ttfamily\scriptsize,breaklines=true,showlines=true,postbreak=\mbox{$\hookrightarrow$\space}"
+EXAMPLE_STYLE = (
+    r"basicstyle=\ttfamily\scriptsize,breaklines=true,showlines=true,"
+    r"postbreak=\mbox{$\hookrightarrow$\space},"
+    r"literate={å}{{\aa}}1 {Å}{{\AA}}1"
+)
 
 
 def bib_dois(path: Path) -> dict[str, str]:
