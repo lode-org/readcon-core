@@ -1,6 +1,8 @@
 //! C and C++ bindings write a major-4 frame with velocities and read
 //! `units.time` and the velocity values back.
 
+#![cfg(feature = "capi")]
+
 use std::path::Path;
 use std::process::Command;
 

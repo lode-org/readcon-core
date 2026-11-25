@@ -4,6 +4,7 @@
 //! right one. The band check names the first frame that breaks the ids.
 
 use readcon_core::correspondence::IdentityCheck;
+#[cfg(feature = "capi")]
 use readcon_core::ffi::{
     RKRConFrame, RKRStatus, free_rkr_frame, rkr_frame_atom_id_permutation,
     rkr_frame_minimum_image_displacements, rkr_frame_reorder_like, rkr_frames_check_atom_ids,
@@ -17,6 +18,7 @@ use readcon_core::{
     CorrespondenceError, atom_id_permutation, check_atom_id_consistency, minimum_image_delta,
     minimum_image_displacements, reorder_like,
 };
+#[cfg(feature = "capi")]
 use std::ffi::CStr;
 
 const CELL: f64 = 18.0;
@@ -472,6 +474,7 @@ fn the_first_bad_frame_is_the_one_reported() {
     check_atom_id_consistency(&[good], IdentityCheck::Strict).unwrap();
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn c_abi_reports_the_permutation_and_the_offender() {
     let reference = build(

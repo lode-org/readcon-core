@@ -18,24 +18,56 @@ jobs:
       fail-fast: false
       matrix:
         features:
-          - chemfiles-from-sources
-          - chemfiles-from-sources,zstd
-          - chemfiles-from-sources,metatensor
-          - chemfiles-from-sources,zstd,metatensor
-          - grammar
-          - chemfiles-from-sources,grammar
+          - default
           - parallel
+          - zstd,grammar
+          - rpc
+          - mpi
+          - capi
+          - capi,chemfiles-from-sources
+          - capi,chemfiles-from-sources,zstd
+          - capi,chemfiles-from-sources,metatensor
+          - capi,chemfiles-from-sources,zstd,metatensor
+          - capi,grammar
+          - capi,chemfiles-from-sources,grammar
+          - capi,parallel
+          - capi,mpi
+          - all-features
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install system dependencies for MPI / RPC / all-features rows
+        if: contains(matrix.features, 'mpi') || contains(matrix.features, 'rpc') || matrix.features == 'all-features'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            openmpi-bin libopenmpi-dev libclang-dev clang \
+            capnproto libcapnp-dev python3-dev zstd
       - name: Build + symbol/header matrix
         env:
           FEATURES: ${{ matrix.features }}
           PROFILE: release
+          CC: gcc
+          CXX: g++
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
         run: bash scripts/check_feature_matrix.sh
+      - name: Lib tests for default features (no capi)
+        if: matrix.features == 'default'
+        run: cargo test --release --lib
+      - name: Lib tests for all-features
+        if: matrix.features == 'all-features'
+        env:
+          CC: gcc
+          CXX: g++
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+        run: cargo test --release --all-features --lib
       - name: Lib tests for this feature set
-        # shellcheck disable=SC2086
-        run: cargo test --release --features ${{ matrix.features }} --lib
+        if: matrix.features != 'default' && matrix.features != 'all-features'
+        env:
+          CC: gcc
+          CXX: g++
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+        run: cargo test --release --features "${{ matrix.features }}" --lib
       - name: Parallel library tests
-        if: matrix.features == 'parallel'
+        if: matrix.features == 'capi,parallel'
         run: cargo test --lib --features parallel

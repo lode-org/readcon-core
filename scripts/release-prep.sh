@@ -23,8 +23,9 @@ done
 if [[ "${READCON_RELEASE_PREP_SKIP_TESTS:-}" == 1 ]]; then
   echo "==> tests skipped (READCON_RELEASE_PREP_SKIP_TESTS=1)"
 else
-  echo "==> tests (default features)"
+  echo "==> tests (default features and capi)"
   cargo test --locked
+  cargo test --locked --features capi
 fi
 
 echo "==> version bump -> $VER"

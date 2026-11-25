@@ -571,6 +571,7 @@ impl FrameMeta {
     ///
     /// A keyed edit materialises the map and the line is no longer the
     /// source of the metadata JSON.
+    #[cfg(feature = "capi")]
     pub(crate) fn unedited_line(&self) -> Option<&std::sync::Arc<str>> {
         if self.map.get().is_some() {
             None

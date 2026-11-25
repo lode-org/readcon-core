@@ -20,12 +20,16 @@ gives a reason for a clause that something names.
 
     python paper/cpc/scripts/clause_coverage.py            # writes clauses_macros.tex from the live tree
     python paper/cpc/scripts/clause_coverage.py --check    # compares the live regeneration without writing
-    python paper/cpc/scripts/clause_coverage.py --record   # appends a final spec-major record
+    python paper/cpc/scripts/clause_coverage.py --record   # appends a final record
+    python paper/cpc/scripts/clause_coverage.py --record --series NAME   # appends to series NAME
 
 It also writes clauses_macros.tex, the counts the paper prints. A committed
-final record is never rewritten: when the sources change, --record writes
-clause_coverage-<version>-spec-major-<n>.json, which supersedes record n - 1,
-and --check compares the newest one.
+final record is never rewritten: when the sources change, --record appends a
+record that supersedes the newest one, and --check compares the newest. A
+final record is spec-major[-n] or <series>-r<n>; --series names the series to
+extend (default: the series of the newest record). The order of the chain is
+the order of the supersedes links from the legacy record, not the series
+names, so a series that lands before or after another one stays one chain.
 """
 
 from __future__ import annotations
@@ -58,59 +62,94 @@ RECORD_DIR = ROOT / "data" / "spec"
 LEGACY_RECORD = RECORD_DIR / f"clause_coverage-{VERSION}.json"
 
 
+SERIES = re.compile(
+    r"spec-major(?:-(?P<major>[0-9]+))?|(?P<name>[a-z]+)-r(?P<n>[0-9]+)"
+)
+
+
+def series_record(
+    series: str,
+    n: int,
+    spec_dir: Path | None = None,
+    version: str | None = None,
+) -> Path:
+    """Record n of a series. spec-major names record 1 without a number."""
+    if series == "spec-major":
+        stem = "spec-major" if n == 1 else f"spec-major-{n}"
+    else:
+        stem = f"{series}-r{n}"
+    return (
+        spec_dir or RECORD_DIR
+    ) / f"clause_coverage-{version or VERSION}-{stem}.json"
+
+
 def final_record(n: int) -> Path:
-    """Final record n of this version. Record n supersedes record n - 1."""
-    suffix = "" if n == 1 else f"-{n}"
-    return RECORD_DIR / f"clause_coverage-{VERSION}-spec-major{suffix}.json"
+    """Spec-major record n of this version. Record n supersedes record n - 1."""
+    return series_record("spec-major", n)
 
 
-def final_count() -> int:
-    n = 0
-    while final_record(n + 1).is_file():
-        n += 1
-    return n
+def record_series(path: Path, version: str | None = None) -> tuple[str, int] | None:
+    """The series and number a final record's file name gives, or None."""
+    prefix = f"clause_coverage-{version or VERSION}-"
+    if not path.name.startswith(prefix) or path.suffix != ".json":
+        return None
+    found = SERIES.fullmatch(path.name[len(prefix) : -len(".json")])
+    if found is None:
+        return None
+    if found["name"]:
+        return found["name"], int(found["n"])
+    return "spec-major", int(found["major"] or 1)
 
 
 def final_chain(spec_dir: Path | None = None, version: str | None = None) -> list[Path]:
-    """The final spec-major records of one version, oldest first.
+    """The active final records of one version, oldest first.
 
-    Final record 1 supersedes the legacy record of the version and record n
-    supersedes record n - 1. No other record of data/spec may supersede a
-    final record, so the newest one is the only tip of the active chain.
+    A final record is named spec-major[-n] or <series>-r<n>. The first one
+    supersedes the legacy record of the version and each later one supersedes
+    the one before it, whatever its series, so the chain follows the
+    supersedes links and not the names. The legacy record may also be
+    superseded by records outside that grammar (blob-named, sources, recount,
+    a bare r<n>): those are side chains of the legacy record, never final.
+    Past the legacy record nothing else may supersede a final record, so the
+    newest one is the only tip, and a final record that the walk from the
+    legacy record does not reach, a fork, or a dangling supersedes is an
+    error.
     """
     spec_dir = spec_dir or RECORD_DIR
     ver = version or VERSION
-
-    def named(n: int) -> Path:
-        suffix = "" if n == 1 else f"-{n}"
-        return spec_dir / f"clause_coverage-{ver}-spec-major{suffix}.json"
-
-    chain: list[Path] = []
-    while named(len(chain) + 1).is_file():
-        chain.append(named(len(chain) + 1))
-    links = {
-        path.name: Path(prior).name
+    legacy = f"clause_coverage-{ver}.json"
+    finals = {
+        path.name: path
         for path in spec_dir.glob(f"clause_coverage-{ver}-*.json")
-        if (prior := json.loads(path.read_text(encoding="utf-8")).get("supersedes"))
+        if record_series(path, ver)
     }
-    parent = f"clause_coverage-{ver}.json"
-    for record in chain:
-        if links.get(record.name) != parent:
+    children: dict[str, list[str]] = {}
+    for path in sorted(spec_dir.glob(f"clause_coverage-{ver}-*.json")):
+        prior = json.loads(path.read_text(encoding="utf-8")).get("supersedes")
+        if prior:
+            children.setdefault(Path(prior).name, []).append(path.name)
+    chain: list[Path] = []
+    parent = legacy
+    while True:
+        later = children.get(parent, [])
+        following = [name for name in later if name in finals]
+        if len(following) > 1 or (chain and len(later) > len(following)):
             sys.exit(
-                f"{record.name} supersedes {links.get(record.name)}, not {parent}; "
-                f"the {len(chain)} final clause coverage records of {ver} must "
-                "form one chain"
+                f"{len(later)} records of data/spec supersede {parent} "
+                f"({', '.join(later)}); the final clause coverage records of "
+                f"{ver} must form one chain"
             )
-        parent = record.name
-    for record, after in zip(chain, [*chain[1:], None]):
-        children = sorted(name for name, prior in links.items() if prior == record.name)
-        allowed = [after.name] if after else []
-        if children != allowed:
-            sys.exit(
-                f"{len(children)} records of data/spec supersede {record.name} "
-                f"({', '.join(children) or 'none'}); the {len(chain)} final clause "
-                f"coverage records of {ver} must form one chain"
-            )
+        if not following:
+            break
+        chain.append(finals[following[0]])
+        parent = following[0]
+    if len(chain) != len(finals):
+        stray = sorted(set(finals) - {path.name for path in chain})
+        sys.exit(
+            f"{', '.join(stray)} does not supersede the end of the chain "
+            f"({parent}); the final clause coverage records of {ver} must "
+            "form one chain"
+        )
     return chain
 
 
@@ -126,7 +165,7 @@ def default_paths(
     """Previous and newest coverage records for one spec.org.
 
     A spec.org with a blob-named record follows that chain. Otherwise the
-    final spec-major chain of the version is the active one.
+    final chain of the version is the active one.
     """
     root = root or ROOT
     repo_root = (repo or REPO).resolve()
@@ -525,31 +564,48 @@ def build(supersedes: Path | None = None) -> dict:
     }
 
 
-def final_payload(n: int, payload: dict) -> dict:
-    if n == 1:
-        supersedes = LEGACY_RECORD
-        reason = (
-            f"Final spec-major recount of specification coverage for "
-            f"readcon-core {VERSION}."
+def final_payload(
+    parent: Path, series: str, payload: dict, reason: str | None = None
+) -> dict:
+    """Payload of a final record of ``series`` that supersedes ``parent``.
+
+    ``reason`` is the prose a stored record already carries. It was written
+    when that record was appended and is not recounted, so --check keeps it
+    and compares the link and the counts.
+    """
+    if reason is None:
+        first = series == "spec-major" and parent == LEGACY_RECORD
+        label = (
+            "Final spec-major"
+            if series == "spec-major"
+            else f"{series.capitalize()}-series"
         )
-    else:
-        supersedes = final_record(n - 1)
-        reason = (
-            f"Final spec-major recount of specification coverage for "
-            f"readcon-core {VERSION} after the sources counted in "
-            f"{supersedes.name} changed."
+        reason = f"{label} recount of specification coverage for readcon-core {VERSION}"
+        reason += (
+            "." if first else f" after the sources counted in {parent.name} changed."
         )
-    return {"supersedes": rel(supersedes), "reason": reason, **payload}
+    return {"supersedes": rel(parent), "reason": reason, **payload}
 
 
 def record_for_sources() -> tuple[Path, dict]:
-    n = max(final_count(), 1)
-    return final_record(n), final_payload(n, build())
+    chain = final_chain()
+    if not chain:
+        return final_record(1), final_payload(LEGACY_RECORD, "spec-major", build())
+    tip = chain[-1]
+    series, _ = record_series(tip)
+    parent = chain[-2] if len(chain) > 1 else LEGACY_RECORD
+    stored = json.loads(tip.read_text(encoding="utf-8")).get("reason")
+    return tip, final_payload(parent, series, build(), stored)
 
 
-def next_record_for_sources() -> tuple[Path, dict]:
-    n = final_count() + 1
-    return final_record(n), final_payload(n, build())
+def next_record_for_sources(series: str | None = None) -> tuple[Path, dict]:
+    chain = final_chain()
+    series = series or (record_series(chain[-1])[0] if chain else "spec-major")
+    if not SERIES.fullmatch(f"{series}-r1") and series != "spec-major":
+        sys.exit(f"{series!r} is not a series name: use lower-case letters")
+    count = sum(1 for path in chain if record_series(path)[0] == series)
+    tip = chain[-1] if chain else LEGACY_RECORD
+    return series_record(series, count + 1), final_payload(tip, series, build())
 
 
 def macros(record: dict) -> str:
@@ -580,7 +636,7 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        help="final record path (default: the newest data/spec/clause_coverage-<version>-spec-major*.json)",
+        help="final record path (default: the end of the data/spec/clause_coverage-<version> final chain)",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -598,7 +654,13 @@ def main() -> int:
         action="store_true",
         help="write the final record as well as the live TeX",
     )
+    parser.add_argument(
+        "--series",
+        help="with --record, the series of the record it appends (default: that of the newest record)",
+    )
     args = parser.parse_args()
+    if args.series and not args.record:
+        parser.error("--series needs --record")
     generated_out, record = record_for_sources()
     out = args.out or generated_out
     t = record["totals"]
@@ -631,7 +693,7 @@ def main() -> int:
             and out.is_file()
             and out.read_text(encoding="utf-8") != wanted
         ):
-            out, record = next_record_for_sources()
+            out, record = next_record_for_sources(args.series)
             wanted = text(record)
         if out.is_file() and out.read_text(encoding="utf-8") != wanted:
             sys.exit(f"refusing to overwrite committed record {rel(out)}")

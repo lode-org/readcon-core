@@ -17,8 +17,8 @@
 //! unknown symbols and [`atomic_number_to_symbol`] returns "X" for
 //! unknown atomic numbers.
 //!
-//! The same lookup is exposed to C/C++ via [`crate::ffi::rkr_symbol_to_z`]
-//! and [`crate::ffi::rkr_z_to_symbol`], and to Python as
+//! The same lookup is exposed to C/C++ via `crate::ffi::rkr_symbol_to_z`
+//! and `crate::ffi::rkr_z_to_symbol` (behind the `capi` feature), and to Python as
 //! `readcon.symbol_to_atomic_number` / `readcon.atomic_number_to_symbol`,
 //! so downstream tools can drop their own copies of the periodic table.
 

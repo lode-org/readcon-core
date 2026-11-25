@@ -71,7 +71,7 @@ function _lib_handle()
             return candidate
         end
     end
-    error("Cannot find libreadcon_core. Set READCON_CORE_LIB (or READCON_LIB_PATH), install the clib artifact, or build with cargo build --release.")
+    error("Cannot find libreadcon_core. Set READCON_CORE_LIB (or READCON_LIB_PATH), install the clib artifact, or build with cargo build --release --features capi.")
 end
 
 const _LIB = Ref{Ptr{Cvoid}}(C_NULL)
@@ -195,7 +195,7 @@ those selectors return zero matches; name/type/`all` still work.
 """
 function select_on_frame(frame::ConFrame, selection::String)
     has_chemfiles_support() || error(
-        "select_on_frame requires libreadcon_core built with --features chemfiles"
+        "select_on_frame requires libreadcon_core built with --features capi,chemfiles"
     )
     handle = _build_frame_handle(frame)
     try

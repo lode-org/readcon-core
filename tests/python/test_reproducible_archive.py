@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 EPOCH_SCRIPT = ROOT / "scripts" / "source-date-epoch.sh"
 PIN_SCRIPT = ROOT / "scripts" / "accept-cxx-wrap-pin.sh"
 TAR_SCRIPT = ROOT / "scripts" / "reproducible-tar.sh"
+CXX_PIN = ROOT / "packaging" / "wrapdb" / "readcon-core.sha256"
 PIN = (
     (ROOT / "packaging" / "wrapdb" / "source-date-epoch")
     .read_text(encoding="utf-8")
@@ -56,6 +57,26 @@ def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> None:
         capture_output=True,
         text=True,
     )
+
+
+def _head_is_release() -> bool:
+    """Whether HEAD is the release whose archive pin it carries."""
+    tagged = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "describe",
+            "--exact-match",
+            "--match",
+            f"v{VERSION}",
+            "HEAD",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return tagged.returncode == 0
 
 
 class SourceDateEpochTest(unittest.TestCase):
@@ -373,11 +394,6 @@ class ReproducibleTarTest(unittest.TestCase):
 
 class CxxArchiveStabilityTest(unittest.TestCase):
     def test_slim_archive_ignores_directory_and_tag(self) -> None:
-        pin = (
-            (ROOT / "packaging" / "wrapdb" / "readcon-core.sha256")
-            .read_text(encoding="utf-8")
-            .strip()
-        )
         with tempfile.TemporaryDirectory() as tmp:
             bare = Path(tmp) / "no-tag"
             tagged = Path(tmp) / "tagged"
@@ -399,7 +415,9 @@ class CxxArchiveStabilityTest(unittest.TestCase):
                 _slim_sha(bare, other_dir),
                 _slim_sha(bare, bare_out),
             )
-            self.assertEqual(_slim_sha(bare, bare_out), pin)
+            if _head_is_release():
+                pin = CXX_PIN.read_text(encoding="utf-8").strip()
+                self.assertEqual(_slim_sha(bare, bare_out), pin)
 
 
 def _shared_clone(dest: Path) -> None:

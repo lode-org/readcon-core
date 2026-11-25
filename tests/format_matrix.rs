@@ -11,6 +11,7 @@ use readcon_core::extxyz_scan::{
     ExtxyzSource, XyzColumn, XyzTables, extxyz_bytes_with_threads,
     tables_from_extxyz_bytes_with_threads,
 };
+#[cfg(feature = "capi")]
 use readcon_core::ffi::{
     CAtom, CFrame, RKRConFrame, RKRStatus, create_writer_from_path_c, create_writer_gzip_c,
     free_c_frame, free_rkr_frame_array, free_rkr_writer, rkr_frame_to_c_frame,
@@ -19,6 +20,7 @@ use readcon_core::ffi::{
 use readcon_core::iterators::{read_all_frames_phased, read_all_frames_with_threads};
 use readcon_core::types::{ConFrame, ConFrameBuilder};
 use readcon_core::writer::write_frame_refs_to_path;
+#[cfg(feature = "capi")]
 use std::ffi::{CStr, CString};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,7 +29,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use readcon_core::compression::write_gzip_members_limited;
 #[cfg(feature = "zstd")]
 use readcon_core::compression::write_zstd_members_limited;
-#[cfg(feature = "zstd")]
+#[cfg(all(feature = "zstd", feature = "capi"))]
 use readcon_core::ffi::create_writer_zstd_c;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -242,6 +244,7 @@ fn read_threaded(path: &Path, threads: usize) -> Vec<ConFrame> {
         .unwrap_or_else(|err| panic!("{} threads {threads}: {err}", path.display()))
 }
 
+#[cfg(feature = "capi")]
 fn last_error() -> String {
     let message = rkr_last_error_message();
     if message.is_null() {
@@ -250,6 +253,7 @@ fn last_error() -> String {
     unsafe { CStr::from_ptr(message).to_string_lossy().into_owned() }
 }
 
+#[cfg(feature = "capi")]
 fn per_atom_masses(frame: &ConFrame) -> Vec<f64> {
     frame
         .header
@@ -260,6 +264,7 @@ fn per_atom_masses(frame: &ConFrame) -> Vec<f64> {
         .collect()
 }
 
+#[cfg(feature = "capi")]
 fn assert_c_frame(label: &str, expected: &ConFrame, c_frame: *mut CFrame) {
     assert!(!c_frame.is_null(), "{label} c frame");
     let frame = unsafe { &*c_frame };
@@ -275,6 +280,7 @@ fn assert_c_frame(label: &str, expected: &ConFrame, c_frame: *mut CFrame) {
     unsafe { free_c_frame(c_frame) };
 }
 
+#[cfg(feature = "capi")]
 fn assert_c_atom(label: &str, frame: &ConFrame, index: usize, mass: f64, c_atom: &CAtom) {
     let atom = &frame.atom_data[index];
     assert_eq!(bits(c_atom.x), bits(frame.x_at(index)), "{label} x");
@@ -309,23 +315,26 @@ fn check_readers(label: &str, path: &Path, threads: usize, expected: &[ConFrame]
         read_threaded(path, threads).as_slice(),
         "{label} reader {threads}"
     );
-    let text = CString::new(path.to_str().expect("path")).unwrap();
-    let mut count = 0usize;
-    let handles = unsafe { rkr_read_all_frames_n_threads(text.as_ptr(), &mut count, threads) };
-    assert!(
-        !handles.is_null(),
-        "{label} c read {threads}: {}",
-        last_error()
-    );
-    assert_eq!(count, expected.len(), "{label} c count");
-    let slice = unsafe { std::slice::from_raw_parts(handles, count) };
-    for (index, handle) in slice.iter().enumerate() {
-        let frame = unsafe { &*(*handle as *const ConFrame) };
-        assert_eq!(&expected[index], frame, "{label} c frame {index}");
-        let c_frame = unsafe { rkr_frame_to_c_frame(*handle) };
-        assert_c_frame(&format!("{label} t{threads}"), &expected[index], c_frame);
+    #[cfg(feature = "capi")]
+    {
+        let text = CString::new(path.to_str().expect("path")).unwrap();
+        let mut count = 0usize;
+        let handles = unsafe { rkr_read_all_frames_n_threads(text.as_ptr(), &mut count, threads) };
+        assert!(
+            !handles.is_null(),
+            "{label} c read {threads}: {}",
+            last_error()
+        );
+        assert_eq!(count, expected.len(), "{label} c count");
+        let slice = unsafe { std::slice::from_raw_parts(handles, count) };
+        for (index, handle) in slice.iter().enumerate() {
+            let frame = unsafe { &*(*handle as *const ConFrame) };
+            assert_eq!(&expected[index], frame, "{label} c frame {index}");
+            let c_frame = unsafe { rkr_frame_to_c_frame(*handle) };
+            assert_c_frame(&format!("{label} t{threads}"), &expected[index], c_frame);
+        }
+        unsafe { free_rkr_frame_array(handles, count) };
     }
-    unsafe { free_rkr_frame_array(handles, count) };
 }
 
 fn write_plain(path: &Path, frames: &[ConFrame], threads: usize) {
@@ -365,6 +374,7 @@ fn write_codec(path: &Path, frames: &[ConFrame], codec: Codec, threads: usize) {
     }
 }
 
+#[cfg(feature = "capi")]
 fn write_c(path: &Path, frames: &[ConFrame], codec: Codec) {
     let text = CString::new(path.to_str().expect("path")).unwrap();
     let writer = unsafe {
@@ -566,16 +576,19 @@ fn formats_round_trip_across_codecs_and_threads() {
                         check_readers(&label, &path, read_threads, &expected);
                     }
                 }
-                let path = path_for(root, kind, codec);
-                write_c(&path, &built, codec);
-                for read_threads in [1usize, 2, 8] {
-                    let label = format!(
-                        "{} {} {} c-writer",
-                        layout_name(layout),
-                        kind_name(kind),
-                        codec_name(codec)
-                    );
-                    check_readers(&label, &path, read_threads, &expected);
+                #[cfg(feature = "capi")]
+                {
+                    let path = path_for(root, kind, codec);
+                    write_c(&path, &built, codec);
+                    for read_threads in [1usize, 2, 8] {
+                        let label = format!(
+                            "{} {} {} c-writer",
+                            layout_name(layout),
+                            kind_name(kind),
+                            codec_name(codec)
+                        );
+                        check_readers(&label, &path, read_threads, &expected);
+                    }
                 }
             }
         }

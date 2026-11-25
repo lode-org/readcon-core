@@ -336,7 +336,18 @@ def test_repo_final_clause_coverage_chain_is_linear() -> None:
     assert finals
     tip = finals[-1]
     assert clause_coverage.FINAL_RECORD == tip
-    assert tip.name == f"clause_coverage-{version}-spec-major-{len(finals)}.json"
+    names = [p.name for p in finals]
+    assert all(clause_coverage.record_series(p) for p in finals)
+    assert names.count(tip.name) == 1
+    assert f"clause_coverage-{version}-spec-major-10.json" in names
+    assert f"clause_coverage-{version}-capi-r1.json" in names
+    assert names.index(f"clause_coverage-{version}-capi-r1.json") == (
+        names.index(f"clause_coverage-{version}-spec-major-10.json") + 1
+    )
+    # The older -r2 recount supersedes the legacy record beside spec-major and
+    # has no series name, so it is a side record and never final.
+    assert (spec_dir / f"clause_coverage-{version}-r2.json").is_file()
+    assert f"clause_coverage-{version}-r2.json" not in names
     assert clause_coverage.default_paths() == (
         finals[-2] if len(finals) > 1 else spec_dir / f"clause_coverage-{version}.json",
         tip,
@@ -379,4 +390,39 @@ def test_final_chain_rejects_a_second_child_of_a_final_record(tmp_path: Path) ->
     after_tip = spec_dir / f"clause_coverage-{version}-after-tip.json"
     _write_json(after_tip, {"supersedes": f"paper/cpc/data/spec/{second}"})
     with pytest.raises(SystemExit, match=f"1 records of data/spec supersede {second}"):
+        clause_coverage.final_chain(spec_dir, version)
+
+
+def test_final_chain_continues_through_capi_recounts(tmp_path: Path) -> None:
+    clause_coverage = _load(
+        "clause_coverage_under_test", SCRIPTS / "clause_coverage.py"
+    )
+    spec_dir = tmp_path / "spec"
+    version = "0.99.0"
+    legacy = f"clause_coverage-{version}.json"
+    first = f"clause_coverage-{version}-spec-major.json"
+    second = f"clause_coverage-{version}-spec-major-2.json"
+    capi1 = f"clause_coverage-{version}-capi-r1.json"
+    capi2 = f"clause_coverage-{version}-capi-r2.json"
+    _write_json(spec_dir / legacy, {})
+    _write_json(spec_dir / first, {"supersedes": f"paper/cpc/data/spec/{legacy}"})
+    _write_json(spec_dir / second, {"supersedes": f"paper/cpc/data/spec/{first}"})
+    _write_json(spec_dir / capi1, {"supersedes": f"paper/cpc/data/spec/{second}"})
+    _write_json(spec_dir / capi2, {"supersedes": f"paper/cpc/data/spec/{capi1}"})
+    assert [p.name for p in clause_coverage.final_chain(spec_dir, version)] == [
+        first,
+        second,
+        capi1,
+        capi2,
+    ]
+
+    fork = spec_dir / f"clause_coverage-{version}-spec-major-fork.json"
+    _write_json(fork, {"supersedes": f"paper/cpc/data/spec/{second}"})
+    with pytest.raises(SystemExit, match=f"2 records of data/spec supersede {second}"):
+        clause_coverage.final_chain(spec_dir, version)
+
+    fork.unlink()
+    after_tip = spec_dir / f"clause_coverage-{version}-after-tip.json"
+    _write_json(after_tip, {"supersedes": f"paper/cpc/data/spec/{capi2}"})
+    with pytest.raises(SystemExit, match=f"1 records of data/spec supersede {capi2}"):
         clause_coverage.final_chain(spec_dir, version)

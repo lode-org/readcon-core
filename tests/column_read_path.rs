@@ -2,6 +2,7 @@
 //! parser on the corpus and on the head-to-head inputs, including convel,
 //! and it must surface the frame parser's error text when a file is bad.
 
+#[cfg(feature = "capi")]
 use readcon_core::ffi::{
     rkr_free_position_block, rkr_last_error_message, rkr_position_block_values,
     rkr_read_all_frames, rkr_read_positions_n_threads,
@@ -11,6 +12,7 @@ use readcon_core::iterators::{
 };
 use readcon_core::types::ConFrameBuilder;
 use readcon_core::writer::ConFrameWriter;
+#[cfg(feature = "capi")]
 use std::ffi::{CStr, CString};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,10 +21,12 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+#[cfg(feature = "capi")]
 fn c_string(path: &Path) -> CString {
     CString::new(path.to_str().expect("utf-8 path")).unwrap()
 }
 
+#[cfg(feature = "capi")]
 fn c_error() -> String {
     unsafe {
         let msg = rkr_last_error_message();
@@ -33,6 +37,7 @@ fn c_error() -> String {
     }
 }
 
+#[cfg(feature = "capi")]
 fn c_frame_error(path: &Path) -> Option<String> {
     let name = c_string(path);
     let mut n_frames = 0usize;
@@ -46,6 +51,7 @@ fn c_frame_error(path: &Path) -> Option<String> {
     None
 }
 
+#[cfg(feature = "capi")]
 fn c_positions(path: &Path, threads: usize) -> Result<Vec<f64>, String> {
     let name = c_string(path);
     let mut n_frames = 0usize;
@@ -68,6 +74,7 @@ fn c_positions(path: &Path, threads: usize) -> Result<Vec<f64>, String> {
     }
 }
 
+#[cfg(feature = "capi")]
 fn assert_c(path: &Path, threads: usize, rust_values: &[f64]) {
     let got = c_positions(path, threads)
         .unwrap_or_else(|err| panic!("{} C threads {threads}: {err}", path.display()));
@@ -123,6 +130,7 @@ fn assert_file(path: &Path) {
                     path.display()
                 );
                 bits(want, &block.values);
+                #[cfg(feature = "capi")]
                 assert_c(path, threads, want);
             }
             (Err(want), Err(err)) => {
@@ -132,9 +140,12 @@ fn assert_file(path: &Path) {
                     "{} threads {threads}",
                     path.display()
                 );
-                let c_err = c_positions(path, threads).expect_err("C accepted a bad file");
-                if let Some(frame_err) = c_frame_error(path) {
-                    assert_eq!(c_err, frame_err, "{} threads {threads}", path.display());
+                #[cfg(feature = "capi")]
+                {
+                    let c_err = c_positions(path, threads).expect_err("C accepted a bad file");
+                    if let Some(frame_err) = c_frame_error(path) {
+                        assert_eq!(c_err, frame_err, "{} threads {threads}", path.display());
+                    }
                 }
             }
             (Ok(_), Err(err)) if err.to_string().contains("frame atom count does not match") => {}
@@ -216,9 +227,12 @@ fn malformed_files_keep_the_frame_parser_message() {
                 "{} threads {threads}",
                 path.display()
             );
-            let c_err = c_positions(&path, threads).expect_err("C accepted a bad file");
-            let frame_err = c_frame_error(&path).expect("frame reader accepted a bad file");
-            assert_eq!(c_err, frame_err, "{} threads {threads}", path.display());
+            #[cfg(feature = "capi")]
+            {
+                let c_err = c_positions(&path, threads).expect_err("C accepted a bad file");
+                let frame_err = c_frame_error(&path).expect("frame reader accepted a bad file");
+                assert_eq!(c_err, frame_err, "{} threads {threads}", path.display());
+            }
         }
         seen += 1;
     }
@@ -265,8 +279,11 @@ fn differing_atom_counts_use_the_frame_parser_message() {
         err.to_string().contains("frame atom count does not match"),
         "{err}"
     );
-    let c_err = c_positions(&path, 1).expect_err("C accepted differing counts");
-    assert!(c_err.contains("frame atom count does not match"), "{c_err}");
+    #[cfg(feature = "capi")]
+    {
+        let c_err = c_positions(&path, 1).expect_err("C accepted differing counts");
+        assert!(c_err.contains("frame atom count does not match"), "{c_err}");
+    }
 }
 
 #[test]

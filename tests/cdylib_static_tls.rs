@@ -16,7 +16,7 @@ fn cdylib() -> PathBuf {
             "--crate-type",
             "cdylib",
             "--features",
-            "mimalloc-allocator",
+            "capi,mimalloc-allocator",
             "--target-dir",
         ])
         .arg(&target)

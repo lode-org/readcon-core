@@ -12,7 +12,7 @@ test = "cargo test"
 test-all = "cargo test --all-features"
 bench = "cargo bench --features parallel,benchmark"
 cachegrind-bench = { cmd = "scripts/run_cachegrind_bench.sh", description = "Valgrind Cachegrind I-refs for docs (slow)" }
-build = "cargo build --release --features mimalloc-allocator"
+build = "cargo build --release --features capi,mimalloc-allocator"
 build-rpc = "cargo build --release --features rpc,mimalloc-allocator"
 regen-capi-headers = { cmd = "scripts/regen-capi-headers.sh", description = "Optional: draft include/readcon-core.h via cbindgen (maintainers only, not CI)" }
 check-capi-headers = { cmd = "scripts/regen-capi-headers.sh --check", description = "Optional maintainer diff vs cbindgen; CI does not run this" }

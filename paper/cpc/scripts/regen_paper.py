@@ -6,7 +6,7 @@
 
 The format steps read only committed records. The measurement steps rewrite
 those records; the C-interface rows load the library that
-``cargo build --release --features benchmark`` writes, or ``READCON_LIB``.
+``cargo build --release --features capi,benchmark`` writes, or ``READCON_LIB``.
 The library must contain mimalloc. The eOn band
 (``evidence/e1_restart.py``), the resume wall times
 (``scripts/run_restart_walls.py``), the file sizes (``scripts/file_sizes.py``),
@@ -34,6 +34,7 @@ the figures carry a fixed date.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import subprocess
@@ -257,7 +258,7 @@ def main() -> None:
         if not Path(env["READCON_LIB"]).is_file():
             raise SystemExit(
                 f"{env['READCON_LIB']} is missing; "
-                "run cargo build --release --features benchmark"
+                "run cargo build --release --features capi,benchmark"
             )
         allocator = subprocess.run(
             [
@@ -273,6 +274,15 @@ def main() -> None:
         if allocator.returncode:
             raise SystemExit(allocator.stderr.strip() or allocator.stdout.strip())
         print(allocator.stdout.strip(), flush=True)
+        try:
+            clib = ctypes.CDLL(env["READCON_LIB"])
+        except OSError as exc:
+            raise SystemExit(f"cannot load {env['READCON_LIB']}: {exc}") from exc
+        if not hasattr(clib, "rkr_read_all_frames"):
+            raise SystemExit(
+                f"{env['READCON_LIB']} lacks rkr_read_all_frames; "
+                "rebuild with cargo build --release --features capi,benchmark"
+            )
         for step in MEASURE:
             run(step, env)
     # matplotlib runs fc-list when it builds its font cache, and the ledger would record that run for the first

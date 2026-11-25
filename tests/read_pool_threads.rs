@@ -20,9 +20,13 @@
 
 #![cfg(all(target_os = "linux", not(any(asan_run, tsan_run))))]
 
+#[cfg(feature = "capi")]
 use readcon_core::ffi::{free_rkr_frame_array, rkr_read_all_frames_n_threads};
 use readcon_core::iterators::read_all_frames_located;
-use std::ffi::{CString, c_int, c_void};
+#[cfg(feature = "capi")]
+use std::ffi::CString;
+use std::ffi::{c_int, c_void};
+#[cfg(feature = "capi")]
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -94,6 +98,7 @@ fn running() -> usize {
 /// One read at a worker count, returning the frame count.
 type Read<'a> = Box<dyn Fn(usize) -> usize + 'a>;
 
+#[cfg(feature = "capi")]
 fn ffi_read(path: &Path, threads: usize) -> usize {
     let c_path = CString::new(path.to_str().expect("utf8 path")).expect("c path");
     let mut count = 0usize;
@@ -121,6 +126,7 @@ fn threaded_reads_reuse_their_workers() {
                     .len()
             }),
         ),
+        #[cfg(feature = "capi")]
         (
             "rkr_read_all_frames_n_threads",
             Box::new(|n| ffi_read(&path, n)),

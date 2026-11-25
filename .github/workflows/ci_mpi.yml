@@ -77,12 +77,18 @@ jobs:
         env:
           MPICC: ${{ matrix.cc }}
         run: cargo test --features mpi --lib distrib
+      - name: MPI without capi exports zero C ABI symbols
+        env:
+          MPICC: ${{ matrix.cc }}
+          FEATURES: mpi
+          PROFILE: debug
+        run: bash scripts/check_feature_matrix.sh
       - name: Build Rust smoke test and C library
         env:
           MPICC: ${{ matrix.cc }}
         run: |
-          cargo build --features mpi,benchmark --example mpi_smoke --example mpi_read_check
-          cargo build --features mpi --lib
+          cargo build --features capi,mpi,benchmark --example mpi_smoke --example mpi_read_check
+          cargo build --features capi,mpi --lib
           ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_shim.c \
             -Ltarget/debug -lreadcon_core -o target/test_mpi_shim
           ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_read.c \
@@ -105,7 +111,7 @@ jobs:
         env:
           MPICC: ${{ matrix.cc }}
         run: |
-          cargo build --features mpi,benchmark --lib --example mpi_write_check
+          cargo build --features capi,mpi,benchmark --lib --example mpi_write_check
           ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_write.c \
             -Ltarget/debug -lreadcon_core -o target/test_mpi_write
       - name: Collective write is byte-identical to serial (sha256, 1 to 4 ranks)
@@ -132,6 +138,6 @@ jobs:
           target/pyenv/bin/python -c "import readcon; assert readcon.has_mpi_support()"
       - name: C++, Fortran and Python bindings match serial (sha256, 1 to 4 ranks)
         run: |
-          cargo build --features mpi --lib
+          cargo build --features capi,mpi --lib
           scripts/mpi_bindings_check.sh "${{ matrix.launcher }}" target/debug \
             target/mpi-bindings target/pyenv/bin/python

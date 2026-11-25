@@ -762,6 +762,7 @@ fn read_scatter(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<Rank
 /// MPI must be initialized; `comm_f` must be a live intra-communicator;
 /// `path_c` must be a NUL-terminated string; the out pointers must be
 /// valid for writes. Every rank of the communicator must call this.
+#[cfg(feature = "capi")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_mpi_read_block_f(
     comm_f: ::mpi::ffi::RSMPI_Fint,

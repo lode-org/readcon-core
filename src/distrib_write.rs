@@ -1306,6 +1306,7 @@ fn write_gather(comm: &Comm, path: &Path, bytes: &[u8], total: u64) -> Result<()
 /// MPI must be initialized; `comm_f` must be a live intra-communicator;
 /// `path_c` must be a NUL-terminated string; `frames` must hold
 /// `num_frames` live frame handles. Every rank must call this.
+#[cfg(feature = "capi")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_mpi_write_block_f(
     comm_f: ffi::RSMPI_Fint,
@@ -1336,6 +1337,7 @@ pub unsafe extern "C" fn rkr_mpi_write_block_f(
 ///
 /// # Safety
 /// Same as [`rkr_mpi_write_block_f`]. Every rank must call this.
+#[cfg(feature = "capi")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_mpi_rewrite_block_f(
     comm_f: ffi::RSMPI_Fint,
@@ -1362,6 +1364,7 @@ pub unsafe extern "C" fn rkr_mpi_rewrite_block_f(
     }
 }
 
+#[cfg(feature = "capi")]
 #[allow(clippy::too_many_arguments)]
 unsafe fn mpi_write_block(
     comm_f: ffi::RSMPI_Fint,

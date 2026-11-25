@@ -435,7 +435,7 @@ def compile_tools() -> None:
             "build",
             "--release",
             "--features",
-            "parallel,benchmark",
+            "capi,parallel,benchmark",
         ],
         cwd=ROOT,
         check=True,

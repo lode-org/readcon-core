@@ -158,3 +158,29 @@ def test_a_commit_off_the_history_fails(tmp_path: Path) -> None:
             assert commit in str(exc)
             continue
         raise AssertionError(f"{commit} off the history was accepted")
+
+
+def test_off_chain_records_are_stored_and_replace_nothing() -> None:
+    module = _load()
+    stale = "paper/cpc/data/spec/spec-measurement-0.24.0.json"
+    fresh = "paper/cpc/data/spec/spec-measurement-0.24.0-measured.json"
+    (stray,) = module.OFF_CHAIN
+    assert (ROOT / stray).is_file()
+    assert json.loads((ROOT / stray).read_text())["supersedes"] == stale
+    records = {
+        stale: {"spec": "docs/orgmode/spec.org"},
+        fresh: {"supersedes": stale, "measured_at": {"commit": "a" * 40}},
+        stray: {"supersedes": stale, "measured_at": {"commit": "b" * 40}},
+    }
+    chosen, _ = module.resolve_measurement(records, stale)
+    assert chosen == fresh
+    records["paper/cpc/data/spec/spec-measurement-0.24.0-other.json"] = {
+        "supersedes": stale
+    }
+    try:
+        module.resolve_measurement(records, stale)
+    except module.MeasurementSchemaError as exc:
+        assert "superseded by" in str(exc)
+        assert stray not in str(exc)
+        return
+    raise AssertionError("two on-chain successors were accepted")

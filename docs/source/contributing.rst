@@ -154,6 +154,9 @@ Testing
     # Core Rust tests
     cargo test
 
+    # C ABI / FFI tests
+    cargo test --features capi
+
     # All features (parallel, rpc, python)
     cargo test --all-features
 
@@ -564,6 +567,7 @@ Manual equivalent of the script:
    .. code:: shell
 
        cargo test --locked
+       cargo test --locked --features capi
        cargo test --locked --features chemfiles   # optional; needs libchemfiles/cmake policy
        pixi r -e python python-test
        prek run -a
@@ -622,7 +626,7 @@ Manual equivalent of the script:
       (and any prior C ABI tarballs if still attached)
 
 Optional local C ABI tarball for consumers that do not use cargo-dist CLI
-archives (headers + ``libreadcon_core.{a,so}`` via ``cargo build --release`` or
+archives (headers + ``libreadcon_core.{a,so}`` via ``cargo build --release --features capi`` or
 ``cargo cinstall``) can still be attached with ``gh release upload`` if needed.
 
 Initial PyPI setup (first release only)
@@ -685,17 +689,19 @@ Optional functionality is gated behind Cargo features:
 
 .. table::
 
-    +--------------------+-------------------------------+-----------------------------------------------+
-    | Feature            | Dependencies                  | Purpose                                       |
-    +====================+===============================+===============================================+
-    | parallel           | rayon                         | Multi-frame parallel parse                    |
-    +--------------------+-------------------------------+-----------------------------------------------+
-    | rpc                | capnp, capnp-rpc, tokio, etc. | Cap'n Proto RPC serving                       |
-    +--------------------+-------------------------------+-----------------------------------------------+
-    | python             | pyo3                          | Python bindings                               |
-    +--------------------+-------------------------------+-----------------------------------------------+
-    | mimalloc-allocator | mimalloc                      | Process allocator for final readcon artifacts |
-    +--------------------+-------------------------------+-----------------------------------------------+
+    +--------------------+-------------------------------+-------------------------------------------------------------------------------------------------+
+    | Feature            | Dependencies                  | Purpose                                                                                         |
+    +====================+===============================+=================================================================================================+
+    | capi               | (none)                        | Export the ``rkr_*`` C ABI (``ffi`` module); enabled automatically by cargo-c, Meson, and CMake |
+    +--------------------+-------------------------------+-------------------------------------------------------------------------------------------------+
+    | parallel           | rayon                         | Multi-frame parallel parse                                                                      |
+    +--------------------+-------------------------------+-------------------------------------------------------------------------------------------------+
+    | rpc                | capnp, capnp-rpc, tokio, etc. | Cap'n Proto RPC serving                                                                         |
+    +--------------------+-------------------------------+-------------------------------------------------------------------------------------------------+
+    | python             | pyo3                          | Python bindings                                                                                 |
+    +--------------------+-------------------------------+-------------------------------------------------------------------------------------------------+
+    | mimalloc-allocator | mimalloc                      | Process allocator for final readcon artifacts                                                   |
+    +--------------------+-------------------------------+-------------------------------------------------------------------------------------------------+
 
 Add new optional features in ``Cargo.toml`` under ``[features]``.
 

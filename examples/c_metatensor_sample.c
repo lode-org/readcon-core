@@ -1,6 +1,6 @@
 /* Metatensor-sys C ABI consumer (option A: sys on the boundary).
  *
- * After: cargo build --release --features metatensor,chemfiles
+ * After: cargo build --release --features capi,metatensor,chemfiles
  *   source target/release/readcon-metatensor.env   # sets INCLUDE + LIB_DIR
  *   gcc -I include -I "$READCON_METATENSOR_INCLUDE" examples/c_metatensor_sample.c \
  *       -L target/release -L "$READCON_METATENSOR_LIB_DIR" \

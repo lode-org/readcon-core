@@ -7,7 +7,7 @@ C++ compiler of the Python environment that runs it (``sys.prefix``, the
 ``default`` environment of pixi.toml):
 
 * ``readcon_read``   ``native/readcon_read.cpp`` over the C ABI static library
-                     of ``READCON_SRC``, built with the ``parallel`` feature;
+                     of ``READCON_SRC``, built with the ``capi`` and ``parallel`` features;
 * ``chemfiles_read`` ``native/chemfiles_read.cpp`` against ``CHEMFILES_PREFIX``
                      (default the environment).
 
@@ -49,7 +49,7 @@ RESULTS = Path(os.environ.get("BENCH_RESULTS", HERE / "results" / "r0174")) / "c
 PAYLOADS = Path(os.environ.get("RC_PAYLOADS", HERE / "work" / "r0174"))
 CXX = os.environ.get("CXX", str(ENV / "bin" / "x86_64-conda-linux-gnu-c++"))
 CXXFLAGS = ["-O3", "-std=c++17", "-DNDEBUG"]
-FEATURES = ["parallel", "benchmark"]
+FEATURES = ["capi", "parallel", "benchmark"]
 REL_TOL = 1e-12
 CHECKED = {
     "moc": (
