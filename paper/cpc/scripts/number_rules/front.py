@@ -92,6 +92,19 @@ def spec_version(version: str) -> float:
     )
 
 
+def safety_version(label: str) -> float:
+    """``major.minor`` of one case in ``scripts/version_safety.py``."""
+    minor = re.search(
+        rf'"{re.escape(label)}".{{0,500}}?"con_spec_minor": (\d+)',
+        text("scripts/version_safety.py"),
+        re.S,
+    )
+    if minor is None:
+        raise SystemExit(f"scripts/version_safety.py has no case {label}")
+    major = label.split(".", 1)[0]
+    return float(f"{major}.{minor.group(1)}")
+
+
 def variance_contours() -> list[float]:
     """Fractions of the variance range that plot_landscape_surface draws as dashed lines."""
     # chemparseplot.plot.neb imports ASE, so the function is read from the file, not imported.
@@ -238,11 +251,32 @@ RULES: list[Rule] = [
         (f"{DOC}~2\\^\\{{64\\}}-1", f"{SUPP}~2\\^\\{{64\\}}-1"),
     ),
     Rule(
+        "-1",
+        -1,
+        "/src/correspondence.rs",
+        "exponent of the cell-matrix inverse in the minimum-image displacement",
+        (f"{DOC}~H\\^{{-1}}",),
+    ),
+    Rule(
+        "47",
+        int(grep("/bench/ecosystem/README.md", r"Memory: (\d+) GiB")),
+        "/bench/ecosystem/README.md",
+        "memory of the ecosystem exchange host",
+        (f"{DOC}~47~GiB",),
+    ),
+    Rule(
         "3.1",
         spec_version("3.1"),
         SPEC,
         "version column of the spec version-history table",
-        (DOC,),
+        (f"{SUPP}~keeps the 3\\.1 and 3\\.3 frames",),
+    ),
+    Rule(
+        "3.3",
+        safety_version("3.3, unknown key"),
+        "scripts/version_safety.py",
+        "major 3 minor 3 case of the version-safety table",
+        (f"{SUPP}~keeps the 3\\.1 and 3\\.3 frames",),
     ),
     Rule(
         "0.002",

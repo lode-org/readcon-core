@@ -67,6 +67,7 @@ def test_plotters_write_included_figures(tmp_path: Path | None = None) -> None:
     supp = _load("plot_supp")
     generated = _load("gen_figures")
     mpi = _load("mpi_from_log")
+    ecosystem = _load("fig_ecosystem")
     for module, attr in (
         (restored, "OUT"),
         (extra, "OUT"),
@@ -78,6 +79,7 @@ def test_plotters_write_included_figures(tmp_path: Path | None = None) -> None:
         (claisen, "OUT"),
         (generated, "OUT"),
         (mpi, "GEN"),
+        (ecosystem, "OUT"),
     ):
         setattr(module, attr, tmp_path)
     refused = []
@@ -94,6 +96,7 @@ def test_plotters_write_included_figures(tmp_path: Path | None = None) -> None:
         ("gen_figures", generated.main),
         ("mpi_from_log", mpi.main),
         ("plot_figures", figures.main),
+        ("fig_ecosystem", ecosystem.main),
     ):
         try:
             step()

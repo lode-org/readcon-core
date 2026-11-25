@@ -170,6 +170,15 @@ def ase_writer_decimals() -> str:
     raise SystemExit("ASE extxyz writer does not name a decimal width")
 
 
+def spec_release(version: str) -> str:
+    """The printed form of one tag in the specification measurement."""
+    tags = jget("data/spec/spec-measurement-0.24.0.json", "tags")
+    found = [item["tag"] for item in tags if item["tag"] == f"v{version}"]
+    if len(found) != 1:
+        raise SystemExit(f"specification measurement has no single tag v{version}")
+    return version
+
+
 def tectonic_version() -> str:
     """The Tectonic version named by the paper's typeset task."""
     found = re.search(r"Tectonic (\d+\.\d+\.\d+)", text("pixi.toml"))
@@ -193,6 +202,20 @@ _RULES = [
         grep(SPEC, r"^\|\s+(3\.0) \| \d{4}-\d{2}-\d{2} \|"),
         SPEC,
         "row of the version history of the specification",
+    ),
+    Rule(
+        "4.0.4",
+        grep(SPEC, r"^- Version :: (4\.0\.4) "),
+        SPEC,
+        "version line of the specification",
+        lines(r"4\.0\.4"),
+    ),
+    Rule(
+        "0.21.0",
+        spec_release("0.21.0"),
+        "data/spec/spec-measurement-0.24.0.json",
+        "tag v0.21.0 of the specification measurement",
+        (f"{SUPP}~readcon-core~0\\.21\\.0",),
     ),
     *peer_rules(
         OPENERS,

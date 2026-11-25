@@ -257,8 +257,8 @@ def test_check_fails_on_an_org_number_without_emacs(
 def test_check_fails_when_the_tex_is_not_the_org_export(clone: Path) -> None:
     tex = clone / CPC / "src" / "rg_main.tex"
     text = tex.read_text()
-    assert "geometry checkpoint" in text
-    tex.write_text(text.replace("geometry checkpoint", "geometry check-point", 1))
+    assert "geometry interchange" in text
+    tex.write_text(text.replace("geometry interchange", "geometry inter-change", 1))
     done = _check(clone)
     assert done.returncode != 0, done.stdout + done.stderr
     assert "rg_main.tex is not the Org export of rg_main.org" in done.stdout
