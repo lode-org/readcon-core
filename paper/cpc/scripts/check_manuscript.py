@@ -370,11 +370,12 @@ VERSION_KEYS = ("readcon_version", "readcon_core")
 
 @dataclass(frozen=True)
 class Named:
-    """A library a record names: its version, its digest, and the module or binary built from it."""
+    """A library a record names, its source commit, and the built artifact."""
 
     where: str
     version: str | None
     digest: str | None
+    commit: str | None
     module: str | None
     module_sha256: str | None
     newer: tuple[str, ...]
@@ -392,6 +393,7 @@ def named_builds(node, where: str, by_digest: bool):
                 where,
                 version,
                 node["library_digest"] if by_digest else library_at(commit),
+                commit,
                 node.get("readcon_module"),
                 node.get("readcon_module_sha256"),
                 tuple(node.get("newer_sources") or ()),
@@ -495,7 +497,17 @@ def record_builds(
             if build.version in measured:
                 continue
             where = f"{rel} ({build.where})" if build.where else rel
-            if build.version == manifest and build.digest not in (None, digest, kept):
+            recorded = (
+                library_at(build.commit)
+                if build.commit and not isinstance(data.get("record"), str)
+                else None
+            )
+            if build.version == manifest and build.digest not in (
+                None,
+                digest,
+                kept,
+                recorded,
+            ):
                 bad.append(
                     f"{where}: library {(build.digest or 'of an unknown commit')[:12]}, this tree "
                     f"{digest[:12]}"

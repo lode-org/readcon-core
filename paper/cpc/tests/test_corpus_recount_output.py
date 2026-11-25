@@ -122,3 +122,27 @@ def test_stale_terminal_corpus_recount_still_fails_release_guard() -> None:
     assert bad[0].startswith(
         "data/spec/corpus_recount-3.json (provenance.build): library 000000000000, this tree ffffffffffff"
     )
+
+
+def test_historical_corpus_recount_keeps_its_recorded_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if str(SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS))
+    import check_manuscript
+
+    record = _sample_result(80)
+    commit = record["provenance"]["build"]["source_commit"]
+    digest = record["provenance"]["build"]["library_digest"]
+    monkeypatch.setattr(
+        check_manuscript,
+        "library_at",
+        lambda candidate: digest if candidate == commit else None,
+    )
+    bad, _, checked = check_manuscript.record_builds(
+        [("data/spec/corpus_recount-3.json", record)],
+        "0.1.0",
+        "f" * 64,
+    )
+    assert bad == []
+    assert checked == 1
