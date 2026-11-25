@@ -159,9 +159,10 @@ PY
         export CMAKE_POLICY_VERSION_MINIMUM="${CMAKE_POLICY_VERSION_MINIMUM:-3.5}"
         cargo fmt --all -- --check
         cargo clippy --locked --all-targets \
-            --features parallel,chemfiles,zstd,grammar,metatensor,mimalloc-allocator,benchmark \
+            --features capi,parallel,chemfiles,zstd,grammar,metatensor,mimalloc-allocator,benchmark \
             -- -D warnings
         cargo test --locked
+        cargo test --locked --features capi
         bash scripts/run_doc_examples.sh
         bash scripts/check_cxx_wrap_pin.sh --pull-request
     )
