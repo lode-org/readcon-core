@@ -2906,7 +2906,7 @@ impl PyConFrame {
         for index in 0..n {
             let item = list.get_item(index)?;
             let atom = item.cast::<PyAtomDatum>()?;
-            let mut atom = exclusive(&atom)?;
+            let mut atom = exclusive(atom)?;
             atom.coord = Some(CoordLink {
                 owner: owner.clone_ref(py),
                 ptr: SharedF64(unsafe { ptr.add(index.saturating_mul(3)) }),
@@ -2953,7 +2953,7 @@ impl PyConFrame {
                 let Ok(atom) = item.cast::<PyAtomDatum>() else {
                     continue;
                 };
-                if shared(&atom)?.edits != 0 {
+                if shared(atom)?.edits != 0 {
                     return Ok(true);
                 }
             }
