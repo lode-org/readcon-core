@@ -210,8 +210,7 @@ Line 2 starts with \texttt{\{} & JSON header; otherwise version 1. \\
 JSON object without \texttt{con\_spec\_version} & Rejected. \\
 JSON major other than 2 or 3, a negative one included & Unsupported version. \\
 Later minor of a known major, of any size & Accepted. \\
-\texttt{con\_spec\_minor} not a non-negative JSON integer & Invalid metadata. \\
-\texttt{con\_spec\_minor} repeated in the header & Invalid metadata. \\
+\texttt{con\_spec\_minor} not a non-negative JSON integer, or repeated in the header & Invalid metadata. \\
 Major 3 without \texttt{units.length} or \texttt{units.energy} & Rejected. \\
 Unknown metadata key & Kept on rewrite, each number with the digits the file gave it. \\
 Unknown section at the reader's minor or earlier & Rejected. \\
