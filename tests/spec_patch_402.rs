@@ -35,26 +35,29 @@ fn con_cell_7_column_readers_reject_impossible_angles() {
     };
     assert!(coords.to_string().contains("no real c vector"));
 
-    let c_path = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
-    let mut n_frames = 0usize;
-    let mut n_atoms = 0usize;
-    let block = unsafe {
-        readcon_core::ffi::rkr_read_positions(c_path.as_ptr(), &mut n_frames, &mut n_atoms)
-    };
-    assert!(block.is_null());
-    let message = unsafe {
-        std::ffi::CStr::from_ptr(readcon_core::ffi::rkr_last_error_message()).to_string_lossy()
-    };
-    assert!(message.contains("ValidationError"), "{message}");
-    let threaded = unsafe {
-        readcon_core::ffi::rkr_read_positions_n_threads(
-            c_path.as_ptr(),
-            &mut n_frames,
-            &mut n_atoms,
-            2,
-        )
-    };
-    assert!(threaded.is_null());
+    #[cfg(feature = "capi")]
+    {
+        let c_path = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+        let mut n_frames = 0usize;
+        let mut n_atoms = 0usize;
+        let block = unsafe {
+            readcon_core::ffi::rkr_read_positions(c_path.as_ptr(), &mut n_frames, &mut n_atoms)
+        };
+        assert!(block.is_null());
+        let message = unsafe {
+            std::ffi::CStr::from_ptr(readcon_core::ffi::rkr_last_error_message()).to_string_lossy()
+        };
+        assert!(message.contains("ValidationError"), "{message}");
+        let threaded = unsafe {
+            readcon_core::ffi::rkr_read_positions_n_threads(
+                c_path.as_ptr(),
+                &mut n_frames,
+                &mut n_atoms,
+                2,
+            )
+        };
+        assert!(threaded.is_null());
+    }
 }
 
 /// CON-cell.7. Frame parsing and direct construction reject impossible angles.
