@@ -258,6 +258,23 @@ _RULES = [
         lines(r"MDAnalysis 2\.11\.0|Release 2\.11\.0", (MAIN, SUPP)),
     ),
     Rule(
+        "0.2.7",
+        release("metatensor-core", "0.2.7")["version"],
+        RELEASES,
+        "metatensor-core GitHub release metatensor-core-v0.2.7",
+        lines(r"Since version 0\.2\.7, the Python package of metatensor-core", (SUPP,)),
+    ),
+    *(
+        Rule(
+            v,
+            release("d-SEAMS", v)["version"],
+            RELEASES,
+            f"d-SEAMS GitHub release v{v}",
+            lines(r"^d-SEAMS 2\.14\.0 and 2\.14\.1 read CON files", (MAIN,)),
+        )
+        for v in ("2.14.0", "2.14.1")
+    ),
+    Rule(
         "0.1.2",
         release("ase-extxyz", "0.1.2")["version"],
         RELEASES,
