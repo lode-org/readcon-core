@@ -2783,12 +2783,12 @@ pub(crate) fn validate_read_cell(
     }
     // Out-of-range angles remain a validate-mode check (CON-validate.4).
     // When all three angles are in their ordinary range, reject a
-    // combination that cannot form a real c vector (CON-cell.7).
+    // combination that cannot form a real cell (CON-cell.7).
     if angles_deg
         .iter()
         .all(|angle| angle.is_finite() && *angle > 0.0 && *angle < 180.0)
     {
-        require_real_cell(*angles_deg)?;
+        check_cell_reality(lengths, angles_deg)?;
     }
     Ok(())
 }
