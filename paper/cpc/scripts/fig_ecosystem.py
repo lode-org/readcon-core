@@ -461,7 +461,7 @@ def footer(ax) -> None:
         SX1,
         0.8,
         "Worked case: band → CON checkpoint → resumed band. ASE: bit for bit. "
-        r"eOn: same barrier, coordinates within $10^{-12}$ Å.",
+        r"eOn SD band: same barrier, coordinates within $10^{-12}$ Å.",
         face=WHITE,
         edge=GREY,
         lw=0.5,
