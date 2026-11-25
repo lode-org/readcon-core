@@ -175,6 +175,7 @@ def test_stored_ledger_chain_is_spec_major_then_capi(tmp_path: Path) -> None:
         ),
         f"clause_coverage-{VERSION}-capi-r1.json",
         f"clause_coverage-{VERSION}-capi-r2.json",
+        f"clause_coverage-{VERSION}-capi-r3.json",
     ]
     # -r2 supersedes the legacy record beside spec-major. Its stem names no
     # series, so the walk leaves it as a side record of the legacy record.
@@ -200,7 +201,7 @@ def test_stored_ledger_never_makes_r2_final(
     monkeypatch.setattr(clause_coverage, "build", lambda: {"totals": {}})
     monkeypatch.setattr(clause_coverage, "rel", lambda path: f"data/{path.name}")
     tip, payload = clause_coverage.record_for_sources()
-    assert tip.name == f"clause_coverage-{VERSION}-capi-r2.json"
+    assert tip.name == f"clause_coverage-{VERSION}-capi-r3.json"
     assert payload["reason"] == json.loads(tip.read_text(encoding="utf-8"))["reason"]
     for series in (None, "capi", "spec-major"):
         out, payload = clause_coverage.next_record_for_sources(series)
@@ -248,8 +249,8 @@ def test_stored_ledger_dangling_supersedes_fails(tmp_path: Path, payload: dict) 
         "clause_coverage_under_test", SCRIPTS / "clause_coverage.py"
     )
     spec_dir = _ledger_copy(tmp_path)
-    _write_json(spec_dir / f"clause_coverage-{VERSION}-capi-r2.json", payload)
-    with pytest.raises(SystemExit, match="capi-r2.json does not supersede"):
+    _write_json(spec_dir / f"clause_coverage-{VERSION}-capi-r4.json", payload)
+    with pytest.raises(SystemExit, match="capi-r4.json does not supersede"):
         clause_coverage.final_chain(spec_dir, VERSION)
 
 
@@ -260,7 +261,7 @@ def test_stored_ledger_record_superseding_the_tip_off_series_fails(
         "clause_coverage_under_test", SCRIPTS / "clause_coverage.py"
     )
     spec_dir = _ledger_copy(tmp_path)
-    tip = f"clause_coverage-{VERSION}-capi-r2.json"
+    tip = f"clause_coverage-{VERSION}-capi-r3.json"
     _write_json(
         spec_dir / f"clause_coverage-{VERSION}-after-tip.json", _supersedes(tip)
     )

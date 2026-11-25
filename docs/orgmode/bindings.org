@@ -270,6 +270,9 @@ readcon.atomic_number_to_symbol(93)     # "X"
   the operands' =.atoms=.
 - =readcon.ConFrame= :: Constructable with cell, angles, atoms, and
   optional headers and metadata (v0.4.0+).  Properties: cell, angles,
+  =cell_matrix= (3×3, rows are lattice vectors, the same matrix as
+  =FrameHeader::cell_matrix=), =pbc_effective= (a list of three booleans, one per axis; a
+  missing =pbc= key is fully periodic),
   atoms (live =AtomSequence=), has_velocities, has_forces,
   prebox_header, postbox_header, spec_version (v0.6.0+),
   metadata (v0.6.0+, live dict of native JSON-compatible values),
