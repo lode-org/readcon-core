@@ -46,10 +46,13 @@ arm performs one copy (`torch.tensor`, `jnp.array(..., copy=True)`, or
 `np.array(..., copy=True)`). CuPy was not run.
 For item 3, a file requesting `storage_dtypes.positions=float32` is read
 through the C API. Direct float32 DLPack export is compared with float64
-DLPack export followed by `astype(float32)`. For item 4, each timed arm
-includes reading the same file and constructing/freeing the TensorBlock.
-Before timing, the native and ASE shapes and all position values are asserted
-equal.
+DLPack export followed by `astype(float32)`. For item 4, both arms read the
+same file, build one TensorBlock, and free that block before returning.
+`elapsed` stops the clock before it deletes the return value. The readcon
+arm calls `rkr_mts_block_free` and `free_rkr_frame` before returning. The
+ASE arm deletes the Python TensorBlock before returning. Both frees are
+inside the measured interval. Before timing, the native and ASE shapes and
+all position values are asserted equal.
 
 Item 1 is `NO_CUDA` rather than simulated. `results.csv` contains explicit
 `NO_CUDA` rows for all requested sizes, fields, and arms.
@@ -59,7 +62,7 @@ Status by item:
 - 1: `NO_CUDA`; feature compile passed, but no NVIDIA device or driver existed
 - 2: `MEASURED` on CPU for NumPy, PyTorch, and JAX; CuPy rows are `NO_CUDA`
 - 3: `MEASURED`
-- 4: `MEASURED`
+- 4: both arms free the TensorBlock inside the timer; published medians are pending a rerun
 
 ## Summary
 
@@ -83,17 +86,21 @@ Medians are milliseconds. Ratio is the first arm divided by its comparator.
 | 3 | float32 export / float64 then cast | 10,000 | 0.096822 | 0.101636 | 0.9526 |
 | 3 | float32 export / float64 then cast | 100,000 | 1.005458 | 1.146253 | 0.8772 |
 | 3 | float32 export / float64 then cast | 1,000,000 | 9.506717 | 11.059092 | 0.8596 |
-| 4 | readcon TensorBlock / ASE TensorBlock | 1,000 | 0.199492 | 1.050601 | 0.1899 |
-| 4 | readcon TensorBlock / ASE TensorBlock | 10,000 | 1.392714 | 8.116269 | 0.1716 |
-| 4 | readcon TensorBlock / ASE TensorBlock | 100,000 | 12.917369 | 82.507692 | 0.1566 |
-| 4 | readcon TensorBlock / ASE TensorBlock | 1,000,000 | 162.013881 | 955.342921 | 0.1696 |
+| 4 | readcon TensorBlock / ASE TensorBlock | 1,000 | pending rerun | pending rerun | pending rerun |
+| 4 | readcon TensorBlock / ASE TensorBlock | 10,000 | pending rerun | pending rerun | pending rerun |
+| 4 | readcon TensorBlock / ASE TensorBlock | 100,000 | pending rerun | pending rerun | pending rerun |
+| 4 | readcon TensorBlock / ASE TensorBlock | 1,000,000 | pending rerun | pending rerun | pending rerun |
 
 The JAX explicit-copy arm previously copied with NumPy and then with JAX.
 That double copy produced the withdrawn speedup (roughly 55x at one
 million atoms). Those figures are pending a rerun. The JAX rows in
 `summary.csv` and `results.csv` are that double-copy run and are not a
-current result. Other medians, quartiles, IQRs, statuses, and comparator
-ratios are in `summary.csv`. Every individual sample is in `results.csv`.
+current result. Item 4 samples in those files were recorded when only the
+readcon arm freed inside the timer. `elapsed` stopped the clock before
+`del result`, so the ASE TensorBlock was freed afterwards. Those medians
+are pending a rerun. Other medians, quartiles, IQRs, statuses, and
+comparator ratios are in `summary.csv`. Every individual sample is in
+`results.csv`.
 
 ## Reproduction
 

@@ -502,7 +502,10 @@ def item_four(rows: list[Row], native: Native, readcon, paths) -> None:
 
         def ase_block():
             local_atoms = ase.io.read(path, format="eon")
-            return make_python_block(metatensor, np.asarray(local_atoms.positions))
+            block = make_python_block(metatensor, np.asarray(local_atoms.positions))
+            # Free before return. elapsed() stops the clock before deleting
+            # the return value, so a returned block would be freed outside.
+            del block
 
         measure_pair(
             rows,
