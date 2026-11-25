@@ -14,6 +14,15 @@ from pathlib import Path
 # added with the field, and 8319e6043a35 later removed it.
 LEGACY_WITHOUT_MEASURED_AT: frozenset[str] = frozenset()
 
+# Stored records that name a supersedes target but are not on its chain.
+# feat/capi-gate measured spec-measurement-0.24.0-r2.json at e2ef16cd10a5
+# under its own -rN naming before the develop merge. Develop's chain from
+# the stored file runs through -measured and -measured-2. The -r2 record
+# stays as stored, and the walk does not take it as a successor.
+OFF_CHAIN: frozenset[str] = frozenset(
+    {"paper/cpc/data/spec/spec-measurement-0.24.0-r2.json"}
+)
+
 
 class MeasurementSchemaError(Exception):
     """A record that is not legacy is missing measured_at.commit."""
@@ -23,10 +32,11 @@ def resolve_measurement(records: dict[str, dict], relpath: str) -> tuple[str, di
     """Follow supersedes links from ``relpath`` to the record that replaces it.
 
     A record replaces a path when its ``supersedes`` field is that path.
-    The walk is that chain. Two records replacing the same path, or a
-    cycle, is an error. The record the walk ends on is returned as
-    stored; ``measured_commit`` still has to accept it, so a successor
-    that omits ``measured_at.commit`` fails by name.
+    The walk is that chain; a record in OFF_CHAIN replaces nothing. Two
+    records replacing the same path, or a cycle, is an error. The record
+    the walk ends on is returned as stored; ``measured_commit`` still has
+    to accept it, so a successor that omits ``measured_at.commit`` fails
+    by name.
     """
     seen: set[str] = set()
     current = relpath
@@ -38,7 +48,9 @@ def resolve_measurement(records: dict[str, dict], relpath: str) -> tuple[str, di
         nxt = sorted(
             path
             for path, body in records.items()
-            if isinstance(body, dict) and body.get("supersedes") == current
+            if path not in OFF_CHAIN
+            and isinstance(body, dict)
+            and body.get("supersedes") == current
         )
         if not nxt:
             return current, record
