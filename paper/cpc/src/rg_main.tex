@@ -590,7 +590,7 @@ On that host, a fresh process reads one million atoms of CON in \hhfReadconConWa
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/format_pareto.pdf} \caption{\textbf{Warm read time against file size.}
 One frame at each size, one point per reader and format, from the records of Table~\ref*{tab:format-h2h} in the supplementary material; the coral steps are the Pareto front.
-extxyz-ng, MDCompress and the MDAnalysis PDB reader past its five-digit atom serial cannot open these files and have no point.}
+extxyz-ng, the trajectory compressor MDCompress \cite{Kokot2026MDCompress} and the MDAnalysis PDB reader past its five-digit atom serial cannot open these files and have no point.}
 \label{fig:pareto} \end{figure}
 
 Section~\ref*{sec:supp-readcon-db} of the supplementary material compares the companion campaign store readcon-db (\url{https://github.com/lode-org/readcon-db}) with the ASE database and gives the distributed read of a CON file over MPI ranks.
