@@ -366,7 +366,8 @@ def right(ax) -> None:
         10.2,
         torch_y - 0.48,
         "DLPack: positions, velocities, forces, energies, masses, ids,\n"
-        "displacements, spreads; CPU view or CUDA buffer; storage_dtypes",
+        "displacements, spreads; CPU view; CUDA buffer from Rust/C;\n"
+        "storage_dtypes",
         ha="left",
         va="top",
     )
@@ -381,8 +382,8 @@ def right(ax) -> None:
     )
 
     gx = (CX1 + PX0) / 2
-    db0, db1 = 5.75, 7.45
-    h5md, ranks, db_in = 7.075, 6.125, 6.6
+    db0, db1 = 6.25, 7.95
+    h5md, ranks, db_in = 7.575, 6.625, 7.1
     box(ax, PX0, db0, PX1, db1, "readcon-db")
     route(ax, [(PX0, db_in), (CX1, db_in)])
     label(ax, gx, db_in + 0.05, "decode, index;\nxxHash3 dedup")
@@ -405,7 +406,7 @@ def right(ax) -> None:
     box(ax, SX0, mini - 0.32, SX1, mini + 0.32, "linkcell")
     route(ax, [(SX0, mini), (PX1, mini)])
     label(ax, (PX1 + SX0) / 2, mini - 0.08, "Cell, wrap\nkernels", va="top")
-    nl = 5.17
+    nl = 5.75
     xs = (SX0 + SX1) / 2
     box(ax, SX0, nl - 0.32, SX1, nl + 0.32, "neighbour\nlists", edge=SKY)
     route(ax, [(xs, mini + 0.32), (xs, nl - 0.32)], dashed=True)
@@ -413,7 +414,7 @@ def right(ax) -> None:
         ax,
         xs - 0.12,
         (mini + nl) / 2,
-        "pairs_within, knearest, CSR;\nCPU, CUDA, Kokkos",
+        "pairs_within, knearest, CSR;\nCPU and CUDA (C API);\nDLPack in/out",
         ha="right",
         va="center",
     )
