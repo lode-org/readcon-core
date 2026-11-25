@@ -332,14 +332,20 @@ def left(ax, optional: bool) -> None:
 
 
 def upper(ax, entries) -> None:
-    """Producers above the left column, each routed into the core's top-left."""
+    """Producers above the left column that call readcon without declaring it, each routed
+    into the core's top-left; they read and write CON, so the dashed arrow has two heads."""
     pitch = 1.3
     for i, (name, text, _site) in enumerate(entries):
         y = 8.3 + pitch * i
         x_turn = 5.6 - 0.18 * i
         y_in = 7.38 - 0.16 * i
         box(ax, LX0, y - 0.5, LX1, y + 0.5, name)
-        route(ax, [(LX1, y), (x_turn, y), (x_turn, y_in), (CX0, y_in)])
+        route(
+            ax,
+            [(LX1, y), (x_turn, y), (x_turn, y_in), (CX0, y_in)],
+            dashed=True,
+            heads=("start", "end"),
+        )
         label(ax, (LX1 + x_turn) / 2, y + 0.05, text)
 
 
