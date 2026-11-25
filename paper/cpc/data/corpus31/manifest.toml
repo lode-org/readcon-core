@@ -63,12 +63,11 @@ reason = "No sections key: the blank line that begins a complete velocity block 
 
 [[file]]
 file = "v31_legacy_velocity_no_time.convel"
-expected = "reject"
-error = "InvalidUnits"
-line = 14
-clause = "CON-section.1, CON-units.11"
+expected = "accept"
+frames = 1
+clause = "CON-section.1, CON-units.9"
 basis = "explicit"
-reason = "No sections key and no units.time at minor 1. The blank line 14 begins a complete velocity block, so the frame has a velocities section from that line and fails CON-units.11 there."
+reason = "No sections key. The blank line opens a legacy velocity block. CON-units.9 says a missing units.time must not reject that minor-1 frame."
 
 [[file]]
 file = "v30_convel_fs.convel"
