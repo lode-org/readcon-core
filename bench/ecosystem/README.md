@@ -1,7 +1,7 @@
 # Ecosystem exchange benchmarks
 
 These results measure readcon-core commit
-`8bba6f59ced996784ba713250603dbbdd8220a75`. The run completed on
+`4eaa5f0d9b0e61f07b277a50815704a8795babd8`. The run completed on
 2026-11-25 UTC. Lower wall time and lower ratios are better.
 
 ## Hardware and software
