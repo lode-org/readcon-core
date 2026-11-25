@@ -59,6 +59,10 @@ pub mod meta {
     pub const CON_SPEC_VERSION: &str = "con_spec_version";
     /// Minor of a known major. Absent or 0 means minor 0 (CON-line2.10).
     pub const CON_SPEC_MINOR: &str = "con_spec_minor";
+    /// Patch of a known major.minor. Absent or 0 means patch 0 (CON-line2.15).
+    pub const CON_SPEC_PATCH: &str = "con_spec_patch";
+    /// When true, column-5 ids name the same atoms in every frame (CON-id.11).
+    pub const IDS_PERSISTENT: &str = "ids_persistent";
     /// Value-field counts for sections this reader may skip (CON-section.12).
     /// The flag and the optional id are not part of the count.
     pub const SECTION_ARITY: &str = "section_arity";
@@ -488,6 +492,18 @@ impl FrameMeta {
     pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
         self.ensure().get(key)
     }
+
+    /// `ids_persistent`, without keeping the parsed map on this frame.
+    pub(crate) fn ids_persistent_flag(&self) -> Result<bool, ParseError> {
+        self.with_map(|map| match map.get(meta::IDS_PERSISTENT) {
+            Some(value) if value.as_bool() == Some(true) => Ok(true),
+            Some(value) if value.as_bool() == Some(false) => Ok(false),
+            Some(_) => Err(ParseError::InvalidMetadataJson(
+                "ids_persistent must be a boolean".into(),
+            )),
+            None => Ok(false),
+        })
+    }
 }
 
 impl std::ops::Index<&str> for FrameMeta {
@@ -645,12 +661,19 @@ struct ParsedMetaLine {
 const META_LINE_CACHE_CAP: usize = 4;
 
 std::thread_local! {
-    // Keep the bounded cache alive until process exit. Free-threaded CPython
-    // can tear worker TLS down while libc is still running other TLS
-    // destructors; dropping the cached Arcs there produces a TSan-visible
-    // libc TLS-dtor race. At most four parsed lines remain per exited thread.
+    // Native builds keep the bounded cache alive until process exit.
+    // Free-threaded CPython can tear worker TLS down while libc is still
+    // running other TLS destructors; dropping the cached Arcs there produces
+    // a TSan-visible libc TLS-dtor race. At most four parsed lines remain
+    // per exited thread. Miri does not run those destructors concurrently,
+    // and it reports the retained lines as leaks, so under Miri the cache
+    // is an ordinary thread-local and drops with the thread.
+    #[cfg(not(miri))]
     static META_LINE_CACHE: std::mem::ManuallyDrop<std::cell::RefCell<Vec<ParsedMetaLine>>> =
         const { std::mem::ManuallyDrop::new(std::cell::RefCell::new(Vec::new())) };
+    #[cfg(miri)]
+    static META_LINE_CACHE: std::cell::RefCell<Vec<ParsedMetaLine>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
 pub(crate) fn metadata_map_from_line(line: &str) -> BTreeMap<String, serde_json::Value> {
@@ -660,7 +683,7 @@ pub(crate) fn metadata_map_from_line(line: &str) -> BTreeMap<String, serde_json:
     }
     let spans = crate::parser::top_level_minor_spans(trimmed);
     let (sanitized, huge_minor) = crate::parser::sanitize_huge_con_spec_minor(trimmed, &spans);
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(sanitized.as_ref()) else {
+    let Ok(value) = crate::parser::parse_metadata_value(sanitized.as_ref()) else {
         return BTreeMap::new();
     };
     let Some(obj) = value.as_object() else {
@@ -717,6 +740,11 @@ pub struct FrameHeader {
     /// "key absent" (try blank-separator velocity detection). Cached at
     /// parse time so the section dispatch does not re-parse the JSON.
     pub(crate) sections_declared: bool,
+    /// The frame was read from a file, so a later write keeps each column-5
+    /// id, including a repeated one (CON-id.13). A frame built in memory
+    /// does not set this, and the writer still rejects a repeated id
+    /// (CON-id.3).
+    pub(crate) ids_from_file: bool,
 }
 
 impl PartialEq for FrameHeader {
@@ -876,13 +904,14 @@ impl FrameHeader {
                 "metadata units.{dimension} is missing"
             ))
         })?;
-        crate::units::unit_conversion_factor(from, to_unit)
+        crate::units::unit_conversion_factor_for_version(self.spec_version, from, to_unit)
     }
 
     /// Sets the unit system. Aliases are rewritten to preferred names
     /// (`A` → `angstrom`) so line 2 carries the contract spelling.
     pub fn set_units(&mut self, units: serde_json::Value) {
-        let stored = crate::units::canonicalize_units_object(&units).unwrap_or(units);
+        let stored = crate::units::canonicalize_units_object_for_version(self.spec_version, &units)
+            .unwrap_or(units);
         self.metadata.insert(meta::UNITS.into(), stored);
     }
 
@@ -1195,9 +1224,14 @@ impl AtomTail {
 
 /// Represents the data for a single atom in a frame.
 ///
-/// Coordinates, the symbol, the fixed mask, and the id sit inline. Optional
-/// sections live in one heap tail, allocated only when a section value is set,
-/// so a coordinates-only trajectory does not store eight empty `Option`s per atom.
+/// The symbol, the fixed mask, and the id sit inline. Optional sections live
+/// in one heap tail, allocated only when a section value is set, so a
+/// coordinates-only trajectory does not store eight empty `Option`s per atom.
+///
+/// Coordinates are not stored here and this atom holds no pointer. They live
+/// in [`ConFrame::positions`]. [`ConFrame::xyz_at`] reads that column at this
+/// atom's index in [`ConFrame::atom_data`]. [`ConFrame::set_x_at`] writes the
+/// same row, so a column store and an accessor see one value.
 #[derive(Debug)]
 pub struct AtomDatum {
     /// The chemical symbol of the atom (e.g., "C", "H", "O").
@@ -1213,16 +1247,16 @@ pub struct AtomDatum {
     /// When column 5 is absent from the input, defaults to the sequential
     /// position within the frame (0, 1, 2, ...).
     pub atom_id: u64,
-    /// Three coordinates. Either the frame's position buffer or an owned box.
-    xyz: *mut f64,
-    /// Bits 0-2 are fixed flags. Bit 3 marks an owned coordinate box.
-    /// Bit 4 marks a tail that lives in the frame arena, not a `Box`.
-    /// The rest is a `HeapTail` pointer or null. `HeapTail` is 32-byte aligned.
+    /// Bits 0-2 are fixed flags. Bit 4 marks a tail that lives in the frame
+    /// arena, not a `Box`. The rest is a `HeapTail` pointer or null.
+    /// `HeapTail` is 32-byte aligned.
     tail: usize,
 }
 
-const TAIL_OWNED: usize = 0b1000;
 const TAIL_EXTERNAL: usize = 0b1_0000;
+/// Low bits that are not part of the tail pointer. Bits 0-2 are fixed
+/// flags. Bit 3 is unused. Bit 4 marks an arena tail. `HeapTail` is
+/// 32-byte aligned, so these bits are free.
 const TAIL_MASK: usize = 0b1_1111;
 
 impl AtomDatum {
@@ -1255,73 +1289,11 @@ impl AtomDatum {
         debug_assert!(ptr as usize & TAIL_MASK == 0);
         self.tail = (ptr as usize) | (self.tail & TAIL_MASK);
     }
-
-    /// Address of this atom's three coordinates.
-    ///
-    /// Parsed frames and the binding slab lay those triples out in order.
-    /// The writer uses that to format a run from one base pointer.
-    #[inline]
-    pub(crate) fn coord_ptr(&self) -> *const f64 {
-        self.xyz
-    }
-
-    #[inline]
-    pub fn x(&self) -> f64 {
-        unsafe { *self.xyz }
-    }
-    #[inline]
-    pub fn y(&self) -> f64 {
-        unsafe { *self.xyz.add(1) }
-    }
-    #[inline]
-    pub fn z(&self) -> f64 {
-        unsafe { *self.xyz.add(2) }
-    }
-    #[inline]
-    pub fn set_x(&mut self, v: f64) {
-        unsafe { *self.xyz = v }
-        crate::writer::invalidate_packed_lengths();
-    }
-    #[inline]
-    pub fn set_y(&mut self, v: f64) {
-        unsafe { *self.xyz.add(1) = v }
-        crate::writer::invalidate_packed_lengths();
-    }
-    #[inline]
-    pub fn set_z(&mut self, v: f64) {
-        unsafe { *self.xyz.add(2) = v }
-        crate::writer::invalidate_packed_lengths();
-    }
-
-    /// Copy coordinates that may live in Python-writable storage.
-    ///
-    /// Each element is one relaxed, untorn atomic load. The three elements
-    /// are not one transaction and may therefore come from different
-    /// instants while another thread writes the source.
-    #[cfg(feature = "python")]
-    pub(crate) fn atomic_coords(&self) -> [f64; 3] {
-        let source = self.xyz.cast_const();
-        assert_atomic_f64_alignment(source);
-        unsafe {
-            [
-                atomic_load_f64(source),
-                atomic_load_f64(source.add(1)),
-                atomic_load_f64(source.add(2)),
-            ]
-        }
-    }
-
-    fn owned_xyz(x: f64, y: f64, z: f64) -> *mut f64 {
-        Box::into_raw(Box::new([x, y, z])).cast()
-    }
 }
 
 impl PartialEq for AtomDatum {
     fn eq(&self, other: &Self) -> bool {
         self.symbol == other.symbol
-            && self.x().to_bits() == other.x().to_bits()
-            && self.y().to_bits() == other.y().to_bits()
-            && self.z().to_bits() == other.z().to_bits()
             && self.fixed() == other.fixed()
             && self.atom_id == other.atom_id
             && self.velocity() == other.velocity()
@@ -1335,9 +1307,9 @@ impl PartialEq for AtomDatum {
     }
 }
 
-// The coordinate pointer addresses the frame's position buffer, which moves
-// with the frame and is not freed by the atom. Sending a frame sends both.
-// Coordinate slots alias the frame buffer. A shared reference only reads them.
+// The tail word may address a heap section owned by this atom or by the
+// frame's column arena. The frame and the atom move together. Coordinates
+// live in the frame column, so cloning an atom copies no coordinate memory.
 unsafe impl Send for AtomDatum {}
 unsafe impl Sync for AtomDatum {}
 
@@ -1346,8 +1318,7 @@ impl Clone for AtomDatum {
         let mut cloned = Self {
             symbol: self.symbol.clone(),
             atom_id: self.atom_id,
-            xyz: Self::owned_xyz(self.x(), self.y(), self.z()),
-            tail: (self.tail & 0b111) | TAIL_OWNED,
+            tail: self.tail & 0b111,
         };
         let external = self.tail & TAIL_EXTERNAL != 0;
         let ptr = self.tail_ptr();
@@ -1370,9 +1341,6 @@ impl Clone for AtomDatum {
 
 impl Drop for AtomDatum {
     fn drop(&mut self) {
-        if self.tail & TAIL_OWNED != 0 && !self.xyz.is_null() {
-            unsafe { drop(Box::from_raw(self.xyz as *mut [f64; 3])) };
-        }
         let ptr = self.tail_ptr();
         if self.tail & TAIL_EXTERNAL == 0 && !ptr.is_null() {
             unsafe { drop(Box::from_raw(ptr)) };
@@ -1380,7 +1348,7 @@ impl Drop for AtomDatum {
     }
 }
 
-/// Drop `atoms` when every shell shares one symbol and owns no coordinate box.
+/// Drop `atoms` when every shell shares one symbol and owns no heap tail.
 ///
 /// A million atoms otherwise run a million decrements against the same
 /// symbol counter. One `fetch_sub` matches that count.
@@ -1403,7 +1371,8 @@ thread_local! {
 
 /// The next drop of this atom buffer releases its symbol counts in one step.
 ///
-/// The buffer must be one shared symbol and no owned coordinate boxes.
+/// The buffer must be one shared symbol and no heap tail. Coordinates live
+/// on the frame and are not freed per atom.
 #[cfg(any(feature = "parallel", feature = "chemfiles", test))]
 pub(crate) fn mark_uniform_symbol_drop(atoms: &[AtomDatum]) {
     if atoms.is_empty() {
@@ -1576,43 +1545,22 @@ impl Drop for ConFrame {
 
 #[cfg(feature = "python")]
 impl ConFrame {
-    /// Coordinates as one contiguous raw pointer.
+    /// This frame with a private copy of atom `i`'s coordinates.
     ///
-    /// Frame views built from a slab and parsed frames with row-major SoA
-    /// storage return this. Other layouts fall back to per-atom reads.
-    #[cfg(feature = "python")]
-    fn coord_ptr_len(&self) -> Option<(*const f64, usize)> {
-        if self.positions.kind() != crate::storage_dtype::ElementKind::Float64 {
-            return None;
-        }
-        let want = self.atom_data.len().checked_mul(3)?;
-        if self.positions.nrows().checked_mul(self.positions.ncols())? != want {
-            return None;
-        }
-        let ptr = self.positions.data_ptr();
-        if ptr.is_null() {
-            return None;
-        }
-        Some((ptr.cast::<f64>(), want))
-    }
-
-    /// This frame with atom `i` reading its coordinates at `base + 3 i`,
-    /// first copied there when `fill` is set.
-    ///
-    /// The atom vector and the metadata map cell are new. Every other
-    /// field is shared with `self`, so the same rules as
+    /// When `fill` is set, those values are also written at `base + 3 i`.
+    /// Otherwise `base` already holds them and the copy is taken from there.
+    /// The atom vector and the metadata map cell are new. Every other field
+    /// is shared with `self`, so the same rules as a bitwise copy apply.
     /// Another reader may fill the source map cell meanwhile, so that cell
     /// is never copied bit for bit; the view starts with the map the source
     /// already had, if any. The flag says whether it did.
-    unsafe fn view_onto(&self, base: *mut f64, fill: bool) -> (ConFrame, bool) {
+    ///
+    /// The view keeps a private positions column of the coordinates observed
+    /// at this call. Its atoms store none. Its velocity and force columns
+    /// are counted handles on the source's blocks.
+    unsafe fn view_onto(&self, base: *mut f64, fill: bool, from: *const f64) -> (ConFrame, bool) {
         use std::ptr::read;
         let n_atoms = self.atom_data.len();
-        let contiguous = self.coord_ptr_len().map(|(src, _)| src);
-        if fill {
-            if let Some(src) = contiguous {
-                assert_atomic_f64_alignment(src);
-            }
-        }
         let mut raw = take_snapshot_atom_spare(n_atoms);
         unsafe {
             std::ptr::copy_nonoverlapping(
@@ -1630,25 +1578,30 @@ impl ConFrame {
             )
         };
         std::mem::forget(raw);
-        let mut atom_data = SnapshotAtomGuard(atom_data);
+        let atom_data = SnapshotAtomGuard(atom_data);
         let base_address = base as usize;
-        let contiguous_address = contiguous.map(|ptr| ptr as usize);
-        let retarget = |index: usize, atom: &mut AtomDatum| {
+        let mut copied = Vec::with_capacity(n_atoms.saturating_mul(3));
+        for index in 0..n_atoms {
             let slot = unsafe { (base_address as *mut f64).add(index * 3) };
+            let values = if !fill {
+                unsafe { [*slot, *slot.add(1), *slot.add(2)] }
+            } else if from.is_null() {
+                self.load_coords(index)
+            } else {
+                unsafe {
+                    [
+                        atomic_load_f64(from.add(index * 3)),
+                        atomic_load_f64(from.add(index * 3 + 1)),
+                        atomic_load_f64(from.add(index * 3 + 2)),
+                    ]
+                }
+            };
             if fill {
-                let source = contiguous_address.map_or_else(
-                    || atom.xyz.cast_const(),
-                    |address| unsafe { (address as *const f64).add(index * 3) },
-                );
-                assert_atomic_f64_alignment(source);
-                unsafe { atomic_copy_f64_serial(source, slot, 3) };
+                unsafe { std::ptr::copy_nonoverlapping(values.as_ptr(), slot, 3) };
             }
-            atom.xyz = slot;
-            atom.tail &= !TAIL_OWNED;
-        };
-        for (index, atom) in atom_data.0.iter_mut().enumerate() {
-            retarget(index, atom);
+            copied.extend_from_slice(&values);
         }
+        let mut atom_data = atom_data;
         let source = &self.header;
         let map = std::sync::OnceLock::new();
         let shared_map = match source.metadata.map.get() {
@@ -1677,16 +1630,17 @@ impl ConFrame {
                 sections: read(&source.sections),
                 strict_validation: source.strict_validation,
                 sections_declared: source.sections_declared,
+                ids_from_file: source.ids_from_file,
             }
         };
-        let view = unsafe {
+        let mut view = unsafe {
             ConFrame {
                 header,
                 atom_data: std::mem::take(&mut atom_data.0),
                 column_tails: read(&self.column_tails),
                 positions: read(&self.positions),
-                velocities: read(&self.velocities),
-                forces: read(&self.forces),
+                velocities: self.velocities.clone(),
+                forces: self.forces.clone(),
                 atom_energies: read(&self.atom_energies),
                 charges: read(&self.charges),
                 spins: read(&self.spins),
@@ -1698,6 +1652,15 @@ impl ConFrame {
                 sequential_plain: self.sequential_plain,
             }
         };
+        // The bitwise positions alias the source. The view keeps a private
+        // column of the coordinates copied above, and the shared handle is
+        // not dropped. The velocity and force handles are counted clones:
+        // the source's atoms address those blocks, and a source that saw a
+        // count of one would treat its block as its own while the view
+        // still reads it.
+        let owned = crate::storage_dtype::FloatArray2::from_f64_row_major(n_atoms, 3, copied);
+        let shared = std::mem::replace(&mut view.positions, owned);
+        std::mem::forget(shared);
         (view, shared_map)
     }
 }
@@ -1768,6 +1731,13 @@ impl SnapshotViewGuard {
     fn dismantle(&mut self) {
         for (slot, shared) in self.frames.iter_mut().zip(&self.shared_maps) {
             let Some(frame) = slot else { continue };
+            // The view owns its positions column. Drop it in place; the
+            // frame is forgotten below, so the field is not dropped again.
+            // Writing a zeroed column instead would be an invalid value.
+            unsafe { std::ptr::drop_in_place(&mut frame.positions) };
+            // Counted clones of the source columns, released here.
+            drop(std::mem::take(&mut frame.velocities));
+            drop(std::mem::take(&mut frame.forces));
             recycle_snapshot_atoms(&mut frame.atom_data);
             // A map parsed into the view is owned by it. A copied map is
             // still owned by the source and must not be dropped here.
@@ -1795,6 +1765,29 @@ impl Drop for SnapshotViewGuard {
 #[cfg(feature = "python")]
 impl<'a> CoordSnapshot<'a> {
     pub(crate) fn copy_of(frames: &[Option<&'a ConFrame>]) -> Self {
+        Self::copy_reading(frames, std::ptr::null())
+    }
+
+    /// `source` is a contiguous `[frame][atom][xyz]` slab Python can store
+    /// into. A null source reads each frame's positions column.
+    pub(crate) fn copy_reading(frames: &[Option<&'a ConFrame>], source: *const f64) -> Self {
+        Self::copy_reading_gap(frames, source, 0)
+    }
+
+    /// `gap_doubles` is the slab width of one missing frame.
+    ///
+    /// A `None` slot consumes that many doubles of a non-null source and
+    /// writes no view. Skipping the slot without that advance shifts every
+    /// later frame. A null source ignores the gap and reads each present
+    /// column.
+    pub(crate) fn copy_reading_gap(
+        frames: &[Option<&'a ConFrame>],
+        source: *const f64,
+        gap_doubles: usize,
+    ) -> Self {
+        if !source.is_null() {
+            assert_atomic_f64_alignment(source);
+        }
         let total: usize = frames
             .iter()
             .flatten()
@@ -1830,7 +1823,8 @@ impl<'a> CoordSnapshot<'a> {
                 fresh.as_mut_ptr()
             }
         };
-        let mut offset = 0usize;
+        let mut src_at = 0usize;
+        let mut dst_at = 0usize;
         let mut views = SnapshotViewGuard {
             frames: Vec::with_capacity(frames.len()),
             shared_maps: Vec::with_capacity(frames.len()),
@@ -1839,25 +1833,30 @@ impl<'a> CoordSnapshot<'a> {
             let Some(frame) = slot else {
                 views.frames.push(None);
                 views.shared_maps.push(false);
+                if !source.is_null() {
+                    src_at += gap_doubles;
+                }
                 continue;
             };
-            let at = unsafe { base.add(offset) };
-            if !fill && !coords_match(frame, at) {
+            let at = unsafe { base.add(dst_at) };
+            let from = if source.is_null() {
+                std::ptr::null()
+            } else {
+                unsafe { source.add(src_at) }
+            };
+            if !fill && !coords_match(frame, at, from) {
                 fresh.reserve_exact(total * 3);
                 let to = fresh.as_mut_ptr();
                 unsafe {
-                    std::ptr::copy_nonoverlapping(base, to, offset);
-                    for view in views.frames.iter_mut().flatten() {
-                        for atom in &mut view.atom_data {
-                            atom.retarget(to.offset(atom.xyz.offset_from(base)));
-                        }
-                    }
+                    std::ptr::copy_nonoverlapping(base, to, dst_at);
                 }
                 base = to;
                 fill = true;
             }
-            let (view, shared) = unsafe { frame.view_onto(base.add(offset), fill) };
-            offset += frame.atom_data.len() * 3;
+            let (view, shared) = unsafe { frame.view_onto(base.add(dst_at), fill, from) };
+            let width = frame.atom_data.len() * 3;
+            src_at += width;
+            dst_at += width;
             views.frames.push(Some(view));
             views.shared_maps.push(shared);
         }
@@ -1866,8 +1865,8 @@ impl<'a> CoordSnapshot<'a> {
         let coords = match priced {
             Some(priced) if !fill => priced,
             _ => {
-                // Every slot was written above. Moving the vector into the
-                // Arc keeps its buffer where the views point.
+                // Every slot was written above. The Arc keeps those bytes for
+                // the price key. The views' atoms already hold the same values.
                 unsafe { fresh.set_len(total * 3) };
                 Arc::new(fresh)
             }
@@ -1910,33 +1909,29 @@ impl<'a> CoordSnapshot<'a> {
 /// Whether the doubles at `priced` hold the coordinates of `frame` bit
 /// for bit.
 #[cfg(feature = "python")]
-fn coords_match(frame: &ConFrame, priced: *const f64) -> bool {
-    if let Some((left, n)) = frame.coord_ptr_len() {
-        let right = unsafe { std::slice::from_raw_parts(priced, n) };
-        assert_atomic_f64_alignment(left);
-        for (index, rhs) in right.iter().enumerate() {
-            if unsafe { atomic_load_f64(left.add(index)) }.to_bits() != rhs.to_bits() {
-                return false;
-            }
-        }
+fn coords_match(frame: &ConFrame, priced: *const f64, from: *const f64) -> bool {
+    let n = frame.atom_data.len() * 3;
+    if n == 0 {
         return true;
     }
-    let priced = unsafe { std::slice::from_raw_parts(priced, frame.atom_data.len() * 3) };
-    frame
-        .atom_data
-        .iter()
-        .zip(priced.as_chunks::<3>().0)
-        .all(|(atom, xyz)| {
-            let source = atom.xyz.cast_const();
-            assert_atomic_f64_alignment(source);
-            (unsafe { atomic_load_f64(source) }.to_bits() ^ xyz[0].to_bits())
-                | (unsafe { atomic_load_f64(source.add(1)) }.to_bits() ^ xyz[1].to_bits())
-                | (unsafe { atomic_load_f64(source.add(2)) }.to_bits() ^ xyz[2].to_bits())
+    let priced = unsafe { std::slice::from_raw_parts(priced, n) };
+    if from.is_null() {
+        return frame.atom_data.iter().enumerate().all(|(index, _)| {
+            let xyz = frame.load_coords(index);
+            let base = index * 3;
+            (xyz[0].to_bits() ^ priced[base].to_bits())
+                | (xyz[1].to_bits() ^ priced[base + 1].to_bits())
+                | (xyz[2].to_bits() ^ priced[base + 2].to_bits())
                 == 0
-        })
+        });
+    }
+    (0..n).all(|index| {
+        let value = unsafe { atomic_load_f64(from.add(index)) };
+        value.to_bits() == priced[index].to_bits()
+    })
 }
 
-#[cfg(feature = "python")]
+#[cfg(any(feature = "python", test))]
 pub(crate) fn assert_atomic_f64_alignment(ptr: *const f64) {
     assert!(
         ptr.cast::<std::sync::atomic::AtomicU64>().is_aligned(),
@@ -1950,18 +1945,32 @@ pub(crate) fn assert_atomic_f64_alignment(ptr: *const f64) {
 /// cross-element atomicity. Each returned element is nevertheless one complete
 /// value observed by a relaxed 64-bit atomic load. Callers must keep the
 /// allocation alive and check [`assert_atomic_f64_alignment`] first.
-#[cfg(feature = "python")]
+#[cfg(any(feature = "python", test))]
 #[inline(always)]
 pub(crate) unsafe fn atomic_load_f64(ptr: *const f64) -> f64 {
     f64::from_bits(unsafe { atomic_load_bits(ptr) })
 }
 
+/// Store one potentially shared `f64` without creating an `f64` reference.
+///
+/// The write is one relaxed 64-bit atomic store. Callers must keep the
+/// allocation alive and check [`assert_atomic_f64_alignment`] first.
 #[cfg(feature = "python")]
 #[inline(always)]
+pub(crate) unsafe fn atomic_store_f64(ptr: *mut f64, value: f64) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let atomic = unsafe { AtomicU64::from_ptr(ptr.cast::<u64>()) };
+    atomic.store(value.to_bits(), Ordering::Relaxed);
+}
+
+#[cfg(any(feature = "python", test))]
+#[inline(always)]
 unsafe fn atomic_load_bits(ptr: *const f64) -> u64 {
-    use std::sync::atomic::Ordering;
-    let atomic = ptr.cast::<std::sync::atomic::AtomicU64>();
-    unsafe { (*atomic).load(Ordering::Relaxed) }
+    use std::sync::atomic::{AtomicU64, Ordering};
+    // `from_ptr` borrows the cell as an atomic. Callers must not also hold
+    // an `f64` reference to that cell.
+    let atomic = unsafe { AtomicU64::from_ptr(ptr.cast_mut().cast::<u64>()) };
+    atomic.load(Ordering::Relaxed)
 }
 
 /// Copy potentially shared doubles to private storage with relaxed loads.
@@ -2033,49 +2042,16 @@ impl AtomDatum {
         fixed: [bool; 3],
         atom_id: u64,
     ) -> Self {
+        // Coordinates belong in the frame column. Callers that still pass
+        // them here also write that column; the atom does not keep a copy.
+        let _ = (x, y, z);
         let mut atom = Self {
             symbol: symbol.into(),
             atom_id,
-            xyz: Self::owned_xyz(x, y, z),
-            tail: TAIL_OWNED,
-        };
-        atom.set_fixed(fixed);
-        atom
-    }
-
-    /// Coordinates live in `slot`, three contiguous `f64`s owned by the caller.
-    pub(crate) fn at_slot(
-        symbol: impl Into<Arc<str>>,
-        slot: *mut f64,
-        fixed: [bool; 3],
-        atom_id: u64,
-    ) -> Self {
-        let mut atom = Self {
-            symbol: symbol.into(),
-            atom_id,
-            xyz: slot,
             tail: 0,
         };
         atom.set_fixed(fixed);
         atom
-    }
-
-    /// Point this atom at `slot` after the coordinate buffer moves.
-    ///
-    /// The slot is three contiguous `f64`s. An owned coordinate box is left
-    /// alone: it does not alias the frame buffer.
-    pub(crate) fn retarget(&mut self, slot: *mut f64) {
-        if self.tail & TAIL_OWNED == 0 {
-            self.xyz = slot;
-        }
-    }
-
-    /// Copy the coordinates into an owned box that outlives the frame buffer.
-    fn own_coords(&mut self) {
-        if self.tail & TAIL_OWNED == 0 {
-            self.xyz = Self::owned_xyz(self.x(), self.y(), self.z());
-            self.tail |= TAIL_OWNED;
-        }
     }
 
     fn install(&mut self, section: AtomSections) {
@@ -2106,6 +2082,26 @@ impl AtomDatum {
     fn detach_external_tail(&mut self) {
         if self.tail & TAIL_EXTERNAL != 0 {
             self.tail &= 0b1111;
+        }
+    }
+
+    fn is_external(&self) -> bool {
+        self.tail & TAIL_EXTERNAL != 0
+    }
+
+    /// No section other than velocity and force, so a column slot can
+    /// stand in for this atom's own tail without losing a value.
+    fn holds_only_motion(&self) -> bool {
+        match self.heap() {
+            None | Some(HeapTail::Velocity(_)) | Some(HeapTail::Column { .. }) => true,
+            Some(HeapTail::Full(full)) => {
+                full.energy.is_none()
+                    && full.charge.is_none()
+                    && full.spin.is_none()
+                    && full.magmom.is_none()
+                    && full.displacement.is_none()
+                    && full.spread.is_none()
+            }
         }
     }
 
@@ -2343,6 +2339,12 @@ impl AtomDatum {
         }
     }
 
+    /// Set or clear the velocity.
+    ///
+    /// On an atom of a parsed frame this stores into the frame's velocity
+    /// column. Another handle on that block, such as a DLPack export, sees
+    /// the store; [`ConFrame::unshare_slot_columns`] gives the frame its
+    /// own block first.
     pub fn set_velocity(&mut self, value: Option<[f64; 3]>) {
         let slot = match self.heap() {
             Some(HeapTail::Column { vel, .. }) if !vel.is_null() => Some(*vel),
@@ -2358,6 +2360,15 @@ impl AtomDatum {
             }
             return;
         }
+        if let Some(HeapTail::Column { force, .. }) = self.heap() {
+            if !force.is_null() {
+                if value.is_some() {
+                    self.ensure_tail().velocity = value;
+                    self.shrink_tail();
+                }
+                return;
+            }
+        }
         if matches!(self.heap(), Some(HeapTail::Full(_))) {
             self.ensure_tail().velocity = value;
             self.shrink_tail();
@@ -2368,6 +2379,8 @@ impl AtomDatum {
             None => AtomSections::Empty,
         });
     }
+    /// Set or clear the force. A parsed frame's atom stores into the force
+    /// column, as [`Self::set_velocity`] does into the velocity column.
     pub fn set_force(&mut self, value: Option<[f64; 3]>) {
         let slot = match self.heap() {
             Some(HeapTail::Column { force, .. }) if !force.is_null() => Some(*force),
@@ -2622,15 +2635,18 @@ pub fn check_lattice_finite(vecs: &[[f64; 3]; 3]) -> Result<(), ParseError> {
     Ok(())
 }
 
-/// Lattice vectors from lengths `|a| |b| |c|` and angles `alpha beta gamma`
-/// in degrees (CON-cell.6).
+/// Window on the binary64 radicand of `c_z` (CON-cell.7).
+/// A computed radicand greater than this negative bound is a real cell.
+/// A negative value inside the window sets `c_z` to 0.
+pub const CELL_CZ_ROUNDING: f64 = 1e-12;
+
+/// Radicand of `c_z` in binary64, with no fused multiply-add (CON-cell.7).
 ///
-/// `a = (|a|, 0, 0)`,
-/// `b = (|b| cos gamma, |b| sin gamma, 0)`,
-/// `c = (|c| cos beta, |c| (cos alpha - cos beta cos gamma) / sin gamma,
-/// |c| sqrt(1 - cos^2 beta - cy^2))` where `cy` is that middle term.
-pub fn cell_vectors(lengths: [f64; 3], angles_deg: [f64; 3]) -> [[f64; 3]; 3] {
-    let [a_len, b_len, c_len] = lengths;
+/// The operations, in order, are `cos` of each angle in radians, then
+/// `cy = (cos_alpha - cos_beta * cos_gamma) / sin_gamma`, then
+/// `1 - cos_beta * cos_beta - cy * cy`. Each product is its own statement
+/// so a multiply and an add are not contracted.
+pub fn cell_cz_squared(angles_deg: [f64; 3]) -> f64 {
     let alpha = angles_deg[0].to_radians();
     let beta = angles_deg[1].to_radians();
     let gamma = angles_deg[2].to_radians();
@@ -2638,14 +2654,95 @@ pub fn cell_vectors(lengths: [f64; 3], angles_deg: [f64; 3]) -> [[f64; 3]; 3] {
     let cos_beta = beta.cos();
     let cos_gamma = gamma.cos();
     let sin_gamma = gamma.sin();
-    let cy = (cos_alpha - cos_beta * cos_gamma) / sin_gamma;
-    let cz_sq = 1.0 - cos_beta * cos_beta - cy * cy;
-    // Orthogonal angles leave a rounding crumb below zero.
-    let cz = if cz_sq < 0.0 && cz_sq > -1e-12 {
-        0.0
+    let product = cos_beta * cos_gamma;
+    let cy = (cos_alpha - product) / sin_gamma;
+    let cos_beta_sq = cos_beta * cos_beta;
+    let cy_sq = cy * cy;
+    1.0 - cos_beta_sq - cy_sq
+}
+
+/// Id set seen while `ids_persistent` is in force (CON-id.11).
+pub(crate) struct PersistentIds {
+    first_flag: bool,
+    first_ids: Vec<u64>,
+    any_true: bool,
+}
+
+/// True when any frame sets `ids_persistent` to true.
+#[cfg(feature = "parallel")]
+pub(crate) fn persistent_ids_requested(frames: &[ConFrame]) -> bool {
+    frames
+        .iter()
+        .any(|frame| frame.header.metadata.ids_persistent_flag().unwrap_or(false))
+}
+
+/// Apply CON-id.11 to one more frame.
+pub(crate) fn observe_persistent_ids(
+    state: &mut Option<PersistentIds>,
+    frame: &ConFrame,
+) -> Result<(), ParseError> {
+    let flag = frame.header.metadata.ids_persistent_flag()?;
+    let mut ids: Vec<u64> = frame.atom_data.iter().map(|atom| atom.atom_id).collect();
+    ids.sort_unstable();
+    if flag && ids.windows(2).any(|pair| pair[0] == pair[1]) {
+        return Err(ParseError::ValidationError(
+            "ids_persistent requires each id once in the frame".into(),
+        ));
+    }
+    match state {
+        None => {
+            *state = Some(PersistentIds {
+                first_flag: flag,
+                first_ids: if flag { ids } else { Vec::new() },
+                any_true: flag,
+            });
+            Ok(())
+        }
+        Some(seen) => {
+            seen.any_true |= flag;
+            if seen.any_true && (!flag || !seen.first_flag || seen.first_ids != ids) {
+                Err(ParseError::ValidationError(
+                    "ids_persistent requires the same ids in every frame".into(),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
+/// `c_z` when the radicand is inside the CON-cell.7 window, else an error.
+pub fn require_real_cell(angles_deg: [f64; 3]) -> Result<f64, ParseError> {
+    let cz_sq = cell_cz_squared(angles_deg);
+    if cz_sq > -CELL_CZ_ROUNDING {
+        Ok(if cz_sq < 0.0 { 0.0 } else { cz_sq.sqrt() })
     } else {
-        cz_sq.sqrt()
-    };
+        Err(ParseError::ValidationError(
+            "cell angles have no real c vector".into(),
+        ))
+    }
+}
+
+/// Lattice vectors from lengths `|a| |b| |c|` and angles `alpha beta gamma`
+/// in degrees (CON-cell.6, CON-cell.7).
+///
+/// `a = (|a|, 0, 0)`,
+/// `b = (|b| cos gamma, |b| sin gamma, 0)`,
+/// `c = (|c| cos beta, |c| (cos alpha - cos beta cos gamma) / sin gamma,
+/// |c| * c_z)` where `c_z` is 0 inside the rounding window and the square
+/// root of the radicand otherwise. A radicand at or below `-CELL_CZ_ROUNDING`
+/// is not a real cell; callers that accept a frame use [`require_real_cell`].
+pub fn cell_vectors(lengths: [f64; 3], angles_deg: [f64; 3]) -> [[f64; 3]; 3] {
+    let [a_len, b_len, c_len] = lengths;
+    let alpha = angles_deg[0].to_radians();
+    let beta = angles_deg[1].to_radians();
+    let gamma = angles_deg[2].to_radians();
+    let cos_beta = beta.cos();
+    let cos_gamma = gamma.cos();
+    let sin_gamma = gamma.sin();
+    let product = cos_beta * cos_gamma;
+    let cy = (alpha.cos() - product) / sin_gamma;
+    let cz = require_real_cell(angles_deg).unwrap_or(f64::NAN);
     [
         [a_len, 0.0, 0.0],
         [b_len * cos_gamma, b_len * sin_gamma, 0.0],
@@ -2699,11 +2796,14 @@ pub fn encode_fixed_bitmask(fixed: [bool; 3]) -> u8 {
 /// these as the source of truth for DLPack (`as_dlpack` exports **storage** dtype).
 /// Project in-memory representation with [`Self::project_storage_dtypes`]. On-disk CON
 /// text remains binary64. [`Self::atom_data`] is the AoS projection for the writer.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ConFrame {
     /// The `FrameHeader` containing the frame's metadata.
     pub header: FrameHeader,
-    /// AoS projection for CON serialization and symbol/fixed metadata.
+    /// AoS records for CON serialization and symbol/fixed metadata.
+    ///
+    /// An atom stores no coordinates. [`Self::positions`] is the column
+    /// [`Self::xyz_at`] reads, at the atom's index in this list.
     pub atom_data: Vec<AtomDatum>,
     /// Arena for velocity and force column tails. Empty on a coordinate-only
     /// frame, so those atoms stay the same size as a file with no sections.
@@ -2712,8 +2812,19 @@ pub struct ConFrame {
     /// Primary positions `(N, 3)`, type-grouped order (f32 or f64 storage).
     pub positions: crate::storage_dtype::FloatArray2,
     /// Velocities `(N, 3)` when present; else `(0, 3)`.
+    ///
+    /// On a parsed frame each atom's [`AtomDatum::velocity`] reads its row
+    /// of this block. A row write through this field is seen by the atoms
+    /// while the frame holds the only handle; [`Self::clone`] gives the
+    /// clone its own block. After handing out another handle, such as a
+    /// clone of this field or a DLPack export, call
+    /// [`Self::unshare_slot_columns`] before writing. Assign a new
+    /// column inside [`Self::with_section_columns`].
     pub velocities: crate::storage_dtype::Optional2,
     /// Forces `(N, 3)` when present; else `(0, 3)`.
+    ///
+    /// The atoms address this block the way they address
+    /// [`Self::velocities`], and the same rules apply.
     pub forces: crate::storage_dtype::Optional2,
     /// Per-atom energies `(N,)` when present; else `(0,)`.
     pub atom_energies: crate::storage_dtype::Optional1,
@@ -2738,6 +2849,51 @@ pub struct ConFrame {
     pub(crate) sequential_plain: bool,
 }
 
+impl Clone for ConFrame {
+    /// Cloned atoms own their section tails (`AtomDatum::clone` clears
+    /// `TAIL_EXTERNAL`). The clone therefore owns its velocity and force
+    /// columns when atoms address their rows, and its atoms are rebound to
+    /// the clone's copy.
+    ///
+    /// A block shared between the two frames would be copied by the first
+    /// write through either frame's field, which leaves that frame's atoms
+    /// on the other frame's block, and a write through an atom would show
+    /// in both frames.
+    fn clone(&self) -> Self {
+        let bound = self.section_slot_mask();
+        let column = |column: &crate::storage_dtype::Optional2| {
+            if bound.is_empty() {
+                return column.clone();
+            }
+            match &**column {
+                crate::storage_dtype::Array2Storage::F64(array) if column.is_present() => {
+                    crate::storage_dtype::Array2Storage::F64(array.to_owned().into_shared()).into()
+                }
+                _ => column.clone(),
+            }
+        };
+        let mut out = Self {
+            header: self.header.clone(),
+            atom_data: self.atom_data.clone(),
+            column_tails: Vec::new(),
+            positions: self.positions.clone(),
+            velocities: column(&self.velocities),
+            forces: column(&self.forces),
+            atom_energies: self.atom_energies.clone(),
+            charges: self.charges.clone(),
+            spins: self.spins.clone(),
+            magmoms: self.magmoms.clone(),
+            displacements: self.displacements.clone(),
+            spreads: self.spreads.clone(),
+            masses: self.masses.clone(),
+            atom_ids: self.atom_ids.clone(),
+            sequential_plain: self.sequential_plain,
+        };
+        out.bind_section_slots(&bound);
+        out
+    }
+}
+
 impl PartialEq for ConFrame {
     /// The column-tail arena is how a parsed frame addresses its velocity
     /// and force columns. A built frame keeps those values in the section
@@ -2760,18 +2916,79 @@ impl PartialEq for ConFrame {
 }
 
 impl ConFrame {
+    /// Coordinates of the atom at `index`, copied from [`Self::positions`].
+    #[inline]
+    pub fn xyz_at(&self, index: usize) -> [f64; 3] {
+        self.positions.as_f64_row(index)
+    }
+
+    /// `x` of the atom at `index`.
+    #[inline]
+    pub fn x_at(&self, index: usize) -> f64 {
+        self.xyz_at(index)[0]
+    }
+
+    /// `y` of the atom at `index`.
+    #[inline]
+    pub fn y_at(&self, index: usize) -> f64 {
+        self.xyz_at(index)[1]
+    }
+
+    /// `z` of the atom at `index`.
+    #[inline]
+    pub fn z_at(&self, index: usize) -> f64 {
+        self.xyz_at(index)[2]
+    }
+
+    /// Write one coordinate row. Accessors read this row back.
+    #[inline]
+    pub fn set_xyz_at(&mut self, index: usize, xyz: [f64; 3]) {
+        self.positions.set_f64_row(index, xyz);
+        crate::writer::invalidate_packed_lengths();
+    }
+
+    /// Write `x` of the atom at `index` into the positions column.
+    ///
+    /// A shared column is copied first, so a clone or a DLPack export of
+    /// the old allocation keeps the previous value.
+    #[inline]
+    pub fn set_x_at(&mut self, index: usize, value: f64) {
+        let mut xyz = self.xyz_at(index);
+        xyz[0] = value;
+        self.set_xyz_at(index, xyz);
+    }
+
+    /// Write `y` of the atom at `index` into the positions column.
+    #[inline]
+    pub fn set_y_at(&mut self, index: usize, value: f64) {
+        let mut xyz = self.xyz_at(index);
+        xyz[1] = value;
+        self.set_xyz_at(index, xyz);
+    }
+
+    /// Write `z` of the atom at `index` into the positions column.
+    #[inline]
+    pub fn set_z_at(&mut self, index: usize, value: f64) {
+        let mut xyz = self.xyz_at(index);
+        xyz[2] = value;
+        self.set_xyz_at(index, xyz);
+    }
+
+    /// Coordinates of atom `index`. Same row as [`Self::xyz_at`].
+    #[cfg_attr(not(feature = "python"), allow(dead_code))]
+    #[inline]
+    pub(crate) fn load_coords(&self, index: usize) -> [f64; 3] {
+        self.xyz_at(index)
+    }
+
     /// Apply [`crate::storage_dtype::StorageDtypes`] from metadata (or argument) to SoA fields.
     pub fn project_storage_dtypes(&mut self, dtypes: &crate::storage_dtype::StorageDtypes) {
-        // Projection replaces the column allocation. Copy slot values into
-        // owned tails and coordinates into owned boxes first so the atoms do
-        // not keep the old pointer.
+        // Projection replaces the column allocation. Section slots that
+        // address the old velocity or force column are copied into owned
+        // tails first, and address the projected column after, when it is
+        // still float64. Coordinates are that column.
         clear_uniform_symbol_drop(&self.atom_data);
-        self.materialise_section_slots();
-        if self.positions.kind() != dtypes.positions {
-            for atom in &mut self.atom_data {
-                atom.own_coords();
-            }
-        }
+        let bound = self.materialise_section_slots();
         self.positions.project_to(dtypes.positions);
         if self.velocities.nrows() > 0 {
             self.velocities.project_to(dtypes.velocities);
@@ -2805,6 +3022,7 @@ impl ConFrame {
         dtypes.insert_into(&mut map);
         self.header.metadata = FrameMeta::from_map_with_minor_raw(map, minor_raw.as_deref());
         self.sync_atom_data_from_arrays();
+        self.bind_section_slots(&bound);
     }
 
     /// Rebuild AoS [`atom_data`] coordinates (and optional sections) from SoA arrays.
@@ -2813,6 +3031,12 @@ impl ConFrame {
         if self.atom_data.len() != n {
             return;
         }
+        let bound = self.materialise_section_slots();
+        self.sync_atoms_from_columns(n);
+        self.bind_section_slots(&bound);
+    }
+
+    fn sync_atoms_from_columns(&mut self, n: usize) {
         let has_vel = self.velocities.nrows() == n;
         let has_frc = self.forces.nrows() == n;
         let has_eng = self.atom_energies.len() == n;
@@ -2823,10 +3047,6 @@ impl ConFrame {
         let has_spr = self.spreads.nrows() == n;
         for i in 0..n {
             let a = &mut self.atom_data[i];
-            let p = self.positions.as_f64_row(i);
-            a.set_x(p[0]);
-            a.set_y(p[1]);
-            a.set_z(p[2]);
             if has_vel {
                 a.set_velocity(Some(self.velocities.as_f64_row(i)));
             }
@@ -2861,6 +3081,10 @@ impl ConFrame {
     pub(crate) fn adopt_velocity_column(&mut self, data: Vec<f64>) {
         let n = self.atom_data.len();
         let kind = self.header.metadata.dtypes().velocities;
+        if kind != crate::storage_dtype::ElementKind::Float64 {
+            // The slots address `data`, which a converted column frees.
+            self.clear_slots(false);
+        }
         self.velocities = store_rows(kind, n, data).into();
         self.bind_velocity_slots();
     }
@@ -2869,8 +3093,20 @@ impl ConFrame {
     pub(crate) fn adopt_force_column(&mut self, data: Vec<f64>) {
         let n = self.atom_data.len();
         let kind = self.header.metadata.dtypes().forces;
+        if kind != crate::storage_dtype::ElementKind::Float64 {
+            self.clear_slots(true);
+        }
         self.forces = store_rows(kind, n, data).into();
         self.bind_force_slots();
+    }
+
+    /// Null every velocity (or force) slot, keeping the other one.
+    fn clear_slots(&mut self, force: bool) {
+        for tail in &mut self.column_tails {
+            if let HeapTail::Column { vel, force: frc } = tail {
+                *(if force { frc } else { vel }) = std::ptr::null_mut();
+            }
+        }
     }
 
     fn bind_velocity_slots(&mut self) {
@@ -2878,11 +3114,7 @@ impl ConFrame {
         if self.velocities.nrows() != n || n == 0 {
             return;
         }
-        let Some(ptr) = self
-            .velocities
-            .f64_slice()
-            .map(|slice| slice.as_ptr() as *mut f64)
-        else {
+        let Some(ptr) = self.velocities.f64_allocation_ptr() else {
             for i in 0..n {
                 let row = self.velocities.as_f64_row(i);
                 self.atom_data[i].set_velocity(Some(row));
@@ -2904,11 +3136,7 @@ impl ConFrame {
         if self.forces.nrows() != n || n == 0 {
             return;
         }
-        let Some(ptr) = self
-            .forces
-            .f64_slice()
-            .map(|slice| slice.as_ptr() as *mut f64)
-        else {
+        let Some(ptr) = self.forces.f64_allocation_ptr() else {
             for i in 0..n {
                 let row = self.forces.as_f64_row(i);
                 self.atom_data[i].set_force(Some(row));
@@ -2946,14 +3174,163 @@ impl ConFrame {
         }
     }
 
-    fn materialise_section_slots(&mut self) {
+    /// Which atoms address a row of the velocity or force column.
+    ///
+    /// Empty when no atom does.
+    fn section_slot_mask(&self) -> Vec<bool> {
         if self.column_tails.is_empty() {
+            return Vec::new();
+        }
+        self.atom_data.iter().map(AtomDatum::is_external).collect()
+    }
+
+    /// Whether any atom slot addresses the force column, or the velocity
+    /// column when `force` is false.
+    fn slots_address(&self, force: bool) -> bool {
+        self.column_tails.iter().any(|tail| match tail {
+            HeapTail::Column { vel, force: frc } => !(if force { *frc } else { *vel }).is_null(),
+            _ => false,
+        })
+    }
+
+    /// Run `op` with every atom holding its own velocity and force.
+    ///
+    /// `op` may replace, reshape, reorder, or copy the velocity and force
+    /// columns. Atoms that addressed a column row before `op` address the
+    /// same row of the column `op` leaves, which is then the value they
+    /// read. An atom stays on its own tail when that column is no longer a
+    /// float64 `(n, 3)` row-major block or the atom gained another section.
+    pub fn with_section_columns<R>(&mut self, op: impl FnOnce(&mut Self) -> R) -> R {
+        let bound = self.materialise_section_slots();
+        let out = op(self);
+        self.bind_section_slots(&bound);
+        out
+    }
+
+    /// Give this frame its own copy of a shared velocity or force column.
+    ///
+    /// Atoms of a parsed frame address rows of those columns. A write
+    /// through [`AtomDatum::set_velocity`] lands in the column, so a block
+    /// another handle shares, such as a DLPack export or a clone of the
+    /// `velocities` field, would see it, and a write through the field would
+    /// copy the block and leave the atoms on the old one. After this call
+    /// the frame holds the only handle and the atoms address it.
+    pub fn unshare_slot_columns(&mut self) {
+        let n = self.atom_data.len();
+        if n == 0 || self.column_tails.len() != n {
             return;
         }
+        for force in [false, true] {
+            if !self.slots_address(force) {
+                continue;
+            }
+            let column = if force {
+                &mut self.forces
+            } else {
+                &mut self.velocities
+            };
+            if !column.is_present() {
+                continue;
+            }
+            let crate::storage_dtype::Array2Storage::F64(array) = &mut **column else {
+                continue;
+            };
+            if array.is_unique() || array.dim() != (n, 3) || !array.is_standard_layout() {
+                continue;
+            }
+            // Copies the block. The old one stays alive until this returns,
+            // because the other handle still holds it.
+            let base = array.as_mut_ptr();
+            for (i, tail) in self.column_tails.iter_mut().enumerate() {
+                if let HeapTail::Column { vel, force: frc } = tail {
+                    let slot = if force { frc } else { vel };
+                    if !slot.is_null() {
+                        *slot = unsafe { base.add(i * 3) };
+                    }
+                }
+            }
+        }
+    }
+
+    /// Point the atoms marked in `bound` at their rows of the velocity and
+    /// force columns. Call after [`Self::materialise_section_slots`].
+    ///
+    /// An atom keeps its own tail when it holds another section, or a
+    /// velocity or force whose column is not a float64 `(n, 3)` row-major
+    /// block. Binding makes the column unique first, so the slots address
+    /// a block no other handle writes.
+    pub(crate) fn bind_section_slots(&mut self, bound: &[bool]) {
+        let n = self.atom_data.len();
+        if n == 0 || bound.len() != n || !bound.contains(&true) {
+            return;
+        }
+        debug_assert!(self.column_tails.is_empty());
+        if !self.column_tails.is_empty() {
+            return;
+        }
+        fn row_base(column: &mut crate::storage_dtype::Optional2, n: usize) -> Option<*mut f64> {
+            if column.nrows() != n || column.ncols() != 3 {
+                return None;
+            }
+            column.f64_allocation_ptr()
+        }
+        let vel = row_base(&mut self.velocities, n);
+        let force = row_base(&mut self.forces, n);
+        if vel.is_none() && force.is_none() {
+            return;
+        }
+        clear_uniform_symbol_drop(&self.atom_data);
+        self.column_tails = vec![
+            HeapTail::Column {
+                vel: std::ptr::null_mut(),
+                force: std::ptr::null_mut(),
+            };
+            n
+        ];
+        let tails = self.column_tails.as_mut_ptr();
+        for (i, atom) in self.atom_data.iter_mut().enumerate() {
+            if !bound[i] || !atom.holds_only_motion() {
+                continue;
+            }
+            let has_vel = atom.has_velocity();
+            let has_force = atom.has_forces();
+            if (!has_vel && !has_force)
+                || (has_vel && vel.is_none())
+                || (has_force && force.is_none())
+            {
+                continue;
+            }
+            let at = |base: Option<*mut f64>, present: bool| match base {
+                Some(base) if present => unsafe { base.add(i * 3) },
+                _ => std::ptr::null_mut(),
+            };
+            let slot = unsafe { tails.add(i) };
+            unsafe {
+                *slot = HeapTail::Column {
+                    vel: at(vel, has_vel),
+                    force: at(force, has_force),
+                };
+            }
+            atom.bind_external_tail(slot);
+        }
+    }
+
+    /// Copy every atom's velocity and force into its own tail and drop the
+    /// slot arena. Returns which atoms held a slot, for
+    /// [`Self::bind_section_slots`].
+    pub(crate) fn materialise_section_slots(&mut self) -> Vec<bool> {
+        let bound = self.section_slot_mask();
+        if bound.is_empty() {
+            return bound;
+        }
+        clear_uniform_symbol_drop(&self.atom_data);
         let n = self.atom_data.len();
         for i in 0..n {
-            let velocity = self.atom_data[i].velocity();
-            let force = self.atom_data[i].force();
+            let atom = &self.atom_data[i];
+            let velocity = slot_value(atom.velocity_slot(), &self.velocities, n, i)
+                .unwrap_or_else(|| atom.velocity());
+            let force =
+                slot_value(atom.force_slot(), &self.forces, n, i).unwrap_or_else(|| atom.force());
             self.atom_data[i].detach_external_tail();
             if velocity.is_some() {
                 self.atom_data[i].set_velocity(velocity);
@@ -2963,22 +3340,7 @@ impl ConFrame {
             }
         }
         self.column_tails.clear();
-    }
-
-    /// Copy the coordinates of every atom that addresses the positions
-    /// column into an owned box, before that column is replaced.
-    ///
-    /// Atoms bound to another buffer, such as a binding slab, stay bound.
-    fn own_coords_in_positions(&mut self) {
-        let Some(column) = self.positions.f64_slice().map(|s| s.as_ptr_range()) else {
-            return;
-        };
-        clear_uniform_symbol_drop(&self.atom_data);
-        for atom in &mut self.atom_data {
-            if column.contains(&atom.coord_ptr()) {
-                atom.own_coords();
-            }
-        }
+        bound
     }
 
     fn velocity_column_live(&self) -> bool {
@@ -3013,17 +3375,29 @@ impl ConFrame {
         }
         let dt = self.header.metadata.dtypes();
         let sections = self.header.sections.clone();
+        let declared = |name: &str| sections.iter().any(|section| section == name);
+        let pack_velocities = declared(SECTION_VELOCITIES) && !self.velocity_column_live();
+        let pack_forces = declared(SECTION_FORCES) && !self.force_column_live();
+        // A column that is packed again replaces the block other atoms'
+        // slots may still address.
+        let bound = if (pack_velocities && self.slots_address(false))
+            || (pack_forces && self.slots_address(true))
+        {
+            self.materialise_section_slots()
+        } else {
+            Vec::new()
+        };
         for name in &sections {
             match name.as_str() {
                 SECTION_VELOCITIES => {
-                    if self.velocity_column_live() {
+                    if !pack_velocities {
                         continue;
                     }
                     let data = pack_rows(n, |i| self.atom_data[i].velocity().unwrap_or([0.0; 3]));
                     self.velocities = store_rows(dt.velocities, n, data).into();
                 }
                 SECTION_FORCES => {
-                    if self.force_column_live() {
+                    if !pack_forces {
                         continue;
                     }
                     let data = pack_rows(n, |i| self.atom_data[i].force().unwrap_or([0.0; 3]));
@@ -3057,6 +3431,7 @@ impl ConFrame {
                 _ => {}
             }
         }
+        self.bind_section_slots(&bound);
     }
 
     /// After section parsers mutate AoS only, allocate/fill SoA **sections**
@@ -3069,8 +3444,9 @@ impl ConFrame {
         if n == 0 {
             return;
         }
-        // Replacing a column drops the allocation the slots address.
-        self.materialise_section_slots();
+        // Replacing a column drops the allocation the slots address, and a
+        // row store into a shared column copies it first.
+        let bound = self.materialise_section_slots();
         use crate::storage_dtype::{FloatArray1, FloatArray2};
         let dt = self.header.metadata.dtypes();
         let has_vel = self.atom_data.iter().any(|a| a.has_velocity());
@@ -3081,11 +3457,15 @@ impl ConFrame {
         let has_mm = self.atom_data.iter().any(|a| a.has_magmom());
         let has_dsp = self.atom_data.iter().any(|a| a.has_displacement());
         let has_spr = self.atom_data.iter().any(|a| a.has_spread());
-        // Only allocate positions if missing (should not happen on parse-primary path).
-        let need_pos_fill = self.positions.nrows() != n;
-        if need_pos_fill {
-            self.own_coords_in_positions();
-            self.positions = FloatArray2::zeros(dt.positions, n, 3);
+        // The column is the coordinate store. A length change keeps the
+        // rows that still have an atom and leaves a new row at zero.
+        if self.positions.nrows() != n {
+            let mut next = FloatArray2::zeros(dt.positions, n, 3);
+            let keep = self.positions.nrows().min(n);
+            for i in 0..keep {
+                next.set_f64_row(i, self.positions.as_f64_row(i));
+            }
+            self.positions = next;
         }
         if has_vel {
             if self.velocities.nrows() != n {
@@ -3147,9 +3527,6 @@ impl ConFrame {
             self.atom_ids = ndarray::ArcArray1::<u64>::zeros(n);
         }
         for (i, a) in self.atom_data.iter().enumerate() {
-            if need_pos_fill {
-                self.positions.set_f64_row(i, [a.x(), a.y(), a.z()]);
-            }
             self.atom_ids[i] = a.atom_id;
             if has_vel && let Some(v) = a.velocity() {
                 self.velocities.set_f64_row(i, v);
@@ -3176,6 +3553,7 @@ impl ConFrame {
                 self.spreads.set_f64_row(i, d);
             }
         }
+        self.bind_section_slots(&bound);
     }
 
     /// Metatensor-style: export **stored** positions (f32 or f64) via DLPack.
@@ -3441,6 +3819,9 @@ pub struct ConFrameBuilder {
 
     metadata: BTreeMap<String, serde_json::Value>,
     minor_raw: Option<String>,
+    /// `0` writes [`crate::CON_SPEC_VERSION`]. A caller that reproduces an
+    /// older file, such as the r0174 CON 3.1 payloads, sets 3.
+    written_spec: u32,
 }
 
 impl Default for ConFrameBuilder {
@@ -3473,6 +3854,7 @@ impl Default for ConFrameBuilder {
             has_spreads: false,
             metadata: BTreeMap::new(),
             minor_raw: None,
+            written_spec: 0,
         }
     }
 }
@@ -3510,6 +3892,16 @@ impl ConFrameBuilder {
     pub fn try_new(cell: [f64; 3], angles: [f64; 3]) -> Result<Self, ParseError> {
         check_cell_finite(&cell, "cell", &angles, "angles")?;
         Ok(Self::new(cell, angles))
+    }
+
+    /// Write this major version instead of [`crate::CON_SPEC_VERSION`].
+    ///
+    /// `0` writes [`crate::CON_SPEC_VERSION`]. [`Self::build`] refuses a major
+    /// above it with [`ParseError::UnsupportedVersion`], because no reader of
+    /// this crate reads that file back.
+    pub fn spec_version(&mut self, version: u32) -> &mut Self {
+        self.written_spec = version;
+        self
     }
 
     /// Sets the user-facing pre-box header line. The JSON metadata line is
@@ -3578,11 +3970,15 @@ impl ConFrameBuilder {
     /// Sets `metadata["units"]` from a JSON object.
     ///
     /// Aliases are rewritten to preferred names. The natural time spelling
-    /// `(amu*angstrom^2/eV)^0.5` is kept byte for byte (CON-units.5, D10).
+    /// `(u*Å^2/eV)^0.5` is the symbol spelling (CON-units.5). The older mixed spelling is the same unit.
     /// This is the builder entry that C and C++ call. [`FrameHeader::set_units`]
     /// is the same contract on a frame that already exists.
     pub fn set_units(&mut self, units: serde_json::Value) -> Result<(), crate::error::ParseError> {
-        let stored = crate::units::canonicalize_units_object(&units)
+        let spec_version = match self.written_spec {
+            0 => crate::CON_SPEC_VERSION,
+            version => version,
+        };
+        let stored = crate::units::canonicalize_units_object_for_version(spec_version, &units)
             .map_err(|err| crate::error::ParseError::InvalidUnits(err.to_string()))?;
         self.metadata.insert(meta::UNITS.into(), stored);
         Ok(())
@@ -4826,7 +5222,9 @@ impl ConFrameBuilder {
     ///
     /// Returns [`crate::error::ParseError::MassMismatch`] when two atoms
     /// share a symbol and their masses differ by more than
-    /// [`Self::TYPE_MASS_ABS_TOL`].
+    /// [`Self::TYPE_MASS_ABS_TOL`]. Returns
+    /// [`crate::error::ParseError::UnsupportedVersion`] when
+    /// [`Self::spec_version`] named a major above [`crate::CON_SPEC_VERSION`].
     pub fn build(self) -> Result<ConFrame, crate::error::ParseError> {
         self.build_with_permutation().map(|(frame, _perm)| frame)
     }
@@ -4863,6 +5261,15 @@ impl ConFrameBuilder {
                 None => err,
             });
         }
+        let has_lattice = self.metadata.contains_key(meta::LATTICE_VECTORS);
+        crate::parser::reject_impossible_cell(self.angles, has_lattice)?;
+        let written_spec = match self.written_spec {
+            0 => crate::CON_SPEC_VERSION,
+            major if major > crate::CON_SPEC_VERSION => {
+                return Err(ParseError::UnsupportedVersion(major));
+            }
+            major => major,
+        };
         // Single-pass grouping: assign each atom a type index in encounter
         // order and bucket its position. The buckets preserve per-symbol
         // input order so the final flatten yields atoms grouped by type.
@@ -5012,17 +5419,55 @@ impl ConFrameBuilder {
         );
         let sections_declared = !sections.is_empty();
         let mut metadata = self.metadata;
+        if let Some(units) = metadata.get(meta::UNITS).cloned() {
+            let units = crate::units::canonicalize_units_object_for_version(written_spec, &units)
+                .map_err(|err| ParseError::InvalidUnits(err.to_string()))?;
+            metadata.insert(meta::UNITS.into(), units);
+        }
         // v3 writers always emit units (defaults if the caller omitted them).
-        if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::UNITS) {
+        if written_spec >= 3 && !metadata.contains_key(meta::UNITS) {
             metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
         }
-        // The builder, not the writer, stamps minor 1 on a v3 frame when
-        // the caller did not call set_con_spec_minor (D15).
-        if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::CON_SPEC_MINOR) {
+        // The builder, not the writer, stamps the current minor and patch
+        // on a major 4 frame when the caller did not set the keys (D15).
+        // A requested major 3 is the CON 3.1 writer: minor 1, no patch.
+        if written_spec >= 3 && !metadata.contains_key(meta::CON_SPEC_MINOR) {
+            let minor = if written_spec >= 4 {
+                crate::CON_SPEC_MINOR
+            } else {
+                1
+            };
+            metadata.insert(meta::CON_SPEC_MINOR.into(), serde_json::Value::from(minor));
+        }
+        if written_spec >= 4 && !metadata.contains_key(meta::CON_SPEC_PATCH) {
             metadata.insert(
-                meta::CON_SPEC_MINOR.into(),
-                serde_json::Value::from(crate::CON_SPEC_MINOR),
+                meta::CON_SPEC_PATCH.into(),
+                serde_json::Value::from(crate::CON_SPEC_PATCH),
             );
+        }
+        // In-memory velocities are in the natural time unit. Major 4
+        // requires units.time when a velocities section is present
+        // (CON-units.3, CON-units.11). A major 3 file keeps the time label
+        // the caller set, which for a reproduction is the historical spelling.
+        if has_vel && written_spec >= 4 {
+            let time_ok = metadata
+                .get(meta::UNITS)
+                .and_then(|units| units.get("time"))
+                .and_then(|value| value.as_str())
+                .is_some_and(|unit| !unit.trim().is_empty());
+            if !time_ok {
+                let mut units = metadata
+                    .get(meta::UNITS)
+                    .cloned()
+                    .unwrap_or_else(crate::units::default_v3_units_json);
+                if let Some(object) = units.as_object_mut() {
+                    object.insert(
+                        "time".to_string(),
+                        serde_json::Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
+                    );
+                    metadata.insert(meta::UNITS.into(), units);
+                }
+            }
         }
         use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
         let dt = StorageDtypes::from_metadata(&metadata).unwrap_or_default();
@@ -5041,8 +5486,15 @@ impl ConFrameBuilder {
         if dt != StorageDtypes::all_f64() {
             dt.insert_into(&mut metadata);
         }
+        // `atom_data` is grouped. `self.positions` is still insertion
+        // order, so copy the row that landed in each grouped slot.
+        let mut from_insertion = vec![0usize; n];
+        for (insertion, &grouped) in insertion_to_grouped.iter().enumerate() {
+            from_insertion[grouped] = insertion;
+        }
         for (i, a) in atom_data.iter().enumerate() {
-            pos.set_f64_row(i, [a.x(), a.y(), a.z()]);
+            let row = self.positions.row(from_insertion[i]);
+            pos.set_f64_row(i, [row[0], row[1], row[2]]);
             ids_arr[i] = a.atom_id;
             if has_vel && let Some(v) = a.velocity() {
                 vel.set_f64_row(i, v);
@@ -5088,11 +5540,12 @@ impl ConFrameBuilder {
             natm_types: type_order.len(),
             natms_per_type: type_counts,
             masses_per_type: type_masses,
-            spec_version: crate::CON_SPEC_VERSION,
+            spec_version: written_spec,
             metadata: FrameMeta::from_map_with_minor_raw(metadata, self.minor_raw.as_deref()),
             sections,
             strict_validation,
             sections_declared,
+            ids_from_file: false,
         };
 
         Ok((
@@ -5135,6 +5588,33 @@ fn pack_col(n: usize, mut one: impl FnMut(usize) -> f64) -> Vec<f64> {
     data
 }
 
+/// The value a bound atom holds: row `i` of `column`, which is
+/// authoritative while any atom holds a slot. A slot that is not inside
+/// that column (it was copied on write, replaced or reshaped) may address
+/// a freed block and is never read. `None` for an unbound atom, or when
+/// the slot is inside the column and can be read directly.
+fn slot_value(
+    slot: *const f64,
+    column: &crate::storage_dtype::Array2Storage,
+    n: usize,
+    i: usize,
+) -> Option<Option<[f64; 3]>> {
+    if slot.is_null() {
+        return None;
+    }
+    if let Some(rows) = column.f64_rows3()
+        && rows.len() == n * 3
+        && rows.as_ptr_range().contains(&slot)
+    {
+        return None;
+    }
+    Some(if column.nrows() == n {
+        column.try_f64_row(i)
+    } else {
+        None
+    })
+}
+
 fn store_rows(
     kind: crate::storage_dtype::ElementKind,
     n: usize,
@@ -5171,13 +5651,17 @@ fn store_col(
 /// Build a [`ConFrame`] from header + AoS atoms, filling SoA numeric arrays.
 /// Prefer [`con_frame_from_atom_data_with_positions`] on the CON parse hot path
 /// when positions were already written into SoA during coordinate parsing.
-pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) -> ConFrame {
+pub fn con_frame_from_atom_data(
+    header: FrameHeader,
+    atom_data: Vec<AtomDatum>,
+    coords: &[[f64; 3]],
+) -> ConFrame {
     let n = atom_data.len();
     use crate::storage_dtype::FloatArray2;
     let dt = header.metadata.dtypes();
     let mut pos = FloatArray2::zeros(dt.positions, n, 3);
-    for (i, a) in atom_data.iter().enumerate() {
-        pos.set_f64_row(i, [a.x(), a.y(), a.z()]);
+    for (i, row) in coords.iter().enumerate().take(n) {
+        pos.set_f64_row(i, *row);
     }
     con_frame_from_atom_data_with_positions(header, atom_data, pos)
 }
@@ -5432,6 +5916,19 @@ mod tests {
         })
     }
 
+    /// A successful write fills the per-thread metadata line cache. The
+    /// cache must not be reported as a leak when the thread ends.
+    #[test]
+    fn a_written_frame_releases_the_metadata_line_cache() {
+        let frame = crate::iterators::ConFrameIterator::new(&uniform_frame_text(1))
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let bytes =
+            crate::writer::write_frames_to_vec(std::slice::from_ref(&frame)).expect("write");
+        assert!(!bytes.is_empty());
+    }
+
     #[cfg(feature = "python")]
     #[test]
     fn coordinate_snapshot_unwind_does_not_drop_source_fields() {
@@ -5444,25 +5941,18 @@ mod tests {
             .expect("second frame")
             .expect("parse second");
 
-        // Force the per-atom path and make its source deliberately unsuitable
-        // for AtomicU64. The first view has already pointer-read its source
-        // fields when construction of the second view panics.
-        let mut unaligned = [0_u8; 32];
-        second.atom_data[0].xyz = unsafe { unaligned.as_mut_ptr().add(1).cast::<f64>() };
-        second.atom_data[0].tail &= !TAIL_OWNED;
+        // The second frame's column has no row, so reading it panics after
+        // the first view has copied its source fields.
         second.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let _ = CoordSnapshot::copy_of(&[Some(&first), Some(&second)]);
         }));
-        assert!(result.is_err(), "misaligned atomic source should panic");
+        assert!(result.is_err(), "an empty coordinate column should panic");
 
-        // Restore an owned coordinate before dropping the deliberately
-        // malformed source. The first source must still own and use all of
-        // its fields; without the unwind guard the partial view drops them.
-        second.atom_data[0].xyz = AtomDatum::owned_xyz(4.0, 5.0, 6.0);
-        second.atom_data[0].tail |= TAIL_OWNED;
-        assert_eq!(first.atom_data[0].x(), 0.1234567);
+        // The first source must still own and use all of its fields; without
+        // the unwind guard the partial view drops them.
+        assert_eq!(first.x_at(0), 0.1234567);
         first.header.prebox_header.user.push_str("still owned");
         drop(first);
         drop(second);
@@ -5486,43 +5976,33 @@ mod tests {
                 .all(|atom| std::ptr::eq(Arc::as_ptr(&atom.symbol), symbol)),
             "the frame should share one symbol"
         );
-        let column = frame
-            .positions
-            .f64_slice()
-            .expect("f64 positions")
-            .as_ptr_range();
-        let column = column.start as usize..column.end as usize;
-        assert!(
-            frame
-                .atom_data
-                .iter()
-                .all(|atom| column.contains(&(atom.coord_ptr() as usize))),
-            "a parsed frame should address its position column"
-        );
+        for i in 0..frame.atom_data.len() {
+            assert_eq!(
+                frame.xyz_at(i),
+                frame.positions.as_f64_row(i),
+                "parsed atom {i} should match its positions row"
+            );
+        }
         // The piped reader and the chemfiles import mark a buffer like this.
         mark_uniform_symbol_drop(&frame.atom_data);
         assert!(bulk_drop_is_marked(&frame.atom_data));
-        let expect: Vec<[f64; 3]> = frame
-            .atom_data
-            .iter()
-            .map(|atom| [atom.x(), atom.y(), atom.z()].map(|v| v as f32 as f64))
+        let expect: Vec<[f64; 3]> = (0..frame.atom_data.len())
+            .map(|i| frame.xyz_at(i).map(|v| v as f32 as f64))
             .collect();
         let dtypes = crate::storage_dtype::StorageDtypes {
             positions: crate::storage_dtype::ElementKind::Float32,
             ..Default::default()
         };
         frame.project_storage_dtypes(&dtypes);
-        // The atoms own coordinate boxes now. The bulk drop would skip them.
+        // Projection may install owned section tails, so the bulk drop is
+        // disarmed before the column is replaced.
         assert!(
             !bulk_drop_is_marked(&frame.atom_data),
             "the projection left the bulk drop armed"
         );
-        for (i, atom) in frame.atom_data.iter().enumerate() {
-            assert!(
-                !column.contains(&(atom.coord_ptr() as usize)),
-                "atom {i} still points into the freed f64 column"
-            );
-            assert_eq!([atom.x(), atom.y(), atom.z()], expect[i], "atom {i}");
+        for (i, row) in expect.iter().enumerate() {
+            assert_eq!(frame.xyz_at(i), *row, "atom {i}");
+            assert_eq!(frame.positions.as_f64_row(i), *row, "row {i}");
         }
     }
 
@@ -5534,24 +6014,27 @@ mod tests {
             .expect("frame")
             .expect("parse");
         let coords = |frame: &ConFrame| -> Vec<[f64; 3]> {
-            frame
-                .atom_data
-                .iter()
-                .map(|atom| [atom.x(), atom.y(), atom.z()])
+            (0..frame.atom_data.len())
+                .map(|i| frame.xyz_at(i))
                 .collect()
         };
         let mut expect = coords(&frame);
         // Shrinking and growing the atoms both make the sync replace the
-        // positions column the parsed atoms address.
+        // positions column. A clone carries no coordinates, so the new row
+        // is zero until a column write.
         frame.atom_data.pop();
         expect.pop();
         frame.sync_arrays_from_atom_data();
         assert_eq!(coords(&frame), expect);
+        let kept = expect[0];
         let extra = frame.atom_data[0].clone();
         frame.atom_data.push(extra);
-        expect.push(expect[0]);
+        expect.push([0.0; 3]);
         frame.sync_arrays_from_atom_data();
         assert_eq!(coords(&frame), expect);
+        let last = frame.atom_data.len() - 1;
+        frame.set_xyz_at(last, kept);
+        expect[last] = kept;
         for (i, row) in expect.iter().enumerate() {
             assert_eq!(frame.positions.as_f64_row(i), *row, "row {i}");
         }
@@ -5587,17 +6070,9 @@ mod tests {
         let n = 2048;
         let symbol: Arc<str> = Arc::from("O");
         let weak = Arc::downgrade(&symbol);
-        let mut flat = vec![0.0f64; n * 3];
         bump_arc_str(&symbol, n);
         let mut atoms: Vec<AtomDatum> = (0..n)
-            .map(|i| {
-                AtomDatum::at_slot(
-                    share_arc_str(&symbol),
-                    unsafe { flat.as_mut_ptr().add(i * 3) },
-                    [false; 3],
-                    i as u64,
-                )
-            })
+            .map(|i| AtomDatum::coords(share_arc_str(&symbol), 0.0, 0.0, 0.0, [false; 3], i as u64))
             .collect();
         mark_uniform_symbol_drop(&atoms);
         drop(symbol);
@@ -5711,6 +6186,10 @@ mod tests {
         assert_eq!(&*frame.atom_data[0].symbol, "H");
         assert_eq!(&*frame.atom_data[1].symbol, "H");
         assert_eq!(&*frame.atom_data[2].symbol, "Cu");
+        // Coordinates follow the symbols, not the insertion slots.
+        assert_eq!(frame.xyz_at(0), [0.0, 0.0, 0.0]);
+        assert_eq!(frame.xyz_at(1), [2.0, 0.0, 0.0]);
+        assert_eq!(frame.xyz_at(2), [1.0, 0.0, 0.0]);
     }
 
     #[test]
@@ -5739,6 +6218,15 @@ mod tests {
                 .map(|a| a.atom_id)
                 .collect::<Vec<_>>(),
             vec![10, 30, 20, 40]
+        );
+        assert_eq!(
+            (0..4).map(|i| frame.xyz_at(i)).collect::<Vec<_>>(),
+            vec![
+                [0.0, 0.0, 0.0],
+                [2.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [3.0, 0.0, 0.0],
+            ]
         );
         for (insertion, &grouped) in perm.iter().enumerate() {
             let expected_id = [10, 20, 30, 40][insertion];
@@ -5790,6 +6278,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.energy(), None);
         header.set_energy(-42.5);
@@ -5811,6 +6300,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.potential_type(), None);
         header.set_potential("EMT", serde_json::json!({"cutoff": 6.0}));
@@ -5836,6 +6326,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         header.set_frame_index(5);
         header.set_time(2.5);
@@ -5948,8 +6439,32 @@ mod tests {
         assert_eq!(frame.energy_unit(), Some("eV"));
         let to_nm = frame.conversion_factor_to("length", "nm").unwrap();
         assert!((to_nm - 0.1).abs() < 1e-12);
-        let x_nm = frame.atom_data[0].x() * to_nm;
+        let x_nm = frame.x_at(0) * to_nm;
         assert!((x_nm - 0.1).abs() < 1e-12);
+        let units = serde_json::json!({
+            "length": "angstrom",
+            "energy": "eV",
+            "time": crate::units::HISTORICAL_NATURAL_TIME
+        });
+        for (major, expected) in [
+            (3, crate::units::HISTORICAL_NATURAL_TIME),
+            (4, crate::units::NATURAL_TIME_UNIT),
+        ] {
+            for set_spec_first in [true, false] {
+                let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+                if set_spec_first {
+                    builder.spec_version(major);
+                }
+                builder.set_units(units.clone()).unwrap();
+                if !set_spec_first {
+                    builder.spec_version(major);
+                }
+                builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+                let frame = builder.build().unwrap();
+                assert_eq!(frame.header.spec_version, major);
+                assert_eq!(frame.header.units().unwrap()["time"], expected);
+            }
+        }
     }
 
     #[test]
@@ -5967,6 +6482,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.units(), None);
         header.set_units(serde_json::json!({"length": "angstrom", "energy": "eV"}));
@@ -5990,6 +6506,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.pbc(), None);
         header.set_pbc([true, true, false]);
@@ -6011,6 +6528,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.lattice_vectors(), None);
         let vecs = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 20.0]];
@@ -6135,6 +6653,29 @@ mod tests {
         assert_eq!(b.atom_count(), 1);
         b.add_atom("H", 1.0, 1.0, 1.0, [false; 3], 1, 1.0);
         assert_eq!(b.atom_count(), 2);
+    }
+
+    #[test]
+    fn grouping_interleaved_species_keeps_each_atom_on_its_coordinates() {
+        let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        let added = [
+            ("H", [0.1, 0.2, 0.3], 1.008),
+            ("Cu", [1.1, 1.2, 1.3], 63.546),
+            ("H", [2.1, 2.2, 2.3], 1.008),
+            ("O", [3.1, 3.2, 3.3], 15.999),
+            ("Cu", [4.1, 4.2, 4.3], 63.546),
+        ];
+        for (id, (symbol, [x, y, z], mass)) in added.iter().enumerate() {
+            b.add_atom(symbol, *x, *y, *z, [false; 3], id as u64, *mass);
+        }
+        let (frame, perm) = b.build_with_permutation().unwrap();
+        assert_eq!(perm, [0, 2, 1, 4, 3]);
+        for (insertion, &grouped) in perm.iter().enumerate() {
+            let (symbol, xyz, _) = added[insertion];
+            let atom = &frame.atom_data[grouped];
+            assert_eq!(&*atom.symbol, symbol, "atom {insertion}");
+            assert_eq!(frame.positions.as_f64_row(grouped), xyz, "row {insertion}");
+        }
     }
 
     #[test]
@@ -6417,7 +6958,7 @@ mod tests {
             .next()
             .unwrap()
             .unwrap();
-        assert_eq!(parsed.header.spec_version, 3);
+        assert_eq!(parsed.header.spec_version, 4);
         assert_eq!(parsed.length_unit(), Some("angstrom"));
     }
 
@@ -6525,5 +7066,490 @@ mod tests {
         assert_eq!(v[[1, 0]], 42.0);
         assert_eq!(v[[1, 1]], 43.0);
         assert_eq!(v[[1, 2]], 44.0);
+    }
+
+    #[test]
+    fn cloned_and_permuted_frame_clears_column_tails_and_unshares_safely() {
+        let text = std::fs::read_to_string("resources/test/tiny_cuh2_vel_forces.con").unwrap();
+        let frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .unwrap()
+            .unwrap();
+        assert!(!frame.column_tails.is_empty());
+
+        let cloned = frame.clone();
+        assert!(!cloned.column_tails.is_empty());
+        assert_slots_on_columns(&cloned);
+
+        let mut reordered = crate::correspondence::reorder_like(
+            &frame,
+            &frame,
+            crate::correspondence::IdentityCheck::Strict,
+        )
+        .unwrap();
+        assert!(!reordered.column_tails.is_empty());
+        assert_slots_on_columns(&reordered);
+        drop(frame);
+
+        let _shared_vel = reordered.velocities.clone();
+        reordered.unshare_slot_columns();
+        assert!(reordered.atom_data[0].velocity().is_some());
+    }
+
+    #[test]
+    fn set_velocity_on_forces_only_parsed_frame_preserves_force() {
+        let text = std::fs::read_to_string("resources/test/tiny_cuh2_forces.con").unwrap();
+        let mut frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .unwrap()
+            .unwrap();
+        let force0 = frame.atom_data[0].force().expect("parsed force");
+        let force1 = frame.atom_data[1].force().expect("parsed force");
+
+        frame.atom_data[0].set_velocity(None);
+        assert_eq!(frame.atom_data[0].force(), Some(force0));
+        assert_eq!(frame.atom_data[0].velocity(), None);
+
+        frame.atom_data[1].set_velocity(Some([1.5, -2.5, 3.5]));
+        assert_eq!(frame.atom_data[1].force(), Some(force1));
+        assert_eq!(frame.atom_data[1].velocity(), Some([1.5, -2.5, 3.5]));
+    }
+
+    #[test]
+    fn sync_atom_data_from_arrays_does_not_mutate_shared_column_view() {
+        let text = std::fs::read_to_string("resources/test/tiny_cuh2_vel_forces.con").unwrap();
+        let mut frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .unwrap()
+            .unwrap();
+        let shared_vel = frame.velocities.clone();
+        let before = shared_vel.as_f64_row(0);
+
+        frame.velocities.set_f64_row(0, [11.0, 22.0, 33.0]);
+        frame.sync_atom_data_from_arrays();
+
+        assert_eq!(shared_vel.as_f64_row(0), before);
+        drop(shared_vel);
+        assert_eq!(frame.atom_data[0].velocity(), Some([11.0, 22.0, 33.0]));
+    }
+
+    #[test]
+    fn unshare_moves_live_slots_off_a_shared_velocity_column() {
+        let text = std::fs::read_to_string("resources/test/tiny_cuh2_vel_forces.con").unwrap();
+        let mut frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .unwrap()
+            .unwrap();
+        let shared = frame.velocities.clone();
+        let before = shared.as_f64_row(0);
+        frame.unshare_slot_columns();
+        frame.atom_data[0].set_velocity(Some([123.0, 0.0, 0.0]));
+        assert_eq!(shared.as_f64_row(0), before);
+        assert_eq!(frame.atom_data[0].velocity(), Some([123.0, 0.0, 0.0]));
+        assert_eq!(frame.velocities.as_f64_row(0), [123.0, 0.0, 0.0]);
+        let slot = frame.atom_data[0].velocity_slot() as usize;
+        let range = frame.velocities.f64_slice().unwrap().as_ptr_range();
+        assert!(range.contains(&(slot as *const f64)));
+    }
+
+    fn parsed_coords(frame: &ConFrame) -> Vec<[f64; 3]> {
+        (0..frame.atom_data.len())
+            .map(|index| frame.xyz_at(index))
+            .collect()
+    }
+
+    /// Cloning shares the positions column. A later row write copies that
+    /// column. Dropping the frame that still owns the old allocation must
+    /// not free the column the other frame reads, and the accessor reads
+    /// the row that was written.
+    #[test]
+    fn cloned_row_write_leaves_atom_coordinates_readable() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let mut frame = crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let snapshot = parsed_coords(&frame);
+        let cloned = frame.clone();
+        {
+            let row = frame.positions.f64_mut_slice().expect("f64 positions");
+            row[0] = 42.0;
+        }
+        assert_eq!(cloned.xyz_at(0), snapshot[0]);
+        drop(cloned);
+        assert_eq!(frame.xyz_at(0)[0], 42.0);
+        assert_eq!(frame.positions.as_f64_row(0)[0], 42.0);
+    }
+
+    /// Replacing the public positions field drops the old column. The
+    /// accessor reads the new column and does not touch the dropped one.
+    #[test]
+    fn replacing_positions_leaves_atom_coordinates_readable() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let mut frame = crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let n = frame.positions.nrows();
+        frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(n, 3);
+        assert_eq!(frame.positions.as_f64_row(0), [0.0; 3]);
+        assert_eq!(frame.xyz_at(0), [0.0; 3]);
+    }
+
+    /// A store through the positions column is the value the accessor returns.
+    #[test]
+    fn a_column_write_is_seen_by_the_atom_accessor() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let mut frame = crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        frame.set_x_at(0, 42.0);
+        assert_eq!(frame.x_at(0), 42.0);
+        assert_eq!(frame.positions.as_f64_row(0)[0], 42.0);
+        {
+            let row = frame.positions.f64_mut_slice().expect("f64 positions");
+            row[1] = 7.0;
+        }
+        assert_eq!(frame.y_at(0), 7.0);
+    }
+
+    /// A writer storing whole `AtomicU64` values and a reader using
+    /// [`atomic_load_f64`] do not tear a double. ThreadSanitizer is the
+    /// check that the two sides do not race.
+    #[test]
+    fn a_concurrent_atomic_store_is_a_whole_double() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+        let n = 1024usize;
+        let buf = vec![0.0f64; n];
+        let ptr = buf.as_ptr();
+        assert_atomic_f64_alignment(ptr);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_writer = Arc::clone(&stop);
+        let addr = ptr as usize;
+        let writer = std::thread::spawn(move || {
+            let cells = addr as *mut u64;
+            let mut value = 1u64;
+            while !stop_writer.load(Ordering::Relaxed) {
+                for index in 0..n {
+                    unsafe {
+                        AtomicU64::from_ptr(cells.add(index)).store(value, Ordering::Relaxed);
+                    }
+                    value = value.wrapping_add(1);
+                    if value == 0 {
+                        value = 1;
+                    }
+                }
+            }
+        });
+        for _ in 0..64 {
+            for index in 0..n {
+                let loaded = unsafe { atomic_load_f64(ptr.add(index)).to_bits() };
+                let _ = loaded;
+            }
+        }
+        stop.store(true, Ordering::Relaxed);
+        writer.join().expect("writer");
+        for index in 0..n {
+            let loaded = unsafe { atomic_load_f64(ptr.add(index)).to_bits() };
+            let direct = unsafe {
+                AtomicU64::from_ptr(ptr.cast_mut().cast::<u64>().add(index)).load(Ordering::Relaxed)
+            };
+            assert_eq!(loaded, direct);
+        }
+    }
+
+    fn vel_forces_frame() -> ConFrame {
+        let text = include_str!("../resources/test/tiny_cuh2_vel_forces.con");
+        crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse")
+    }
+
+    /// Every atom slot addresses its row of the frame's own columns.
+    fn assert_slots_on_columns(frame: &ConFrame) {
+        let vel = frame.velocities.f64_slice().expect("velocity column");
+        let force = frame.forces.f64_slice().expect("force column");
+        for (i, atom) in frame.atom_data.iter().enumerate() {
+            assert_eq!(atom.velocity_slot(), vel[i * 3..].as_ptr(), "velocity {i}");
+            assert_eq!(atom.force_slot(), force[i * 3..].as_ptr(), "force {i}");
+            assert_eq!(atom.velocity(), Some(frame.velocities.as_f64_row(i)));
+            assert_eq!(atom.force(), Some(frame.forces.as_f64_row(i)));
+        }
+    }
+
+    #[test]
+    fn a_column_row_write_after_a_clone_reaches_the_atoms() {
+        let mut frame = vel_forces_frame();
+        assert_slots_on_columns(&frame);
+        let clone = frame.clone();
+        frame.velocities.set_f64_row(0, [9.0, 8.0, 7.0]);
+        frame.forces.set_f64_row(1, [6.0, 5.0, 4.0]);
+        drop(clone);
+        assert_eq!(frame.atom_data[0].velocity(), Some([9.0, 8.0, 7.0]));
+        assert_eq!(frame.atom_data[1].force(), Some([6.0, 5.0, 4.0]));
+        assert_slots_on_columns(&frame);
+    }
+
+    #[test]
+    fn a_mutable_slice_write_after_a_clone_reaches_the_atoms() {
+        let mut frame = vel_forces_frame();
+        let clone = frame.clone();
+        frame.velocities.f64_mut_slice().expect("f64")[3] = 42.0;
+        drop(clone);
+        assert_eq!(frame.atom_data[1].velocity().unwrap()[0], 42.0);
+        assert_slots_on_columns(&frame);
+    }
+
+    #[test]
+    fn a_clone_owns_its_columns_and_its_atoms_address_them() {
+        let mut frame = vel_forces_frame();
+        let before = frame.clone();
+        let mut clone = frame.clone();
+        assert_slots_on_columns(&clone);
+        frame.atom_data[0].set_velocity(Some([1.0, 2.0, 3.0]));
+        frame.atom_data[0].set_force(Some([4.0, 5.0, 6.0]));
+        assert_eq!(
+            clone.velocities.as_f64_row(0),
+            before.velocities.as_f64_row(0)
+        );
+        assert_eq!(clone.forces.as_f64_row(0), before.forces.as_f64_row(0));
+        assert_eq!(
+            clone.atom_data[0].velocity(),
+            before.atom_data[0].velocity()
+        );
+        clone.velocities.set_f64_row(2, [7.0, 7.0, 7.0]);
+        assert_eq!(clone.atom_data[2].velocity(), Some([7.0, 7.0, 7.0]));
+        assert_eq!(
+            frame.atom_data[2].velocity(),
+            before.atom_data[2].velocity()
+        );
+        drop(frame);
+        assert_slots_on_columns(&clone);
+    }
+
+    #[test]
+    fn unsharing_a_column_handed_out_keeps_the_atoms_on_the_frame() {
+        let mut frame = vel_forces_frame();
+        let handed_out = (*frame.velocities).clone();
+        let original = handed_out.as_f64_row(0);
+        frame.unshare_slot_columns();
+        frame.atom_data[0].set_velocity(Some([3.0, 2.0, 1.0]));
+        frame.velocities.set_f64_row(1, [1.0, 1.0, 1.0]);
+        assert_eq!(handed_out.as_f64_row(0), original);
+        drop(handed_out);
+        assert_eq!(frame.velocities.as_f64_row(0), [3.0, 2.0, 1.0]);
+        assert_eq!(frame.atom_data[1].velocity(), Some([1.0, 1.0, 1.0]));
+        assert_slots_on_columns(&frame);
+    }
+
+    #[test]
+    fn repacking_a_declared_section_rebinds_the_other_atoms() {
+        let mut frame = vel_forces_frame();
+        // Atom 0 takes its own tail, so the velocity column no longer
+        // looks live and the section is packed again from the atoms.
+        frame.atom_data[0].set_energy(Some(-1.0));
+        frame.install_declared_section_soa();
+        let vel = frame.velocities.f64_slice().expect("f64");
+        for i in 1..frame.atom_data.len() {
+            assert_eq!(frame.atom_data[i].velocity_slot(), vel[i * 3..].as_ptr());
+        }
+        frame.velocities.set_f64_row(3, [8.0, 8.0, 8.0]);
+        assert_eq!(frame.atom_data[3].velocity(), Some([8.0, 8.0, 8.0]));
+        assert_eq!(frame.atom_data[0].energy(), Some(-1.0));
+    }
+
+    #[test]
+    fn dtype_projection_and_array_sync_keep_the_atoms_on_the_columns() {
+        let mut frame = vel_forces_frame();
+        let dtypes = frame.header.metadata.dtypes();
+        frame.project_storage_dtypes(&dtypes);
+        assert_slots_on_columns(&frame);
+        frame.velocities.set_f64_row(0, [5.0, 5.0, 5.0]);
+        assert_eq!(frame.atom_data[0].velocity(), Some([5.0, 5.0, 5.0]));
+        frame.sync_arrays_from_atom_data();
+        assert_slots_on_columns(&frame);
+        frame.forces.set_f64_row(1, [2.0, 2.0, 2.0]);
+        assert_eq!(frame.atom_data[1].force(), Some([2.0, 2.0, 2.0]));
+    }
+
+    #[test]
+    fn a_reordered_frame_addresses_its_permuted_columns() {
+        let frame = vel_forces_frame();
+        let mut reversed = frame.clone();
+        reversed.atom_data.reverse();
+        let mut out = crate::correspondence::reorder_like(
+            &reversed,
+            &frame,
+            crate::correspondence::IdentityCheck::Lenient,
+        )
+        .expect("same ids");
+        drop(reversed);
+        let n = frame.atom_data.len();
+        for i in 0..n {
+            assert_eq!(out.atom_data[i].atom_id, frame.atom_data[n - 1 - i].atom_id);
+            assert_eq!(
+                out.velocities.as_f64_row(i),
+                frame.velocities.as_f64_row(n - 1 - i)
+            );
+        }
+        assert_slots_on_columns(&out);
+        out.velocities.set_f64_row(0, [4.0, 4.0, 4.0]);
+        assert_eq!(out.atom_data[0].velocity(), Some([4.0, 4.0, 4.0]));
+        drop(frame);
+        assert_slots_on_columns(&out);
+    }
+
+    #[cfg(feature = "python")]
+    #[test]
+    fn a_snapshot_view_counts_its_motion_columns_and_releases_them() {
+        let mut frame = vel_forces_frame();
+        let held = {
+            let snapshot = CoordSnapshot::copy_of(&[Some(&frame)]);
+            let view = snapshot.frames[0].as_ref().expect("view");
+            let vel = view.velocities.f64_slice().expect("f64");
+            assert_eq!(vel.as_ptr(), frame.velocities.f64_slice().unwrap().as_ptr());
+            (*view.forces).clone()
+        };
+        let crate::storage_dtype::Array2Storage::F64(velocities) = &mut *frame.velocities else {
+            panic!("f64 velocities");
+        };
+        assert!(velocities.is_unique(), "the view must not keep a count");
+        drop(held);
+        let crate::storage_dtype::Array2Storage::F64(forces) = &mut *frame.forces else {
+            panic!("f64 forces");
+        };
+        assert!(forces.is_unique());
+        assert_slots_on_columns(&frame);
+    }
+
+    #[test]
+    fn a_velocity_edit_keeps_the_force_of_a_forces_only_atom() {
+        let text = include_str!("../resources/test/tiny_cuh2_forces.con");
+        let mut frame = crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let force0 = frame.atom_data[0].force().expect("parsed force");
+        let force1 = frame.atom_data[1].force().expect("parsed force");
+        frame.atom_data[0].set_velocity(None);
+        assert_eq!(frame.atom_data[0].force(), Some(force0));
+        assert_eq!(frame.atom_data[0].velocity(), None);
+        frame.atom_data[1].set_velocity(Some([1.5, -2.5, 3.5]));
+        assert_eq!(frame.atom_data[1].force(), Some(force1));
+        assert_eq!(frame.atom_data[1].velocity(), Some([1.5, -2.5, 3.5]));
+    }
+
+    #[test]
+    fn a_reordered_frame_reads_its_own_columns_after_the_source_drops() {
+        let frame = vel_forces_frame();
+        let mut reordered = crate::correspondence::reorder_like(
+            &frame,
+            &frame,
+            crate::correspondence::IdentityCheck::Strict,
+        )
+        .expect("same frame");
+        drop(frame);
+        reordered.velocities.set_f64_row(0, [4.0, 5.0, 6.0]);
+        reordered.forces.set_f64_row(1, [-4.0, -5.0, -6.0]);
+        for (i, atom) in reordered.atom_data.iter().enumerate() {
+            assert_eq!(atom.velocity(), Some(reordered.velocities.as_f64_row(i)));
+            assert_eq!(atom.force(), Some(reordered.forces.as_f64_row(i)));
+        }
+    }
+
+    #[test]
+    fn a_reordered_frame_unshares_its_columns_after_the_source_drops() {
+        let frame = vel_forces_frame();
+        let expected: Vec<_> = frame.atom_data.iter().map(|a| a.velocity()).collect();
+        let mut reordered = crate::correspondence::reorder_like(
+            &frame,
+            &frame,
+            crate::correspondence::IdentityCheck::Strict,
+        )
+        .expect("same frame");
+        drop(frame);
+        let shared = (*reordered.velocities).clone();
+        reordered.unshare_slot_columns();
+        reordered.atom_data[0].set_velocity(Some([7.0, 8.0, 9.0]));
+        assert_eq!(shared.as_f64_row(0), expected[0].unwrap());
+        assert_eq!(reordered.velocities.as_f64_row(0), [7.0, 8.0, 9.0]);
+        for (i, atom) in reordered.atom_data.iter().enumerate().skip(1) {
+            assert_eq!(atom.velocity(), expected[i]);
+        }
+        assert_slots_on_columns(&reordered);
+    }
+
+    #[test]
+    fn syncing_atoms_after_a_column_copy_leaves_the_other_handle_alone() {
+        let mut frame = vel_forces_frame();
+        let shared = (*frame.velocities).clone();
+        let before = shared.as_f64_row(0);
+        frame.velocities.set_f64_row(0, [11.0, 22.0, 33.0]);
+        frame.sync_atom_data_from_arrays();
+        assert_eq!(shared.as_f64_row(0), before);
+        drop(shared);
+        assert_eq!(frame.atom_data[0].velocity(), Some([11.0, 22.0, 33.0]));
+        assert_slots_on_columns(&frame);
+    }
+
+    #[test]
+    fn a_dtype_projection_after_the_shared_block_drops_reads_the_column() {
+        let mut frame = vel_forces_frame();
+        let shared = (*frame.forces).clone();
+        frame.forces.set_f64_row(1, [3.0, 2.0, 1.0]);
+        drop(shared);
+        let dtypes = frame.header.metadata.dtypes();
+        frame.project_storage_dtypes(&dtypes);
+        assert_eq!(frame.atom_data[1].force(), Some([3.0, 2.0, 1.0]));
+        assert_slots_on_columns(&frame);
+    }
+
+    #[test]
+    fn adopting_a_float32_column_over_bound_slots_gives_each_atom_its_row() {
+        let mut frame = vel_forces_frame();
+        let n = frame.atom_data.len();
+        let mut dtypes = frame.header.metadata.dtypes();
+        dtypes.velocities = crate::storage_dtype::ElementKind::Float32;
+        let mut map = frame.header.metadata.to_map();
+        dtypes.insert_into(&mut map);
+        frame.header.metadata = FrameMeta::from_map_with_minor_raw(map, None);
+        let data: Vec<f64> = (0..n * 3).map(|k| k as f64 + 0.5).collect();
+        frame.adopt_velocity_column(data);
+        for (i, atom) in frame.atom_data.iter().enumerate() {
+            let row = [0.5, 1.5, 2.5].map(|v| v + (i * 3) as f64);
+            assert_eq!(atom.velocity(), Some(row), "velocity {i}");
+        }
+    }
+
+    #[test]
+    fn a_float32_motion_section_gives_each_atom_its_converted_row() {
+        let text = include_str!("../resources/test/tiny_cuh2_vel_forces.con");
+        let mut lines: Vec<&str> = text.lines().collect();
+        let meta = concat!(
+            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"#,
+            r#""sections":["velocities","forces"],"#,
+            r#""storage_dtypes":{"velocities":"float32","forces":"float32"},"energy":-42.5}"#
+        );
+        lines[1] = meta;
+        let text = lines.join("\n") + "\n";
+        let frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        assert_eq!(
+            frame.velocities.kind(),
+            crate::storage_dtype::ElementKind::Float32
+        );
+        let reference = vel_forces_frame();
+        for (i, atom) in frame.atom_data.iter().enumerate() {
+            let vel = reference.velocities.as_f64_row(i).map(|v| v as f32 as f64);
+            let frc = reference.forces.as_f64_row(i).map(|v| v as f32 as f64);
+            assert_eq!(frame.velocities.as_f64_row(i), vel, "column v {i}");
+            assert_eq!(atom.velocity(), Some(vel), "atom v {i}");
+            assert_eq!(atom.force(), Some(frc), "atom f {i}");
+        }
     }
 }

@@ -1,7 +1,7 @@
 //! Unit expressions and conversion (metatomic-inspired, SI dimensional analysis).
 //!
 //! Supports named base units and simple products/quotients with `*`, `/`, `^`,
-//! and parentheses (case-insensitive). `unit_conversion_factor(from, to)` returns
+//! and parentheses (case-sensitive). `unit_conversion_factor(from, to)` returns
 //! the multiplier `x_to = factor * x_from` when dimensions match.
 
 use crate::error::ParseError;
@@ -89,21 +89,58 @@ const fn unit(si_factor: f64, dim: Dimension) -> UnitValue {
     UnitValue { si_factor, dim }
 }
 
-/// Names are lowercase and sorted. Lookup is a binary search, so the table
-/// is plain static data: no `HashMap`, and no hashbrown control bytes for
-/// Valgrind to treat as an interior pointer of a process-lifetime allocation.
+/// CODATA 2018 values. CON-units.18 fixes bohr and hartree to these
+/// published decimal literals rather than values derived from rounded inputs.
+const CODATA2018_BOHR_M: f64 = 5.291_772_109_03e-11;
+const CODATA2018_AMU_KG: f64 = metrology::AMU;
+const CODATA2018_HARTREE_J: f64 = 4.359_744_722_207_1e-18;
+const CODATA2018_ELEMENTARY: f64 = metrology::E_CHARGE;
+const CODATA2018_AVOGADRO: f64 = metrology::N_A;
+/// CON-units.18 writes these decimals. A product of the elementary charge
+/// and a power of ten is a different binary64 value.
+const MEV_J: f64 = 1.602_176_634e-22;
+const MEGA_EV_J: f64 = 1.602_176_634e-13;
+/// Thermochemical kilocalorie, exactly 4184 joule. Not a CODATA value.
+const KCAL_THERMOCHEMICAL_J: f64 = 4184.0;
+
+/// Accepted spellings, sorted for binary search. `MeV` and `meV` are different
+/// names. There is no case fold (CON-units.16).
 const BASE_UNITS: &[BaseUnit] = &[
     BaseUnit {
-        name: "a",
+        name: "A",
         value: unit(1e-10, Dimension::LENGTH),
     },
     BaseUnit {
+        name: "AMU",
+        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
+    },
+    BaseUnit {
+        name: "Angstrom",
+        value: unit(1e-10, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "Da",
+        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
+    },
+    BaseUnit {
+        name: "Ha",
+        value: unit(CODATA2018_HARTREE_J, ENERGY),
+    },
+    BaseUnit {
+        name: "J",
+        value: unit(1.0, ENERGY),
+    },
+    BaseUnit {
+        name: "MeV",
+        value: unit(MEGA_EV_J, ENERGY),
+    },
+    BaseUnit {
         name: "a0",
-        value: unit(5.291_772_109_03e-11, Dimension::LENGTH),
+        value: unit(CODATA2018_BOHR_M, Dimension::LENGTH),
     },
     BaseUnit {
         name: "amu",
-        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
     },
     BaseUnit {
         name: "angstrom",
@@ -111,27 +148,27 @@ const BASE_UNITS: &[BaseUnit] = &[
     },
     BaseUnit {
         name: "bohr",
-        value: unit(5.291_772_109_03e-11, Dimension::LENGTH),
-    },
-    BaseUnit {
-        name: "da",
-        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+        value: unit(CODATA2018_BOHR_M, Dimension::LENGTH),
     },
     BaseUnit {
         name: "dalton",
-        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
     },
     BaseUnit {
         name: "e",
-        value: unit(1.602_176_634e-19, Dimension::CHARGE),
+        value: unit(CODATA2018_ELEMENTARY, Dimension::CHARGE),
+    },
+    BaseUnit {
+        name: "eV",
+        value: unit(CODATA2018_ELEMENTARY, ENERGY),
     },
     BaseUnit {
         name: "electron_charge",
-        value: unit(1.602_176_634e-19, Dimension::CHARGE),
+        value: unit(CODATA2018_ELEMENTARY, Dimension::CHARGE),
     },
     BaseUnit {
         name: "ev",
-        value: unit(1.602_176_634e-19, ENERGY),
+        value: unit(CODATA2018_ELEMENTARY, ENERGY),
     },
     BaseUnit {
         name: "femtosecond",
@@ -142,12 +179,8 @@ const BASE_UNITS: &[BaseUnit] = &[
         value: unit(1e-15, Dimension::TIME),
     },
     BaseUnit {
-        name: "ha",
-        value: unit(4.359_744_722_207_1e-18, ENERGY),
-    },
-    BaseUnit {
         name: "hartree",
-        value: unit(4.359_744_722_207_1e-18, ENERGY),
+        value: unit(CODATA2018_HARTREE_J, ENERGY),
     },
     BaseUnit {
         name: "j",
@@ -158,8 +191,12 @@ const BASE_UNITS: &[BaseUnit] = &[
         value: unit(1.0, ENERGY),
     },
     BaseUnit {
+        name: "kJ",
+        value: unit(1000.0, ENERGY),
+    },
+    BaseUnit {
         name: "kcal",
-        value: unit(4184.0, ENERGY),
+        value: unit(KCAL_THERMOCHEMICAL_J, ENERGY),
     },
     BaseUnit {
         name: "kg",
@@ -178,6 +215,10 @@ const BASE_UNITS: &[BaseUnit] = &[
         value: unit(1.0, Dimension::LENGTH),
     },
     BaseUnit {
+        name: "meV",
+        value: unit(MEV_J, ENERGY),
+    },
+    BaseUnit {
         name: "meter",
         value: unit(1.0, Dimension::LENGTH),
     },
@@ -187,11 +228,11 @@ const BASE_UNITS: &[BaseUnit] = &[
     },
     BaseUnit {
         name: "mev",
-        value: unit(1.602_176_634e-22, ENERGY),
+        value: unit(MEV_J, ENERGY),
     },
     BaseUnit {
         name: "mol",
-        value: unit(6.022_140_76e23, Dimension::ZERO),
+        value: unit(CODATA2018_AVOGADRO, Dimension::ZERO),
     },
     BaseUnit {
         name: "nanometer",
@@ -227,7 +268,11 @@ const BASE_UNITS: &[BaseUnit] = &[
     },
     BaseUnit {
         name: "u",
-        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
+    },
+    BaseUnit {
+        name: "Å",
+        value: unit(1e-10, Dimension::LENGTH),
     },
     BaseUnit {
         name: "å",
@@ -248,13 +293,15 @@ fn lookup_base(name: &str) -> Option<&'static UnitValue> {
 }
 
 /// Parse a unit expression into SI factor and dimension.
+///
+/// ASCII spaces and tabs are removed (CON-units.17). Names are exact
+/// spellings: `MeV` is megaelectronvolt and `meV` is millielectronvolt.
 pub fn parse_unit_expression(expr: &str) -> Result<(f64, Dimension), ParseError> {
-    let s: String = expr.chars().filter(|c| !c.is_whitespace()).collect();
+    let s: String = expr.chars().filter(|c| *c != ' ' && *c != '\t').collect();
     if s.is_empty() {
         return Err(ParseError::ValidationError("empty unit expression".into()));
     }
-    // CON-units.16 names are case-insensitive, including `Å`.
-    parse_expr(&s.to_lowercase())
+    parse_expr(&s)
 }
 
 fn parse_expr(s: &str) -> Result<(f64, Dimension), ParseError> {
@@ -327,8 +374,12 @@ fn parse_atom(s: &str) -> Result<(f64, Dimension, usize), ParseError> {
         )));
     }
     let name = &s[..j];
-    let base = lookup_base(name)
-        .ok_or_else(|| ParseError::ValidationError(format!("unknown unit '{name}'")))?;
+    let base = lookup_base(name).ok_or_else(|| {
+        ParseError::ValidationError(format!(
+            "unknown unit '{name}'; unit symbols are case-sensitive \
+             (meV is milli, MeV is mega)"
+        ))
+    })?;
     let mut end = j;
     let (f, d, extra) = apply_power(base.si_factor, base.dim, &s[end..])?;
     end += extra;
@@ -374,6 +425,16 @@ fn apply_power(f: f64, d: Dimension, rest: &str) -> Result<(f64, Dimension, usiz
 /// assert!((meters - 1.0e-10).abs() < 1.0e-20);
 /// ```
 pub fn unit_conversion_factor(from_unit: &str, to_unit: &str) -> Result<f64, ParseError> {
+    unit_conversion_factor_for_version(crate::CON_SPEC_VERSION, from_unit, to_unit)
+}
+
+/// Multiplicative factor from `from_unit` to `to_unit` under a CON major.
+pub fn unit_conversion_factor_for_version(
+    spec_version: u32,
+    from_unit: &str,
+    to_unit: &str,
+) -> Result<f64, ParseError> {
+    let _ = spec_version;
     let (f_from, d_from) = parse_unit_expression(from_unit)?;
     let (f_to, d_to) = parse_unit_expression(to_unit)?;
     if !d_from.compatible(d_to) {
@@ -386,26 +447,35 @@ pub fn unit_conversion_factor(from_unit: &str, to_unit: &str) -> Result<f64, Par
 
 /// Time unit that velocities in this frame are stored in (D10).
 ///
-/// Versions 1, 2, and 3.0 are the natural unit regardless of a
-/// `units.time` label (CON-units.8, CON-units.9). From minor 1,
-/// `units.time` is authoritative (CON-units.10). `override_unit`
-/// replaces that choice when it is a time expression (CON-units.15).
+/// Versions 1, 2, and every minor of major 3 are the natural unit
+/// regardless of a `units.time` label (CON-units.8, CON-units.9).
+/// Major 4 and later take `units.time` as authoritative (CON-units.10).
+/// `override_unit` must not replace that assignment (CON-units.15).
+/// A value that differs from the assigned unit is `InvalidUnits`.
 pub fn velocity_file_time_unit(
     spec_version: u32,
     metadata: &serde_json::Map<String, serde_json::Value>,
     override_unit: Option<&str>,
 ) -> Result<String, ParseError> {
-    if let Some(unit) = override_unit {
-        validate_unit_for_quantity("time", unit)?;
-        return Ok(unit.to_string());
-    }
-    let minor = metadata
-        .get(crate::types::meta::CON_SPEC_MINOR)
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0);
-    if spec_version < 3 || minor == 0 {
+    if spec_version < 4 {
         return Ok(NATURAL_TIME_UNIT.to_string());
     }
+    let assigned = assigned_velocity_time(metadata)?;
+    if let Some(unit) = override_unit {
+        validate_unit_for_quantity("time", unit)?;
+        let both_natural = is_natural_time_spelling(unit) && is_natural_time_spelling(&assigned);
+        if unit != assigned && !both_natural {
+            return Err(ParseError::InvalidUnits(
+                "a consumer must not replace the time unit the clauses assign".into(),
+            ));
+        }
+    }
+    Ok(assigned)
+}
+
+fn assigned_velocity_time(
+    metadata: &serde_json::Map<String, serde_json::Value>,
+) -> Result<String, ParseError> {
     let time = metadata
         .get(crate::types::meta::UNITS)
         .and_then(|u| u.get("time"))
@@ -417,7 +487,7 @@ pub fn velocity_file_time_unit(
             Ok(unit.to_string())
         }
         None => Err(ParseError::InvalidUnits(
-            "v3.1 velocities require units.time".into(),
+            "major >= 4 velocities require units.time".into(),
         )),
     }
 }
@@ -468,6 +538,15 @@ pub fn validate_unit_for_quantity(quantity: &str, unit: &str) -> Result<(), Pars
 
 /// CON v3 requires `units` object with non-empty `length` and `energy` strings.
 pub fn validate_v3_units_metadata(units: &serde_json::Value) -> Result<(), ParseError> {
+    validate_units_metadata_for_version(3, units)
+}
+
+/// Validate the units object under the spelling rules of its CON major.
+pub fn validate_units_metadata_for_version(
+    spec_version: u32,
+    units: &serde_json::Value,
+) -> Result<(), ParseError> {
+    let _ = spec_version;
     let obj = units
         .as_object()
         .ok_or_else(|| ParseError::ValidationError("units must be a JSON object".into()))?;
@@ -506,9 +585,23 @@ pub fn validate_v3_units_metadata(units: &serde_json::Value) -> Result<(), Parse
     Ok(())
 }
 
-/// Default LODE units object for new v3 frames.
-/// Pinned spelling of the eOn/ASE natural time unit (CON-units.5, D10).
-pub const NATURAL_TIME_UNIT: &str = "(amu*angstrom^2/eV)^0.5";
+/// Symbol spelling of the natural time unit (CON-units.5).
+/// The historical alias `(amu*angstrom^2/eV)^0.5` is the same unit.
+pub const NATURAL_TIME_UNIT: &str = "(u*Å^2/eV)^0.5";
+
+/// The eOn and ASE spelling. It mixes a name with symbols and is accepted
+/// as an alias of [`NATURAL_TIME_UNIT`], not as the spelling a new frame uses.
+pub const HISTORICAL_NATURAL_TIME: &str = "(amu*angstrom^2/eV)^0.5";
+
+fn is_natural_time(compact: &str) -> bool {
+    compact == NATURAL_TIME_UNIT || compact == HISTORICAL_NATURAL_TIME
+}
+
+/// Both spellings of CON-units.5, ignoring ASCII spaces and tabs.
+pub fn is_natural_time_spelling(unit: &str) -> bool {
+    let compact: String = unit.chars().filter(|c| !c.is_whitespace()).collect();
+    is_natural_time(&compact)
+}
 
 pub fn default_v3_units_json() -> serde_json::Value {
     serde_json::json!({
@@ -519,23 +612,25 @@ pub fn default_v3_units_json() -> serde_json::Value {
 }
 
 fn preferred_atom(alias: &str) -> Option<&'static str> {
-    let lower = alias.trim().to_lowercase();
-    Some(match lower.as_str() {
-        "a" | "å" | "angstrom" | "ångstrom" => "angstrom",
-        "nm" | "nanometer" | "nanometre" => "nm",
+    // Exact spellings. `a`, `ha`, and `da` are not folded onto another unit.
+    Some(match alias {
+        "A" | "Å" | "å" | "angstrom" | "Angstrom" => "angstrom",
+        "nm" | "nanometer" => "nm",
         "m" | "meter" | "metre" => "m",
         "bohr" | "a0" => "bohr",
-        "fs" | "femtosecond" | "femtoseconds" => "fs",
-        "ps" | "picosecond" | "picoseconds" => "ps",
-        "ns" | "nanosecond" | "nanoseconds" => "ns",
-        "s" | "sec" | "second" | "seconds" => "s",
-        "ev" => "eV",
-        "mev" => "meV",
-        "hartree" | "ha" => "hartree",
-        "j" | "joule" => "J",
-        "kj" => "kJ",
+        "fs" | "femtosecond" => "fs",
+        "ps" | "picosecond" => "ps",
+        "ns" | "nanosecond" => "ns",
+        "s" | "second" => "s",
+        "eV" | "ev" => "eV",
+        "meV" | "mev" => "meV",
+        "MeV" => "MeV",
+        "hartree" | "Ha" => "hartree",
+        "J" | "j" | "joule" => "J",
+        "kJ" | "kj" => "kJ",
         "kcal" => "kcal",
-        "amu" | "u" | "dalton" | "da" => "amu",
+        "amu" | "AMU" => "amu",
+        "u" | "Da" | "dalton" => "u",
         "kg" | "kilogram" => "kg",
         "mol" => "mol",
         _ => return None,
@@ -545,14 +640,27 @@ fn preferred_atom(alias: &str) -> Option<&'static str> {
 /// Rewrite a unit expression to preferred names (`A` → `angstrom`, `ev` → `eV`).
 /// The expression MUST parse (`unit_conversion_factor` identity).
 pub fn canonicalize_unit_expression(expr: &str) -> Result<String, ParseError> {
+    canonicalize_unit_expression_for_version(crate::CON_SPEC_VERSION, expr)
+}
+
+/// Rewrite a unit expression to preferred names for a CON major.
+pub fn canonicalize_unit_expression_for_version(
+    spec_version: u32,
+    expr: &str,
+) -> Result<String, ParseError> {
     let trimmed = expr.trim();
     if trimmed.is_empty() {
         return Err(ParseError::ValidationError("empty unit".into()));
     }
-    let _ = unit_conversion_factor(trimmed, trimmed)?;
+    let _ = unit_conversion_factor_for_version(spec_version, trimmed, trimmed)?;
     let compact: String = trimmed.chars().filter(|c| !c.is_whitespace()).collect();
-    if compact == NATURAL_TIME_UNIT {
-        return Ok(NATURAL_TIME_UNIT.to_string());
+    if is_natural_time(&compact) {
+        return Ok(if spec_version >= 4 {
+            NATURAL_TIME_UNIT
+        } else {
+            HISTORICAL_NATURAL_TIME
+        }
+        .to_string());
     }
     let mut out = String::new();
     let bytes = compact.as_bytes();
@@ -589,14 +697,66 @@ pub fn canonicalize_unit_expression(expr: &str) -> Result<String, ParseError> {
     }
     let rendered = out.split_whitespace().collect::<Vec<_>>().join(" ");
     let rendered_compact: String = rendered.chars().filter(|c| !c.is_whitespace()).collect();
-    if rendered_compact == NATURAL_TIME_UNIT {
-        return Ok(NATURAL_TIME_UNIT.to_string());
+    if is_natural_time(&rendered_compact) {
+        return Ok(if spec_version >= 4 {
+            NATURAL_TIME_UNIT
+        } else {
+            HISTORICAL_NATURAL_TIME
+        }
+        .to_string());
     }
     Ok(rendered)
 }
 
+/// CON-units.21. `units.velocity` does not replace the time the version rules assign.
+pub fn enforce_velocity_precedence(
+    spec_version: u32,
+    units: &serde_json::Value,
+) -> Result<(), ParseError> {
+    let Some(obj) = units.as_object() else {
+        return Ok(());
+    };
+    let Some(velocity) = obj.get("velocity").and_then(|value| value.as_str()) else {
+        return Ok(());
+    };
+    validate_unit_for_quantity("velocity", velocity)?;
+    let length = obj
+        .get("length")
+        .and_then(|value| value.as_str())
+        .filter(|text| !text.is_empty())
+        .unwrap_or("angstrom");
+    let time = if spec_version >= 4 {
+        match obj
+            .get("time")
+            .and_then(|value| value.as_str())
+            .filter(|text| !text.is_empty())
+        {
+            Some(unit) => unit.to_string(),
+            None => return Ok(()),
+        }
+    } else {
+        NATURAL_TIME_UNIT.to_string()
+    };
+    let quotient = format!("({length})/({time})");
+    let factor = unit_conversion_factor_for_version(spec_version, velocity, &quotient)?;
+    if (factor - 1.0).abs() > 1e-9 {
+        return Err(ParseError::InvalidUnits(format!(
+            "units.velocity must equal units.length divided by the time unit, not '{velocity}'"
+        )));
+    }
+    Ok(())
+}
+
 /// Rewrite every string member. Does not require v3 `length`+`energy`.
 pub fn canonicalize_units_object(
+    units: &serde_json::Value,
+) -> Result<serde_json::Value, ParseError> {
+    canonicalize_units_object_for_version(crate::CON_SPEC_VERSION, units)
+}
+
+/// Rewrite every string member under the named CON major.
+pub fn canonicalize_units_object_for_version(
+    spec_version: u32,
     units: &serde_json::Value,
 ) -> Result<serde_json::Value, ParseError> {
     let obj = units
@@ -609,7 +769,7 @@ pub fn canonicalize_units_object(
             .ok_or_else(|| ParseError::ValidationError(format!("units.{k} must be a string")))?;
         out.insert(
             k.clone(),
-            serde_json::Value::String(canonicalize_unit_expression(s)?),
+            serde_json::Value::String(canonicalize_unit_expression_for_version(spec_version, s)?),
         );
     }
     Ok(serde_json::Value::Object(out))
@@ -620,12 +780,29 @@ pub fn canonicalize_units_metadata(
     units: &serde_json::Value,
 ) -> Result<serde_json::Value, ParseError> {
     validate_v3_units_metadata(units)?;
-    canonicalize_units_object(units)
+    canonicalize_units_object_for_version(3, units)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// CON-units.18: bohr and hartree use the specification's exact literals.
+    #[test]
+    fn con_units_18_uses_spec_codata_2018_literals() {
+        let bohr = 5.291_772_109_03e-11_f64;
+        let hartree = 4.359_744_722_207_1e-18_f64;
+        assert_eq!(CODATA2018_BOHR_M.to_bits(), bohr.to_bits());
+        assert_eq!(CODATA2018_HARTREE_J.to_bits(), hartree.to_bits());
+        assert_eq!(
+            parse_unit_expression("bohr").unwrap().0.to_bits(),
+            bohr.to_bits()
+        );
+        assert_eq!(
+            parse_unit_expression("hartree").unwrap().0.to_bits(),
+            hartree.to_bits()
+        );
+    }
 
     #[test]
     fn base_table_is_shared_across_calls_and_threads() {

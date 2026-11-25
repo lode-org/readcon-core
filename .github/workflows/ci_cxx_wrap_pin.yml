@@ -1,38 +1,54 @@
 name: cxx wrap pin
 
-# Rebuild the slim cxx archive on every push and pull request and fail when
-# packaging/wrapdb still names the previous tree. bench/** does not enter
-# the archive, so a campaign-only change does not run this job.
+# Rebuild the slim cxx archive on protected refs and pull requests.
+# Pull requests report stale pins without failing. Branch and tag pushes
+# remain strict release gates. bench/** and paper/** do not enter the
+# archive, so a campaign-only or paper-only change does not run this job.
 on:
   push:
     branches:
       - main
-      - "fix/**"
-      - "feat/**"
-      - "ci/**"
+    tags:
+      - '**'
     paths-ignore:
       - 'bench/**'
+      - 'paper/**'
   pull_request:
     paths-ignore:
       - 'bench/**'
+      - 'paper/**'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: cxx-wrap-pin-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: false
 
 jobs:
   cxx-wrap-pin:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
 
       - name: Install Rust 1.88
-        uses: dtolnay/rust-toolchain@1.88.0
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: 1.88.0
 
-      - name: Rebuild the cxx tarball and compare the wrap pin
+      - name: Compare the wrap pin on a pull request
+        if: github.event_name == 'pull_request'
         env:
           CC: gcc
           CXX: g++
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
-        run: bash scripts/check_cxx_wrap_pin.sh
+        run: bash scripts/check_cxx_wrap_pin.sh --pull-request
+
+      - name: Compare the wrap pin on a protected ref
+        if: github.event_name != 'pull_request'
+        env:
+          CC: gcc
+          CXX: g++
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+        run: bash scripts/check_cxx_wrap_pin.sh --strict

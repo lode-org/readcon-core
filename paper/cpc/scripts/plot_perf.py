@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The head-to-head timing figure of the CPC manuscript.
 
-timing.pdf has three panels, each from a deposited record:
+timing_h2h.pdf has three panels, each from a deposited record:
 
 * top and middle, one-thread Python medians and quartiles of ``reads.json``
 * bottom, one-thread all-frames medians and quartiles of the native-reader campaign
@@ -201,7 +201,7 @@ def timing(at) -> None:
         fontsize=8,
         pad=2,
     )
-    _save(fig, "timing")
+    _save(fig, "timing_h2h")
 
 
 def main() -> None:

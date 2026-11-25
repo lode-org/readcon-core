@@ -1,0 +1,4 @@
+# Blobs at or above 1 MiB that HEAD is supposed to contain.
+# paper/cpc/data/claisen/results.json is the append-only Claisen NEB
+# band. It is a measurement record and is not rewritten.
+paper/cpc/data/claisen/results.json

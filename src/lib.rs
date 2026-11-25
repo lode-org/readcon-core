@@ -27,6 +27,10 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
     not(feature = "static_system_alloc")
 ))]
 mod allocator_link_tests {
+    #[cfg(all(
+        not(any(asan_run, tsan_run, miri)),
+        not(feature = "static_system_alloc")
+    ))]
     unsafe extern "C" {
         fn mi_usable_size(ptr: *const std::ffi::c_void) -> usize;
     }
@@ -114,18 +118,25 @@ pub mod python;
 /// - Version 2: column 5 is the original atom index before type-based
 ///   grouping; JSON line 2 with at least `{"con_spec_version": 2}`.
 /// - Version 3: same as v2 plus **required** `units` object on JSON **line 2**
-///   with non-empty `length` and `energy`. Writers emit canonical names
-///   (`angstrom`, `eV`). A velocities section on minor 1 also requires
-///   `units.time`. See `units::canonicalize_unit_expression`.
+///   with non-empty `length` and `energy`. Every minor keeps the version 3.0
+///   meaning of `units.time`: velocities are `units.length` per the natural
+///   time unit, and `units.time` is not trusted (CON-units.8, CON-units.9).
+/// - Version 4: `units.time` is authoritative for velocities (CON-units.10).
+///   Writers emit canonical names (`angstrom`, `eV`) and, with velocities,
+///   `units.time`. The spec identity is major.minor.patch (CON-status.3).
 ///
 /// See `docs/orgmode/spec.org` for the full specification.
-pub const CON_SPEC_VERSION: u32 = 3;
+pub const CON_SPEC_VERSION: u32 = 4;
 
-/// Minor implemented by this reader. Newer minors of major 3 are accepted.
-/// An unknown section is skipped only when the frame minor is greater than
-/// this value and `section_arity` gives the value-field count
-/// (CON-section.8, CON-section.12, D14).
-pub const CON_SPEC_MINOR: u32 = 1;
+/// Minor of major 4 implemented by this reader. A newer minor of major 4
+/// is accepted. An unknown section is skipped only when the frame minor is
+/// greater than the minor this reader implements for that major and
+/// `section_arity` gives the value-field count (CON-section.8).
+/// For major 3 that minor is 1.
+pub const CON_SPEC_MINOR: u32 = 0;
+
+/// Patch of this specification text (CON-status.3, CON-status.4).
+pub const CON_SPEC_PATCH: u32 = 4;
 
 /// Library version string, taken from the package version at compile time.
 /// `build.rs` checks that it matches the `VERSION` file.
@@ -149,7 +160,9 @@ mod tests {
 
     #[test]
     fn test_spec_version_is_current() {
-        assert_eq!(CON_SPEC_VERSION, 3);
+        assert_eq!(CON_SPEC_VERSION, 4);
+        assert_eq!(CON_SPEC_MINOR, 0);
+        assert_eq!(CON_SPEC_PATCH, 4);
         #[cfg(feature = "capi")]
         assert_eq!(ffi::RKR_CON_SPEC_VERSION, CON_SPEC_VERSION);
     }

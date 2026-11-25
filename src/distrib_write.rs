@@ -177,6 +177,7 @@ pub fn write_ranked_bytes(
     Ok(total)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_pwrite(
     comm: &Comm,
     path: &Path,
@@ -484,9 +485,7 @@ fn write_pwrite_spare(
     } else {
         Ok(())
     };
-    if let Err(err) = collective(comm, prepared.map_err(BoxErr::from), "create") {
-        return Err(err);
-    }
+    collective(comm, prepared.map_err(BoxErr::from), "create")?;
     let wrote = (|| -> std::io::Result<()> {
         let file = std::fs::OpenOptions::new()
             .read(true)
@@ -494,9 +493,7 @@ fn write_pwrite_spare(
             .open(&spare)?;
         pwrite_frames(&file, bytes, offset, frame_starts)
     })();
-    if let Err(err) = collective(comm, wrote.map_err(BoxErr::from), "pwrite") {
-        return Err(err);
-    }
+    collective(comm, wrote.map_err(BoxErr::from), "pwrite")?;
     let published = if comm.rank() == 0 {
         crate::writer::publish_rewrite(&spare, path, keep_spare).map_err(BoxErr::from)
     } else {
@@ -523,6 +520,7 @@ fn open_ranked_spare(path: &Path, total: u64) -> std::io::Result<std::path::Path
         .read(true)
         .write(true)
         .create(true)
+        .truncate(false)
         .open(&spare)?;
     if file.metadata()?.len() != total {
         file.set_len(total)?;
@@ -557,6 +555,7 @@ fn bcast_short(comm: &Comm, data: &[u8]) -> Vec<u8> {
 /// Truncating a file we are about to fill frees every page and faults
 /// them back. Rank 0 did that alone, so eight ranks waited on one
 /// free of the whole trajectory. A same-length rewrite keeps the pages.
+#[cfg(test)]
 fn prepare_ranked_file(path: &Path, total: u64) -> std::io::Result<()> {
     if let Ok(meta) = std::fs::metadata(path)
         && meta.len() == total
@@ -757,6 +756,7 @@ pub fn write_block_refs(
     Ok(total)
 }
 
+#[cfg(test)]
 fn pack_slice_parts(parts: &frame_index::SliceParts) -> Vec<u8> {
     let mut out =
         Vec::with_capacity(16 + parts.fragments.iter().map(|(_, b)| b.len()).sum::<usize>());
@@ -774,6 +774,7 @@ fn pack_slice_parts(parts: &frame_index::SliceParts) -> Vec<u8> {
     out
 }
 
+#[cfg(test)]
 fn unpack_slice_parts(mut buf: &[u8]) -> Result<frame_index::SliceParts, String> {
     fn take<'a>(buf: &mut &'a [u8], n: usize) -> Result<&'a [u8], String> {
         if buf.len() < n {
@@ -1071,6 +1072,7 @@ fn unpack_index_shares(buf: &[u8], counts: &[i32]) -> (Vec<u64>, Vec<(u64, u64)>
 /// One gather of the frame offsets each rank already has and the block
 /// hashes of its bytes. Rank 0 writes the sidecar. Those bytes match a
 /// fresh fingerprint of the file.
+#[allow(clippy::too_many_arguments)]
 fn publish_index(
     comm: &Comm,
     path: &Path,
@@ -1259,7 +1261,6 @@ fn write_gather(comm: &Comm, path: &Path, bytes: &[u8], total: u64) -> Result<()
                 }
             }
         }
-        drop(sink);
         if let Some(f) = file.as_mut()
             && let Err(e) = f.sync_all()
         {
@@ -1364,6 +1365,7 @@ pub unsafe extern "C" fn rkr_mpi_rewrite_block_f(
 }
 
 #[cfg(feature = "capi")]
+#[allow(clippy::too_many_arguments)]
 unsafe fn mpi_write_block(
     comm_f: ffi::RSMPI_Fint,
     path_c: *const std::ffi::c_char,

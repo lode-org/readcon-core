@@ -145,8 +145,8 @@ fn binding_rewrite_stamps_legacy_velocity_time_and_keeps_sections() {
     let built = frame_with_every_section();
     let atom = &built.atom_data[0];
     assert_eq!(atom.velocity(), Some([0.1, 0.2, 0.3]));
-    // v3 minor 1 already carries the label contract, so the stamp returns.
-    let kept = binding_rewrite_frame(&built).expect("rewrite minor 1");
+    // A major 4 frame already carries the natural time label the builder wrote.
+    let kept = binding_rewrite_frame(&built).expect("rewrite major 4");
     let kept_atom = &kept.atom_data[0];
     assert_eq!(kept_atom.velocity(), Some([0.1, 0.2, 0.3]));
     assert_eq!(kept_atom.force(), Some([1.0, 0.0, -1.0]));
@@ -156,7 +156,7 @@ fn binding_rewrite_stamps_legacy_velocity_time_and_keeps_sections() {
     assert_eq!(kept_atom.magmom(), Some([0.0, 0.0, 1.25]));
     assert_eq!(kept_atom.displacement(), Some([0.01, 0.02, 0.03]));
     assert_eq!(kept_atom.spread(), Some([0.04, 0.05, 0.06]));
-    assert_eq!(time_label(&kept), None);
+    assert_eq!(time_label(&kept), Some(NATURAL_TIME_UNIT));
 
     let mut legacy = built.clone();
     legacy.header.spec_version = 2;
@@ -169,14 +169,17 @@ fn binding_rewrite_stamps_legacy_velocity_time_and_keeps_sections() {
         json!({"length": "angstrom", "energy": "eV", "mass": "amu"}),
     );
     let stamped = binding_rewrite_frame(&legacy).expect("rewrite v2 units object");
-    assert_eq!(time_label(&stamped), Some(NATURAL_TIME_UNIT));
+    assert_eq!(
+        time_label(&stamped),
+        Some(readcon_core::units::HISTORICAL_NATURAL_TIME)
+    );
     assert_eq!(
         stamped
             .header
             .metadata
             .get(meta::CON_SPEC_MINOR)
             .and_then(|minor| minor.as_u64()),
-        Some(1)
+        Some(0)
     );
     assert_eq!(stamped.atom_data[0].velocity(), Some([0.1, 0.2, 0.3]));
 
@@ -185,7 +188,10 @@ fn binding_rewrite_stamps_legacy_velocity_time_and_keeps_sections() {
     bare.header.metadata.remove(meta::UNITS);
     bare.header.metadata.remove(meta::CON_SPEC_MINOR);
     let filled = binding_rewrite_frame(&bare).expect("rewrite without units");
-    assert_eq!(time_label(&filled), Some(NATURAL_TIME_UNIT));
+    assert_eq!(
+        time_label(&filled),
+        Some(readcon_core::units::HISTORICAL_NATURAL_TIME)
+    );
 
     let mut odd = built.clone();
     odd.header.spec_version = 2;
@@ -404,4 +410,38 @@ fn accepted_corpus_rewrites_are_byte_identical() {
         .status()
         .unwrap_or_else(|err| panic!("failed to run {}: {err}", script.display()));
     assert!(status.success(), "cross-binding rewrite comparison failed");
+}
+
+/// The C rewriter and the bound writer emit the same bytes, so a major-3
+/// frame keeps major 3 through both and a legacy femtosecond velocity frame
+/// moves to the current major through both.
+#[test]
+fn binding_rewrite_matches_the_bound_writer() {
+    use readcon_core::iterators::ConFrameIterator;
+    let v3 = r#"{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","time":"fs"}}"#;
+    let v2 = r#"{"con_spec_version":2,"con_spec_minor":1}"#;
+    let atoms = "1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 1\n";
+    let velocities = "\nH\nVelocities of Component 1\n0.1 0 0 0 1\n";
+    for (major, line2, body) in [
+        (3, v3, atoms.to_string()),
+        (4, v3, format!("{atoms}{velocities}")),
+        (4, v2, atoms.to_string()),
+    ] {
+        let source = format!("t\n{line2}\n10 10 10\n90 90 90\n\n\n{body}");
+        let frame = ConFrameIterator::new(&source)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let rewritten = binding_rewrite_frame(&frame).expect("rewrite");
+        assert_eq!(rewritten.header.spec_version, major, "{source}");
+        let mut bound = Vec::new();
+        ConFrameWriter::new(&mut bound)
+            .write_frame_bound(&frame)
+            .expect("bound");
+        assert_eq!(
+            String::from_utf8(write_bytes(&[rewritten])).unwrap(),
+            String::from_utf8(bound).unwrap(),
+            "{source}"
+        );
+    }
 }

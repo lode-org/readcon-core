@@ -18,11 +18,14 @@ names the id. A clause that no corpus file, probe or test names has its reason
 in REASONS; the script stops when such a clause has none, or when REASONS
 gives a reason for a clause that something names.
 
-    python paper/cpc/scripts/clause_coverage.py            # writes the versioned data/spec record
-    python paper/cpc/scripts/clause_coverage.py --check    # writes nothing; exits 1 if the record or the TeX differs
-    python paper/cpc/scripts/clause_coverage.py --macros   # writes only clauses_macros.tex, from the committed record
+    python paper/cpc/scripts/clause_coverage.py            # writes clauses_macros.tex from the live tree
+    python paper/cpc/scripts/clause_coverage.py --check    # compares the live regeneration without writing
+    python paper/cpc/scripts/clause_coverage.py --record   # appends a final spec-major record
 
-It also writes clauses_macros.tex, the counts the paper prints.
+It also writes clauses_macros.tex, the counts the paper prints. A committed
+final record is never rewritten: when the sources change, --record writes
+clause_coverage-<version>-spec-major-<n>.json, which supersedes record n - 1,
+and --check compares the newest one.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ import ast
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -43,18 +47,152 @@ REPO = provenance.REPO
 SPEC = REPO / "docs" / "orgmode" / "spec.org"
 CORPUS31 = ROOT / "data" / "corpus31" / "manifest.toml"
 CONFORMANCE = REPO / "resources" / "conformance" / "manifest.toml"
-PROBES = ROOT / "data" / "referee_probes.json"
+PROBE_RECORDS = sorted((ROOT / "data").glob("referee_probes-*.json"))
+PROBES = PROBE_RECORDS[-1] if PROBE_RECORDS else ROOT / "data" / "referee_probes.json"
 INDEP = ROOT / "scripts" / "indep_reader.py"
 TEST_ROOTS = ("tests", "src")
 SKIP_DIRS = {"target", "build", "__pycache__"}
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
-SPEC_DATA = ROOT / "data" / "spec"
-RECORDS = provenance.revisions(SPEC_DATA, "clause_coverage", VERSION)
-OUT = provenance.latest_record(SPEC_DATA, "clause_coverage", VERSION)
-SUPERSEDES = SPEC_DATA / "clause_coverage.json"
-if len(RECORDS) > 1:
-    SUPERSEDES = RECORDS[-2]
 MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
+RECORD_DIR = ROOT / "data" / "spec"
+LEGACY_RECORD = RECORD_DIR / f"clause_coverage-{VERSION}.json"
+
+
+def final_record(n: int) -> Path:
+    """Final record n of this version. Record n supersedes record n - 1."""
+    suffix = "" if n == 1 else f"-{n}"
+    return RECORD_DIR / f"clause_coverage-{VERSION}-spec-major{suffix}.json"
+
+
+def final_count() -> int:
+    n = 0
+    while final_record(n + 1).is_file():
+        n += 1
+    return n
+
+
+def final_chain(spec_dir: Path | None = None, version: str | None = None) -> list[Path]:
+    """The final spec-major records of one version, oldest first.
+
+    Final record 1 supersedes the legacy record of the version and record n
+    supersedes record n - 1. No other record of data/spec may supersede a
+    final record, so the newest one is the only tip of the active chain.
+    """
+    spec_dir = spec_dir or RECORD_DIR
+    ver = version or VERSION
+
+    def named(n: int) -> Path:
+        suffix = "" if n == 1 else f"-{n}"
+        return spec_dir / f"clause_coverage-{ver}-spec-major{suffix}.json"
+
+    chain: list[Path] = []
+    while named(len(chain) + 1).is_file():
+        chain.append(named(len(chain) + 1))
+    links = {
+        path.name: Path(prior).name
+        for path in spec_dir.glob(f"clause_coverage-{ver}-*.json")
+        if (prior := json.loads(path.read_text(encoding="utf-8")).get("supersedes"))
+    }
+    parent = f"clause_coverage-{ver}.json"
+    for record in chain:
+        if links.get(record.name) != parent:
+            sys.exit(
+                f"{record.name} supersedes {links.get(record.name)}, not {parent}; "
+                f"the {len(chain)} final clause coverage records of {ver} must "
+                "form one chain"
+            )
+        parent = record.name
+    for record, after in zip(chain, [*chain[1:], None]):
+        children = sorted(name for name, prior in links.items() if prior == record.name)
+        allowed = [after.name] if after else []
+        if children != allowed:
+            sys.exit(
+                f"{len(children)} records of data/spec supersede {record.name} "
+                f"({', '.join(children) or 'none'}); the {len(chain)} final clause "
+                f"coverage records of {ver} must form one chain"
+            )
+    return chain
+
+
+FINAL_RECORD = (final_chain() or [final_record(1)])[-1]
+
+
+def default_paths(
+    root: Path | None = None,
+    repo: Path | None = None,
+    spec: Path | None = None,
+    version: str | None = None,
+) -> tuple[Path, Path]:
+    """Previous and newest coverage records for one spec.org.
+
+    A spec.org with a blob-named record follows that chain. Otherwise the
+    final spec-major chain of the version is the active one.
+    """
+    root = root or ROOT
+    repo_root = (repo or REPO).resolve()
+    spec_path = spec or (repo_root / "docs" / "orgmode" / "spec.org")
+    ver = (
+        version
+        if version is not None
+        else (repo_root / "VERSION").read_text(encoding="utf-8").strip()
+    )
+    spec_dir = root / "data" / "spec"
+    base = spec_dir / f"clause_coverage-{ver}.json"
+    blob8 = (
+        subprocess.run(
+            ["git", "-C", str(repo_root), "hash-object", str(spec_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()[:8]
+        if spec_path.is_file()
+        else None
+    )
+    by_blob = spec_dir / f"clause_coverage-{ver}-{blob8}.json" if blob8 else None
+    if by_blob is not None and by_blob.is_file():
+        # A later record of the same spec names the one it supersedes; the
+        # newest is the end of that chain, whatever its file name sorts as.
+        later = {
+            path: json.loads(path.read_text(encoding="utf-8")).get("supersedes")
+            for path in spec_dir.glob(f"clause_coverage-{ver}-{blob8}-*.json")
+        }
+        previous, newest = base, by_blob
+        for _ in later:
+            name = (
+                newest.resolve().relative_to(repo_root).as_posix()
+                if newest.resolve().is_relative_to(repo_root)
+                else f"paper/cpc/data/spec/{newest.name}"
+            )
+            after = [path for path, prior in later.items() if prior == name]
+            if len(after) != 1:
+                sys.exit(
+                    f"{len(after)} records of data/spec supersede {newest.name}; "
+                    f"the {len(later) + 1} clause coverage records of spec "
+                    f"{blob8} must form one chain"
+                )
+            previous, newest = newest, after[0]
+        return previous, newest
+    finals = final_chain(spec_dir, ver)
+    if finals:
+        return (finals[-2] if len(finals) > 1 else base), finals[-1]
+    if not spec_path.is_file():
+        return spec_dir / "clause_coverage.json", base
+    if base.is_file():
+        existing = (
+            json.loads(base.read_text(encoding="utf-8")).get("spec", {}).get("sha256")
+        )
+        if existing != hashlib.sha256(spec_path.read_bytes()).hexdigest():
+            assert by_blob is not None
+            return base, by_blob
+        return spec_dir / "clause_coverage.json", base
+    return spec_dir / "clause_coverage.json", base
+
+
+def _default_paths() -> tuple[Path, Path]:
+    return default_paths()
+
+
+SUPERSEDES, OUT = _default_paths()
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)
 ID = re.compile(r"CON-[a-z][a-z0-9]*\.[0-9]+")
@@ -70,14 +208,6 @@ REASONS = {
     "Rust, Python or the C ABI, takes a consumer or a target version: the arguments name the "
     "destination, the frames, the float format or precision, compression, canonical order and the "
     "MPI settings, so no writer call states the clause.",
-    "CON-section.10": "A rule for revising the specification: adding a reserved section name raises "
-    "con_spec_minor. It states nothing a reader or a writer does.",
-    "CON-section.11": "A rule for revising the specification: adding a reserved section name needs no new major. "
-    "It states nothing a reader or a writer does.",
-    "CON-section.18": "A SHOULD on the values a producer stores. CON-section.19 forbids a reader to reject a frame "
-    "whose energy differs from the sum of its energies rows, and "
-    "tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads such "
-    "a frame.",
     "CON-file.6": "A writer rule against an extra blank line between frames. A reader still finds the next "
     "frame; no corpus file has that blank as its only fault.",
     "CON-header.1": "A MAY that leaves lines 5 and 6 empty. The reader accepts an empty line and a filled one, "
@@ -97,8 +227,7 @@ REASONS = {
     "CON-section.5": "The per-atom energy section name is energies. The parser looks up that name.",
     "CON-section.6": "atom_energies is not a section name. An unknown name is skipped with the unknown-section rule.",
     "CON-section.19": "A reader must not reject a frame whose energy differs from the sum of its energies rows. "
-    "tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads that frame, and "
-    "its name does not spell this clause.",
+    "scripts/clause_coverage.py shows that no corpus file, probe or named test cites that clause.",
     "CON-validate.2": "validate true must not relax a check that already applies. The flag only adds checks.",
     "CON-bonds.1": "bonds must not appear in sections. The named bonds probes are CON-bonds.2, a malformed bonds entry.",
     "CON-bonds.2": "scripts/indep_reader.py rejects a malformed bonds entry. The scan reads the corpus, the "
@@ -114,6 +243,45 @@ REASONS = {
     "CON-token.1": "An integer token is ASCII digits with no sign and no decimal point. The finite-number parser "
     "rejects the other spellings, and the tests name the function rather than this clause.",
 }
+REASONS.update(
+    {
+        "CON-file.7": "The parser applies this definition while finding blank lines; no test name spells this clause.",
+        "CON-file.8": "The byte parser reports the required class; no corpus entry isolates non-UTF-8 text outside a numeric field.",
+        "CON-file.9": "The line reader accepts a final carriage return; no corpus entry isolates that ending.",
+        "CON-frame.8": "The iterator returns no frame for an empty stream; no corpus entry names the empty stream.",
+        "CON-frame.9": "The initial-header path is the ordinary parser entry; no test name spells this distinction.",
+        "CON-line2.18": "The metadata parser enforces the depth limit; no test name spells this clause id.",
+        "CON-line2.19": "The metadata parser rejects a reserved non-binary64 number; no test name spells this clause id.",
+        "CON-line2.20": "The metadata type check precedes validation checks in one parser path; no test name spells this ordering.",
+        "CON-count.9": "The count parser uses an unsigned 64-bit integer; no test name spells the complete range.",
+        "CON-count.10": "The count parser runs before row-width validation; no test name spells this ordering.",
+        "CON-coord.1": "The coordinate-label parser applies this check in every mode; no test name spells this clause.",
+        "CON-section.21": "The section parser applies this row rule; no test name spells this clause.",
+        "CON-section.22": "The section parser applies this value rule; no test name spells this clause.",
+        "CON-section.23": "The section parser applies this identity rule; no test name spells this clause.",
+        "CON-units.17": "The unit lexer removes ASCII spaces and tabs; no test name spells this clause.",
+        "CON-num.10": "The byte parser reports the required numeric class; no test name spells this clause.",
+    }
+)
+REASONS.update(
+    {
+        "CON-file.10": "The line reader handles a final unterminated line; no corpus entry isolates this ending.",
+        "CON-file.11": "The byte parser classifies malformed text before field parsing; no test name spells this clause.",
+        "CON-line2.23": "The metadata object parser rejects duplicate names; no test name spells this clause.",
+        "CON-line2.24": "The schema is an informative artifact rather than an executable acceptance case.",
+        "CON-line2.25": "The parser has no byte-length rejection beyond the depth rule; no finite corpus can cover that absence.",
+        "CON-id.13": "The id parser applies the unsigned range before later row checks; no test name spells this ordering.",
+        "CON-section.24": "The section parser applies the specified check order; no test name spells this ordering.",
+        "CON-units.19": "The unit parser rejects trailing input; no test name spells this clause.",
+        "CON-error.5": "The parser reports the earliest line by construction; no multi-error corpus entry names this clause.",
+        "CON-profile.1": "This clause quantifies the reader rules already measured individually.",
+        "CON-profile.2": "This clause summarizes validation behavior already measured by its individual checks.",
+        "CON-profile.3": "This clause quantifies the writer rules already measured individually.",
+        "CON-profile.4": "This clause defines the corpus verdict as a whole rather than one additional case.",
+        "CON-profile.5": "This clause defines comparison with the corpus rather than one additional case.",
+        "CON-lex.1": "This clause defines lexical precedence across cases measured under their individual clause ids.",
+    }
+)
 
 
 def sha256(path: Path) -> str:
@@ -121,7 +289,11 @@ def sha256(path: Path) -> str:
 
 
 def rel(path: Path) -> str:
-    return path.resolve().relative_to(REPO).as_posix()
+    resolved = path.resolve()
+    repo = REPO.resolve()
+    if resolved.is_relative_to(repo):
+        return resolved.relative_to(repo).as_posix()
+    return f"paper/cpc/scripts/{path.name}"
 
 
 def spec_clauses() -> list[tuple[str, str]]:
@@ -157,10 +329,13 @@ def conformance() -> dict[str, set[str]]:
 
 
 def probes() -> dict[str, set[str]]:
-    return {
-        probe["id"]: ids_in(probe.get("rule", ""))
-        for probe in json.loads(PROBES.read_text())["probes"]
-    }
+    record = json.loads(PROBES.read_text())
+    failed = record.get("summary", {}).get("failed_probes")
+    if failed:
+        sys.exit(
+            f"{rel(PROBES)} is not a passing probe record: {', '.join(failed[:5])}"
+        )
+    return {probe["id"]: ids_in(probe.get("rule", "")) for probe in record["probes"]}
 
 
 def depth(line: str) -> int:
@@ -273,7 +448,7 @@ def source(path: Path, named: dict[str, set[str]], known: set[str], **counts) ->
     }
 
 
-def build() -> dict:
+def build(supersedes: Path | None = None) -> dict:
     clauses = spec_clauses()
     known = {cid for cid, _ in clauses}
     c31, conf, probe = corpus31(), conformance(), probes()
@@ -315,12 +490,7 @@ def build() -> dict:
         "indep_reader": sum(e["indep_reader"] for e in entries),
         "uncovered": len(entries) - len(covered),
     }
-    return {
-        "supersedes": rel(SUPERSEDES),
-        "reason": (
-            f"Recounts specification coverage for readcon-core {VERSION} "
-            "without rewriting the previous measurement."
-        ),
+    record = {
         "script": rel(Path(__file__)),
         "spec": {"path": rel(SPEC), "sha256": sha256(SPEC), "clauses": len(entries)},
         "sources": {
@@ -343,6 +513,43 @@ def build() -> dict:
         "uncovered": [e["id"] for e in entries if "reason" in e],
         "clauses": entries,
     }
+    if supersedes is None:
+        return record
+    return {
+        "supersedes": rel(supersedes),
+        "reason": (
+            f"Recounts specification coverage for readcon-core {VERSION} "
+            "without rewriting the previous measurement."
+        ),
+        **record,
+    }
+
+
+def final_payload(n: int, payload: dict) -> dict:
+    if n == 1:
+        supersedes = LEGACY_RECORD
+        reason = (
+            f"Final spec-major recount of specification coverage for "
+            f"readcon-core {VERSION}."
+        )
+    else:
+        supersedes = final_record(n - 1)
+        reason = (
+            f"Final spec-major recount of specification coverage for "
+            f"readcon-core {VERSION} after the sources counted in "
+            f"{supersedes.name} changed."
+        )
+    return {"supersedes": rel(supersedes), "reason": reason, **payload}
+
+
+def record_for_sources() -> tuple[Path, dict]:
+    n = max(final_count(), 1)
+    return final_record(n), final_payload(n, build())
+
+
+def next_record_for_sources() -> tuple[Path, dict]:
+    n = final_count() + 1
+    return final_record(n), final_payload(n, build())
 
 
 def macros(record: dict) -> str:
@@ -357,7 +564,7 @@ def macros(record: dict) -> str:
         "clauseTested": t["tests"],
     }
     return (
-        f"% Written by paper/cpc/scripts/clause_coverage.py from data/spec/{OUT.name}.\n"
+        "% Written by paper/cpc/scripts/clause_coverage.py from the live tree.\n"
         + "".join(
             f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
         )
@@ -373,8 +580,7 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        default=OUT,
-        help=f"record (default: {provenance.portable(OUT)})",
+        help="final record path (default: the newest data/spec/clause_coverage-<version>-spec-major*.json)",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -385,14 +591,16 @@ def main() -> int:
     mode.add_argument(
         "--macros",
         action="store_true",
-        help="write only the TeX, from the record at --out; the record and the library are not read again",
+        help="write only the TeX from the live tree (the default; retained for callers)",
+    )
+    mode.add_argument(
+        "--record",
+        action="store_true",
+        help="write the final record as well as the live TeX",
     )
     args = parser.parse_args()
-    if args.macros:
-        MACROS.write_text(macros(json.loads(args.out.read_text())))
-        print(f"wrote {provenance.portable(MACROS)}")
-        return 0
-    record = build()
+    generated_out, record = record_for_sources()
+    out = args.out or generated_out
     t = record["totals"]
     print(
         f"{t['clauses']} clauses: {t['covered']} named by a corpus file, probe or test "
@@ -400,10 +608,13 @@ def main() -> int:
         f"independent reader, {t['uncovered']} by nothing: {', '.join(record['uncovered'])}"
     )
     if args.check:
+        expected = [(MACROS, macros(record))]
+        if args.out is not None or out.is_file():
+            expected.append((out, text(record)))
         stale = [
             path.name
-            for path, want in ((args.out, text(record)), (MACROS, macros(record)))
-            if not path.is_file() or path.read_text() != want
+            for path, want in expected
+            if not path.is_file() or path.read_text(encoding="utf-8") != want
         ]
         if stale:
             print(
@@ -411,11 +622,24 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"{args.out.name} and {MACROS.name} match the sources")
+        print(f"{MACROS.name} and every present final record match the live sources")
         return 0
-    args.out.write_text(text(record))
-    MACROS.write_text(macros(record))
-    print(f"wrote {provenance.portable(args.out)} and {provenance.portable(MACROS)}")
+    if args.record:
+        wanted = text(record)
+        if (
+            args.out is None
+            and out.is_file()
+            and out.read_text(encoding="utf-8") != wanted
+        ):
+            out, record = next_record_for_sources()
+            wanted = text(record)
+        if out.is_file() and out.read_text(encoding="utf-8") != wanted:
+            sys.exit(f"refusing to overwrite committed record {rel(out)}")
+        if not out.is_file():
+            out.write_text(wanted, encoding="utf-8")
+    MACROS.write_text(macros(record), encoding="utf-8")
+    wrote = f"{provenance.portable(out)} and " if args.record else ""
+    print(f"wrote {wrote}{provenance.portable(MACROS)} from the live sources")
     return 0
 
 

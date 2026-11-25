@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Redraw restart.pdf from the stored Morse record in the Ruhi palette."""
+"""Draw restart.pdf from the stored Morse record in the Ruhi palette."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from matplotlib import font_manager as fm
 ROOT = Path(__file__).resolve().parents[1]
 FONT = ROOT / "fonts" / "latin-modern" / "lmroman10-regular.otf"
 RECORD = ROOT / "evidence" / "results" / "e1_restart.json"
-OUT = ROOT / "src" / "figures" / "generated" / "restart.pdf"
+OUT = ROOT / "src" / "figures" / "generated"
 
 TEAL = "#004D40"
 SKY = "#1E88E5"
@@ -42,17 +42,21 @@ def main() -> None:
     barriers = [item["barrier_eV"] for _, item, _ in rows]
     colors = [color for _, _, color in rows]
     axes[0].bar(range(4), calls, color=colors, edgecolor=BLACK, linewidth=0.4)
-    axes[0].set_xticks(range(4), labels, rotation=20, ha="right")
+    axes[0].set_xticks(range(4), labels, rotation=60, ha="right")
     axes[0].set_ylabel("force calls")
-    axes[1].bar(range(4), barriers, color=colors, edgecolor=BLACK, linewidth=0.4)
-    axes[1].axhline(barriers[0], color=SUNSHINE, linewidth=1.2)
-    axes[1].set_xticks(range(4), labels, rotation=20, ha="right")
-    axes[1].set_ylabel("barrier (eV)")
+    # The four barriers agree to about a micro-electronvolt, so a
+    # shared axis from zero hides the gap. Plot the difference.
+    delta_uev = [(value - barriers[0]) * 1e6 for value in barriers]
+    axes[1].bar(range(4), delta_uev, color=colors, edgecolor=BLACK, linewidth=0.4)
+    axes[1].axhline(0.0, color=SUNSHINE, linewidth=1.2)
+    axes[1].set_xticks(range(4), labels, rotation=60, ha="right")
+    axes[1].set_ylabel("barrier minus uninterrupted (µeV)")
     for ax in axes:
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-    fig.savefig(OUT, bbox_inches="tight")
-    print("wrote", OUT.name)
+    OUT.mkdir(parents=True, exist_ok=True)
+    fig.savefig(OUT / "restart.pdf", bbox_inches="tight")
+    print("wrote", OUT / "restart.pdf")
 
 
 if __name__ == "__main__":

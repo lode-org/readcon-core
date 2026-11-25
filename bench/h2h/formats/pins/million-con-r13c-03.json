@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "reason": "The forward-compatible CON 4 metadata changes the generated one-million-atom fixture.",
+  "supersedes": {
+    "bytes": 85299775,
+    "sha256": "a423f1a2dbdd07b0dddc283c75e83aac20c5a6698affb6f130aab685aa3dfd6c"
+  },
+  "con": {
+    "bytes": 85299767,
+    "sha256": "055a8d233dbed4d5005aa5b52582c5914cd1d58a06611a9169c3d19166fddd30"
+  }
+}

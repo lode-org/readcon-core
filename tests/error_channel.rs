@@ -320,7 +320,7 @@ fn v3_0_velocities_stay_in_the_natural_unit() {
     assert_eq!(unit, NATURAL_TIME_UNIT);
     meta.insert("con_spec_minor".into(), serde_json::json!(1));
     let unit = velocity_file_time_unit(3, &meta, None).unwrap();
-    assert_eq!(unit, "fs");
+    assert_eq!(unit, NATURAL_TIME_UNIT);
     let scale = velocity_scale_to_natural("fs").unwrap();
     assert!((scale - 10.180505710759414).abs() < 1e-9, "{scale}");
     assert!((velocity_scale_to_natural(NATURAL_TIME_UNIT).unwrap() - 1.0).abs() < 1e-12);
@@ -440,14 +440,26 @@ fn located_readers_cover_every_load_error() {
     let none = read_all_frames_located(path_for("empty-load").as_path(), Some(1)).unwrap();
     assert!(none.is_empty());
 
-    // Files at or above 64 KiB are mapped. `as_str` is then the UTF-8 check.
+    // A mapped file is parsed as bytes. A bad byte is the frame parser's
+    // ValidationError, the same verdict as a full read, not a file-level
+    // UTF-8 failure that drops the line.
     let mut bad = vec![b'\n'; 64 * 1024];
     bad[0] = 0xff;
     let bad_path = path_for("bad-utf8");
     fs::write(&bad_path, &bad).unwrap();
     let utf = read_first_frame_located(&bad_path).unwrap_err();
-    assert!(matches!(utf, LoadError::Utf8(_)), "{utf}");
-    assert!(utf.to_string().to_lowercase().contains("utf-8"), "{utf}");
+    match &utf {
+        LoadError::Parse(located) => {
+            assert_eq!(located.error.class_name(), "ValidationError");
+            assert!(
+                located.error.to_string().to_lowercase().contains("utf-8"),
+                "{located}"
+            );
+        }
+        other => panic!("expected the frame parser, got {other}"),
+    }
+    let all = read_all_frames_located(&bad_path, Some(1)).unwrap_err();
+    assert_eq!(all.to_string(), utf.to_string());
     let _ = fs::remove_file(&bad_path);
 
     let nan = format!("{}{}", one_atom("0 0 0 0 0"), one_atom("nan 0 0 0 0"));
@@ -590,8 +602,8 @@ fn indexed_read_covers_owned_and_mapped_files() {
 fn unit_edges_cover_override_time_and_rejected_spellings() {
     let mut meta = serde_json::Map::new();
     meta.insert("con_spec_minor".into(), serde_json::json!(1));
-    assert_eq!(velocity_file_time_unit(3, &meta, Some("ps")).unwrap(), "ps");
-    let missing = velocity_file_time_unit(3, &meta, None).unwrap_err();
+    assert!(velocity_file_time_unit(4, &meta, Some("ps")).is_err());
+    let missing = velocity_file_time_unit(4, &meta, None).unwrap_err();
     assert_eq!(missing.class_name(), "InvalidUnits");
     assert!(missing.to_string().contains("units.time"));
 

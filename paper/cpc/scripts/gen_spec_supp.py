@@ -38,7 +38,10 @@ name its upcoming version before the tag exists; any other spec.org that no
 release tag ships stops the build. --measure writes a versioned specification
 measurement, preserving earlier records, with the version history and clause
 ids of spec.org at every release tag vX.Y.Z and, for a second text, what it
-changed in each section, from the git objects of this repository alone.
+changed in each section, from the git objects of this repository alone. When
+the versioned file already exists, --measure writes a new file that names the
+newest earlier file in supersedes and records measured_at.commit from git
+rev-parse HEAD. No stored file is rewritten.
 --check exits 1 unless the three generated files are byte for byte what
 --as-is writes from spec.org.
 
@@ -49,11 +52,12 @@ holding '="', which org itself closes at that "=".
     gen_spec_supp.py --as-is            write figures/generated/spec_normative.tex, versions_table.tex and spec_macros.tex
     gen_spec_supp.py --check            compare those three files with what --as-is writes
     gen_spec_supp.py --as-is --compile  also compile spec_normative.tex with pdflatex in a test document
-    gen_spec_supp.py --measure          write a versioned specification measurement from the release tags
+    gen_spec_supp.py --measure          write a new measurement; it supersedes the newest stored one
 """
 
 import argparse
 import difflib
+import hashlib
 import json
 import math
 import os
@@ -61,8 +65,6 @@ import random
 import re
 import subprocess
 from pathlib import Path
-
-import provenance
 
 
 _repo = next(
@@ -86,17 +88,53 @@ VERSIONS_OUT = PAPER_SRC / "figures" / "generated" / "versions_table.tex"
 MACROS_OUT = PAPER_SRC / "figures" / "generated" / "spec_macros.tex"
 SPEC_DATA = ROOT / "paper" / "cpc" / "data" / "spec"
 LEGACY_VERSIONS = SPEC_DATA / "versions.json"
-MEASUREMENTS = provenance.revisions(
-    SPEC_DATA,
-    "spec-measurement",
-    (ROOT / "VERSION").read_text().strip(),
-)
-MEASUREMENT = provenance.latest_record(
-    SPEC_DATA,
-    "spec-measurement",
-    (ROOT / "VERSION").read_text().strip(),
-)
-VERSIONS = MEASUREMENT if MEASUREMENT.is_file() else LEGACY_VERSIONS
+VERSION = (ROOT / "VERSION").read_text().strip()
+MEASUREMENT = SPEC_DATA / f"spec-measurement-{VERSION}.json"
+
+
+def _spec_blob() -> str:
+    return subprocess.run(
+        ["git", "hash-object", str(SPEC)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+
+def measurement_path(version: str | None = None, blob: str | None = None) -> Path:
+    version = version or VERSION
+    blob = blob or _spec_blob()
+    base = SPEC_DATA / f"spec-measurement-{version}.json"
+    by_blob = SPEC_DATA / f"spec-measurement-{version}-{blob[:8]}.json"
+    if by_blob.is_file():
+        return by_blob
+    if base.is_file():
+        existing = json.loads(base.read_text()).get("tree", {}).get("spec_blob")
+        if existing == blob:
+            return base
+        return by_blob
+    return base
+
+
+def active_versions_file() -> Path:
+    blob = _spec_blob()
+    path = measurement_path(blob=blob)
+    if not path.is_file():
+        raise SystemExit(
+            f"no specification measurement for {SPEC.relative_to(ROOT)} "
+            f"blob {blob[:8]}: run gen_spec_supp.py --measure"
+        )
+    recorded = json.loads(path.read_text()).get("tree", {}).get("spec_blob")
+    if recorded != blob:
+        raise SystemExit(
+            f"{path.relative_to(ROOT)} records spec blob {recorded}, "
+            f"not {blob}: run gen_spec_supp.py --measure"
+        )
+    return path
+
+
+VERSIONS = measurement_path()
 RELEASE = r"[0-9]+\.[0-9]+\.[0-9]+"
 CLAUSE_ID = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) ::", re.M)
 CLAUSE_LINE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+ :: .*)$")
@@ -422,7 +460,9 @@ def history_rows(org: str) -> list[dict]:
 
     A bare major 3 is minor 0.
     """
-    section = re.search(r"^\* Version history\n(.*?)(?=^\* |\Z)", org, re.M | re.S)
+    section = re.search(
+        r"^\* Version (?:history|chronology)\n(.*?)(?=^\* |\Z)", org, re.M | re.S
+    )
     rows, head = [], None
     for line in section[1].splitlines() if section else ():
         if not line.startswith("|") or line.startswith("|-"):
@@ -582,16 +622,59 @@ def second_text_change(changes: list[dict], texts: dict[str, str]) -> str:
     return " ".join(parts)
 
 
+def read_versions() -> dict:
+    """The tag record of this release. No other release's record stands in for it."""
+    if not VERSIONS.is_file():
+        raise SystemExit(
+            f"{VERSIONS.relative_to(ROOT)} is absent. Run gen_spec_supp.py --measure for this release."
+        )
+    return json.loads(VERSIONS.read_text())
+
+
+def _unreleased_history() -> list[dict]:
+    return [
+        {"version": row["version"], "date": row["date"]}
+        for row in history_rows(SPEC.read_text(encoding="utf-8"))
+        if row["version"] != "1"
+    ]
+
+
+def measurement_record() -> dict:
+    record = read_versions()
+    if not SPEC.is_file():
+        return record
+    contents = SPEC.read_bytes()
+    spec_blob = hashlib.sha1(f"blob {len(contents)}\0".encode() + contents).hexdigest()
+    tree = record["tree"]
+    release = package_version()
+    tagged_releases = {entry["tag"] for entry in record["tags"]}
+    live_untagged = (
+        not tree["tagged"]
+        and tree["release"] == release
+        and f"v{release}" not in tagged_releases
+    )
+    if VERSIONS == MEASUREMENT and live_untagged:
+        record["tree"] = {
+            "release": release,
+            "tagged": False,
+            "spec_blob": spec_blob,
+        }
+        record["unreleased_history"] = _unreleased_history()
+    elif live_untagged and tree.get("spec_blob") == spec_blob:
+        record["unreleased_history"] = _unreleased_history()
+    return record
+
+
 def release_rows(org: str) -> list[dict]:
     """The version history of a spec.org without a Release column, as a release tree ships it.
 
-    A row's release is the first tag of versions.json whose history lists the row's version with the row's
+    A row's release is the first tag of the measurement record whose history lists the row's version with the row's
     date; version 1 is the eOn text and has no readcon-core release.  A tag whose spec.org differs from that
     of the tag before it under the same newest version, both with numbered clauses, published a second text
     of that version. It is a row of its own after the version's rows, dated by the tag, and its change is
     what --measure recorded for the tag (second_text_change).
     """
-    record = json.loads(VERSIONS.read_text())
+    record = measurement_record()
     rows = history_rows(org)
     for row in rows:
         if row["version"] == "1":
@@ -609,11 +692,19 @@ def release_rows(org: str) -> list[dict]:
             None,
         )
         if first is None:
-            raise SystemExit(
-                f"no tag of {VERSIONS.relative_to(ROOT)} lists version {row['version']} "
-                f"of {row['date']}"
+            tree = record["tree"]
+            listed = any(
+                (entry["version"], entry["date"]) == (row["version"], row["date"])
+                for entry in record.get("unreleased_history", [])
             )
-        row["release"] = f"readcon-core {first[1:]}"
+            if not listed or tree["tagged"] or tree["release"] != package_version():
+                raise SystemExit(
+                    f"no tag of {VERSIONS.relative_to(ROOT)} lists version "
+                    f"{row['version']} of {row['date']}"
+                )
+            row["release"] = f"readcon-core {tree['release']} (unreleased)"
+        else:
+            row["release"] = f"readcon-core {first[1:]}"
     texts = dict(
         re.findall(r"^- (CON-[a-z0-9]+\.[0-9]+) :: [A-Z ]+ :: (.*)$", org, re.M)
     )
@@ -636,9 +727,13 @@ def release_rows(org: str) -> list[dict]:
                     f"{tag['tag']} added or reworded {missing}, which {SPEC.relative_to(ROOT)} "
                     "does not hold"
                 )
-            at = max(
+            matching = [
                 i for i, row in enumerate(rows) if row["version"] == newest(tag)[0]
-            )
+            ]
+            if not matching:
+                previous = tag
+                continue
+            at = max(matching)
             # The mark goes under the date, so the date column keeps the width of a bare date.
             rows.insert(
                 at + 1,
@@ -659,7 +754,7 @@ def spec_macros(org: str) -> str:
     A release-preparation tree may name the upcoming release before its tag
     exists. Any other spec.org that no release tag holds stops the build.
     """
-    record = json.loads(VERSIONS.read_text())
+    record = measurement_record()
     blob = git("hash-object", str(SPEC)).stdout.strip()
     same = next((t["tag"][1:] for t in record["tags"] if t["spec_blob"] == blob), None)
     tree = record["tree"]
@@ -731,10 +826,9 @@ def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 
 
 def package_version() -> str:
-    found = re.search(r'^version = "([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M)
-    if found is None:
-        raise SystemExit("Cargo.toml names no package version")
-    return found.group(1)
+    # VERSION, not Cargo.toml: the branch history check reads the release
+    # back from <measured commit>:VERSION.
+    return (ROOT / "VERSION").read_text().strip()
 
 
 def versions_record() -> dict:
@@ -772,9 +866,7 @@ def versions_record() -> dict:
             previous, previous_org = entry, org
         entries.append(entry)
     release = package_version()
-    measured = git("rev-parse", "HEAD").stdout.strip()
     return {
-        "measured_at": {"commit": measured},
         "spec": spec,
         "tags": entries,
         "tree": {
@@ -785,21 +877,56 @@ def versions_record() -> dict:
     }
 
 
-def measure() -> None:
-    previous = MEASUREMENTS[-2] if len(MEASUREMENTS) > 1 else None
-    supersedes = {}
-    if previous:
-        supersedes["supersedes"] = previous.relative_to(ROOT).as_posix()
+def measure(commit: str | None = None) -> None:
+    """Write the specification measurement. An existing versioned file stays.
+
+    The record pairs the release in VERSION with the spec.org blob, so the
+    measured commit is the last one to change either file.
+    """
+    spec_rel = (
+        SPEC.relative_to(ROOT).as_posix()
+        if SPEC.is_relative_to(ROOT)
+        else "docs/orgmode/spec.org"
+    )
+    measured_commit = (
+        commit
+        or git(
+            "log", "-n", "1", "--format=%H", "HEAD", "--", spec_rel, "VERSION"
+        ).stdout.strip()
+        or git("rev-parse", "HEAD").stdout.strip()
+    )
+    if not re.fullmatch(r"[0-9a-f]{40}", measured_commit):
+        raise SystemExit("git did not return a commit")
+    body = versions_record()
+    stored = measurement_path(body["tree"]["release"], body["tree"]["spec_blob"])
+    # Each rerun on the same (release, spec_blob) supersedes the newest file
+    # of its chain: -measured.json, then -measured-2.json, and so on.
+    previous, out, n = None, stored, 1
+    while out.is_file():
+        previous = out
+        suffix = "measured" if n == 1 else f"measured-{n}"
+        out = stored.with_name(f"{stored.stem}-{suffix}.json")
+        n += 1
     versions = {
         "generator": "paper/cpc/scripts/gen_spec_supp.py --measure",
-        **supersedes,
-        **versions_record(),
+        "measured_at": {"commit": measured_commit},
+        **body,
     }
-    MEASUREMENT.parent.mkdir(parents=True, exist_ok=True)
-    MEASUREMENT.write_text(json.dumps(versions, indent=2) + "\n")
+    if previous is not None:
+        versions = {
+            "generator": versions["generator"],
+            "supersedes": previous.relative_to(ROOT).as_posix(),
+            "measured_at": versions["measured_at"],
+            "spec": versions["spec"],
+            "tags": versions["tags"],
+            "tree": versions["tree"],
+        }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("x") as handle:
+        handle.write(json.dumps(versions, indent=2) + "\n")
     print(
-        f"wrote {MEASUREMENT.relative_to(ROOT)}: {len(versions['tags'])} tags, "
-        f"release {versions['tree']}"
+        f"wrote {out.relative_to(ROOT)}: {len(versions['tags'])} tags, "
+        f"release {versions['tree']}, measured_at.commit {measured_commit}"
     )
 
 
@@ -894,6 +1021,32 @@ def split_rows(block: str) -> list[list[str]]:
     return rows
 
 
+def p_spec(widths: list[float], least: list[int]) -> str:
+    """Column fractions of \\linewidth.
+
+    TABLE_CHARS underestimates a footnotesize word, so a short capitalised
+    header was wider than its column. 56 such characters fill the preprint
+    line. Extra width is taken from the widest column that can spare it.
+    """
+    word = 56
+    fracs = [
+        float(f"{max(w / TABLE_CHARS, m / word):.2f}") for w, m in zip(widths, least)
+    ]
+    mins = [float(f"{m / word:.2f}") for m in least]
+    limit = 1.0 - 0.04 * len(fracs)
+    overflow = sum(fracs) - limit
+    for _ in range(20):
+        if overflow <= 0.001:
+            break
+        i = max(range(len(fracs)), key=lambda k: fracs[k] - mins[k])
+        room = fracs[i] - mins[i]
+        if room <= 0.001:
+            break
+        fracs[i] = float(f"{fracs[i] - min(room, overflow):.2f}")
+        overflow = sum(fracs) - limit
+    return "".join(f"p{{{f:.2f}\\linewidth}}" for f in fracs)
+
+
 def tabular(match: re.Match) -> str:
     """A pandoc longtable as a tabular; a p column is never narrower than its longest word."""
     head = split_rows(match["head"])
@@ -920,7 +1073,7 @@ def tabular(match: re.Match) -> str:
             if sum(extra)
             else least
         )
-        spec = "".join(f"p{{{w / TABLE_CHARS:.2f}\\linewidth}}" for w in widths)
+        spec = p_spec(widths, least)
         end, lead = " \\tabularnewline", "\\raggedright "
     lines = [
         "\\begin{center}",
@@ -1017,12 +1170,24 @@ def postprocess(tex: str) -> str:
 
 
 def pandoc_version() -> str:
-    out = subprocess.run(
-        [*PANDOC, "--version"], capture_output=True, text=True, check=True
-    ).stdout
+    # paper/cpc/pixi.toml pins pandoc == 3.13. A different binary must not
+    # rewrite the fragment. The comparison stays a literal so number_rules
+    # can read the version.
+    try:
+        out = subprocess.run(
+            [*PANDOC, "--version"], capture_output=True, text=True, check=True
+        ).stdout
+    except FileNotFoundError:
+        raise SystemExit(
+            "pandoc is not on PATH; the fragment is written with pandoc 3.13 "
+            "(paper/cpc/pixi.toml pins pandoc == 3.13)"
+        ) from None
     first = out.splitlines()[0]
     if first != "pandoc 3.13":
-        raise SystemExit(f"{first} on PATH; the fragment is written with pandoc 3.13")
+        raise SystemExit(
+            f"{first} on PATH; the fragment is written with pandoc 3.13 "
+            "(paper/cpc/pixi.toml pins pandoc == 3.13)"
+        )
     return first
 
 
@@ -1109,6 +1274,8 @@ def compile_test(fragment: Path) -> None:
 
 
 def main() -> None:
+    global VERSIONS
+
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -1136,6 +1303,7 @@ def main() -> None:
     if args.measure:
         measure()
         return
+    VERSIONS = active_versions_file()
     rows = release_rows(SPEC.read_text())
     outputs = {
         VERSIONS_OUT: versions_table(rows),
@@ -1148,12 +1316,14 @@ def main() -> None:
         f"% Written by paper/cpc/scripts/gen_spec_supp.py --as-is from {records} ({pandoc_version()}).\n"
         f"% Not included: {', '.join(INFORMATIVE)}, and the two sentences of the units section that round\n"
         "% the parsed natural time unit and its difference from eOn; velocity_case.py prints both values.\n"
-        "% Code words such as IncompleteSection have no break point; the local tolerance lets a line\n"
-        "% stretch rather than run into the margin.\n"
-        "\\begingroup\n\\tolerance=1000\n"
+        "% Code words such as IncompleteSection have no break point; emergency stretch\n"
+        "% lets that line break short of the margin.\n"
+        "\\begingroup\n\\tolerance=9999\n\\emergencystretch=3em\n"
         "\\providecommand{\\tightlist}{\\setlength{\\itemsep}{0pt}\\setlength{\\parskip}{0pt}}\n\n"
     )
-    outputs[OUT] = header + tex.rstrip("\n") + "\n\\endgroup\n"
+    # End the paragraph first. Otherwise the last line is broken after \\endgroup,
+    # outside this tolerance, and a code span runs past the margin.
+    outputs[OUT] = header + tex.rstrip("\n") + "\n\\par\n\\endgroup\n"
     if args.check:
         stale = [
             p.relative_to(ROOT).as_posix()

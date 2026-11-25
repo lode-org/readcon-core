@@ -55,11 +55,11 @@ pub fn species_counts_from_symbols(
         if symbol.is_empty() {
             continue;
         }
-        if let Some(last) = order.last_mut() {
-            if last.0 == symbol {
-                last.1 = last.1.saturating_add(1);
-                continue;
-            }
+        if let Some(last) = order.last_mut()
+            && last.0 == symbol
+        {
+            last.1 = last.1.saturating_add(1);
+            continue;
         }
         if let Some(slot) = order.iter_mut().find(|(name, _)| name == symbol) {
             slot.1 = slot.1.saturating_add(1);
@@ -528,8 +528,8 @@ mod tests {
         let mut it = ConFrameIterator::new(&text);
         let fa = it.next().unwrap().unwrap();
         let fb = it.next().unwrap().unwrap();
-        assert_eq!(a.atom_data[0].x(), fa.atom_data[0].x());
-        assert_eq!(b.atom_data[0].x(), fb.atom_data[0].x());
+        assert_eq!(a.x_at(0), fa.x_at(0));
+        assert_eq!(b.x_at(0), fb.x_at(0));
         assert!(parse_frame_at(&text, 9).is_err());
     }
 

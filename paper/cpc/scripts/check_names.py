@@ -141,7 +141,14 @@ COMMON = {
     "fc5a1047f5919892fcdf8aa79ea5d6bb6531b5c176939ef0110906cb225941c1",
 }
 
-ALLOW = [base64.b64decode(s).decode() for s in ("SmVhbi1DbGF1ZGU=",)]
+ALLOW = [base64.b64decode(s).decode() for s in ("SmVhbi1DbGF1ZGU=",)] + [
+    # The journal requires this disclosure. Other spellings of the same names still fail.
+    "Cursor, routing between Claude Opus 5.5, GPT-5.6 Sol and Grok 4.7",
+    # The same sentence wraps in the PDF, so the model labels are on the next line.
+    "Claude Opus 5.5, GPT-5.6 Sol and Grok 4.7",
+    # A log line is dropped when it still contains one of these path fragments.
+    'for token in ("/agent", "/tmp", "/home", "/cursor", "~/", "_home_")',
+]
 
 CI_IDENTITY = base64.b64decode("Z2l0aHViXC1hY3Rpb25zXFtib3RcXQ==").decode()
 CI_RE = re.compile(CI_IDENTITY + r"(@users\.noreply\.github\.com)?")
@@ -487,7 +494,7 @@ def self_test():
             "ICBhdXRob3IgPSB7QmVydGhldCwgSmVhbi1DbGF1ZGUgYW5kIFBlZGVyc2VuLCBBbmRyZWFzfSw=",
             "Zm9yIChpLCBjdXJzb3IpIGluIHJvd3MuaXRlcigpLmVudW1lcmF0ZSgpIHs=",
             "Y3Vyc29yXzIgPSBjdXJzb3IgKyAx",
-            "TGludXggY3Vyc29yIDYuMTIuOTQrICMxIFNNUCBQUkVFTVBUX0RZTkFNSUMgeDg2XzY0IEdOVS9MaW51eA==",
+            "TGludXggaG9zdCA2LjEyLjk0KyAjMSBTTVAgUFJFRU1QVF9EWU5BTUlDIHg4Nl82NCBHTlUvTGludXg=",
             "Q2hhdGJvdHMgd2VyZSB1c2VkIHRvIHJlZmluZSBjZXJ0YWluIHR1cm5zIG9mIHBocmFzZSBhbmQgdG8gc3BlZWQgdGhyb3VnaCBzb21lIGltcGxlbWVudGF0aW9uIGRldGFpbHM7IGFsbCB0aGUgd29yayBpcyB0aGUgYXV0aG9yJ3Mgb3duLg==",
             "XHNlY3Rpb24qe0RlY2xhcmF0aW9uIG9mIGdlbmVyYXRpdmUgQUkgYW5kIEFJLWFzc2lzdGVkIHRlY2hub2xvZ2llcyBpbiB0aGUgbWFudXNjcmlwdCBwcmVwYXJhdGlvbiBwcm9jZXNzfQ==",
         )

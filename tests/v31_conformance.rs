@@ -267,8 +267,8 @@ fn m10_gzip_reads_every_member() {
     std::fs::write(&path, &bytes).unwrap();
     let frames = readcon_core::iterators::read_all_frames(&path).unwrap();
     assert_eq!(frames.len(), 2);
-    assert_eq!(frames[0].atom_data[0].x(), 1.0);
-    assert_eq!(frames[1].atom_data[0].x(), 2.0);
+    assert_eq!(frames[0].x_at(0), 1.0);
+    assert_eq!(frames[1].x_at(0), 2.0);
 }
 
 /// CON-compress.2.
@@ -432,9 +432,9 @@ fn float_accepts_sign_dot_and_exponent() {
     let text = v2_frame(r#"{"con_spec_version":2}"#, "+1.5 .25 1.0e-1 0 7");
     let frame = parse_one(&text).unwrap();
     let atom = &frame.atom_data[0];
-    assert!((atom.x() - 1.5).abs() < 1e-15);
-    assert!((atom.y() - 0.25).abs() < 1e-15);
-    assert_eq!(atom.z().to_bits(), 0.1_f64.to_bits());
+    assert!((frame.x_at(0) - 1.5).abs() < 1e-15);
+    assert!((frame.y_at(0) - 0.25).abs() < 1e-15);
+    assert_eq!(frame.z_at(0).to_bits(), 0.1_f64.to_bits());
     assert_eq!(atom.atom_id, 7);
 }
 
@@ -532,7 +532,7 @@ fn round_trip_is_the_writer_default_and_lattice_lines_follow_vectors() {
     ConFrameWriter::new(&mut buf).write_frame(&frame).unwrap();
     let text = String::from_utf8(buf).unwrap();
     let parsed = parse_one(&text).unwrap();
-    assert_eq!(parsed.atom_data[0].x().to_bits(), 1.25_f64.to_bits());
+    assert_eq!(parsed.x_at(0).to_bits(), 1.25_f64.to_bits());
     assert!((parsed.header.boxl[0] - 2.0).abs() < 1e-12);
     assert!((parsed.header.boxl[1] - (0.5_f64 * 0.5 + 9.0).sqrt()).abs() < 1e-9);
     assert!((parsed.header.boxl[2] - 4.0).abs() < 1e-12);
@@ -564,7 +564,10 @@ fn v31_writer_requires_time_when_velocities_are_present() {
     builder
         .add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0)
         .with_velocity([0.1, 0.0, 0.0]);
-    let frame = builder.build().unwrap();
+    let mut frame = builder.build().unwrap();
+    let mut units = frame.header.units().cloned().unwrap();
+    units.as_object_mut().unwrap().remove("time");
+    frame.header.set_units(units);
     let mut buf = Vec::new();
     let err = ConFrameWriter::new(&mut buf)
         .write_frame(&frame)
@@ -689,11 +692,11 @@ fn digest(frames: &[ConFrame]) -> u64 {
             mass.to_bits().hash(&mut hasher);
         }
         format!("{:?}", frame.header.metadata).hash(&mut hasher);
-        for atom in &frame.atom_data {
+        for (coord_i0, atom) in frame.atom_data.iter().enumerate() {
             atom.symbol.hash(&mut hasher);
-            atom.x().to_bits().hash(&mut hasher);
-            atom.y().to_bits().hash(&mut hasher);
-            atom.z().to_bits().hash(&mut hasher);
+            frame.x_at(coord_i0).to_bits().hash(&mut hasher);
+            frame.y_at(coord_i0).to_bits().hash(&mut hasher);
+            frame.z_at(coord_i0).to_bits().hash(&mut hasher);
             atom.fixed().hash(&mut hasher);
             atom.atom_id.hash(&mut hasher);
             atom.velocity()
@@ -925,7 +928,7 @@ fn coordinates_and_masses_use_declared_units() {
     assert_eq!(v2.header.spec_version, 2);
     assert_eq!(v2.header.coordinate_length_unit(), "nm");
     assert_eq!(v2.header.mass_unit(), "u");
-    assert_eq!(v2.atom_data[0].x(), 1.5);
+    assert_eq!(v2.x_at(0), 1.5);
     assert_eq!(v2.header.masses_per_type[0], 12.011);
 
     let bare = parse_one(&v2_frame(r#"{"con_spec_version":2}"#, "1 0 0 0 0")).unwrap();
@@ -939,7 +942,7 @@ fn coordinates_and_masses_use_declared_units() {
     .unwrap();
     assert_eq!(v3.header.coordinate_length_unit(), "nm");
     assert_eq!(v3.header.mass_unit(), "u");
-    assert_eq!(v3.atom_data[0].x(), 2.5);
+    assert_eq!(v3.x_at(0), 2.5);
 }
 
 /// CON-units.8, CON-units.9, CON-units.10, CON-units.11.
@@ -963,7 +966,11 @@ fn velocity_time_follows_the_minor() {
         NATURAL_TIME_UNIT
     );
     meta.insert("con_spec_minor".into(), serde_json::json!(1));
-    assert_eq!(velocity_file_time_unit(3, &meta, None).unwrap(), "fs");
+    assert_eq!(
+        velocity_file_time_unit(3, &meta, None).unwrap(),
+        NATURAL_TIME_UNIT
+    );
+    assert_eq!(velocity_file_time_unit(4, &meta, None).unwrap(), "fs");
 
     let minor0 = "\
 PRE
@@ -988,7 +995,7 @@ Velocities of Component 1
 
     let minor1_no_time = "\
 PRE
-{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"},\"sections\":[\"velocities\"]}
+{\"con_spec_version\":4,\"con_spec_minor\":0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"},\"sections\":[\"velocities\"]}
 10 10 10
 90 90 90
 A
@@ -1031,7 +1038,8 @@ Coordinates of Component 1
 fn unit_vocabulary_includes_mol() {
     validate_unit_for_quantity("energy", "kcal/mol").unwrap();
     validate_unit_for_quantity("energy", "kJ/mol").unwrap();
-    validate_unit_for_quantity("energy", "KCAL/MOL").unwrap();
+    // CON-units.16 matches the listed spellings exactly. KCAL is not one of them.
+    assert!(validate_unit_for_quantity("energy", "KCAL/MOL").is_err());
     let groups = [
         (
             "length",
@@ -1040,7 +1048,8 @@ fn unit_vocabulary_includes_mol() {
                 "meter",
                 "metre",
                 "angstrom",
-                "a",
+                "Angstrom",
+                "A",
                 "å",
                 "Å",
                 "nm",
@@ -1051,9 +1060,15 @@ fn unit_vocabulary_includes_mol() {
         ),
         (
             "energy",
-            &["j", "joule", "ev", "mev", "hartree", "ha", "kcal", "kj"][..],
+            &[
+                "J", "j", "joule", "eV", "ev", "meV", "mev", "MeV", "hartree", "Ha", "kcal", "kJ",
+                "kj",
+            ][..],
         ),
-        ("mass", &["kg", "kilogram", "u", "amu", "dalton", "da"][..]),
+        (
+            "mass",
+            &["kg", "kilogram", "u", "Da", "amu", "AMU", "dalton"][..],
+        ),
         (
             "time",
             &[
@@ -1072,13 +1087,14 @@ fn unit_vocabulary_includes_mol() {
         for name in names {
             validate_unit_for_quantity(quantity, name)
                 .unwrap_or_else(|err| panic!("{name}: {err}"));
-            let upper = name.to_ascii_uppercase();
-            validate_unit_for_quantity(quantity, &upper)
-                .unwrap_or_else(|err| panic!("{upper}: {err}"));
         }
     }
+    // CON-units.16. These three are SI spellings and are not folded.
+    assert!(validate_unit_for_quantity("length", "a").is_err());
+    assert!(validate_unit_for_quantity("energy", "ha").is_err());
+    assert!(validate_unit_for_quantity("mass", "da").is_err());
     parse_unit_expression("mol").unwrap();
-    parse_unit_expression("MOL").unwrap();
+    assert!(parse_unit_expression("MOL").is_err());
 }
 
 /// CON-frame.1, CON-frame.3, CON-frame.7.
@@ -1162,12 +1178,12 @@ fn later_minors_and_line_endings_are_accepted() {
 
     let crlf = v2_frame(r#"{"con_spec_version":2}"#, "1.25 0 0 0 4").replace('\n', "\r\n");
     let frame = parse_one(&crlf).unwrap();
-    assert_eq!(frame.atom_data[0].x(), 1.25);
+    assert_eq!(frame.x_at(0), 1.25);
     assert_eq!(frame.atom_data[0].atom_id, 4);
 
     let spaced = v2_frame(r#"{"con_spec_version":2}"#, "1.5 2 3 0 5   \t");
     let frame = parse_one(&spaced).unwrap();
-    assert_eq!(frame.atom_data[0].x(), 1.5);
+    assert_eq!(frame.x_at(0), 1.5);
     assert_eq!(frame.atom_data[0].atom_id, 5);
 }
 

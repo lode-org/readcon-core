@@ -468,12 +468,9 @@ class TestConFrameConstructor:
         bad = bytearray(frame * 5)
         bad[-40] = 0xFF
         path.write_bytes(bytes(bad))
-        index = len(bad) - 40
         for mmap in (False, True):
-            with pytest.raises(
-                IOError, match=f"invalid utf-8 sequence of 1 bytes from index {index}$"
-            ):
-                readcon.iter_con(str(path), mmap=mmap)
+            with pytest.raises(readcon.InvalidNumberFormat, match="invalid float"):
+                list(readcon.iter_con(str(path), mmap=mmap))
 
     def test_iter_con_mmap_matches_the_default(self, tmp_path):
         with open(_resource("cuh2.con"), "rb") as fh:
@@ -599,7 +596,8 @@ class TestConFrameConstructor:
         assert float(xyz[0, 0]) == pytest.approx(float(pos[0, 0]))
         xyz[0, 0] = -999.0
         assert float(fr.xyz[0, 0]) == -999.0
-        assert float(fr.atoms[0].x) == pytest.approx(0.6394, abs=1e-3)
+        assert float(fr.atoms[0].x) == pytest.approx(-999.0)
+        assert float(fr.coords_array()[0, 0]) == pytest.approx(-999.0)
 
     def test_coords_array_matches_atoms_after_full_frame_load(self):
         path = _resource("tiny_multi_cuh2.con")

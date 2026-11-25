@@ -18,16 +18,13 @@ use readcon_core::distrib_write::{WriteMode, write_block, write_ranked_bytes};
 use std::time::Instant;
 
 struct RankAtoms {
-    _coords: Vec<f64>,
+    coords: Vec<f64>,
     atoms: Vec<readcon_core::types::AtomDatum>,
 }
 
 fn atoms_from_lines(slice: &[u8], symbol: &std::sync::Arc<str>) -> RankAtoms {
     let (coords, atoms) = readcon_core::distrib_read::slab_atoms(slice, symbol).expect("coord");
-    RankAtoms {
-        _coords: coords,
-        atoms,
-    }
+    RankAtoms { coords, atoms }
 }
 
 fn component_symbol(bytes: &[u8]) -> std::sync::Arc<str> {
@@ -155,7 +152,8 @@ fn main() {
         } else if let Some((header, rows, _, _)) = &prepared {
             let mut body = header.clone();
             body.extend(
-                readcon_core::writer::format_coordinate_lines(&rows.atoms).expect("format"),
+                readcon_core::writer::format_coordinate_lines(&rows.atoms, &rows.coords)
+                    .expect("format"),
             );
             write_rank(&comm, out, &body);
         } else {
@@ -225,7 +223,8 @@ fn main() {
             if let Some((header, rows, _, _)) = &prepared {
                 let mut body = header.clone();
                 body.extend(
-                    readcon_core::writer::format_coordinate_lines(&rows.atoms).expect("format"),
+                    readcon_core::writer::format_coordinate_lines(&rows.atoms, &rows.coords)
+                        .expect("format"),
                 );
                 write_rank(&comm, out, &body);
             } else {

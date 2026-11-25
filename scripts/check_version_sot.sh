@@ -207,32 +207,74 @@ allow_exact = {
     # it from Cargo.toml, and the Snakemake rule cargo_version runs that.
     "paper/cpc/src/cargo_version.tex",
 }
-# These records are append-only. A corrected measurement adds an -rN
-# revision instead of rewriting the first version-named record.
-for stem in ("spec-measurement", "clause_coverage"):
-    revision = re.compile(
-        rf"{stem}-{re.escape(version)}(-r([2-9]|[1-9][0-9]+))?\.json"
-    )
-    records = sorted(
-        path
-        for path in (root / "paper/cpc/data/spec").glob(
-            f"{stem}-{version}*.json"
-        )
-        if revision.fullmatch(path.name)
-    )
-    if records:
-        allow_exact.update(
-            path.relative_to(root).as_posix() for path in records
-        )
-    else:
-        print(f"PENDING: {stem}-{version}.json has not been measured")
+# gen_spec_supp.py records a measured release-preparation tree in a
+# version-named file. An unmeasured release is pending, not a reason to
+# manufacture a placeholder record.
+spec_measurement = f"paper/cpc/data/spec/spec-measurement-{version}.json"
+if (root / spec_measurement).is_file():
+    allow_exact.add(spec_measurement)
+else:
+    print(f"PENDING: {spec_measurement} has not been measured")
+# The measured file is the rerun of gen_spec_supp.py --measure. It names
+# the stored record in supersedes. The stored file stays byte-identical.
+spec_measured = f"paper/cpc/data/spec/spec-measurement-{version}-measured.json"
+if (root / spec_measured).is_file():
+    allow_exact.add(spec_measured)
+else:
+    print(f"PENDING: {spec_measured} has not been measured")
+# A later rerun writes -measured-<n>.json and supersedes the newest file.
+for later in sorted((root / "paper/cpc/data/spec").glob(f"spec-measurement-{version}-measured-*.json")):
+    allow_exact.add(later.relative_to(root).as_posix())
+for extra in sorted(
+    (root / "paper/cpc/data/spec").glob(f"spec-measurement-{version}-*.json")
+):
+    allow_exact.add(extra.relative_to(root).as_posix())
+clause_coverage = f"paper/cpc/data/spec/clause_coverage-{version}.json"
+if (root / clause_coverage).is_file():
+    allow_exact.add(clause_coverage)
+else:
+    print(f"PENDING: {clause_coverage} has not been measured")
+clause_recount = f"paper/cpc/data/spec/clause_coverage-{version}-recount.json"
+if (root / clause_recount).is_file():
+    allow_exact.add(clause_recount)
+else:
+    print(f"PENDING: {clause_recount} has not been measured")
+# The sources file is the count clause_coverage.py writes. The recount stays
+# byte-identical because it embeds the hand-entered REASONS text.
+clause_sources = f"paper/cpc/data/spec/clause_coverage-{version}-sources.json"
+if (root / clause_sources).is_file():
+    allow_exact.add(clause_sources)
+else:
+    print(f"PENDING: {clause_sources} has not been measured")
+for later in sorted((root / "paper/cpc/data/spec").glob(f"clause_coverage-{version}-sources-*.json")):
+    allow_exact.add(later.relative_to(root).as_posix())
+for extra in sorted(
+    (root / "paper/cpc/data/spec").glob(f"clause_coverage-{version}-*.json")
+):
+    allow_exact.add(extra.relative_to(root).as_posix())
+# The like-for-like rows, samples and summary name the build they measured.
+# A later release must not rewrite those fields.
+allow_exact.update({
+    "paper/cpc/bench-like-for-like/results/rows.csv",
+    "paper/cpc/bench-like-for-like/results/samples.csv",
+    "paper/cpc/bench-like-for-like/results/summary.csv",
+})
+for extra in sorted((root / "paper/cpc/data").glob("referee_probes-*.json")):
+    allow_exact.add(extra.relative_to(root).as_posix())
 # Measured campaigns keep the package version they were timed with.
 # A later release must not rewrite that field to VERSION.
 recorded_results = {
     "bench/fidelity/results/fidelity.json",
     "bench/fidelity/results/timing.json",
     "bench/h2h/versions.json",
+    "paper/cpc/data/claisen/readcon-build.json",
     "paper/cpc/data/spec/version_drift.json",
+    "paper/cpc/data/spec/corpus_recount.json",
+    "paper/cpc/data/spec/corpus_recount-2.json",
+    *(
+        later.relative_to(root).as_posix()
+        for later in sorted((root / "paper/cpc/data/spec").glob("corpus_recount-*.json"))
+    ),
 }
 skip_dirs = {
     ".git",
@@ -260,6 +302,21 @@ skip_prefixes = (
     # version_map.tex names the library that wrote it. That is a measurement.
     "paper/cpc/src/figures/generated/version_map.tex",
 )
+# The Claisen campaign records this package's version beside the Baker
+# geometry source_commit. That commit is not a readcon-core commit, so
+# the campaign file cannot itself satisfy the recorded-result walk. The
+# append-only build record names the commit that stored the campaign,
+# and the walk below requires the campaign's readcon version to be the
+# VERSION of that commit. Exempting the campaign without that check
+# would let the embedded version drift.
+measured_campaigns = set()
+for rel in sorted(recorded_results):
+    build_path = root / rel
+    if not build_path.is_file():
+        continue
+    named = json.loads(build_path.read_text(encoding="utf-8")).get("record")
+    if isinstance(named, str):
+        measured_campaigns.add(named)
 bad = []
 listed = subprocess.check_output(["git", "ls-files", "-z"])
 for raw in listed.split(b"\0"):
@@ -272,7 +329,12 @@ for raw in listed.split(b"\0"):
     parts = set(pathlib.PurePosixPath(rel).parts)
     if rel.startswith(skip_prefixes) or parts & skip_dirs or any(part in skip_dirs for part in parts):
         continue
-    if rel in allow_exact or rel in recorded_results or rel.startswith("docs/source/") and rel.endswith(".rst"):
+    if (
+        rel in allow_exact
+        or rel in recorded_results
+        or rel in measured_campaigns
+        or rel.startswith("docs/source/") and rel.endswith(".rst")
+    ):
         continue
     try:
         data = path.read_text(encoding="utf-8")
@@ -321,6 +383,7 @@ for rel in sorted(recorded_results):
         continue
     recorded = versions[0]
     commits = sorted(set(source_commits))
+    commits_ok = True
     if not commits:
         tagged = subprocess.run(
             ["git", "rev-parse", "--verify", f"refs/tags/v{recorded}^{{commit}}"],
@@ -330,6 +393,7 @@ for rel in sorted(recorded_results):
         )
         if tagged.returncode != 0:
             die(f"{rel} records readcon {recorded} but has no source_commit or v{recorded} tag")
+            commits_ok = False
             continue
         commits = [tagged.stdout.strip()]
     for commit in commits:
@@ -342,13 +406,76 @@ for rel in sorted(recorded_results):
         source_version = shown.stdout.strip()
         if shown.returncode != 0:
             die(f"{rel} source_commit {commit} has no readable VERSION")
+            commits_ok = False
         elif source_version != recorded:
             die(
                 f"{rel} records readcon {recorded}, but source_commit {commit} "
                 f"records VERSION {source_version!r}"
             )
+            commits_ok = False
         else:
             print(f"OK: {rel} records measured readcon {recorded} from {commit}")
+    named = payload.get("record")
+    if commits_ok and isinstance(named, str):
+        named_path = root / named
+        if not named_path.is_file():
+            die(f"{rel} names {named}, which is absent")
+        else:
+            if len(source_commits) != 1 or not re.fullmatch(
+                r"[0-9a-f]{40}", source_commits[0]
+            ):
+                die(
+                    f"{rel} names {named} and must record one 40-char source_commit, "
+                    f"found {source_commits}"
+                )
+            else:
+                record_commit = source_commits[0]
+                touched = subprocess.run(
+                    [
+                        "git",
+                        "diff-tree",
+                        "--no-commit-id",
+                        "--name-only",
+                        "-r",
+                        "--root",
+                        record_commit,
+                        "--",
+                        named,
+                    ],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                )
+                if touched.returncode != 0 or named not in touched.stdout.splitlines():
+                    die(f"{rel} source_commit {record_commit} did not store {named}")
+                stored = subprocess.run(
+                    ["git", "cat-file", "blob", f"{record_commit}:{named}"],
+                    cwd=root,
+                    capture_output=True,
+                )
+                if stored.returncode != 0 or stored.stdout != named_path.read_bytes():
+                    die(f"{named} does not match {record_commit}:{named}")
+
+            named_versions = []
+
+            def collect(node, into=named_versions):
+                if isinstance(node, dict):
+                    for key in ("readcon", "readcon_version"):
+                        value = node.get(key)
+                        if isinstance(value, str) and measured.fullmatch(value):
+                            into.append(value)
+                    for child in node.values():
+                        collect(child)
+                elif isinstance(node, list):
+                    for child in node:
+                        collect(child)
+
+            collect(json.loads(named_path.read_text(encoding="utf-8")))
+            named_found = sorted(set(named_versions))
+            if named_found != [recorded]:
+                die(f"{named} must record readcon {recorded}, found {named_found}")
+            else:
+                print(f"OK: {named} records measured readcon {recorded} via {rel}")
 for rel in required:
     data = (root / rel).read_text(encoding="utf-8")
     if version not in data:

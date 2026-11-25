@@ -311,11 +311,24 @@ fn sniff(path: &Path) -> std::io::Result<Compression> {
 /// Rank 0: read the file and scan or load its index.
 fn root_index(path: &Path, write_sidecar: bool) -> Result<(FileContents, FrameIndex), String> {
     let fc = compression::read_file_contents(path).map_err(|e| e.to_string())?;
-    let idx = {
-        let text = fc.as_str_sliced().map_err(|e| e.to_string())?;
-        let mapped = matches!(fc, FileContents::Mapped(_));
-        frame_index::load_or_build(path, text, write_sidecar && mapped)
-            .map_err(|e| e.to_string())?
+    let mapped = matches!(fc, FileContents::Mapped(_));
+    let text = fc.as_str_sliced().map_err(|e| e.to_string())?;
+    // A checked scan refuses to store an index that stops at a bad frame.
+    // The read still has to parse that frame: its start is in the unchecked
+    // scan, and the span parser reports the file line.
+    let idx = match frame_index::load_or_build(path, text, write_sidecar && mapped) {
+        Ok(idx) => idx,
+        Err(crate::error::ParseError::Io(msg)) => return Err(msg),
+        Err(_) => {
+            let offsets = crate::iterators::frame_start_offsets(text);
+            if offsets.is_empty() {
+                return Err("no frames found in file".into());
+            }
+            FrameIndex {
+                offsets: offsets.into_iter().map(|offset| offset as u64).collect(),
+                data_len: text.len() as u64,
+            }
+        }
     };
     Ok((fc, idx))
 }
@@ -1035,11 +1048,9 @@ pub fn rank_line_range_share(
 
 /// Parse `x y z` from each non-empty line. The returned buffer is three
 /// floats per line, in file order.
-/// Atoms whose coordinates alias `coords`.
 ///
-/// `coords` is the return value's buffer. Moving that `Vec` does not move
-/// the allocation, so the atoms stay valid. Reallocating it, or dropping
-/// it before the atoms, does not.
+/// Each atom owns a copy of its coordinates. Moving, reallocating, or
+/// dropping `coords` does not change the atoms.
 pub fn slab_atoms(
     slice: &[u8],
     symbol: &std::sync::Arc<str>,
@@ -1047,7 +1058,6 @@ pub fn slab_atoms(
     let coords = parse_coord_lines(slice)?;
     let n = coords.len() / 3;
     let mut atoms = Vec::with_capacity(n);
-    let base = coords.as_ptr() as *mut f64;
     let mut cursor = 0usize;
     let mut index = 0usize;
     while cursor < slice.len() && index < n {
@@ -1091,9 +1101,12 @@ pub fn slab_atoms(
         } else {
             ([false, false, false], index as u64)
         };
-        atoms.push(crate::types::AtomDatum::at_slot(
+        let offset = index * 3;
+        atoms.push(crate::types::AtomDatum::coords(
             std::sync::Arc::clone(symbol),
-            unsafe { base.add(index * 3) },
+            coords[offset],
+            coords[offset + 1],
+            coords[offset + 2],
             fixed,
             id,
         ));
@@ -1211,20 +1224,19 @@ mod atom_range_tests {
         assert_eq!(span, frame.len());
     }
 
-    /// Rank writes alias one coordinate allocation instead of a box per atom.
+    /// Rank writes keep the parsed coordinates on the atoms.
     #[test]
-    fn slab_atoms_alias_the_parsed_coordinates() {
+    fn slab_atoms_keep_the_parsed_coordinates() {
         let text = b"0.125 0.25 0.5 0 7\n1.5 2.5 3.5 1 8\n";
         let symbol: std::sync::Arc<str> = std::sync::Arc::from("Cu");
         let (coords, atoms) = slab_atoms(text, &symbol).unwrap();
         assert_eq!(coords, vec![0.125, 0.25, 0.5, 1.5, 2.5, 3.5]);
-        assert_eq!(atoms[0].x(), 0.125);
-        assert_eq!(atoms[0].z(), 0.5);
         assert_eq!(atoms[0].atom_id, 7);
         assert_eq!(atoms[0].fixed(), [false, false, false]);
-        assert_eq!(atoms[1].x(), 1.5);
         assert_eq!(atoms[1].atom_id, 8);
         assert_eq!(atoms[1].fixed(), [true, false, false]);
-        assert!(std::ptr::eq(atoms[0].coord_ptr(), coords.as_ptr()));
+        drop(coords);
+        assert_eq!(atoms[0].atom_id, 7);
+        assert_eq!(atoms[1].atom_id, 8);
     }
 }

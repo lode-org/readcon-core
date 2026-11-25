@@ -54,6 +54,7 @@ fn parse_error_display_and_from_all_variants() {
         ParseError::InvalidCount("0".into()),
         ParseError::InvalidUnits("time".into()),
         ParseError::UnsupportedVersion(0),
+        ParseError::Io("disk".into()),
     ];
     for e in &variants {
         let s = e.to_string();
@@ -482,7 +483,7 @@ fn float32_storage_rescale_roundtrip_keeps_atoms() {
         assert_eq!(fr.atom_data.len(), expect.len(), "{what}");
         for (i, (atom, want)) in fr.atom_data.iter().zip(&expect).enumerate() {
             let got = [
-                [atom.x(), atom.y(), atom.z()],
+                [fr.x_at(i), fr.y_at(i), fr.z_at(i)],
                 atom.velocity().unwrap(),
                 atom.force().unwrap(),
             ];

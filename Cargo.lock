@@ -1169,6 +1169,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "metrology"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7964688f2711cfbc228d8a5b50096323533bf6fc7a0e736020bc4ce64f639757"
+
+[[package]]
 name = "micromap"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1744,6 +1750,7 @@ dependencies = [
  "memmap2",
  "metatensor",
  "metatensor-sys",
+ "metrology",
  "mimalloc",
  "mpi",
  "ndarray",

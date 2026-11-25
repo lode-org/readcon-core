@@ -147,11 +147,19 @@ def source_identity() -> dict:
     }
     hashed = None
     tag = f"v{library_version()}"
-    for ref, name in ((f"{tag}^{{commit}}", tag), ("HEAD^{commit}", None)):
+    latest_source = _git("log", "-1", "--format=%H", "HEAD", "--", *LIBRARY_PATHS)
+    candidates = (
+        (f"{tag}^{{commit}}", tag),
+        (latest_source, None),
+        ("HEAD^{commit}", None),
+    )
+    seen: set[str] = set()
+    for ref, name in candidates:
         commit = _git("rev-parse", "--verify", "-q", ref)
-        listing = (
-            _git("ls-tree", "-r", commit, "--", *LIBRARY_PATHS) if commit else None
-        )
+        if not commit or commit in seen:
+            continue
+        seen.add(commit)
+        listing = _git("ls-tree", "-r", commit, "--", *LIBRARY_PATHS)
         if not listing:
             continue
         if hashed is None:

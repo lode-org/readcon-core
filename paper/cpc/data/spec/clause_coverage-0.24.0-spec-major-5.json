@@ -1,0 +1,2697 @@
+{
+ "supersedes": "paper/cpc/data/spec/clause_coverage-0.24.0-spec-major-4.json",
+ "reason": "Final spec-major recount of specification coverage for readcon-core 0.24.0 after the sources counted in clause_coverage-0.24.0-spec-major-4.json changed.",
+ "script": "paper/cpc/scripts/clause_coverage.py",
+ "spec": {
+  "path": "docs/orgmode/spec.org",
+  "sha256": "0b5d372993695a31269933bf1cdf68b7d7015622eb710e390174ee2a28cb6c02",
+  "clauses": 179
+ },
+ "sources": {
+  "corpus31": {
+   "path": "paper/cpc/data/corpus31/manifest.toml",
+   "entries": 143,
+   "naming": 143,
+   "clause_ids": 68,
+   "unknown_ids": []
+  },
+  "conformance": {
+   "path": "resources/conformance/manifest.toml",
+   "entries": 25,
+   "naming": 25,
+   "clause_ids": 15,
+   "unknown_ids": []
+  },
+  "probes": {
+   "path": "paper/cpc/data/referee_probes.json",
+   "probes": 167,
+   "naming": 165,
+   "clause_ids": 60,
+   "unknown_ids": []
+  },
+  "tests": {
+   "roots": [
+    "tests",
+    "src"
+   ],
+   "files": 230,
+   "rust_tests": 1014,
+   "python_tests": 643,
+   "naming": 59,
+   "clause_ids": 106,
+   "unknown_ids": []
+  },
+  "indep_reader": {
+   "path": "paper/cpc/scripts/indep_reader.py",
+   "clause_ids": 55,
+   "unknown_ids": []
+  }
+ },
+ "totals": {
+  "clauses": 179,
+  "covered": 128,
+  "corpus": 75,
+  "corpus31": 68,
+  "conformance": 15,
+  "probes": 60,
+  "tests": 106,
+  "indep_reader": 55,
+  "uncovered": 51
+ },
+ "uncovered": [
+  "CON-file.6",
+  "CON-file.7",
+  "CON-file.8",
+  "CON-file.9",
+  "CON-file.10",
+  "CON-file.11",
+  "CON-frame.8",
+  "CON-frame.9",
+  "CON-header.1",
+  "CON-line2.18",
+  "CON-line2.19",
+  "CON-line2.20",
+  "CON-line2.23",
+  "CON-line2.24",
+  "CON-line2.25",
+  "CON-count.5",
+  "CON-count.6",
+  "CON-count.9",
+  "CON-count.10",
+  "CON-coord.1",
+  "CON-mask.6",
+  "CON-mask.7",
+  "CON-id.2",
+  "CON-id.7",
+  "CON-id.13",
+  "CON-section.3",
+  "CON-section.5",
+  "CON-section.6",
+  "CON-section.19",
+  "CON-section.21",
+  "CON-section.22",
+  "CON-section.23",
+  "CON-section.24",
+  "CON-validate.2",
+  "CON-bonds.1",
+  "CON-bonds.2",
+  "CON-units.15",
+  "CON-units.17",
+  "CON-units.19",
+  "CON-num.4",
+  "CON-num.10",
+  "CON-compress.4",
+  "CON-compress.5",
+  "CON-error.5",
+  "CON-profile.1",
+  "CON-profile.2",
+  "CON-profile.3",
+  "CON-profile.4",
+  "CON-profile.5",
+  "CON-token.1",
+  "CON-lex.1"
+ ],
+ "clauses": [
+  {
+   "id": "CON-status.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "minor/later-minor-unknown-key-kept"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-status.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "v1_convel.convel"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-status.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::patch_identity_and_major3_time"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-status.4",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::patch_identity_and_major3_time"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-status.5",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::patch_identity_and_major3_time"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-status.6",
+   "keyword": "MAY",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::patch_identity_and_major3_time"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-status.8",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_patch_404.rs::con_status_8_uppercase_keywords"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-file.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_utf8_line1.con",
+    "v31_utf8_number_token.con",
+    "v31_utf8_separator_line.convel"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-file.2",
+   "keyword": "MUST NOT",
+   "corpus31": [
+    "v31_bom.con",
+    "v31_bom_later_frame.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "bom/first-frame",
+    "bom/second-frame"
+   ],
+   "tests": [
+    "tests/spec_v40.rs::bom_on_a_later_frame_is_rejected",
+    "tests/v31_conformance.rs::leading_bom_is_rejected"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-file.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_cr_separator.con",
+    "v31_crlf.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "whitespace/carriage-return-in-row"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-file.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "d03_nbsp_after_id.con",
+    "v31_trailing_ff.con",
+    "v31_trailing_ws.con",
+    "v31_unicode_blank_before_section.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/nbsp-after-id",
+    "labels/coordinates-case-and-spaces",
+    "line2/trailing-spaces-and-tab",
+    "whitespace/trailing-form-feed-line-2",
+    "whitespace/unicode-blank-before-section"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-file.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_label_case.convel",
+    "v31_label_case_coordinates.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "labels/coordinates-01",
+    "labels/coordinates-case-and-spaces"
+   ],
+   "tests": [
+    "tests/empty_header_lines.rs::case_folded_velocity_label_keeps_the_following_empty_user_line",
+    "tests/v31_conformance.rs::m6_labels_fold_case_and_spaces"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-file.6",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A writer rule against an extra blank line between frames. A reader still finds the next frame; no corpus file has that blank as its only fault."
+  },
+  {
+   "id": "CON-file.7",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The parser applies this definition while finding blank lines; no test name spells this clause."
+  },
+  {
+   "id": "CON-file.8",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The byte parser reports the required class; no corpus entry isolates non-UTF-8 text outside a numeric field."
+  },
+  {
+   "id": "CON-file.9",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The line reader accepts a final carriage return; no corpus entry isolates that ending."
+  },
+  {
+   "id": "CON-file.10",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The line reader handles a final unterminated line; no corpus entry isolates this ending."
+  },
+  {
+   "id": "CON-file.11",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The byte parser classifies malformed text before field parsing; no test name spells this clause."
+  },
+  {
+   "id": "CON-frame.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "empty.con",
+    "ff_tail_610_frames.con",
+    "v31_trailing_ws.con",
+    "v31_unicode_tail.con",
+    "whitespace_only.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "threads/blank-tails-6000-frames",
+    "threads/form-feed-tail-610-frames",
+    "whitespace/unicode-tail"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m3_trailing_whitespace_does_not_open_a_velocity_section",
+    "tests/v31_conformance.rs::the_line_after_a_frame_starts_the_next_frame"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-frame.2",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "c-iterator/statuses",
+    "cli/truncated-last-frame",
+    "truncation/cut-at-27",
+    "truncation/cut-at-32",
+    "truncation/cut-at-34"
+   ],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-frame.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_unicode_tail.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "truncation/trailing-garbage-line",
+    "whitespace/unicode-tail"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::the_line_after_a_frame_starts_the_next_frame",
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-frame.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_atom_count_1e12.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "cli/truncated-last-frame",
+    "hostile/atom-count-10^12",
+    "truncation/cut-at-27",
+    "truncation/cut-at-32",
+    "truncation/cut-at-34"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-frame.5",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/restart_defects.rs::blank_then_whitespace_eof_is_not_a_section_on_skip",
+    "tests/v31_conformance.rs::m3_trailing_whitespace_does_not_open_a_velocity_section"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-frame.6",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "labels/velocities-0",
+    "labels/velocities-2",
+    "labels/velocities-no-index",
+    "labels/velocities-xyz"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::one_blank_line_opens_a_section"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-frame.7",
+   "keyword": "MUST",
+   "corpus31": [
+    "sections_empty_velocity.con",
+    "sections_empty_velocity_6001_frames.con",
+    "sections_empty_velocity_x300.con",
+    "two_frames_blank.con",
+    "v1_then_json_frame_empty_title.con",
+    "v31_legacy_velocity_time.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "c-iterator/two-frames-blank",
+    "threads/case-a-6001-frames",
+    "threads/report-f-70978-bytes",
+    "threads/report-g-1038233-bytes",
+    "threads/sections-empty-velocity-block",
+    "threads/sections-empty-velocity-block-every-path"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::the_line_after_a_frame_starts_the_next_frame",
+    "tests/v31_conformance.rs::zero_atom_frame_round_trips_and_keeps_the_next_frame"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-frame.8",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The iterator returns no frame for an empty stream; no corpus entry names the empty stream."
+  },
+  {
+   "id": "CON-frame.9",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The initial-header path is the ordinary parser entry; no test name spells this distinction."
+  },
+  {
+   "id": "CON-header.1",
+   "keyword": "MAY",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A MAY that leaves lines 5 and 6 empty. The reader accepts an empty line and a filled one, and the clause names no rejection."
+  },
+  {
+   "id": "CON-header.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_bom_later_frame.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "bom/second-frame",
+    "bom/second-frame-line-1-kept"
+   ],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-header.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec",
+    "tests/v31_conformance.rs::coordinates_and_masses_use_declared_units"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-header.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "sections_empty_velocity.con",
+    "sections_empty_velocity_6001_frames.con",
+    "sections_empty_velocity_x300.con",
+    "v1_then_json_frame_empty_title.con"
+   ],
+   "conformance": [
+    "valid/empty_header_both.con",
+    "valid/empty_line2.con",
+    "valid/empty_user_line.con",
+    "valid/empty_user_line_two.con"
+   ],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "d10_json_depth_129.con",
+    "d15_json_depth_100001.con",
+    "v2_json_depth_127.con",
+    "v2_json_depth_128.con",
+    "v31_trailing_ff.con"
+   ],
+   "conformance": [
+    "valid/v2_minimal.con"
+   ],
+   "probes": [
+    "acceptor/json-depth-100001",
+    "acceptor/json-depth-129",
+    "line2/text-after-object",
+    "line2/trailing-spaces-and-tab",
+    "line2/two-objects",
+    "whitespace/trailing-form-feed-line-2"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted",
+    "tests/v31_conformance.rs::m12_metadata_errors_name_line_two"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "d05_lattice_nan.con",
+    "d10_json_depth_129.con",
+    "d15_json_depth_100001.con",
+    "v2_json_depth_128.con",
+    "v31_trailing_ff.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/json-depth-100001",
+    "acceptor/json-depth-129",
+    "acceptor/lattice-nan",
+    "whitespace/trailing-form-feed-line-2"
+   ],
+   "tests": [
+    "tests/spec_v40.rs::con_line2_21_relaxes_overflow_not_malformed_numbers",
+    "tests/v31_conformance.rs::m12_metadata_errors_name_line_two"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [
+    "invalid/missing_spec_version.con"
+   ],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m12_metadata_errors_name_line_two"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_version_3_5.con",
+    "v31_version_3e0.con",
+    "v31_version_float.con",
+    "v31_version_string.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "line2/version-3.0",
+    "line2/version-3e0",
+    "line2/version-string"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "json_version_1.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::builder_refuses_a_major_it_cannot_read_back",
+    "tests/v31_conformance.rs::m11_json_majors_zero_and_one_are_unsupported"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.6",
+   "keyword": "MUST",
+   "corpus31": [
+    "json_version_4.con",
+    "v31_version_3_5.con"
+   ],
+   "conformance": [
+    "invalid/unsupported_spec_version.con"
+   ],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m11_json_majors_zero_and_one_are_unsupported"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.7",
+   "keyword": "MUST",
+   "corpus31": [
+    "d14_minor_2pow64.con",
+    "f27_minor2_no_ids.con",
+    "v2_minor_2pow64.con",
+    "v31_minor_2pow64_minus_1.con",
+    "v32_mixed_ids.con",
+    "v32_repeated_ids.con",
+    "v32_unknown_section_arity.con",
+    "v32_validate_count_change.con",
+    "v32_validate_repeated_ids.con",
+    "v32_validate_symbol_change.con",
+    "v33_unknown_section_arity.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/minor-2^64",
+    "ids/four-column-rows-minor-2",
+    "ids/last-row-four-columns/minor-2",
+    "ids/repeated/minor-2",
+    "ids/repeated/minor-2-validate",
+    "ids/second-frame-new-id/minor-2-validate",
+    "ids/second-frame-new-id/read-minor-2-validate",
+    "ids/second-frame-same-id/read-minor-2-validate",
+    "line2/minor-10^30",
+    "line2/minor-2^64-1-kept",
+    "line2/minor-2^64-kept",
+    "minor/2^64-v2",
+    "minor/2^64-v3",
+    "minor/later-minor-four-column-ids",
+    "minor/later-minor-unknown-key-kept"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.8",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "minor/later-minor-unknown-key-kept"
+   ],
+   "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec",
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.9",
+   "keyword": "MUST",
+   "corpus31": [
+    "d14_minor_2pow64.con",
+    "v2_minor_2pow64.con",
+    "v31_minor_2pow64_minus_1.con",
+    "v31_minor_string.con",
+    "v31_units_time.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/minor-2^64",
+    "line2/minor-10^30",
+    "line2/minor-2^64-1-kept",
+    "line2/minor-2^64-kept",
+    "line2/minor-fraction",
+    "line2/minor-negative",
+    "line2/minor-string",
+    "minor/2^64-v2",
+    "minor/2^64-v3",
+    "units/pre-3.1-minor-kept"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.10",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec",
+    "tests/v31_conformance.rs::later_minors_and_line_endings_are_accepted"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.11",
+   "keyword": "MUST",
+   "corpus31": [
+    "d08_sections_null.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/sections-null"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.12",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_validate_string.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.13",
+   "keyword": "MUST",
+   "corpus31": [
+    "d06_lattice_1e999.con",
+    "v2_pbc_string.con",
+    "v31_energy_string.con",
+    "v31_lattice_string.con",
+    "v31_lattice_two_rows.con",
+    "v31_pbc_numbers.con",
+    "v31_pbc_two.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "line2/version-string",
+    "metadata/lattice-2x2",
+    "metadata/lattice-string",
+    "metadata/pbc-string",
+    "metadata/pbc-two",
+    "metadata/pbc-yes",
+    "pbc/numbers",
+    "pbc/string-yes"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-line2.14",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "src/parser.rs::test_invalid_con_spec_minor_and_duplicate_semantics",
+    "tests/minor_arbitrary.rs::con_line2_14_in_range_minor_velocities_use_the_top_level_key"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.15",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::patch_identity_and_major3_time"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.16",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::patch_identity_and_major3_time"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.17",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::patch_identity_and_major3_time"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.18",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The metadata parser enforces the depth limit; no test name spells this clause id."
+  },
+  {
+   "id": "CON-line2.19",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The metadata parser rejects a reserved non-binary64 number; no test name spells this clause id."
+  },
+  {
+   "id": "CON-line2.20",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The metadata type check precedes validation checks in one parser path; no test name spells this ordering."
+  },
+  {
+   "id": "CON-line2.21",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::con_line2_21_relaxes_overflow_not_malformed_numbers"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.22",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::con_line2_22_minor_above_u64_is_metadata"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-line2.23",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The metadata object parser rejects duplicate names; no test name spells this clause."
+  },
+  {
+   "id": "CON-line2.24",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The schema is an informative artifact rather than an executable acceptance case."
+  },
+  {
+   "id": "CON-line2.25",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The parser has no byte-length rejection beyond the depth rule; no finite corpus can cover that absence."
+  },
+  {
+   "id": "CON-cell.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_lattice_ok.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::cell_matrix_prefers_lattice_vectors_and_builds_the_rest"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-cell.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::round_trip_is_the_writer_default_and_lattice_lines_follow_vectors"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-cell.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "v2_pbc_absent.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "pbc/booleans-and-default",
+    "pbc/frame-attribute"
+   ],
+   "tests": [
+    "tests/spec_patch_402.rs::degenerate_cells_are_validate_mode_checks",
+    "tests/v31_conformance.rs::cell_matrix_prefers_lattice_vectors_and_builds_the_rest"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-cell.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "d11_validate_pbc_object.con",
+    "v2_pbc_string.con",
+    "v31_pbc_numbers.con",
+    "v31_pbc_slab.con",
+    "v31_pbc_two.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/validate-pbc-object",
+    "metadata/pbc-booleans",
+    "metadata/pbc-string",
+    "metadata/pbc-two",
+    "metadata/pbc-yes",
+    "pbc/booleans-and-default",
+    "pbc/frame-attribute",
+    "pbc/numbers",
+    "pbc/numbers-validate",
+    "pbc/slab-ase-round-trip",
+    "pbc/string-yes"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::cell_matrix_prefers_lattice_vectors_and_builds_the_rest"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-cell.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "d06_lattice_1e999.con",
+    "v31_lattice_ok.con",
+    "v31_lattice_string.con",
+    "v31_lattice_two_rows.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/lattice-1e999",
+    "metadata/lattice-2x2",
+    "metadata/lattice-string"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::cell_matrix_prefers_lattice_vectors_and_builds_the_rest"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-cell.6",
+   "keyword": "MUST",
+   "corpus31": [
+    "f26_cell_10_10_170.con",
+    "gram_170_v1.con",
+    "gram_170_v2.con",
+    "gram_170_v30.con",
+    "gram_170_v31_validate.con",
+    "gram_60_60_119_9.con",
+    "gram_60_60_119_9_validate.con",
+    "gram_60_60_120.con",
+    "gram_60_60_120_1.con",
+    "gram_60_60_120_1_validate.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "cell/10-10-170/v2/validate",
+    "cell/130-130-130/v3.1",
+    "cell/130-130-130/v3.1/validate",
+    "cell/170-170-170/v1",
+    "cell/170-170-170/v2",
+    "cell/170-170-170/v3.0",
+    "cell/170-170-170/v3.0/validate",
+    "cell/170-170-170/v3.1",
+    "cell/170-170-170/v3.1/validate",
+    "cell/60-60-119.9/v2",
+    "cell/60-60-119.9/v2/validate",
+    "cell/60-60-119.9/v3.1",
+    "cell/60-60-119.9/v3.1/validate",
+    "cell/60-60-120.1/v2",
+    "cell/60-60-120.1/v2/validate",
+    "cell/60-60-120.1/v3.1",
+    "cell/60-60-120.1/v3.1/validate",
+    "cell/60-60-120/v2",
+    "cell/60-60-120/v2/validate",
+    "cell/60-60-120/v3.1",
+    "cell/60-60-120/v3.1/validate",
+    "cell/90-90-90/v3.1",
+    "cell/90-90-90/v3.1/validate",
+    "cell/c-z-never-nan",
+    "cell/constructed-frame-round-trip",
+    "cell/f26-gram-file",
+    "cell/f26-gram-no-validate",
+    "cell/f26-gram-v3-validate",
+    "cell/negative-gram-radicand",
+    "cell/tab-separated/10-10-170",
+    "cell/tab-separated/10-10-170/validate",
+    "cell/tab-separated/120-120-120",
+    "cell/tab-separated/120-120-120/validate",
+    "cell/tab-separated/150-150-100",
+    "cell/tab-separated/150-150-100/validate",
+    "cell/tab-separated/170-170-170",
+    "cell/tab-separated/170-170-170/validate",
+    "cell/tab-separated/90-90-90",
+    "cell/tab-separated/90-90-90/validate",
+    "cell/zero-gram-radicand-legal"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::cell_matrix_prefers_lattice_vectors_and_builds_the_rest"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-cell.7",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_patch_402.rs::con_cell_7_column_readers_reject_impossible_angles",
+    "tests/spec_patch_402.rs::con_cell_7_impossible_angles_are_rejected",
+    "tests/spec_v40.rs::cell_window_boundary"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-count.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_zero_atom_unicode_blank.con"
+   ],
+   "conformance": [
+    "valid/zero_atom.con",
+    "valid/zero_atom_eof.con",
+    "valid/zero_atom_then_frame.con"
+   ],
+   "probes": [
+    "threads/blank-tails-6000-frames"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count",
+    "tests/v31_conformance.rs::zero_atom_frame_round_trips_and_keeps_the_next_frame"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-count.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-count.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [
+    "invalid/per_type_zero.con"
+   ],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-count.4",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "threads/blank-tails-6000-frames"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count",
+    "tests/v31_conformance.rs::zero_atom_frame_round_trips_and_keeps_the_next_frame"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-count.5",
+   "keyword": "SHOULD NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A SHOULD NOT that turns on the consumer a file is written for. No writer of the library, in Rust, Python or the C ABI, takes a consumer or a target version: the arguments name the destination, the frames, the float format or precision, compression, canonical order and the MPI settings, so no writer call states the clause."
+  },
+  {
+   "id": "CON-count.6",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "Coordinate blocks follow the header order. The parser reads them in that order; no corpus file is only a reordered block."
+  },
+  {
+   "id": "CON-count.7",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_validate_count_change.con",
+    "v32_validate_count_change.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-count.8",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_label_coordinates_2.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "labels/coordinates-01",
+    "labels/coordinates-2"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-count.9",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The count parser uses an unsigned 64-bit integer; no test name spells the complete range."
+  },
+  {
+   "id": "CON-count.10",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The count parser runs before row-width validation; no test name spells this ordering."
+  },
+  {
+   "id": "CON-coord.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The coordinate-label parser applies this check in every mode; no test name spells this clause."
+  },
+  {
+   "id": "CON-coord.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_patch_404.rs::con_coord_2_block_shape"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-mask.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-mask.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [
+    "valid/column4_spec1_all_fixed.con"
+   ],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token",
+    "tests/v31_conformance.rs::m3_trailing_whitespace_does_not_open_a_velocity_section"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-mask.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-mask.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_masks_0to7.con"
+   ],
+   "conformance": [
+    "valid/column4_spec2_all_fixed.con",
+    "valid/column4_spec2_x_only.con",
+    "valid/column4_spec2_xz.con",
+    "valid/column4_spec2_y_only.con"
+   ],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-mask.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_mask_8.con",
+    "v31_mask_float.con"
+   ],
+   "conformance": [
+    "invalid/column4_out_of_range.con"
+   ],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-mask.6",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A spec 2 writer must not emit 1 for all-fixed. The writer emits 7, and a legacy 1 stays all-fixed for a reader of spec 1."
+  },
+  {
+   "id": "CON-mask.7",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A spec 2 writer emits 7 for an atom fixed on x, y and z. That is the same writer path as CON-mask.6."
+  },
+  {
+   "id": "CON-mask.8",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_patch_404.rs::con_mask_8_bit_order"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_id_2pow64.con",
+    "v31_ids_beyond_binary64.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m4_atom_id_is_not_parsed_as_float"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-id.2",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A reader must not assume an id starts at 0 or 1. The parser accepts any integer id, and no probe is named with this clause."
+  },
+  {
+   "id": "CON-id.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "cli/rewrite-refused",
+    "writers/c-path-writer-mid-write-failure",
+    "writers/python-mid-write-failure",
+    "writers/repeated-id-refused",
+    "writers/repeated-id-refused-gzip"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::writer_rejects_a_repeated_atom_id"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_repeated_ids.con",
+    "v31_validate_repeated_ids.con",
+    "v32_repeated_ids.con",
+    "v32_validate_repeated_ids.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "cli/rewrite-refused",
+    "ids/repeated",
+    "ids/repeated/minor-2",
+    "ids/repeated/minor-2-validate",
+    "ids/repeated/validate",
+    "ids/second-frame-new-id"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::pre_grouping_indices_follow_unique_ids_and_the_reader_keeps_file_order"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.5",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::pre_grouping_indices_follow_unique_ids_and_the_reader_keeps_file_order"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.6",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_ids_beyond_binary64.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "ids/second-frame-new-id",
+    "ids/second-frame-new-id/minor-1-validate",
+    "ids/second-frame-new-id/minor-2-validate"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m4_atom_id_is_not_parsed_as_float",
+    "tests/v31_conformance.rs::pre_grouping_indices_follow_unique_ids_and_the_reader_keeps_file_order"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.7",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A consumer that returns atoms in pre-grouping order uses CON-id.5. The library returns file order, so this consumer rule has no call."
+  },
+  {
+   "id": "CON-id.8",
+   "keyword": "MAY",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::pre_grouping_indices_follow_unique_ids_and_the_reader_keeps_file_order"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.9",
+   "keyword": "MUST",
+   "corpus31": [
+    "f27_minor1_no_ids.con",
+    "f27_minor2_no_ids.con",
+    "v31_mixed_ids.con",
+    "v32_mixed_ids.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "ids/four-column-rows-minor-2",
+    "ids/four-column-rows-two-frames",
+    "ids/last-row-four-columns/minor-2",
+    "ids/last-row-four-columns/v2",
+    "ids/last-row-four-columns/v3.1",
+    "minor/later-minor-four-column-ids"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m4_atom_id_is_not_parsed_as_float"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.10",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::persistent_ids"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.11",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::persistent_ids"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.12",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::persistent_ids"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-id.13",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The id parser applies the unsigned range before later row checks; no test name spells this ordering."
+  },
+  {
+   "id": "CON-section.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "d02_legacy_velocity_no_time.convel",
+    "d07_sections_capital_velocities.convel",
+    "sections_empty_velocity.con",
+    "sections_empty_velocity_6001_frames.con",
+    "sections_empty_velocity_x300.con",
+    "v1_convel.convel",
+    "v1_then_json_frame_empty_title.con",
+    "v30_legacy_velocity_time_fs.convel",
+    "v31_legacy_velocity_no_time.convel",
+    "v31_legacy_velocity_time.convel",
+    "v31_sections_out_of_order.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/legacy-velocity-no-time",
+    "acceptor/sections-capital-velocities",
+    "threads/case-a-6001-frames",
+    "threads/report-f-70978-bytes",
+    "threads/report-g-1038233-bytes",
+    "threads/sections-empty-velocity-block",
+    "threads/sections-empty-velocity-block-every-path"
+   ],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_two_blanks_before_section.convel",
+    "v31_unicode_blank_before_section.convel",
+    "v31_utf8_separator_line.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "whitespace/unicode-blank-before-section"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::one_blank_line_opens_a_section"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.3",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A writer must not put a blank line between the component blocks of a section. No corpus file is only that blank."
+  },
+  {
+   "id": "CON-section.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "d13_blank_symbol_energies.con",
+    "v31_blank_symbol_velocities.convel",
+    "v31_two_blanks_before_section.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/blank-symbol-energies"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m5_section_rows_have_exact_width"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.5",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The per-atom energy section name is energies. The parser looks up that name."
+  },
+  {
+   "id": "CON-section.6",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "atom_energies is not a section name. An unknown name is skipped with the unknown-section rule."
+  },
+  {
+   "id": "CON-section.7",
+   "keyword": "MUST",
+   "corpus31": [
+    "d07_sections_capital_velocities.convel",
+    "v31_unknown_section.con"
+   ],
+   "conformance": [
+    "invalid/unknown_section.con"
+   ],
+   "probes": [
+    "acceptor/sections-capital-velocities",
+    "minor/minor-1-section-arity"
+   ],
+   "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec",
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.8",
+   "keyword": "MUST",
+   "corpus31": [
+    "v32_unknown_section_arity.con",
+    "v33_unknown_section_arity.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "minor/later-minor-section-arity/minor-2",
+    "minor/later-minor-section-arity/minor-7"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.9",
+   "keyword": "MUST",
+   "corpus31": [
+    "v33_unknown_section_no_arity.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "minor/later-minor-section-no-arity/minor-2",
+    "minor/later-minor-section-no-arity/minor-7"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.10",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [
+    "valid/major3_minor2_widgets.con"
+   ],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.11",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [
+    "valid/major4_minor1_widgets.con"
+   ],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.12",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.13",
+   "keyword": "MUST",
+   "corpus31": [
+    "d09_arity_velocities_1.con",
+    "v31_reserved_arity_wrong.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/arity-velocities-1"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::reserved_section_arity_is_the_value_field_count"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.14",
+   "keyword": "MUST",
+   "corpus31": [
+    "v32_unknown_section_arity.con",
+    "v33_unknown_section_arity.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "minor/later-minor-section-arity/minor-2",
+    "minor/later-minor-section-arity/minor-7"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.15",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_label_case.convel",
+    "v31_label_velocities_0.convel",
+    "v31_label_velocities_01.convel",
+    "v31_label_velocities_1_xyz.convel",
+    "v31_label_velocities_2.convel",
+    "v31_label_velocities_no_index.convel",
+    "v31_label_velocities_xyz.convel",
+    "v31_section_label_mismatch.convel",
+    "v31_sections_out_of_order.convel",
+    "v31_two_blanks_before_section.convel",
+    "v31_validate_bad_label.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "labels/velocities-0",
+    "labels/velocities-2",
+    "labels/velocities-mismatch-validate",
+    "labels/velocities-no-index",
+    "labels/velocities-xyz"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m6_labels_fold_case_and_spaces",
+    "tests/v31_conformance.rs::unknown_section_skips_only_a_newer_minor_with_arity"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.16",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "src/writer.rs::minor2_lists_a_new_section_in_section_arity",
+    "tests/v31_conformance.rs::minor2_writer_lists_new_sections_in_section_arity"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.17",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_section_row_id_mismatch.convel"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.18",
+   "keyword": "SHOULD",
+   "corpus31": [],
+   "conformance": [
+    "valid/energy_matches_rows.con"
+   ],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-section.19",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A reader must not reject a frame whose energy differs from the sum of its energies rows. tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads that frame, and its name does not spell this clause."
+  },
+  {
+   "id": "CON-section.20",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_spreads_negative.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "sections/negative-spread"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-section.21",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The section parser applies this row rule; no test name spells this clause."
+  },
+  {
+   "id": "CON-section.22",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The section parser applies this value rule; no test name spells this clause."
+  },
+  {
+   "id": "CON-section.23",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The section parser applies this identity rule; no test name spells this clause."
+  },
+  {
+   "id": "CON-section.24",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The section parser applies the specified check order; no test name spells this ordering."
+  },
+  {
+   "id": "CON-section.25",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_patch_404.rs::con_section_25_reserved_table"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-validate.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_patch_402.rs::degenerate_cells_are_validate_mode_checks",
+    "tests/v31_conformance.rs::m6_labels_fold_case_and_spaces"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-validate.2",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "validate true must not relax a check that already applies. The flag only adds checks."
+  },
+  {
+   "id": "CON-validate.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [
+    "invalid/validate_true_missing_sections.con"
+   ],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-validate.4",
+   "keyword": "MUST",
+   "corpus31": [
+    "d11_validate_pbc_object.con",
+    "d13_blank_symbol_energies.con",
+    "v30_convel_fs_validate.convel",
+    "v31_blank_symbol_velocities.convel",
+    "v31_coord_label_mismatch.con",
+    "v31_label_case_coordinates.con",
+    "v31_label_coordinates_1_xyz.con",
+    "v31_validate_bad_label.convel",
+    "v31_validate_count_change.con",
+    "v31_validate_ok.convel",
+    "v31_validate_repeated_ids.con",
+    "v31_validate_row_id_mismatch.convel",
+    "v31_validate_symbol_change.con",
+    "v31_validate_symbol_mismatch.convel",
+    "v32_validate_count_change.con",
+    "v32_validate_repeated_ids.con",
+    "v32_validate_symbol_change.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/blank-symbol-energies",
+    "acceptor/validate-pbc-object",
+    "ids/repeated/minor-2-validate",
+    "ids/repeated/validate",
+    "ids/second-frame-new-id/minor-1-validate",
+    "ids/second-frame-new-id/minor-2-validate",
+    "ids/second-frame-new-id/read-minor-1-validate",
+    "ids/second-frame-new-id/read-minor-2-validate",
+    "ids/second-frame-same-id/read-minor-2-validate",
+    "labels/velocities-mismatch-validate",
+    "pbc/numbers-validate",
+    "units/v3.0-fs-label-validate"
+   ],
+   "tests": [
+    "tests/spec_patch_402.rs::degenerate_cells_are_validate_mode_checks"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-bonds.1",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "bonds must not appear in sections. The named bonds probes are CON-bonds.2, a malformed bonds entry."
+  },
+  {
+   "id": "CON-bonds.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": true,
+   "reason": "scripts/indep_reader.py rejects a malformed bonds entry. The scan reads the corpus, the referee probes and the library tests, not that reader."
+  },
+  {
+   "id": "CON-bonds.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_bonds_one_index.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-bonds.4",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_patch_404.rs::con_bonds_4_index_is_not_the_column_id"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "d12_length_trailing_space.con",
+    "v31_kcal_per_mol.con",
+    "v31_length_area.con",
+    "v31_units_compound.convel",
+    "v31_units_string.con",
+    "v31_units_time.con"
+   ],
+   "conformance": [
+    "invalid/v3_bad_units.con",
+    "invalid/v3_missing_units.con",
+    "valid/v3_units.con"
+   ],
+   "probes": [
+    "acceptor/length-trailing-space",
+    "units/compound-units"
+   ],
+   "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-units.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "d01_time_unit_metre.convel",
+    "v2_time_banana.con",
+    "v31_mass_ev.con",
+    "v31_units_compound.convel",
+    "v31_units_time.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/time-unit-metre",
+    "units/banana/v2-velocities",
+    "units/banana/v3.0",
+    "units/banana/v3.1",
+    "units/compound-units",
+    "units/natural-spellings",
+    "units/time-angstrom",
+    "units/v2-time-banana"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-units.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_v40.rs::major4_time_is_authoritative",
+    "tests/v31_conformance.rs::v31_writer_requires_time_when_velocities_are_present"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.4",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::v31_writer_requires_time_when_velocities_are_present"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_convel_natural.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "units/natural-spellings"
+   ],
+   "tests": [
+    "tests/spec_patch_404.rs::con_units_16_symbols_are_case_sensitive",
+    "tests/v31_conformance.rs::natural_time_spelling_is_byte_exact_on_write"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.6",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m11_json_majors_zero_and_one_are_unsupported"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.7",
+   "keyword": "MAY",
+   "corpus31": [
+    "v2_convel_time_fs.convel",
+    "v2_time_banana.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "units/banana/v2-velocities",
+    "units/v2-fs-label-validate",
+    "units/v2-time-banana"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::coordinates_and_masses_use_declared_units"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.8",
+   "keyword": "MUST",
+   "corpus31": [
+    "f20_v30_time_fs.convel",
+    "v1_convel.convel",
+    "v2_convel_time_fs.convel",
+    "v2_minor1_velocity_no_time.convel",
+    "v30_convel_fs.convel",
+    "v30_legacy_velocity_time_fs.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "units/corpus-v3.0-fs-label",
+    "units/pre-3.1-label-kept",
+    "units/pre-3.1-minor-kept",
+    "units/v2-fs-label-validate",
+    "units/v3.0-fs-label-rewrite",
+    "units/v3.0-fs-label-to-ase",
+    "units/v3.0-fs-label-validate"
+   ],
+   "tests": [
+    "tests/spec_v40.rs::major4_time_is_authoritative",
+    "tests/v31_conformance.rs::velocity_time_follows_the_minor"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.9",
+   "keyword": "MUST NOT",
+   "corpus31": [
+    "f20_v30_time_fs.convel",
+    "v2_convel_time_fs.convel",
+    "v30_convel_fs.convel",
+    "v30_convel_fs_validate.convel",
+    "v30_legacy_velocity_time_fs.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "units/corpus-v3.0-fs-label",
+    "units/pre-3.1-label-kept",
+    "units/v2-fs-label-validate",
+    "units/v3.0-fs-label-rewrite",
+    "units/v3.0-fs-label-to-ase",
+    "units/v3.0-fs-label-validate"
+   ],
+   "tests": [
+    "tests/spec_v40.rs::major4_time_is_authoritative",
+    "tests/v31_conformance.rs::velocity_time_follows_the_minor"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.10",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_convel_fs.convel",
+    "v31_convel_natural.convel",
+    "v31_legacy_velocity_time.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "units/minor-1-label-applied"
+   ],
+   "tests": [
+    "tests/spec_v40.rs::major4_time_is_authoritative",
+    "tests/v31_conformance.rs::velocity_time_follows_the_minor"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.11",
+   "keyword": "MUST",
+   "corpus31": [
+    "d02_legacy_velocity_no_time.convel",
+    "v2_minor1_velocity_no_time.convel",
+    "v31_convel_no_time.convel",
+    "v31_legacy_velocity_no_time.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/legacy-velocity-no-time",
+    "minor/later-minor-velocities-need-time/minor-2",
+    "minor/later-minor-velocities-need-time/minor-7",
+    "units/minor-1-velocities-need-time",
+    "units/pre-3.1-minor-kept"
+   ],
+   "tests": [
+    "src/parser.rs::nested_and_dotted_metadata_keys_follow_spec",
+    "tests/spec_v40.rs::major4_time_is_authoritative",
+    "tests/v31_conformance.rs::velocity_time_follows_the_minor"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-units.12",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "units/minor-1-writer-needs-time"
+   ],
+   "tests": [
+    "tests/spec_v40.rs::major4_time_is_authoritative",
+    "tests/v31_conformance.rs::v31_writer_requires_time_when_velocities_are_present"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.13",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m7_writer_rejects_invalid_units"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.14",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m7_writer_rejects_invalid_units"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.15",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A consumer may apply a velocity time-unit override when a file breaks CON-units.8 through CON-units.10. No library call takes that override."
+  },
+  {
+   "id": "CON-units.16",
+   "keyword": "MUST",
+   "corpus31": [
+    "d12_length_trailing_space.con",
+    "v31_kcal_per_mol.con",
+    "v31_units_compound.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/length-trailing-space"
+   ],
+   "tests": [
+    "tests/spec_patch_404.rs::con_units_16_symbols_are_case_sensitive",
+    "tests/v31_conformance.rs::unit_vocabulary_includes_mol"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-units.17",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The unit lexer removes ASCII spaces and tabs; no test name spells this clause."
+  },
+  {
+   "id": "CON-units.18",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "src/units.rs::con_units_18_uses_spec_codata_2018_literals"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-units.19",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The unit parser rejects trailing input; no test name spells this clause."
+  },
+  {
+   "id": "CON-units.21",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/spec_patch_404.rs::con_units_21_velocity_follows_the_assigned_time"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_inf_velocity.convel",
+    "v31_nan_coordinate.con",
+    "v31_overflow_coordinate.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m1_non_finite_rejected_without_validate"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-num.2",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m1_non_finite_rejected_without_validate"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.3",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m1_non_finite_rejected_without_validate"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.4",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The C ABI absent-value NaN is not a file token. The writer prints a finite decimal and refuses a non-finite coordinate."
+  },
+  {
+   "id": "CON-num.5",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_float_forms.con",
+    "v31_overflow_coordinate.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::float_accepts_sign_dot_and_exponent"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.6",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::round_trip_is_the_writer_default_and_lattice_lines_follow_vectors"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.7",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::round_trip_is_the_writer_default_and_lattice_lines_follow_vectors"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-num.8",
+   "keyword": "MUST",
+   "corpus31": [
+    "d04_vertical_tab_separator.con",
+    "sections_empty_velocity.con",
+    "sections_empty_velocity_6001_frames.con",
+    "sections_empty_velocity_x300.con",
+    "two_frames_blank.con",
+    "v31_cr_separator.con",
+    "v31_form_feed_separator.con",
+    "v31_utf8_number_token.con",
+    "whitespace_only.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/vertical-tab-separator",
+    "whitespace/carriage-return-in-row",
+    "whitespace/form-feed-separator"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m4_atom_id_is_not_parsed_as_float"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-num.9",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_type_count_2pow64_minus_1.con",
+    "v31_velocity_no_id.convel"
+   ],
+   "conformance": [],
+   "probes": [
+    "hostile/type-count-2^64-1"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m5_section_rows_have_exact_width"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-num.10",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The byte parser reports the required numeric class; no test name spells this clause."
+  },
+  {
+   "id": "CON-compress.1",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_gzip.con.gz",
+    "v31_gzip_two_members.con.gz"
+   ],
+   "conformance": [],
+   "probes": [
+    "cli/gzip-multi-member",
+    "cli/gzip-summary",
+    "cli/truncated-gzip"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m10_gzip_reads_every_member"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-compress.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_zstd.con.zst",
+    "v31_zstd_two_frames.con.zst"
+   ],
+   "conformance": [],
+   "probes": [
+    "cli/zstd-summary"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m10_zstd_reads_every_frame"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-compress.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_gzip_by_content.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-compress.4",
+   "keyword": "MAY",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A writer may split one frame across gzip members and store an RCZ1 index. src/iterators.rs checks that the index bytes are present; the test name does not spell this clause."
+  },
+  {
+   "id": "CON-compress.5",
+   "keyword": "MAY",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "A writer may split one frame across zstd frames with the same RCZ1 index. A one-frame zstd file has no index, and that is the file the corpus reads."
+  },
+  {
+   "id": "CON-error.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "c-iterator/statuses",
+    "c-iterator/two-frames-blank"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::thread_counts_hash_every_field_and_share_the_first_error"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-error.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::m12_metadata_errors_name_line_two"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-error.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "d03_nbsp_after_id.con",
+    "v31_id_2pow64.con",
+    "v31_mask_8.con",
+    "v31_type_count_2pow64.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/nbsp-after-id"
+   ],
+   "tests": [
+    "tests/v31_conformance.rs::m2_column_four_is_an_integer_token",
+    "tests/v31_conformance.rs::m4_atom_id_is_not_parsed_as_float",
+    "tests/v31_conformance.rs::zero_atom_frame_is_legal_and_a_bad_count_is_invalid_count"
+   ],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-error.4",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [
+    "paths/indexed-trajectory-same-error",
+    "threads/case-a-6001-frames",
+    "threads/report-f-70978-bytes",
+    "threads/report-g-1038233-bytes",
+    "threads/sections-empty-velocity-block",
+    "threads/sections-empty-velocity-block-every-path"
+   ],
+   "tests": [
+    "tests/error_channel.rs::the_lowest_line_wins_at_every_thread_count",
+    "tests/v31_conformance.rs::earliest_frame_error_wins_at_every_thread_count"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-error.5",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "The parser reports the earliest line by construction; no multi-error corpus entry names this clause."
+  },
+  {
+   "id": "CON-profile.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "This clause quantifies the reader rules already measured individually."
+  },
+  {
+   "id": "CON-profile.2",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "This clause summarizes validation behavior already measured by its individual checks."
+  },
+  {
+   "id": "CON-profile.3",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "This clause quantifies the writer rules already measured individually."
+  },
+  {
+   "id": "CON-profile.4",
+   "keyword": "MUST NOT",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "This clause defines the corpus verdict as a whole rather than one additional case."
+  },
+  {
+   "id": "CON-profile.5",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "This clause defines comparison with the corpus rather than one additional case."
+  },
+  {
+   "id": "CON-token.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "An integer token is ASCII digits with no sign and no decimal point. The finite-number parser rejects the other spellings, and the tests name the function rather than this clause."
+  },
+  {
+   "id": "CON-token.2",
+   "keyword": "MUST",
+   "corpus31": [
+    "v31_float_forms.con"
+   ],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "tests/v31_conformance.rs::float_accepts_sign_dot_and_exponent"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-token.3",
+   "keyword": "MUST",
+   "corpus31": [
+    "d03_nbsp_after_id.con",
+    "d04_vertical_tab_separator.con",
+    "v31_cr_separator.con",
+    "v31_form_feed_separator.con"
+   ],
+   "conformance": [],
+   "probes": [
+    "acceptor/nbsp-after-id",
+    "acceptor/vertical-tab-separator",
+    "cell/tab-separated/10-10-170",
+    "cell/tab-separated/10-10-170/validate",
+    "cell/tab-separated/120-120-120",
+    "cell/tab-separated/120-120-120/validate",
+    "cell/tab-separated/150-150-100",
+    "cell/tab-separated/150-150-100/validate",
+    "cell/tab-separated/170-170-170",
+    "cell/tab-separated/170-170-170/validate",
+    "cell/tab-separated/90-90-90",
+    "cell/tab-separated/90-90-90/validate",
+    "whitespace/carriage-return-in-row",
+    "whitespace/form-feed-separator"
+   ],
+   "tests": [],
+   "indep_reader": true
+  },
+  {
+   "id": "CON-token.4",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [
+    "src/grammar.rs::grammar_and_hand_parser_share_an_accept_reject_list"
+   ],
+   "indep_reader": false
+  },
+  {
+   "id": "CON-lex.1",
+   "keyword": "MUST",
+   "corpus31": [],
+   "conformance": [],
+   "probes": [],
+   "tests": [],
+   "indep_reader": false,
+   "reason": "This clause defines lexical precedence across cases measured under their individual clause ids."
+  }
+ ]
+}

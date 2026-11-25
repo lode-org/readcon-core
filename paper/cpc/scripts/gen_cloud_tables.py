@@ -285,7 +285,7 @@ def kernel_sentence(runs: dict[str, dict]) -> str:
     listed = ", ".join(sets[:-1]) + " and " + sets[-1] if len(sets) > 1 else sets[0]
     return (
         f"File, $\\Delta E^\\ddagger$ and the displacement are printed to the significant figures, three at most, "
-        f"on which reruns of every route on {words.get(len(runs), str(len(runs)))} pinned kernel sets "
+        f"on which repeat runs of every route on {words.get(len(runs), str(len(runs)))} pinned kernel sets "
         f"on that host agree, and as a range where their first figures "
         f"differ: {listed}, the kernels that hosts of those generations select when nothing is pinned."
     )
@@ -294,9 +294,13 @@ def kernel_sentence(runs: dict[str, dict]) -> str:
 def restart_walls() -> tuple[dict[str, dict[str, str]], int]:
     """Median walls per route, only from a campaign that clocked exactly the counted leg."""
     meta = WALLS / "restart_walls.json"
-    record = json.loads(meta.read_text()) if meta.is_file() else {}
+    if not meta.is_file():
+        raise SystemExit(f"{meta} is absent. Run scripts/run_restart_walls.py.")
+    record = json.loads(meta.read_text())
     if record.get("timed") != "resumed leg":
-        return {}, 0
+        raise SystemExit(
+            f"{meta} clocked {record.get('timed')!r}, not the resumed leg that the table's Wall column states"
+        )
     return {row["route"]: row for row in read_csv(WALLS / "restart_walls.csv")}, int(
         record["wall_repeats"]
     )
@@ -366,7 +370,7 @@ def main() -> None:
             if notes
             else "",
             kernel_sentence(runs),
-            "Every rerun takes the steps of the table"
+            "Every repeat run takes the steps of the table"
             + (
                 r", the wall times are those of host \rfWallHost{}, and"
                 if walls

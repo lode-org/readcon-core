@@ -1,0 +1,20 @@
+Baker reactant and product, entry 17 (Claisen rearrangement)
+file: eonRuns/resources/icFSM/baker/17_claisen/initial.xyz
+url: https://raw.githubusercontent.com/HaoZeke/nebmmf_repro/939c2d9beaf9a5b6af61eb10af90f06156e6b4e4/eonRuns/resources/icFSM/baker/17_claisen/initial.xyz
+commit: 939c2d9beaf9a5b6af61eb10af90f06156e6b4e4
+repository: https://github.com/HaoZeke/nebmmf_repro
+sha256: 35122ef230cdeea2031b8a1c1e706cf34930080805e00daac113adf9831ec269
+frames: 14-atom reactant, then 14-atom product, comment line "0 1"
+atom order in both frames: C C C O C C H H H H H H H H
+
+PET-MAD-S v1.1.0
+url: https://huggingface.co/lab-cosmo/upet/resolve/7b007a41d51985acc26306152776c6090b6e75c7/models/pet-mad-s-v1.1.0.ckpt
+commit: 7b007a41d51985acc26306152776c6090b6e75c7
+repository: https://huggingface.co/lab-cosmo/upet
+checkpoint sha256: 8d5e1588c70f7a4998940e7b535ab84aeb42c0f2253c889d4af23a1a8c6fd553
+exported torchscript: /tmp/claisen-src/pet-mad-s-v1.1.0.pt
+exported sha256: d65f5d0599f3dbee0f14e6e47a85861910b833e6849d4d1abaaafdade12999b1
+export command: mtt export pet-mad-s-v1.1.0.ckpt -o pet-mad-s-v1.1.0.pt
+eOn loads the exported .pt through the metatomic potential, device cpu.
+
+The checkpoint and the .pt are not stored in this directory.

@@ -83,9 +83,10 @@ pub fn fill_frame_builder(
     for (k, atom) in frame.atom_data.iter().enumerate() {
         let mut ab = atoms_builder.reborrow().get(k as u32);
         ab.set_symbol(atom.symbol.as_ref());
-        ab.set_x(atom.x());
-        ab.set_y(atom.y());
-        ab.set_z(atom.z());
+        let xyz = frame.xyz_at(k);
+        ab.set_x(xyz[0]);
+        ab.set_y(xyz[1]);
+        ab.set_z(xyz[2]);
         ab.set_fixed_mask(encode_fixed_bitmask(atom.fixed()));
         ab.set_atom_id(atom.atom_id);
 
@@ -291,6 +292,7 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Con
     }
 
     let mut atom_data = Vec::with_capacity(atoms_list.len() as usize);
+    let mut coords = Vec::with_capacity(atoms_list.len() as usize);
     for j in 0..atoms_list.len() {
         let a = atoms_list.get(j);
         let sym = a
@@ -347,6 +349,7 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Con
                 None
             },
         ));
+        coords.push([a.get_x(), a.get_y(), a.get_z()]);
     }
 
     let header = FrameHeader {
@@ -365,9 +368,10 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Con
         sections,
         strict_validation: fd.get_strict_validation(),
         sections_declared: fd.get_sections_declared(),
+        ids_from_file: false,
     };
 
-    Ok(con_frame_from_atom_data(header, atom_data))
+    Ok(con_frame_from_atom_data(header, atom_data, &coords))
 }
 
 #[cfg(test)]
@@ -400,9 +404,14 @@ mod tests {
 
         assert_eq!(back.atom_data.len(), frame.atom_data.len());
         assert_eq!(back.header.spec_version, frame.header.spec_version);
-        for (a, b) in frame.atom_data.iter().zip(back.atom_data.iter()) {
+        for (i, (a, b)) in frame
+            .atom_data
+            .iter()
+            .zip(back.atom_data.iter())
+            .enumerate()
+        {
             assert_eq!(a.symbol, b.symbol);
-            assert!((a.x() - b.x()).abs() < 1e-12);
+            assert!((frame.x_at(i) - back.x_at(i)).abs() < 1e-12);
             assert_eq!(a.fixed(), b.fixed());
             assert_eq!(a.atom_id, b.atom_id);
             assert_eq!(a.charge(), b.charge());

@@ -40,6 +40,7 @@ and the residues of every route at full precision.
 
 from __future__ import annotations
 import csv
+import hashlib
 import io
 import json
 import os
@@ -614,10 +615,17 @@ def main():
             )
         )
         return
-    BANDS = OUT / "bands"
-    BANDS.mkdir(exist_ok=True)
-    for old in BANDS.glob("*.npz"):
-        old.unlink()
+    bands = {name: res["energies"] for name, res in results.items()}
+    fingerprint = json.dumps(
+        {"rows": rows, "energies_eV": bands}, sort_keys=True
+    ).encode()
+    suffix = hashlib.sha256(fingerprint).hexdigest()[:12]
+    record_out = OUT / f"restart-formats-{suffix}"
+    if record_out.exists():
+        raise SystemExit(f"refusing to overwrite record {record_out}")
+    record_out.mkdir()
+    BANDS = record_out / "bands"
+    BANDS.mkdir()
     for name, res in results.items():
         np.savez(
             BANDS
@@ -628,29 +636,28 @@ def main():
             numbers=eps[0].numbers,
             cell=eps[0].cell.array,
         )
-    bands = {name: res["energies"] for name, res in results.items()}
-    tmp = OUT / "restart_formats.csv.tmp"
+    tmp = record_out / "restart_formats.csv.tmp"
     with open(tmp, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)
-    os.replace(tmp, OUT / "restart_formats.csv")
+    os.replace(tmp, record_out / "restart_formats.csv")
     record = provenance.record()
     host = roundoff_host()
-    (OUT / "restart_bands.json").write_text(
+    (record_out / "restart_bands.json").write_text(
         json.dumps(
             {"energies_eV": bands, "roundoff_host": host, "provenance": record},
             indent=1,
         )
     )
-    (OUT / "restart_formats.json").write_text(
+    (record_out / "restart_formats.json").write_text(
         json.dumps(
             {
                 "script": "paper/cpc/scripts/restart_formats.py",
                 "outputs": [
-                    "data/failure/restart_formats.csv",
-                    "data/failure/restart_bands.json",
-                    "data/failure/bands",
+                    f"data/failure/{record_out.name}/restart_formats.csv",
+                    f"data/failure/{record_out.name}/restart_bands.json",
+                    f"data/failure/{record_out.name}/bands",
                 ],
                 "parameters": dict(
                     fmax_eV_A=FMAX,

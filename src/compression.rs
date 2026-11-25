@@ -321,45 +321,50 @@ const RELEASE_STEP: usize = 32 << 20;
 /// A mapped file is not a snapshot and must not change while it is read; a
 /// truncation can end the process with `SIGBUS`.
 pub struct ForwardText {
-    contents: FileContents,
+    source: ByteSource,
     released: usize,
 }
 
 impl ForwardText {
-    /// The text of `path`. Without `map` it is [`read_file_text`].
+    /// The bytes of `path`.
+    ///
+    /// With `map`, a large plain file stays mapped. Without it, the bytes
+    /// are copied. A bad UTF-8 byte is left for the parser, which names
+    /// the line (CON-file.1, CON-num.10). Opening the file does not reject it.
     pub fn open(path: &Path, map: bool) -> Result<Self, Box<dyn std::error::Error>> {
-        let contents = if map {
-            read_file_contents(path)?
+        let source = if map {
+            read_bytes_owned(path)?
         } else {
-            FileContents::Owned(read_file_text(path)?)
+            ByteSource::Buf(read_file_bytes(path)?)
         };
-        // One sequential check. Discarding the pages here would fault
-        // them back in during the parse, and a parallel check would
-        // start a worker pool for a single slice.
-        if let FileContents::Mapped(m) = &contents {
-            std::str::from_utf8(m)?;
-        }
         Ok(Self {
-            contents,
+            source,
             released: 0,
         })
     }
 
-    pub fn as_str(&self) -> &str {
-        match &self.contents {
-            FileContents::Owned(s) => s,
-            // SAFETY: `open` checked every byte, in slices that end after a
-            // newline. A mapped file must not change while mapped, as for
-            // every mapped reader in this crate.
-            FileContents::Mapped(m) => unsafe { std::str::from_utf8_unchecked(m) },
+    /// Text the caller already holds. Page release is a no-op.
+    pub fn from_owned(text: String) -> Self {
+        Self {
+            source: ByteSource::Buf(text.into_bytes()),
+            released: 0,
         }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.source.as_slice()
+    }
+
+    /// The file as text when every byte is UTF-8.
+    pub fn as_str(&self) -> Result<&str, std::str::Utf8Error> {
+        std::str::from_utf8(self.as_bytes())
     }
 
     /// Release the mapped pages before byte `pos` once [`RELEASE_STEP`]
     /// bytes have been read since the last release. A later read of them
     /// maps them in again. A `pos` past the end counts as the end.
     pub fn release_before(&mut self, pos: usize) -> io::Result<()> {
-        if let FileContents::Mapped(m) = &self.contents
+        if let ByteSource::Map(m) = &self.source
             && pos >= self.released + RELEASE_STEP
         {
             let pos = pos.min(m.len());
@@ -726,7 +731,14 @@ fn write_fused_frame(
                     if atom_from == 0 {
                         plain.extend_from_slice(header);
                     }
-                    plain.extend(crate::writer::format_coord_range(frame, atom_from, atom_to));
+                    match crate::writer::format_coord_range(frame, atom_from, atom_to) {
+                        Ok(rows) => plain.extend(rows),
+                        Err(err) => {
+                            *slots[index].lock().unwrap() =
+                                Some(Err(io::Error::other(err.to_string())));
+                            continue;
+                        }
+                    }
                     let plain_len = plain.len();
                     let encoded = if gzip {
                         gzip_member(&plain)
@@ -1942,16 +1954,16 @@ mod tests {
         let path = dir.path().join("two-steps.con");
         std::fs::write(&path, &bytes).unwrap();
         let mut mapped = ForwardText::open(&path, true).unwrap();
-        assert!(matches!(mapped.contents, FileContents::Mapped(_)));
-        assert_eq!(mapped.as_str().as_bytes(), bytes.as_slice());
+        assert!(matches!(mapped.source, ByteSource::Map(_)));
+        assert_eq!(mapped.as_bytes(), bytes.as_slice());
         for pos in (0..=bytes.len()).step_by(1 << 20) {
             mapped.release_before(pos).unwrap();
         }
         assert_eq!(mapped.released, RELEASE_STEP);
-        assert_eq!(mapped.as_str().as_bytes(), bytes.as_slice());
+        assert_eq!(mapped.as_bytes(), bytes.as_slice());
         let owned = ForwardText::open(&path, false).unwrap();
-        assert!(matches!(owned.contents, FileContents::Owned(_)));
-        assert_eq!(owned.as_str(), mapped.as_str());
+        assert!(matches!(owned.source, ByteSource::Buf(_)));
+        assert_eq!(owned.as_bytes(), mapped.as_bytes());
     }
 
     /// The guard is private anonymous memory right after the file map, which
@@ -2021,7 +2033,7 @@ mod tests {
         unsafe { libc::munmap(region, map_len) };
         let mut text = ForwardText::open(&path, true).unwrap();
         assert!(
-            std::ptr::eq(text.as_str().as_ptr(), region.cast::<u8>()),
+            std::ptr::eq(text.as_bytes().as_ptr(), region.cast::<u8>()),
             "the file map does not end at the guard"
         );
         for pos in [bytes.len() + RELEASE_STEP, 3 * RELEASE_STEP, usize::MAX] {
@@ -2029,7 +2041,7 @@ mod tests {
         }
         assert_eq!(text.released, bytes.len());
         assert!(guard.iter().all(|&b| b == 0xab));
-        assert_eq!(text.as_str().as_bytes(), bytes.as_slice());
+        assert_eq!(text.as_bytes(), bytes.as_slice());
         unsafe { libc::munmap(guard.as_mut_ptr().cast(), GUARD) };
         for filler in fillers {
             unsafe { libc::munmap(filler, map_len) };
@@ -2037,7 +2049,7 @@ mod tests {
     }
 
     #[test]
-    fn forward_text_reports_invalid_utf8_as_the_mapped_read() {
+    fn forward_text_leaves_invalid_utf8_for_the_parser() {
         let dir = tempfile::tempdir().unwrap();
         let mut bytes = text_of_at_least(RELEASE_STEP + (200 << 10));
         let at = bytes.len() - 100;
@@ -2045,8 +2057,9 @@ mod tests {
         let path = dir.path().join("bad.con");
         std::fs::write(&path, &bytes).unwrap();
         for map in [true, false] {
-            let err = ForwardText::open(&path, map).err().unwrap().to_string();
-            assert_eq!(Err(err), mapped_text(&path), "map {map}");
+            let text = ForwardText::open(&path, map).unwrap();
+            assert_eq!(text.as_bytes(), bytes.as_slice(), "map {map}");
+            assert!(text.as_str().is_err(), "map {map}");
         }
     }
 
@@ -2411,10 +2424,8 @@ mod tests {
     }
 
     fn coords(frame: &crate::types::ConFrame) -> Vec<f64> {
-        frame
-            .atom_data
-            .iter()
-            .flat_map(|atom| [atom.x(), atom.y(), atom.z()])
+        (0..frame.atom_data.len())
+            .flat_map(|index| frame.xyz_at(index))
             .collect()
     }
 

@@ -1,0 +1,87 @@
+{
+  "synthetic": {
+    "name": "synthetic",
+    "kind": "synthetic",
+    "n_frames": 100000,
+    "n_atoms": 32,
+    "symbol": "Cu",
+    "mass": 63.546,
+    "cell_lengths": [20.0, 20.0, 20.0],
+    "cell_angles": [90.0, 90.0, 90.0],
+    "formula": "round(((frame * 17 + atom * 3 + axis) % 10000) / 1000, 8)",
+    "source": "paper/cpc/scripts/bench_readers.py reference()"
+  },
+  "real": {
+    "name": "cuh2_band",
+    "kind": "real",
+    "path": "resources/examples/cuh2_band.con",
+    "sha256": "f71ccf6a04d57f34ca133c5ea13afdc627e1bb0575176dcf62cd389926388a13"
+  },
+  "readcon_release": {
+    "version": "0.23.2",
+    "project_url": "https://pypi.org/project/readcon/0.23.2/",
+    "wheel": "readcon-0.23.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+    "url": "https://files.pythonhosted.org/packages/7f/4c/8d51b1e5941778a3f99abdbb2b036578793b844d0d10f8e7d72ce24ccf9d/readcon-0.23.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+    "sha256": "3e348c2f3887bb9dc38d1bcc69475c2d8dc57795a0a8831ef46eb81d77d92ddb"
+  },
+  "ase": {
+    "version": "3.29.0",
+    "call": "ase.io.read(path, index=':', format='eon')"
+  },
+  "eon_reader": {
+    "repository": "https://github.com/TheochemUI/eOn",
+    "commit": "53f6bbe5167c8100ab7d9434c0b6fe5a4e12d610",
+    "note": "Last fileio.py before that module delegated CON parsing to the readcon package.",
+    "files": {
+      "eon/fileio.py": "ed51f787129a00b2b209d0ddc3b91c68d27853d5dbe9ce5ef81ca49111f4540f",
+      "eon/atoms.py": "11de8ec1c5724375aef44186284cf19e6d8cf1bed75c8470ccd7598db19e0c63",
+      "eon/config.py": "3fbe9384bf266e6924ba0b2c343cf3a58ab49764878361578adf268ab9f1953e",
+      "eon/config.yaml": "49c833446e802aafddd03e0c9ec6cfa9fb16574f753a4ebb986dd70f918b8a1c"
+    }
+  },
+  "protocol": {
+    "repeats": 6,
+    "schedule": "ABBA-rotated",
+    "percentile": "type-7 linear",
+    "warmup_discard": false,
+    "threads_full_frame": 1,
+    "blas_threads": 1
+  },
+  "tip_builds": {
+    "source_revision": "ec3108430b3c25323545080639e7fff6b8e05618",
+    "tip_a_sha256": "46efb0dce504ab3026fa7995ed8f2dad4198c0dac514f59428a4026707fd4f26",
+    "tip_b_sha256": "4c4d424102885087765bc9cc11e69b1f8e0c221e00330f3eea95302efc8f1639"
+  },
+  "simulation": {
+    "name": "al_eam_md",
+    "kind": "simulation output",
+    "n_frames": 1000,
+    "n_atoms": 500,
+    "bytes": 38202999,
+    "sha256": "037d3cede6e70b821125a3c8145c93e05b41d5672120fc6fa472e51bc2fb5604",
+    "path": "work/al_eam_md.con",
+    "kept_out_of_git": true,
+    "provenance": {
+      "system": "FCC aluminum, cubic cell, lattice 4.05 angstrom, repeated 5x5x5",
+      "potential": "rgpot 3.7.0 EAMAlPot",
+      "integrator": "ASE 3.29.0 VelocityVerlet",
+      "timestep_fs": 2.0,
+      "temperature_K": 300.0,
+      "seed": 20261120,
+      "initial_momenta": "thermalize_momenta at 300 K with numpy Generator seed 20261120, then center-of-mass momentum removed",
+      "frames": "the configuration after each of 1000 steps",
+      "command": "python3 make_al_md.py",
+      "energy_first_eV": -1658.91839456,
+      "energy_last_eV": -1658.90148162,
+      "energy_drift_eV": 0.01691294
+    }
+  },
+  "simulation_protocol": {
+    "repeats": 12,
+    "schedule": "ABBA-rotated",
+    "percentile": "type-7 linear",
+    "warmup_discard": false,
+    "threads_full_frame": 1,
+    "blas_threads": 1
+  }
+}

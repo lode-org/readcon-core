@@ -59,18 +59,21 @@ RECORD_DIRS = ("data/", "evidence/", "bench/results/", "src/figures/generated/")
 DATA_SUFFIXES = {".json", ".csv", ".npz", ".h5", ".h5md", ".dat"}
 OUTPUT_KEYS = ("outputs", "csv")
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
-SPEC_DATA = CPC / "data" / "spec"
 # Records no readcon-core build writes: clauses copied from the specifications they cite, and the version
 # history that gen_spec_supp.py --measure reads from spec.org at each release tag.
 NO_BUILD = {
     "evidence/results/e4_cells.csv",
+    *(
+        f"data/spec/{p.name}"
+        for p in (CPC / "data" / "spec").glob("spec-measurement-*.json")
+    ),
     "data/spec/versions.json",
     "data/spec/clause_coverage.json",
-    *{
-        path.relative_to(CPC).as_posix()
-        for stem in ("spec-measurement", "clause_coverage")
-        for path in SPEC_DATA.glob(f"{stem}-{VERSION}*.json")
-    },
+    f"data/spec/clause_coverage-{VERSION}.json",
+    *(
+        f"data/spec/{p.name}"
+        for p in (CPC / "data" / "spec").glob("clause_coverage-*.json")
+    ),
     # Stored tables the restored figures draw. The database rows come from
     # readcon-db, and these files carry no readcon-core provenance block.
     "data/db/dedup.json",
@@ -84,10 +87,24 @@ NO_BUILD = {
     "data/novel/fidelity.json",
     "data/novel/restart_diff.json",
     "data/novel/velocity.json",
+    # The Claisen band is an eOn and PET-MAD-S measurement. It names no readcon-core build.
+    "data/claisen/results.json",
     # Release metadata of eOn and of peer libraries, read from their upstream pages.
     "data/eon/readcon_pins.json",
     "data/peers/releases.json",
 }
+
+
+def no_build(rel: str) -> bool:
+    return rel in NO_BUILD or rel.startswith(
+        (
+            f"data/spec/clause_coverage-{VERSION}-",
+            f"data/spec/spec-measurement-{VERSION}-",
+            "data/referee_probes",
+        )
+    )
+
+
 # Record directories copied verbatim from lode-org/readcon-db: their build is a readcon-db commit, not a readcon-core build.
 EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/", "data/db33/")
 HOST_BUILD_KEYS = ("readcon_core", "readcon_sha", "rustc", "python")
@@ -102,6 +119,7 @@ RECORD_NAMES = (
     (r"bench/results/r0174/", "Timing campaign r0174"),
     (r"bench/results/velocity_case\.json", "Velocity case"),
     (r"bench/results/hcn_loss\.csv", "HCN loss measurement"),
+    (r"data/limiter-r15/", "Limiter r15 read ladder"),
     (r"data/corpus_crosscheck\.json", "Corpus cross-check"),
     (r"data/corpus_paths\.json", "Corpus read paths"),
     (r"data/corpus31-results\.json", "CON 3.1 corpus results"),
@@ -125,11 +143,15 @@ RECORD_NAMES = (
     (r"data/failure/version_safety\.csv", "Failure campaign, version safety"),
     (r"data/restart_walls/restart_walls\.(?:csv|json)", "Restart wall times"),
     (r"data/sizes\.csv", "File sizes"),
-    (r"data/spec/corpus_recount\.json", "Specification campaign, corpus recount"),
+    (
+        r"data/spec/corpus_recount(?:-\d+)?\.json",
+        "Specification campaign, corpus recount",
+    ),
     (
         r"data/spec/mutant_differential\.json",
         "Specification campaign, mutant differential",
     ),
+    (r"data/spec/spec-measurement-[^/]+\.json", "Specification measurement"),
     (r"data/spec/version_drift\.json", "Specification campaign, version drift"),
     (r"data/survey_frame\.json", "Survey frame"),
     (r"src/figures/generated/survey_frame\.con", "Survey frame, CON text"),
@@ -375,7 +397,7 @@ def is_record(rel: str) -> bool:
 
 
 def needs_build(rel: str) -> bool:
-    if rel in NO_BUILD:
+    if no_build(rel):
         return False
     path = CPC / rel
     files = [p for p in path.rglob("*") if p.is_file()] if path.is_dir() else [path]
@@ -617,6 +639,14 @@ def carrier(rel: str) -> tuple[str, str] | None:
             and data.get("tree_commit")
         ):
             return "commit", rel
+        if (
+            isinstance(data, dict)
+            and isinstance(data.get("measured_at"), dict)
+            and data["measured_at"].get("commit")
+            and isinstance(data.get("tree"), dict)
+            and data["tree"].get("release")
+        ):
+            return "measured_commit", rel
     start = path if path.is_dir() else path.parent
     for parent in (start, *start.parents):
         if parent == CPC or not parent.is_relative_to(CPC):
@@ -854,6 +884,16 @@ def build_of(kind: str, rel: str) -> Build | None:
             None,
             None,
         )
+    if kind == "measured_commit":
+        return Build(
+            data["tree"]["release"],
+            provenance.library_digest_at(data["measured_at"]["commit"]),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
     if kind == "campaign":
         sessions = list(data.values())
         builds = {
@@ -967,7 +1007,7 @@ def render() -> tuple[str, list[str]]:
     found, problems = record_places()
     for rel, places in sorted(found.items()):
         held = carrier(rel)
-        build = build_of(*held) if held and rel not in NO_BUILD else None
+        build = build_of(*held) if held and not no_build(rel) else None
         if build is None:
             if needs_build(rel):
                 problems.append(
@@ -1042,7 +1082,7 @@ def library_macros() -> str:
     named: dict[tuple[str, str], int] = {}
     for rel in found:
         held = carrier(rel)
-        build = build_of(*held) if held and rel not in NO_BUILD else None
+        build = build_of(*held) if held and not no_build(rel) else None
         if build is not None and build.digest:
             key = (build.readcon, build.digest)
             named[key] = named.get(key, 0) + 1

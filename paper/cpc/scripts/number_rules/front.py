@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 import scipy.constants
+from scipy.constants import _codata
 from numbers_lib import Rule, grep, jget, text
 
 DOC = "rg_main.tex"
@@ -128,8 +129,24 @@ ANGLE_LIMIT = float(grep("/src/parser.rs", r"\*angle >= ([\d.]+)\)"))
 
 def si_factor(name: str) -> float:
     """``si_factor`` of the base unit ``name`` in src/units.rs."""
-    pattern = rf'name: "{re.escape(name)}",\s*value: unit\(([\d_.e+-]+),'
-    return float(grep("/src/units.rs", pattern).replace("_", ""))
+    expression = grep(
+        "/src/units.rs",
+        rf'name: "{re.escape(name)}",\s*value: unit\(([\w_.+-]+),',
+    )
+    try:
+        return float(expression.replace("_", ""))
+    except ValueError:
+        symbol = grep(
+            "/src/units.rs",
+            rf"const {re.escape(expression)}: f64 = metrology::(\w+);",
+        )
+        codata_name = {
+            "AMU": "atomic mass constant",
+            "E_CHARGE": "elementary charge",
+        }.get(symbol)
+        if codata_name is None:
+            raise SystemExit(f"src/units.rs: unsupported metrology constant {symbol}")
+        return float(_codata._physical_constants_2018[codata_name][0])
 
 
 ANGSTROM_M = si_factor("angstrom")
@@ -211,14 +228,14 @@ RULES: list[Rule] = [
         2**U64_BITS,
         "/src/types.rs",
         "range of the atom_id integer type (u64): 2^bits",
-        (DOC,),
+        (DOC, SUPP),
     ),
     Rule(
         "-1",
         -1,
         "/src/types.rs",
         "the largest u64 identifier is 2^64 - 1; this is the -1 of that expression",
-        (f"{DOC}~2\\^\\{{64\\}}-1",),
+        (f"{DOC}~2\\^\\{{64\\}}-1", f"{SUPP}~2\\^\\{{64\\}}-1"),
     ),
     Rule(
         "3.1",
@@ -247,13 +264,6 @@ RULES: list[Rule] = [
         RESTART,
         "parameters.alpha_A2_eV",
         (DOC, "rg_supp.tex"),
-    ),
-    Rule(
-        "2\\times 10^{-4}",
-        param("alpha_A2_eV") * param("fmax_eV_A"),
-        RESTART,
-        "parameters.alpha_A2_eV times parameters.fmax_eV_A: one step at the band tolerance, in angstrom",
-        (f"{DOC}~moves an atom by",),
     ),
     Rule(
         "1.6605\\times 10^{-27}",
@@ -316,27 +326,27 @@ RULES: list[Rule] = [
         int(grep(READERS_PY, r"^N_ATOMS = (\d+)")),
         READERS_PY,
         "N_ATOMS, the atom count of the host trajectory",
-        (f"{DOC}~32 copper atoms",),
+        (f"{SUPP}~32 copper atoms", "figures/generated/host_table.tex"),
     ),
     Rule(
         "4000",
         int(grep(MPI_PY, r"^N_FRAMES = (\d+)")),
         MPI_PY,
         "N_FRAMES of the distributed read",
-        (f"{DOC}~distributed read", "figures/generated/mpi_host_table.tex"),
+        (f"{SUPP}~distributed read", "figures/generated/mpi_host_table.tex"),
     ),
     Rule(
         "64",
         int(grep(MPI_PY, r"^N_ATOMS = (\d+)")),
         MPI_PY,
         "N_ATOMS of the distributed read",
-        (f"{DOC}~distributed read", "figures/generated/mpi_host_table.tex"),
+        (f"{SUPP}~distributed read", "figures/generated/mpi_host_table.tex"),
     ),
     Rule(
         "1000",
         int(grep(DB_TRACES_PY, r"^SCALE = \((\d+),")),
         DB_TRACES_PY,
         "SCALE[0], the smaller stored-copy frame count of the db traces",
-        (f"{DOC}~1000-frame copies",),
+        (f"{SUPP}~1000-frame copies",),
     ),
 ]

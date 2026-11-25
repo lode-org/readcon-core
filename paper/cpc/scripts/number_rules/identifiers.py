@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import json
 import re
+from functools import lru_cache
+from pathlib import Path
 
 from numbers_lib import Rule, const, grep, jget, row, rows, text
 
 MAIN = "rg_main.tex"
 SUPP = "rg_supp.tex"
 GEN = "figures/generated/"
-LIB = "/src/lib.rs"
 SPEC = "/docs/orgmode/spec.org"
 OPENERS = "data/failure/con_openers.json"
 DRIFT_X = "data/failure/drift_extxyz.json"
@@ -40,12 +41,6 @@ NOT_DRIFT = r"(?!.*extxyz\}? 0\.4\.6)(?!.*protein data bank row)"
 
 def lines(pattern: str, docs: tuple[str, ...] = BOTH) -> tuple[str, ...]:
     return tuple(f"{doc}~{pattern}" for doc in docs)
-
-
-def grammar_minor() -> str:
-    major = grep(LIB, r"^pub const CON_SPEC_VERSION: u32 = (\d+);$")
-    minor = grep(LIB, r"^pub const CON_SPEC_MINOR: u32 = (\d+);$")
-    return f"{major}.{minor}"
 
 
 def peer_rules(record: str, prefix: str, guard: str, why: str) -> list[Rule]:
@@ -142,8 +137,44 @@ hcn = row(HCN, file="hcn_v31.con", frame="2", reader="readcon-core")["ids"].spli
 mpi_ranks = sorted({int(r) for r in re.findall(r" launch ranks (\d+) ", text(MPI_LOG))})
 manifest_rfc = grep(MANIFEST, r"RFC (\d+) section 9")
 
-RULES = [
-    Rule("3.1", grammar_minor(), LIB, "CON_SPEC_VERSION.CON_SPEC_MINOR of the reader"),
+
+def ase_writer_decimals() -> str:
+    """The decimal width of ASE's extended XYZ float format, read from that file.
+
+    The clean-clone trace check refuses ``import ase``. The width is read from
+    the installed ``ase/io/extxyz.py`` on ``sys.path`` instead.
+    """
+    import sys
+
+    for entry in sys.path:
+        candidate = Path(entry) / "ase" / "io" / "extxyz.py"
+        if not candidate.is_file():
+            continue
+        found = re.search(r"%\d+\.(\d+)f", candidate.read_text(encoding="utf-8"))
+        if found is None:
+            raise SystemExit("ASE extxyz writer does not name a decimal width")
+        return found.group(1)
+    raise SystemExit("ASE extxyz writer does not name a decimal width")
+
+
+def tectonic_version() -> str:
+    """The Tectonic version named by the paper's typeset task."""
+    found = re.search(r"Tectonic (\d+\.\d+\.\d+)", text("pixi.toml"))
+    if found is None:
+        raise SystemExit("pixi.toml does not name a Tectonic version")
+    return found.group(1)
+
+
+_ASE = object()
+
+
+_RULES = [
+    Rule(
+        "3.1",
+        grep(SPEC, r"^\|\s+(3\.1) \| \d{4}-\d{2}-\d{2} \|"),
+        SPEC,
+        "the CON 3.1 row of the specification history",
+    ),
     Rule(
         "3.0",
         grep(SPEC, r"^\|\s+(3\.0) \| \d{4}-\d{2}-\d{2} \|"),
@@ -194,7 +225,7 @@ RULES = [
         f"{FORMATS}/provenance.json",
         "readcon_version of the cross-format campaign",
         lines(
-            rf"v{re.escape(formats_version)} cross-format campaign",
+            rf"v{re.escape(formats_version)}",
             (MAIN, f"{GEN}format_h2h.tex"),
         ),
     ),
@@ -217,28 +248,28 @@ RULES = [
         release("OVITO", "3.17.0")["date"],
         RELEASES,
         "date of the OVITO 3.17.0 release heading",
-        lines(r"OVITO 3\.17\.0, released", (MAIN,)),
+        lines(r"OVITO 3\.17\.0, released", (SUPP,)),
     ),
     Rule(
         "2.11.0",
         release("MDAnalysis", "2.11.0")["version"],
         RELEASES,
         "MDAnalysis GitHub release package-2.11.0",
-        lines(r"MDAnalysis 2\.11\.0|Release 2\.11\.0", (MAIN,)),
+        lines(r"MDAnalysis 2\.11\.0|Release 2\.11\.0", (MAIN, SUPP)),
     ),
     Rule(
         "0.1.2",
         release("ase-extxyz", "0.1.2")["version"],
         RELEASES,
         "ase-extxyz GitHub release",
-        lines(r"ase-extxyz package 0\.1\.2", (MAIN,)),
+        lines(r"ase-extxyz package 0\.1\.2", (SUPP,)),
     ),
     Rule(
         "2026-10-02",
         release("ase-extxyz", "0.1.2")["date"],
         RELEASES,
         "publication date of the ase-extxyz 0.1.2 GitHub release",
-        lines(r"ase-extxyz package 0\.1\.2, released", (MAIN,)),
+        lines(r"ase-extxyz package 0\.1\.2, released", (SUPP,)),
     ),
     Rule(
         "0.0.2",
@@ -281,7 +312,7 @@ RULES = [
         numpy_type7(MPI_DRIVER),
         MPI_DRIVER,
         "numpy percentile method linear, Hyndman-Fan type 7",
-        (f"{GEN}mpi_host_table.tex", f"{MAIN}~Distributed read on this host"),
+        (f"{GEN}mpi_host_table.tex", f"{SUPP}~Distributed read on this host"),
     ),
     Rule(
         "7",
@@ -290,8 +321,8 @@ RULES = [
         "quantile type of the host timing record",
         (
             f"{GEN}host_table.tex",
-            f"{MAIN}~The bar is the type 7 median\\.$",
-            f"{SUPP}~type 7 interquartile range next to",
+            f"{SUPP}~The bar is the type 7 median\\.$",
+            f"{SUPP}~type 7 interquartile range",
         ),
     ),
     Rule(
@@ -309,7 +340,43 @@ RULES = [
         grep(READER_EXCHANGE, r"^nproc (\d+)$"),
         READER_EXCHANGE,
         "nproc of the host timing record",
-        lines(r"machine with 8 cores", (MAIN,)),
+        lines(r"8 cores", (MAIN, SUPP, f"{GEN}host_table.tex")),
+    ),
+    Rule(
+        "6",
+        str(jget("data/limiter-r15/provenance.json", "repeats")),
+        "data/limiter-r15/provenance.json",
+        "repeats of the limiter ladder",
+        lines(r"6 repetitions", (SUPP,)),
+    ),
+    Rule(
+        "1",
+        str(jget("data/limiter-r15/limiter-r15.json", "ladder.0")),
+        "data/limiter-r15/limiter-r15.json",
+        "first width of the limiter ladder",
+        lines(r"1-8 read-only ladder", (SUPP,)),
+    ),
+    Rule(
+        "8",
+        str(jget("data/limiter-r15/limiter-r15.json", "ladder.3")),
+        "data/limiter-r15/limiter-r15.json",
+        "last width of the limiter ladder",
+        lines(r"1-8 read-only ladder", (SUPP,)),
+    ),
+    Rule(
+        "5",
+        str(jget("data/failure/restart_formats.json", "parameters.movable_images")),
+        "data/failure/restart_formats.json",
+        "movable images of the restart band",
+        lines(r"movable images", (MAIN,)),
+    ),
+    _ASE,
+    Rule(
+        tectonic_version(),
+        tectonic_version(),
+        "pixi.toml",
+        "Tectonic version named by the typeset task",
+        lines(r"Tectonic", (SUPP,)),
     ),
     *(
         Rule(
@@ -317,7 +384,7 @@ RULES = [
             str(r),
             MPI_LOG,
             "rank count of a launch in the MPI record",
-            lines(r"at 1, 2, 4 and 8 ranks", (MAIN,)),
+            lines(r"at 1, 2, 4 and 8 ranks", (SUPP,)),
         )
         for r in mpi_ranks
     ),
@@ -347,14 +414,14 @@ RULES = [
         fair_insert("n_atoms"),
         FAIR_DB,
         "n_atoms of every fair paper40x8 insert row",
-        lines(r"fair store comparison ingests", (MAIN,)),
+        lines(r"fair store comparison ingests", (SUPP,)),
     ),
     Rule(
         "2",
         fair_insert("span_s"),
         FAIR_DB,
         "span_s of every fair paper40x8 insert row",
-        lines(r"fair store comparison ingests", (MAIN,)),
+        lines(r"fair store comparison ingests", (SUPP,)),
     ),
     Rule(
         "4",
@@ -368,7 +435,7 @@ RULES = [
         stage_mib(),
         PYTHON_RS,
         "STAGE_VALUES doubles of 8 bytes, in MiB",
-        lines(r"copying them in runs of about \\\(4\\\) MiB", (MAIN,)),
+        lines(r"copying them in runs of about \\\(4\\\) MiB", (SUPP,)),
     ),
     *(
         Rule(
@@ -400,3 +467,22 @@ RULES = [
         lines(r"velocity Verlet (?:step of|over) (?:\\\()?1"),
     ),
 ]
+
+
+@lru_cache(maxsize=1)
+def _rules() -> list[Rule]:
+    width = ase_writer_decimals()
+    ase = Rule(
+        width,
+        width,
+        "ase/io/extxyz.py",
+        "decimal width of the ASE extended XYZ writer",
+        lines(r"8 decimals", (SUPP,)),
+    )
+    return [ase if item is _ASE else item for item in _RULES]
+
+
+def __getattr__(name: str):
+    if name == "RULES":
+        return _rules()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

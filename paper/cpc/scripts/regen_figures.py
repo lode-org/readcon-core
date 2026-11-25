@@ -12,7 +12,10 @@ from pathlib import Path
 
 import gen_figures
 import plot_figures as pf
+import plot_claisen_order
+import plot_format_pareto
 import plot_restart_formats
+import plot_restart_ruhi
 import plot_restored
 import plot_structures
 import plot_supp
@@ -53,13 +56,16 @@ def main() -> int:
     run("gen_figures", gen_figures.main)
     run("structures_svg", plot_structures.main)
     run("restart_formats", plot_restart_formats.main)
+    run("format_pareto", plot_format_pareto.main)
+    run("claisen_order", plot_claisen_order.main)
     run("velocity", plot_supp.main)
+    run("restart", plot_restart_ruhi.main)
     theme, settings = pf.house_style()
     evidence = ROOT / "evidence" / "work" / "e1" / "neb"
     if evidence.is_dir():
-        run("restart", lambda: pf.restart(theme, settings, None))
+        run("restart_landscape", lambda: pf.restart(theme, settings, None))
     else:
-        lines.append("skip restart evidence/work is not in the tree")
+        lines.append("skip restart_landscape evidence/work is not in the tree")
     run("restored_dlpack", plot_restored.dlpack)
     run("graphical_abstract", plot_restored.toc)
     run("restored_mpi", plot_restored.mpi_plots)

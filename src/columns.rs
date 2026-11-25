@@ -1525,6 +1525,10 @@ fn parse_one_frame(
     let boxl = parse_cell_line(box_line, "boxl")?;
     let ang_line = utf8_line(read_line(bytes, pos)?)?;
     let angles = parse_cell_line(ang_line, "angles")?;
+    let angles_arr: [f64; 3] = angles.as_slice().try_into().unwrap();
+    let meta_line = std::str::from_utf8(meta).unwrap_or("");
+    let has_lattice = crate::parser::line_declares_lattice(meta_line);
+    crate::parser::reject_impossible_cell(angles_arr, has_lattice)?;
     out.cells.extend_from_slice(&boxl);
     out.cells.extend_from_slice(&angles);
     skip_line(bytes, pos)?;
@@ -1960,8 +1964,8 @@ mod tests {
         for frame in ConFrameIterator::from_bytes(&bytes) {
             let frame = frame.unwrap();
             counts.push(frame.atom_data.len());
-            for atom in &frame.atom_data {
-                expected.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
+            for index in 0..frame.atom_data.len() {
+                expected.extend_from_slice(&frame.xyz_at(index));
             }
         }
         assert_eq!(got.counts, counts, "{rel}");

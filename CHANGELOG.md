@@ -117,6 +117,15 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- **Writer:** a repeat write of two or more frames no longer corrupts memory
+  when the text changed since the frames were priced. The price is keyed by
+  frame address. A store into `positions`, a replaced `positions` column, a
+  header edit, or a Python `read_con` list whose frames were taken out and
+  whose slots were reused by a later list kept the old lengths, and the
+  formatter then grew a buffer over the output mapping (a segfault, or
+  `realloc(): invalid pointer`). Each group is now spelled through a bounded
+  writer. A length that drifted retires the price and the write falls back to
+  the unpriced path, which produces the serial bytes.
 - **Metadata / Python:** `con_spec_minor` integers above `u64::MAX` (within
   `serde_json`'s finite `Number` range) are now preserved verbatim across
   native `ConFrameWriter`, C ABI, Cap'n Proto, and Python metadata rather than
@@ -148,6 +157,34 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Breaking
 
+- **Rust API:** `AtomDatum` stores no coordinates and no pointer.
+  `ConFrame::xyz_at`, `x_at`, `y_at`, and `z_at` copy the row of
+  `positions` at that atom's index in `atom_data`. `set_xyz_at`,
+  `set_x_at`, `set_y_at`, and `set_z_at` write that row. A store through
+  the column is the value those accessors return. Cloning a frame shares
+  the column until a write copies it. Replacing `positions` is what a
+  later accessor reads. `AtomDatum`'s `x`, `y`, and `z` getters and
+  setters are removed. `PartialEq` for `AtomDatum` ignores coordinates.
+  `AtomDatum::coords` discards its xyz arguments.
+  `con_frame_from_atom_data` takes a `coords` argument.
+  `format_coordinate_lines` takes a `coords` argument. `write_frame`
+  returns `InvalidCount` when the header atom count and the atom list
+  disagree.
+- **C ABI:** function signatures are unchanged. `rkr_frame_xyz_view` still
+  borrows the positions column. Per-atom coordinates (`CAtom` `x`/`y`/`z`)
+  are a copy of that row at export. `rkr_frame_positions_from_dlpack`
+  writes the imported rows onto the column.
+- **Python:** `ConFrame.xyz`, `atoms[i].x`, and `write_con` keep their
+  call shape. `read_con` and `iter_con` move a contiguous f64 column
+  into the NumPy array and drop the parsed column. `coords_array`
+  returns a fresh array read from that live column. `to_ase`,
+  `reorder_like`, and `minimum_image_displacements` each copy one
+  private column. `write_con` snapshots the slab when Python can
+  store into it, and borrows it otherwise. A string write copies
+  the borrowed row onto the cloned frame. Once the atom list exists,
+  writes read that list, so an edit, pop, or append keeps each atom's
+  coordinates with its metadata. Gzip and zstd fused writes read the
+  borrowed column. A float32 column is promoted into that array.
 - **Rust API:** `FrameHeader::set_lattice_vectors` now returns
   `Result<(), ParseError>` instead of `()`. It returns
   `ParseError::NonFiniteValue` for a NaN or infinite component and leaves the
@@ -216,6 +253,53 @@ All notable changes to this project will be documented in this file. See [conven
   coordinate, as before. CON-bin also refuses a cell that is finite in
   binary64 and infinite in binary32. Reading a finite cell costs nothing, and
   a finite cell round-trips bit for bit.
+
+- **Rust API:** an atom's velocity and force are rows of the frame's
+  `velocities` and `forces` columns. A write that gave a column a new
+  allocation (copy on write after a clone or an export, a section repack,
+  a dtype projection, `reorder_like`) left the atoms on the old block, so
+  they read stale values or freed memory. Every such path now moves the
+  atoms with the column, and a clone owns its own columns.
+  `ConFrame::unshare_slot_columns` gives the frame a private copy of a
+  column another handle shares, and `ConFrame::with_section_columns` runs
+  an edit that replaces the columns and rebinds the atoms after it.
+- **Python:** editing an atom's velocity or force while a NumPy view of a
+  parsed column (`vel`, `frc`, `velocities_array`, `forces_array`) was
+  alive wrote into the view and left the atom on memory freed with it. A
+  later edit corrupted the heap. The edit now moves the frame's column and
+  its atoms to a private copy first.
+- **Python:** an atom view edit of a frame backed by the read slab or the
+  owned `xyz` array stores one atomic double instead of writing through a
+  mutable slice of the whole buffer, which raced readers on a
+  free-threaded build. The slab row uses the frame's atom count, as reads
+  do.
+- **C ABI:** `rkr_frame_to_c_frame` and the converting velocity and force
+  DLPack exports read rows from the columns, so they agree with
+  `rkr_frame_velocities_f64` and `rkr_frame_forces_f64`. The borrowed
+  `*_f64` accessors document how long their pointer stays valid.
+- A positions column without one `(x, y, z)` row per atom (not three
+  columns, too few rows, or empty while the frame holds atoms) made the
+  writers, `rkr_frame_to_c_frame`, and `rkr_frame_copy_positions` panic.
+  The Rust writers return `WriteError::Format(ParseError::ValidationError)`,
+  and the C calls return NULL or `RKR_STATUS_VALIDATION_ERROR`. A
+  Fortran-ordered coordinate block writes the same text as a row-major
+  one, and `set_f64_row` writes the right row of it.
+- **Rust API:** setting the velocity of an atom parsed with forces but
+  no velocities dropped its force. `sync_atom_data_from_arrays` wrote
+  through slots a copy on write had left on the other handle, and
+  adopting a float32 velocity or force column left the atoms on the
+  freed float64 buffer. The atoms keep their force, and both paths
+  rebind the atoms to the frame's own columns.
+- **C ABI:** `rkr_frame_copy_masses` and `rkr_frame_copy_atom_ids` read
+  past a column shorter than the atom count, and
+  `rkr_frame_positions_from_dlpack` panicked on a positions column that
+  was not `(N, 3)`. An empty mass or id column now reads the header
+  masses or the atom ids, and the other mismatches return
+  `RKR_STATUS_VALIDATION_ERROR`. `rkr_frame_to_c_frame` returns NULL
+  when the header type counts do not add up to the atoms instead of
+  dropping the rest.
+- **Python:** packing velocities or forces for a frame whose column was
+  not `(N, 3)` panicked. The packer reads the atoms instead.
 
 ## v0.23.3 - 2026-11-14
 

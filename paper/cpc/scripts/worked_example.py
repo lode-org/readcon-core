@@ -12,9 +12,9 @@ Writes
 The cell numbers follow ``cell_cz_squared`` and ``cell_vectors`` of
 ``src/types.rs`` at the commit of ``src/commit.tex``, operation by operation
 in binary64, which is what a Python float is.  The window is that file's
-``CELL_CZ_ROUNDING``, and the mapping and parallel thresholds of Algorithm 1 are
-``MMAP_THRESHOLD`` of ``src/compression.rs`` and ``PARALLEL_BYTES_THRESHOLD``
-of ``src/iterators.rs``, all read from the git objects of the commit.  ``--tables``
+``CELL_CZ_ROUNDING``, and the mapping threshold of Algorithm 1 is
+``MMAP_THRESHOLD`` of ``src/compression.rs``, read from the git objects of the
+commit.  ``--tables``
 writes the macros from the committed record, after it recomputes every number
 from the committed frame and stops unless the record holds the same values.
 
@@ -98,15 +98,11 @@ def release_window(sha: str) -> float:
     return float(found.group(1))
 
 
-# The byte counts at which the path reader maps a plain file and the default thread count parses in the pool.
+# The byte count at which the path reader maps a plain file.
 THRESHOLDS = {
     "mmap_bytes": (
         "src/compression.rs",
         r"^(?:pub )?const MMAP_THRESHOLD: u64 = (\d+) \* (\d+);",
-    ),
-    "parallel_bytes": (
-        "src/iterators.rs",
-        r"^pub\(crate\) const PARALLEL_BYTES_THRESHOLD: usize = (\d+) \* (\d+);",
     ),
 }
 
@@ -118,9 +114,7 @@ def release_thresholds(sha: str) -> dict:
         if match is None:
             raise SystemExit(f"{path} at {sha[:12]} does not declare {pattern}")
         found[key] = int(match.group(1)) * int(match.group(2))
-    found["source"] = (
-        f"MMAP_THRESHOLD of src/compression.rs and PARALLEL_BYTES_THRESHOLD of src/iterators.rs at {sha}"
-    )
+    found["source"] = f"MMAP_THRESHOLD of src/compression.rs at {sha}"
     return found
 
 
@@ -339,9 +333,6 @@ def render(record: dict) -> str:
         "wkKinetic": fixed(velocity["kinetic_eV"]),
         "wkKineticMisread": fixed(velocity["kinetic_misread_eV"]),
         "wkMmapBytes": f"{record['thresholds']['mmap_bytes']:,}".replace(",", "{,}"),
-        "wkParallelBytes": f"{record['thresholds']['parallel_bytes']:,}".replace(
-            ",", "{,}"
-        ),
     }
     if (
         ase["right"]["error"] is not None

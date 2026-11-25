@@ -115,11 +115,9 @@ fn sectioned_atoms(n: usize) -> Vec<AtomDatum> {
 fn positions_reusing_constructor_fills_every_section() {
     let template = builder(3).build().unwrap();
     let atoms = sectioned_atoms(3);
-    let positions = FloatArray2::from_f64_row_major(
-        3,
-        3,
-        atoms.iter().flat_map(|a| [a.x(), a.y(), a.z()]).collect(),
-    );
+    let coords: Vec<[f64; 3]> = (0..3).map(|i| [i as f64, 0.5, 1.5]).collect();
+    let positions =
+        FloatArray2::from_f64_row_major(3, 3, coords.iter().flat_map(|row| *row).collect());
     let frame =
         con_frame_from_atom_data_with_positions(template.header.clone(), atoms.clone(), positions);
     assert_eq!(frame.positions.as_f64_row(2), [2.0, 0.5, 1.5]);
@@ -135,7 +133,7 @@ fn positions_reusing_constructor_fills_every_section() {
     assert_eq!(frame.atom_ids.to_vec(), vec![0, 1, 2]);
 
     // The AoS constructor agrees section for section.
-    let reference = con_frame_from_atom_data(template.header.clone(), atoms);
+    let reference = con_frame_from_atom_data(template.header.clone(), atoms, &coords);
     for i in 0..3 {
         assert_eq!(
             frame.velocities.as_f64_row(i),

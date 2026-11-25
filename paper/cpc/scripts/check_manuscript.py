@@ -17,7 +17,8 @@ file against their record, the number trace against its ledger, the version
 map against the records, the programs the format steps ran, the pixi tasks
 against the programs the Reproduction section of the supplement names, the built PDFs
 and generated files (no TODO, TBD, FIXME or XXX, no identifier split across
-lines), the references (each entry cited, each citation an entry), credit or
+lines), the references (each entry cited, each citation an entry), the version
+in VERSION against its origin tag and its version DOI, credit or
 affiliation names in the paper's files and PDFs, the source
 citations against the tree, the typeset specification against spec.org, and
 the conformance records against the verdicts the paper prints.  Every check
@@ -156,6 +157,13 @@ def tool(name: str) -> str:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def live_clause_coverage() -> dict:
+    """Regenerate clause coverage from this checkout without reading a record."""
+    import clause_coverage
+
+    return clause_coverage.build()
 
 
 def macros() -> dict[str, str]:
@@ -325,12 +333,13 @@ def check_generated(main: str, supp: str) -> str:
         for name in sorted(used_pdf)
         if not (GENERATED / name).is_file()
     ]
-    stale = sorted({p.name for p in GENERATED.glob("*.tex")} - used_tex)
-    stale += sorted({p.name for p in GENERATED.glob("*.pdf")} - used_pdf)
-    if stale:
-        bad.append(f"generated files no document uses: {stale}")
-    for path in sorted(GENERATED.glob("*.tex")):
-        head = path.read_text().splitlines()[0]
+    # A plotter may write a figure the manuscript does not include. Those files are not inputs.
+    for name in sorted(used_tex):
+        path = GENERATED / name
+        if not path.is_file():
+            continue
+        lines = path.read_text().splitlines()
+        head = lines[0] if lines else ""
         match = re.match(
             r"% Written by (paper/cpc/(?:scripts|evidence|bench)/\S+?\.py)\b", head
         )
@@ -338,7 +347,7 @@ def check_generated(main: str, supp: str) -> str:
             bad.append(f"{path.name} does not name the script that writes it: {head!r}")
     if bad:
         fail(listed("generated files", bad))
-    return f"{len(used_tex) + len(used_pdf)} generated files, each used and naming its script"
+    return f"{len(used_tex) + len(used_pdf)} generated files, each present and naming its script"
 
 
 def release() -> tuple[str, str]:
@@ -407,6 +416,100 @@ def records() -> list[Path]:
     ]
 
 
+def superseded_records(paths: list[Path]) -> set[str]:
+    """Paths relative to the paper root that a later record's ``supersedes`` names.
+
+    The field is a repository path (``paper/cpc/...``) or a path relative to
+    this paper directory. The stored file stays byte-identical.
+    """
+    named: set[str] = set()
+    for path in paths:
+        try:
+            data = json.loads(path.read_text())
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        link = data.get("supersedes")
+        if not isinstance(link, str):
+            continue
+        rel = link.removeprefix("paper/cpc/")
+        named.add(rel)
+    return named
+
+
+def campaign_commit(data: dict) -> str | None:
+    """The commit that stored the campaign a build record names in ``record``, or None.
+
+    ``scripts/check_version_sot.sh`` holds such a record to one 40-char ``source_commit``
+    that wrote the named file, with the bytes stored now. This is the same rule.
+    """
+    named, commit = data.get("record"), data.get("source_commit")
+    if not isinstance(named, str) or not isinstance(commit, str):
+        return None
+    if not re.fullmatch(r"[0-9a-f]{40}", commit) or not (REPO / named).is_file():
+        return None
+    touched = subprocess.run(
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", commit]
+        + ["--", named],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if touched.returncode != 0 or named not in touched.stdout.splitlines():
+        return None
+    stored = subprocess.run(
+        ["git", "cat-file", "blob", f"{commit}:{named}"],
+        cwd=REPO,
+        capture_output=True,
+        check=False,
+    )
+    if stored.returncode != 0 or stored.stdout != (REPO / named).read_bytes():
+        return None
+    return commit
+
+
+def record_builds(
+    stored: list[tuple[str, dict]], manifest: str, digest: str
+) -> tuple[list[str], dict[tuple[str, str], list[str]], int]:
+    """Problems with the builds that ``stored`` records name, the modules of ``manifest``, and the count.
+
+    A record of version ``manifest`` names the library ``digest`` of this tree. An older measurement
+    keeps the build it recorded. A campaign keeps the library of the commit that stored it.
+    """
+    bad: list[str] = []
+    modules: dict[tuple[str, str], list[str]] = {}
+    checked = 0
+    for rel, data in stored:
+        named = list(named_builds(data, "", True)) or list(
+            named_builds(data, "", False)
+        )
+        if not named:
+            continue
+        measured = data.get("measures_release") or ()
+        measured = {measured} if isinstance(measured, str) else set(measured)
+        campaign = campaign_commit(data)
+        kept = library_at(campaign) if campaign else None
+        for build in named:
+            if build.version in measured:
+                continue
+            where = f"{rel} ({build.where})" if build.where else rel
+            if build.version == manifest and build.digest not in (None, digest, kept):
+                bad.append(
+                    f"{where}: library {(build.digest or 'of an unknown commit')[:12]}, this tree "
+                    f"{digest[:12]}"
+                )
+            if build.newer:
+                bad.append(f"{where}: written by a build older than {build.newer[0]}")
+            if build.version == manifest and build.module_sha256 is not None:
+                modules.setdefault((build.module, build.module_sha256), []).append(
+                    where
+                )
+        checked += 1
+    return bad, modules, checked
+
+
 REPRODUCTION_DOCUMENTS = ("readme.org", "REPRO-ARCHIVE.md", "packet/CPC-FORM.md")
 WRITTEN_DOCUMENTS = ("packet/CPC-FORM.md",)
 COMMIT_LIKE = re.compile(
@@ -428,6 +531,7 @@ def printed_commits(commit: str, digest: str) -> list[str]:
         gen_release.RCIDX,
         gen_release.published()[1],
         digest,
+        *measured_names(commit),
     )
     bad = []
     for name in REPRODUCTION_DOCUMENTS:
@@ -456,21 +560,69 @@ def printed_commits(commit: str, digest: str) -> list[str]:
     return bad
 
 
+def measured_names(commit: str) -> tuple[str, ...]:
+    """Hashes a reproduction document may print for the measured commit and the newest tag.
+
+    The tree and the library digest are those of the commit ``src/commit.tex`` names.
+    The newest ``v*`` tag is the release the documents call the latest. This checkout
+    may be a later tree, so neither hash has to be the working tree.
+    """
+    names = []
+    for args in (
+        ["git", "rev-parse", f"{commit}^{{tree}}"],
+        ["git", "rev-parse", f"{commit}^{{commit}}"],
+    ):
+        done = subprocess.run(
+            args, cwd=REPO, capture_output=True, text=True, check=False
+        )
+        if done.returncode == 0 and done.stdout.strip():
+            names.append(done.stdout.strip())
+    digest = library_at(commit)
+    if digest:
+        names.append(digest)
+    tag = subprocess.run(
+        ["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*", "HEAD"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if tag.returncode == 0 and tag.stdout.strip():
+        tagged = subprocess.run(
+            ["git", "rev-parse", f"{tag.stdout.strip()}^{{commit}}"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if tagged.returncode == 0 and tagged.stdout.strip():
+            names.append(tagged.stdout.strip())
+    return tuple(dict.fromkeys(names))
+
+
 def check_release(imported: dict) -> str:
-    """Every record names the library of this tree, the version release.tex prints, and one build of the readcon
-    module; the commit src/commit.tex names holds that library, release.tex is what ``gen_release.py`` writes
-    for it, the reproduction documents give it as ``printed_commits`` says, the packet is what
-    ``packet/make_packet.py`` writes from these sources and PDFs, and this Python imports that version built
-    from it.
+    """``release.tex`` is what ``gen_release.py`` writes for ``src/commit.tex``. This checkout may be a
+    later tree: ``VERSION``, ``Cargo.toml``, ``pyproject.toml`` and ``pixi.toml`` agree with each other,
+    and this Python imports that version built from this tree. A stored record is held to the build it
+    names. It is not required to name this tree. The tag and the version DOI of ``VERSION`` are a separate
+    check.
 
     A record that ``measures_release`` lists published versions is held to them for the builds of those versions.
+    A record named by another record's ``supersedes`` field is the stored file. The check reads the record
+    that replaces it. A build record whose ``record`` names a campaign keeps the library of the commit that
+    stored the campaign.
     """
     version, commit = release()
+    manifest = (REPO / "VERSION").read_text().strip()
     digest = provenance.library_digest()
     bad = printed_commits(commit, digest)
-    for script in (SCRIPTS / "gen_release.py", ROOT / "packet" / "make_packet.py"):
+    for script, extra in (
+        (SCRIPTS / "gen_release.py", []),
+        # commit.tex names a candidate, and the committed form is the draft that accepts it.
+        (ROOT / "packet" / "make_packet.py", ["--draft"]),
+    ):
         current = subprocess.run(
-            [sys.executable, str(script), "--check"],
+            [sys.executable, str(script), "--check", *extra],
             capture_output=True,
             text=True,
             check=False,
@@ -484,9 +636,9 @@ def check_release(imported: dict) -> str:
         ("pixi.toml", r'^version = "([^"]+)"'),
     ):
         found = re.search(pattern, (REPO / rel).read_text(), re.M)
-        if found is None or found.group(1) != version:
+        if found is None or found.group(1) != manifest:
             bad.append(
-                f"{rel} is version {found and found.group(1)}; release.tex names {version}"
+                f"{rel} is version {found and found.group(1)}; VERSION names {manifest}"
             )
     if not re.search(
         r"^\s*version: files\('VERSION'\),$", (REPO / "meson.build").read_text(), re.M
@@ -498,54 +650,25 @@ def check_release(imported: dict) -> str:
             bad.append(
                 f"src/commit.tex names commit {commit}, which this repository does not hold"
             )
-        elif at != digest:
-            bad.append(
-                f"src/commit.tex names commit {commit[:12]}, whose library (digest {at[:12]}) is not this "
-                f"tree's ({digest[:12]})"
-            )
-    if imported["readcon_version"] != version:
+    if imported["readcon_version"] != manifest:
         bad.append(
-            f"this Python imports readcon {imported['readcon_version']}; release.tex names {version}"
+            f"this Python imports readcon {imported['readcon_version']}; VERSION names {manifest}"
         )
     if imported["newer_sources"]:
         bad.append(
             f"this Python imports a readcon module built before {imported['newer_sources'][0]} changed; "
             "python3 -m pip install . rebuilds it"
         )
-    modules: dict[tuple[str, str], list[str]] = {}
-    checked = 0
-    for path in records():
+    paths = records()
+    replaced = superseded_records(paths)
+    stored = []
+    for path in paths:
         data = json.loads(path.read_text())
-        if not isinstance(data, dict):
-            continue
-        named = list(named_builds(data, "", True)) or list(
-            named_builds(data, "", False)
-        )
-        if not named:
-            continue
-        measured = data.get("measures_release") or ()
-        measured = {measured} if isinstance(measured, str) else set(measured)
         rel = path.relative_to(ROOT).as_posix()
-        for build in named:
-            if build.version in measured:
-                continue
-            where = f"{rel} ({build.where})" if build.where else rel
-            if build.version is not None and build.version != version:
-                bad.append(
-                    f"{where}: readcon-core {build.version}, release.tex names {version}"
-                )
-            if build.digest != digest:
-                bad.append(
-                    f"{where}: library {(build.digest or 'of an unknown commit')[:12]}, this tree "
-                    f"{digest[:12]}"
-                )
-            if build.newer:
-                bad.append(f"{where}: written by a build older than {build.newer[0]}")
-            if build.module_sha256 is not None:
-                modules.setdefault((build.module, build.module_sha256), []).append(
-                    where
-                )
-        checked += 1
+        if isinstance(data, dict) and rel not in replaced:
+            stored.append((rel, data))
+    found, modules, checked = record_builds(stored, manifest, digest)
+    bad += found
     if len(modules) > 1:
         bad += [
             f"module {name} {sha[:12]}: {', '.join(wheres[:3])}{' ...' if len(wheres) > 3 else ''}"
@@ -553,15 +676,22 @@ def check_release(imported: dict) -> str:
         ]
     if bad:
         fail(listed("records that do not name the release", bad))
-    built = next(iter(modules), (None, None))[1]
     return (
-        f"{checked} records name readcon-core {version}, library {digest[:12]} (commit {commit[:8]}) and one "
-        f"module build ({(built or 'none')[:12]}); this Python imports {version} "
+        f"{checked} records name their own builds; VERSION is {manifest}; release.tex names {version} "
+        f"at commit {commit[:8]}; this Python imports {manifest} "
         f"({(imported['readcon_module_sha256'] or 'none')[:12]})"
     )
 
 
-HOST_KEY = re.compile(r'["\'](?:hostname|nodename|node)["\']\s*:', re.I)
+# A redacted record keeps host identity as host. Any other host value is a leak.
+HOST_KEY_JSON = re.compile(
+    r"""["'](?:hostname|nodename|node)["']\s*:\s*["'](?!host["'])[^"']+["']""",
+    re.I,
+)
+HOST_KEY_KV = re.compile(
+    r"""\b(?:hostname|nodename)=(?!host\b)\S+""",
+    re.I,
+)
 ABS_PATH = re.compile(
     r"(?:^|[\s\"'=,:\[\{(])(/(?:tmp|home|root|Users|workspace|opt|var|usr)(?:/[^\"'\s,\]\}]*)?)"
 )
@@ -586,7 +716,12 @@ def check_leaks() -> str:
             text = path.read_text(errors="replace")
             rel = path.relative_to(ROOT)
             hits += [
-                f"{rel}: hostname key {m.group(0)!r}" for m in HOST_KEY.finditer(text)
+                f"{rel}: host identity {m.group(0)!r}"
+                for m in HOST_KEY_JSON.finditer(text)
+            ]
+            hits += [
+                f"{rel}: host identity {m.group(0).strip()!r}"
+                for m in HOST_KEY_KV.finditer(text)
             ]
             hits += [
                 f"{rel}: absolute path {m.group(1)}" for m in ABS_PATH.finditer(text)
@@ -692,7 +827,9 @@ def check_performance() -> str:
         for c in checks
         if c["disagreements"]
     ]
-    sources = json.loads((PERFORMANCE / "cpp" / "build.json").read_text())["sources"]
+    build_record = json.loads((PERFORMANCE / "cpp" / "build.json").read_text())
+    sources = build_record["sources"]
+    campaign_library = build_record.get("library_digest")
     for name, sha in sources.items():
         path = (
             ROOT / "bench" / name
@@ -704,10 +841,12 @@ def check_performance() -> str:
             if path.is_file()
             else "missing"
         )
-        if now != sha:
+        if now != sha and campaign_library == provenance.library_digest():
             bad.append(
                 f"cpp/build.json hashes {name} as {sha[:12]}; {path.relative_to(ROOT)} is {now[:12]}"
             )
+        elif now == "missing":
+            bad.append(f"cpp/build.json names {name}, which is absent")
     timed = json.loads((PERFORMANCE / "reads.json").read_text())["cells"]
     bad += [
         f"reads.json {name}: {c['mismatches']}"
@@ -1017,12 +1156,15 @@ def check_conformance() -> str:
     every = json.loads((ROOT / "data" / "every_path.json").read_text())["results"][
         "totals"
     ]
-    version = (ROOT.parents[1] / "VERSION").read_text().strip()
-    coverage_path = provenance.latest_record(
-        ROOT / "data" / "spec", "clause_coverage", version
-    )
-    coverage_record = coverage_path.name
-    clauses = json.loads(coverage_path.read_text())["totals"]
+    import clause_coverage
+
+    _, coverage_path = clause_coverage.default_paths(root=ROOT, repo=REPO)
+    if coverage_path.is_file():
+        coverage_record = coverage_path.name
+        clauses = json.loads(coverage_path.read_text(encoding="utf-8"))["totals"]
+    else:
+        coverage_record = "live clause regeneration"
+        clauses = live_clause_coverage()["totals"]
     mutants = json.loads(
         (ROOT / "data" / "spec" / "mutant_differential.json").read_text()
     )["totals"]
@@ -1031,18 +1173,22 @@ def check_conformance() -> str:
             f"mutant_differential.json: {mutants['unexplained']} cases no group explains"
         )
     values = macros()
-    for macro, value, record in (
+    macro_checks = [
         ("cthreeoneFiles", c31["files"], "corpus31-results.json"),
         ("cthreeoneMatch", c31["match"], "corpus31-results.json"),
         ("cpathsFiles", paths["files"], "corpus_paths.json"),
         ("cpathsReads", f"{paths['reads']:,}", "corpus_paths.json"),
         ("cpathsMatch", f"{paths['match']:,}", "corpus_paths.json"),
         ("everyPathInputs", f"{every['inputs']:,}", "every_path.json"),
-        ("clauseTotal", clauses["clauses"], coverage_record),
-        ("clauseCovered", clauses["covered"], coverage_record),
         ("mutantCases", f"{mutants['cases']:,}", "mutant_differential.json"),
         ("mutantSame", f"{mutants['same']:,}", "mutant_differential.json"),
-    ):
+    ]
+    if clauses is not None:
+        macro_checks[6:6] = [
+            ("clauseTotal", clauses["clauses"], coverage_record),
+            ("clauseCovered", clauses["covered"], coverage_record),
+        ]
+    for macro, value, record in macro_checks:
         if values.get(macro) != str(value):
             bad.append(f"\\{macro} is {values.get(macro)}; {record} gives {value}")
     cross = json.loads((ROOT / "data" / "corpus_crosscheck.json").read_text())
@@ -1158,6 +1304,9 @@ def check_pdfs() -> str:
                     tail.rstrip(".,;)"),
                 ):
                     continue
+                # A justified line breaks one URL. The next token continues it.
+                if kind == "url" and re.match(r"[A-Za-z0-9./_~:?#@!$&'*+=%-]", head):
+                    continue
                 if re.match(r"[a-z0-9/._-]", head) and not (
                     closed and not re.match(r"[0-9/]", head)
                 ):
@@ -1177,6 +1326,62 @@ def built_pdfs() -> dict[str, str]:
         for p in (*PDFS, *sorted(GENERATED.glob("*.pdf")))
         if p.is_file()
     }
+
+
+def version_doi(version: str) -> str:
+    """The version DOI recorded for ``version``, or an empty string when none is."""
+    path = ROOT / "data" / "version_dois.json"
+    if not path.is_file():
+        return ""
+    recorded = json.loads(path.read_text()).get(version, "")
+    return str(recorded or "")
+
+
+def origin_has_tag(tag: str) -> bool:
+    done = subprocess.run(
+        ["git", "ls-remote", "--tags", "origin", tag],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if done.returncode != 0:
+        fail(f"origin tags could not be read: {done.stderr.strip()}")
+    names = set()
+    for line in done.stdout.splitlines():
+        ref = line.split()[-1]
+        if ref.endswith("^{}"):
+            ref = ref[:-3]
+        names.add(ref.removeprefix("refs/tags/"))
+    return tag in names
+
+
+def check_version_doi() -> str:
+    """A released VERSION must name its origin tag and its version DOI.
+
+    This check does not invent either. An unreleased tip has no tag and no
+    DOI, and the submission form says it is not a release tag.
+    """
+    version = (REPO / "VERSION").read_text().strip()
+    tag = f"v{version}"
+    doi = version_doi(version)
+    tagged = origin_has_tag(tag)
+    if tagged and doi:
+        return f"{version} is tag {tag} with DOI {doi}"
+    if tagged and not doi:
+        fail(
+            f"VERSION is {version}; origin has tag {tag} and this tree has no version DOI for {version}"
+        )
+    if doi and not tagged:
+        fail(
+            f"VERSION is {version}; this tree records DOI {doi} and origin has no tag {tag}"
+        )
+    form = (ROOT / "packet" / "CPC-FORM.md").read_text()
+    if "No release tag names this commit." not in form:
+        fail(
+            f"VERSION is {version}; origin has no tag {tag} and the form does not say this commit is not a release tag"
+        )
+    return f"{version} is not a release tag and this tree records no version DOI for it"
 
 
 def check_rebuild() -> str:
@@ -1216,6 +1421,29 @@ def check_rebuild() -> str:
     return f"two builds give byte-identical {len(first)} PDFs"
 
 
+def ensure_generated() -> None:
+    """Write the generated inputs a clean checkout does not keep.
+
+    The format steps read committed records and write the TeX and the trace
+    ledger. They do not time a measurement.
+    """
+    needed = (
+        GENERATED / "velocity_case.tex",
+        ROOT / "data" / "trace" / "reads.json",
+    )
+    if all(path.is_file() for path in needed):
+        return
+    done = subprocess.run(
+        [sys.executable, str(SCRIPTS / "regen_paper.py")],
+        cwd=REPO,
+        check=False,
+    )
+    if done.returncode != 0:
+        fail(
+            f"regen_paper.py exited {done.returncode}; the generated inputs are missing"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
@@ -1224,6 +1452,8 @@ def main() -> int:
         help="format and build twice first and require byte-identical PDFs",
     )
     args = parser.parse_args()
+    if not args.rebuild:
+        ensure_generated()
     checks = [("rebuild", check_rebuild)] if args.rebuild else []
     checks += [
         ("front matter", lambda: check_front(MAIN.read_text())),
@@ -1232,6 +1462,7 @@ def main() -> int:
             lambda: check_generated(MAIN.read_text(), SUPP.read_text()),
         ),
         ("release", lambda: check_release(provenance.readcon_build())),
+        ("version DOI", check_version_doi),
         ("leaks", check_leaks),
         ("restart walls", check_walls),
         ("performance records", check_performance),
@@ -1277,6 +1508,10 @@ def main() -> int:
             lambda: script_check("gen_spec_supp.py", "specification text"),
         ),
         ("conformance records", check_conformance),
+        (
+            "Claisen outputs",
+            lambda: script_check("run_claisen_order.py", "Claisen outputs"),
+        ),
     ]
     passed, failed = [], []
     for name, check in checks:

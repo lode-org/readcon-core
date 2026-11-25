@@ -118,7 +118,7 @@ namespace readcon {
  * the convenience of either naming convention; they always carry the
  * same value.
  */
-#define RKR_CON_SPEC_VERSION 3
+#define RKR_CON_SPEC_VERSION 4
 
 #define RKR_DL_INT 0
 
@@ -863,6 +863,9 @@ void free_con_frame_iterator(struct CConFrameIterator *iterator);
 /**
  * Extracts the core atomic data into a transparent `CFrame` struct.
  * The caller OWNS the returned pointer and MUST call `free_c_frame` on it.
+ * NULL with `RKR_STATUS_VALIDATION_ERROR` when the positions column does
+ * not hold one `(x, y, z)` row per atom, or the header type counts do not
+ * add up to the atoms.
  *
  * # Safety
  * frame_handle must be valid. The caller takes ownership of the returned CFrame.
@@ -1739,6 +1742,19 @@ enum RKRStatus rkr_frame_builder_set_con_spec_minor(struct RKRConFrameBuilder *b
                                                     uint32_t minor);
 
 /**
+ * Sets the major the built frame writes on line 2.
+ * `0` writes the current major. `3` writes a CON 3 frame, as a binding
+ * rewrite of a major-3 file does. A major above the current one makes
+ * `rkr_frame_builder_build` fail.
+ * Returns `RKR_STATUS_SUCCESS` on success.
+ *
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_spec_version(struct RKRConFrameBuilder *builder_handle,
+                                                  uint32_t version);
+
+/**
  * Sets a numeric metadata key on an existing frame builder.
  * Returns `RKR_STATUS_SUCCESS` on success, or an error code.
  *
@@ -2376,8 +2392,11 @@ enum RKRStatus rkr_frame_atom_ids_view(const struct RKRConFrame *frame_handle,
                                        struct RKRArrayView *out);
 
 /**
- * Row-major f64 xyz pointer, or NULL if storage is not float64.
- * `*n` receives the atom count. Pointer is valid until `free_rkr_frame`.
+ * Row-major f64 xyz pointer, or NULL if storage is not float64 or not
+ * one row of three doubles per atom. `*n` receives the atom count.
+ * Pointer is valid until `free_rkr_frame` or the next
+ * `rkr_frame_positions_from_dlpack` on this frame, which copies a column
+ * a DLPack export shares before it writes.
  */
 const double *rkr_frame_xyz_f64(const struct RKRConFrame *frame_handle,
                                 uintptr_t *n);
@@ -2397,19 +2416,49 @@ int rkr_frame_plain_geometry(const struct RKRConFrame *frame_handle,
                              double *cell, double *angles);
 
 /**
- * Row-major f64 velocities pointer, or NULL if absent / not float64.
+ * Row-major f64 velocities pointer, or NULL if absent, not float64, or not
+ * one row of three doubles per atom. `*n` receives the row count.
+ *
+ * The pointer addresses the frame's velocities column, the block
+ * `rkr_frame_to_c_frame`, the copy function, and the DLPack export read.
+ * It is read-only and valid until `free_rkr_frame`. No C function writes
+ * or replaces that column, so the values do not change while the frame
+ * lives. A DLPack export of the column shares the block and keeps it
+ * alive past `free_rkr_frame` on its own; this pointer does not.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `n` is NULL or writable.
  */
 const double *rkr_frame_velocities_f64(const struct RKRConFrame *frame_handle,
                                        uintptr_t *n);
 
 /**
- * Row-major f64 forces pointer, or NULL if absent / not float64.
+ * Row-major f64 forces pointer, or NULL if absent, not float64, or not
+ * one row of three doubles per atom. `*n` receives the row count.
+ *
+ * The pointer addresses the frame's forces column, the block
+ * `rkr_frame_to_c_frame`, the copy function, and the DLPack export read.
+ * It is read-only and valid until `free_rkr_frame`. No C function writes
+ * or replaces that column, so the values do not change while the frame
+ * lives. A DLPack export of the column shares the block and keeps it
+ * alive past `free_rkr_frame` on its own; this pointer does not.
+ *
+ * # Safety
+ * `frame_handle` must be a valid frame handle; `n` is NULL or writable.
  */
 const double *rkr_frame_forces_f64(const struct RKRConFrame *frame_handle,
                                    uintptr_t *n);
 
 /**
- * Row-major f64 displacements pointer, or NULL if absent / not float64.
+ * Row-major f64 displacements pointer, or NULL if absent, not float64, or not
+ * one row of three doubles per atom. `*n` receives the row count.
+ *
+ * The pointer addresses the frame's displacements column, the block the copy
+ * function and the DLPack export read. It is read-only and valid until
+ * `free_rkr_frame`. No C function writes or replaces that column, so the
+ * values do not change while the frame lives. A DLPack export of the
+ * column shares the block and keeps it alive past `free_rkr_frame` on
+ * its own; this pointer does not.
  *
  * # Safety
  * `frame_handle` must be a valid frame handle; `n` is NULL or writable.
@@ -2418,7 +2467,15 @@ const double *rkr_frame_displacements_f64(const struct RKRConFrame *frame_handle
                                           uintptr_t *n);
 
 /**
- * Row-major f64 spreads pointer, or NULL if absent / not float64.
+ * Row-major f64 spreads pointer, or NULL if absent, not float64, or not
+ * one row of three doubles per atom. `*n` receives the row count.
+ *
+ * The pointer addresses the frame's spreads column, the block the copy
+ * function and the DLPack export read. It is read-only and valid until
+ * `free_rkr_frame`. No C function writes or replaces that column, so the
+ * values do not change while the frame lives. A DLPack export of the
+ * column shares the block and keeps it alive past `free_rkr_frame` on
+ * its own; this pointer does not.
  *
  * # Safety
  * `frame_handle` must be a valid frame handle; `n` is NULL or writable.
@@ -2428,7 +2485,9 @@ const double *rkr_frame_spreads_f64(const struct RKRConFrame *frame_handle,
 
 /**
  * Copy positions as row-major `[x0,y0,z0,...]` into `out` (length >= 3*N).
- * Prefers a memcpy from the SoA column; falls back to AoS only if SoA is empty.
+ * `RKR_STATUS_VALIDATION_ERROR` when the column does not have three
+ * columns, or is empty while the frame has atoms. The velocity and force
+ * copies apply the same check.
  */
 enum RKRStatus rkr_frame_copy_positions(const struct RKRConFrame *frame_handle,
                                         double *out,
@@ -2499,10 +2558,19 @@ enum RKRStatus rkr_frame_copy_atom_energies(const struct RKRConFrame *frame_hand
                                             double *out,
                                             uintptr_t out_len);
 
+/**
+ * Copy one mass per atom into `out` (length >= `N`). Without a mass column
+ * the header's per-type masses are copied. `RKR_STATUS_VALIDATION_ERROR`
+ * when a column or the type counts do not give one value per atom.
+ */
 enum RKRStatus rkr_frame_copy_masses(const struct RKRConFrame *frame_handle,
                                      double *out,
                                      uintptr_t out_len);
 
+/**
+ * Copy one id per atom into `out` (length >= `N`). Without an id column
+ * of `N` entries the ids stored on the atoms are copied.
+ */
 enum RKRStatus rkr_frame_copy_atom_ids(const struct RKRConFrame *frame_handle,
                                        uint64_t *out,
                                        uintptr_t out_len);
@@ -2529,6 +2597,8 @@ enum RKRStatus rkr_frame_positions_as_dlpack(const struct RKRConFrame *frame_han
 /**
  * Ingest positions from a DLManagedTensorVersioned (CPU float32/64, shape (N,3)
  * or length 3N). Metatensor-style write path symmetry.
+ * `RKR_STATUS_VALIDATION_ERROR` when the frame's positions column is not
+ * `(N, 3)`.
  *
  * # Safety
  * `frame` must be a valid mutable frame; `tensor` non-null managed tensor.

@@ -134,10 +134,8 @@ fn main() {
                     &out, &refs, workers, None, false, true,
                 )
                 .unwrap();
-                if fsync {
-                    if let Ok(file) = std::fs::File::open(&out) {
-                        let _ = file.sync_all();
-                    }
+                if fsync && let Ok(file) = std::fs::File::open(&out) {
+                    let _ = file.sync_all();
                 }
             })
         }

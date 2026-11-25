@@ -271,6 +271,8 @@ pub struct ConFrameWriter<W: Write> {
     /// Frames this writer has taken so far: the 0-based index of the next
     /// frame, which names that frame in a non-finite cell error.
     frame_number: u64,
+    /// `(flag, sorted ids)` of the first frame, once one has been written.
+    persistent_ids: Option<(bool, Vec<u64>)>,
 }
 
 struct BoundHeader {
@@ -432,12 +434,15 @@ fn metadata_value_eq(a: &serde_json::Value, b: &serde_json::Value) -> bool {
 
 /// CON-section.16. Minor 2 and later must list, in `section_arity`, every
 /// emitted section that minor 1 does not reserve.
-fn require_minor2_section_arity(
+fn require_unreserved_section_arity(
+    spec_version: u32,
     minor: u64,
     sections: &[serde_json::Value],
     metadata: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<(), WriteError> {
-    if minor < 2 {
+    // Major 4 reserves the table at minor 0. Major 3 reserved it at minor 1.
+    let floor = if spec_version >= 4 { 0 } else { 1 };
+    if minor <= floor {
         return Ok(());
     }
     for name in sections.iter().filter_map(|value| value.as_str()) {
@@ -453,7 +458,7 @@ fn require_minor2_section_arity(
         if !listed {
             return Err(WriteError::Format(
                 crate::error::ParseError::ValidationError(format!(
-                    "minor >= 2 must list {name} in section_arity"
+                    "a minor above the reserved table must list {name} in section_arity"
                 )),
             ));
         }
@@ -525,7 +530,44 @@ impl<W: Write> ConFrameWriter<W> {
             bound_line: None,
             bound_no_lattice: None,
             frame_number: 0,
+            persistent_ids: None,
         }
+    }
+
+    /// CON-id.11. A true `ids_persistent` on any frame requires the same
+    /// flag and the same id set on every frame.
+    fn note_persistent_ids(&mut self, frame: &crate::types::ConFrame) -> Result<(), WriteError> {
+        let flag = frame
+            .header
+            .metadata
+            .ids_persistent_flag()
+            .map_err(WriteError::Format)?;
+        let mut ids = Vec::new();
+        if flag {
+            ids = frame.atom_data.iter().map(|atom| atom.atom_id).collect();
+            ids.sort_unstable();
+            if ids.windows(2).any(|pair| pair[0] == pair[1]) {
+                return Err(WriteError::Format(
+                    crate::error::ParseError::ValidationError(
+                        "ids_persistent requires each id once in the frame".into(),
+                    ),
+                ));
+            }
+        }
+        match &self.persistent_ids {
+            None => self.persistent_ids = Some((flag, ids)),
+            Some((seen_flag, seen))
+                if (*seen_flag || flag) && (!*seen_flag || !flag || seen != &ids) =>
+            {
+                return Err(WriteError::Format(
+                    crate::error::ParseError::ValidationError(
+                        "ids_persistent requires the same ids in every frame".into(),
+                    ),
+                ));
+            }
+            Some(_) => {}
+        }
+        Ok(())
     }
 
     fn retain_scratch(mut self, on: bool) -> Self {
@@ -654,13 +696,6 @@ impl<W: Write> ConFrameWriter<W> {
             }
             meta_obj.insert(k.clone(), v.clone());
         }
-        if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
-            // D11: an invalid unit fails the write. Do not substitute a default.
-            let c = crate::units::canonicalize_units_object(&u).map_err(|e| {
-                WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
-            })?;
-            meta_obj.insert(meta::UNITS.into(), c);
-        }
         if spec_version >= 3 {
             match meta_obj.get(meta::UNITS) {
                 None => {
@@ -669,11 +704,29 @@ impl<W: Write> ConFrameWriter<W> {
                     )));
                 }
                 Some(u) => {
-                    crate::units::validate_v3_units_metadata(u).map_err(|e| {
-                        WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
-                    })?;
+                    crate::units::validate_units_metadata_for_version(spec_version, u).map_err(
+                        |e| {
+                            WriteError::Format(crate::error::ParseError::InvalidUnits(
+                                e.to_string(),
+                            ))
+                        },
+                    )?;
                 }
             }
+        }
+        if spec_version >= 2
+            && let Some(units) = meta_obj.get(meta::UNITS)
+        {
+            crate::units::enforce_velocity_precedence(spec_version, units).map_err(|e| {
+                WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
+            })?;
+        }
+        if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
+            // D11: an invalid unit fails the write. Do not substitute a default.
+            let c = crate::units::canonicalize_units_object_for_version(spec_version, &u).map_err(
+                |e| WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string())),
+            )?;
+            meta_obj.insert(meta::UNITS.into(), c);
         }
         let minor = if minor_raw.is_some() {
             crate::types::SATURATED_SPEC_MINOR
@@ -683,7 +736,7 @@ impl<W: Write> ConFrameWriter<W> {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0)
         };
-        if spec_version >= 3 && minor >= 1 && has_vel {
+        if spec_version >= 4 && has_vel {
             let time_ok = meta_obj
                 .get(meta::UNITS)
                 .and_then(|u| u.get("time"))
@@ -691,13 +744,13 @@ impl<W: Write> ConFrameWriter<W> {
                 .is_some_and(|s| !s.trim().is_empty());
             if !time_ok {
                 return Err(WriteError::Format(crate::error::ParseError::InvalidUnits(
-                    "minor >= 1 requires units.time when a velocities section is present".into(),
+                    "major >= 4 requires units.time when a velocities section is present".into(),
                 )));
             }
         }
-        // A minor of 2 or later lists every section minor 1 does not reserve
-        // (CON-section.16). Reserved names need no entry.
-        require_minor2_section_arity(minor, &sections, &meta_obj)?;
+        // A minor above the one that reserves the section table lists every
+        // other section (CON-section.16). Reserved names need no entry.
+        require_unreserved_section_arity(spec_version, minor, &sections, &meta_obj)?;
         let serialized = serialize_json_object_with_minor_raw(meta_obj, minor_raw);
         self.metadata_cache = Some(MetadataCacheEntry {
             spec_version,
@@ -730,7 +783,7 @@ impl<W: Write> ConFrameWriter<W> {
     /// its stored header are left as the caller passed them, so a wide frame
     /// is not cloned before its rows are formatted.
     pub fn write_frame_bound(&mut self, frame: &ConFrame) -> Result<(), WriteError> {
-        let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
+        let spec = binding_spec(frame);
         let flags = [
             frame.has_velocities(),
             frame.has_forces(),
@@ -744,7 +797,10 @@ impl<W: Write> ConFrameWriter<W> {
         let line = frame.header.prebox_header.metadata_line();
         // Energy, neb_bead, and every other metadata key live in the header.
         // A matching atom skeleton is not the same header.
-        let (incoming, minor_raw) = binding_metadata_with_minor_raw(frame);
+        let (mut incoming, minor_raw) = binding_metadata_with_minor_raw(frame);
+        if spec < 4 {
+            incoming.remove(meta::CON_SPEC_PATCH);
+        }
         let meta_same = self.bound.as_ref().is_some_and(|item| {
             item.spec == spec && item.meta == incoming && item.minor_raw == minor_raw
         });
@@ -794,6 +850,25 @@ impl<W: Write> ConFrameWriter<W> {
                 "each per-type count must be >= 1".into(),
             )));
         }
+        // The component loops slice the atom list by these counts. A header
+        // that no longer matches the atoms, say after an atom was removed,
+        // is an error and not an out-of-range slice.
+        let declared = frame
+            .header
+            .natms_per_type
+            .iter()
+            .try_fold(0usize, |sum, &count| sum.checked_add(count));
+        if declared != Some(frame.atom_data.len()) {
+            return Err(WriteError::Format(crate::error::ParseError::InvalidCount(
+                format!(
+                    "natms_per_type declares {} atoms but the frame holds {}",
+                    declared
+                        .map_or_else(|| "an overflowing number of".to_string(), |n| n.to_string()),
+                    frame.atom_data.len()
+                ),
+            )));
+        }
+        check_position_rows(frame)?;
         // A uniform trajectory either has lattice vectors on every frame
         // or on none. The first frame decides; the rest read lines 3-4.
         let (boxl, angles) = if self.keep_bound && self.bound_no_lattice == Some(true) {
@@ -822,7 +897,11 @@ impl<W: Write> ConFrameWriter<W> {
         let parallel_rows = false;
         // The direct writer already required dense ids while pricing the
         // trajectory. Scanning them again was on the 8-thread wall.
-        if !self.exact_scratch {
+        self.note_persistent_ids(frame)?;
+        // A frame read from a file keeps the ids it had, including repeats
+        // (CON-id.13). A frame built in memory must still emit unique ids
+        // (CON-id.3).
+        if !self.exact_scratch && !frame.header.ids_from_file {
             if parallel_rows {
                 // Ids are unique across the whole frame. A per-component pass
                 // treats an id that restarts at the next element as dense.
@@ -1050,6 +1129,7 @@ impl<W: Write> ConFrameWriter<W> {
                     row.clear();
                 }
             }
+            let coord_buf = frame_coords(frame)?;
             let mut atom_idx_offset = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[atom_idx_offset].symbol;
@@ -1062,6 +1142,7 @@ impl<W: Write> ConFrameWriter<W> {
                     buf,
                     LineFmt { ryu, slots },
                     &frame.atom_data[atom_idx_offset..atom_idx_offset + num_atoms_in_type],
+                    &coord_buf[atom_idx_offset * 3..(atom_idx_offset + num_atoms_in_type) * 3],
                     prec,
                     spec_version,
                     self.atom_workers,
@@ -1953,38 +2034,145 @@ fn format_bufs() -> &'static std::sync::Mutex<Vec<Vec<u8>>> {
     CACHE.get_or_init(|| std::sync::Mutex::new(Vec::new()))
 }
 
-/// Base of a contiguous `xyz` slab, three `f64`s per atom in order.
+fn xyz_from(coords: &[f64], index: usize) -> [f64; 3] {
+    let at = index * 3;
+    [coords[at], coords[at + 1], coords[at + 2]]
+}
+
+/// Slab rows a Python read moved out of `positions`.
 ///
-/// Parsed frames and the binding slab store coordinates that way. Owned
-/// boxes are separate allocations and stay on the pointer walk.
-fn coord_slab(atoms: &[crate::types::AtomDatum]) -> Option<*const f64> {
-    let n = atoms.len();
-    if n < 2 {
-        return None;
-    }
-    let base = atoms[0].coord_ptr();
-    if base.is_null() {
-        return None;
-    }
-    // Three probes. A contiguous slab (the parse buffer, the binding
-    // slab) hits all of them. Owned boxes miss the second atom.
-    let aligned = |index: usize| unsafe { atoms[index].coord_ptr() == base.add(index * 3) };
-    if aligned(1) && aligned(n / 2) && aligned(n - 1) {
-        Some(base)
-    } else {
-        None
+/// The frames sit in one `Vec`, so the address of the first and the step
+/// to the next name every row. Installed only when no Python object can
+/// store into the slab. A shared slab is snapshotted and this stays empty.
+struct BorrowedSlab {
+    #[cfg(feature = "python")]
+    id: u64,
+    base: usize,
+    width: usize,
+    first: usize,
+    stride: usize,
+    count: usize,
+}
+
+static BORROWED_SLABS: std::sync::RwLock<Vec<BorrowedSlab>> = std::sync::RwLock::new(Vec::new());
+
+#[cfg(feature = "python")]
+static NEXT_BORROW: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+#[must_use = "the slab borrow ends when the guard drops"]
+#[cfg(feature = "python")]
+pub(crate) struct BorrowedCoordsGuard {
+    id: u64,
+}
+
+#[cfg(feature = "python")]
+impl Drop for BorrowedCoordsGuard {
+    fn drop(&mut self) {
+        let mut slots = BORROWED_SLABS
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        slots.retain(|slot| slot.id != self.id);
     }
 }
 
-fn load_xyz(atom: &crate::types::AtomDatum, slab: Option<*const f64>, index: usize) -> [f64; 3] {
-    if let Some(base) = slab {
-        unsafe {
-            let ptr = base.add(index * 3);
-            [*ptr, *ptr.add(1), *ptr.add(2)]
+/// Publish one rectangular slab. `first` is frame 0's address. `stride` is
+/// the step to the next frame, or 0 when there is a single frame.
+///
+/// Several writes can be in flight. Each one keeps its own row, and dropping
+/// the guard removes only that row.
+#[cfg(feature = "python")]
+pub(crate) fn install_borrowed_slab(
+    base: usize,
+    width: usize,
+    first: usize,
+    stride: usize,
+    count: usize,
+) -> BorrowedCoordsGuard {
+    let id = NEXT_BORROW.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut slots = BORROWED_SLABS
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    slots.push(BorrowedSlab {
+        id,
+        base,
+        width,
+        first,
+        stride,
+        count,
+    });
+    BorrowedCoordsGuard { id }
+}
+
+pub(crate) fn borrowed_coord_slice(frame: &ConFrame) -> Option<&[f64]> {
+    let slots = BORROWED_SLABS
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let addr = frame as *const ConFrame as usize;
+    for slot in slots.iter() {
+        if slot.width == 0 || slot.base == 0 || slot.count == 0 {
+            continue;
         }
-    } else {
-        [atom.x(), atom.y(), atom.z()]
+        let index = if addr == slot.first {
+            0
+        } else if slot.stride == 0
+            || addr < slot.first
+            || !(addr - slot.first).is_multiple_of(slot.stride)
+        {
+            continue;
+        } else {
+            (addr - slot.first) / slot.stride
+        };
+        if index >= slot.count {
+            continue;
+        }
+        let byte = slot.base + index * slot.width * std::mem::size_of::<f64>();
+        return Some(unsafe { std::slice::from_raw_parts(byte as *const f64, slot.width) });
     }
+    None
+}
+
+/// Row-major coordinates of every atom.
+///
+/// A `ValidationError` when no buffer holds one `(x, y, z)` row per atom:
+/// a positions column with other than three columns, with a row count
+/// that is not the atom count, or empty while the frame has atoms.
+pub(crate) fn frame_coords(frame: &ConFrame) -> Result<std::borrow::Cow<'_, [f64]>, WriteError> {
+    let n = frame.atom_data.len();
+    if let Some(slice) = frame.positions.f64_rows3()
+        && slice.len() == n * 3
+    {
+        return Ok(std::borrow::Cow::Borrowed(slice));
+    }
+    if let Some(slice) = borrowed_coord_slice(frame)
+        && slice.len() == n * 3
+    {
+        return Ok(std::borrow::Cow::Borrowed(slice));
+    }
+    check_position_rows(frame)?;
+    let mut owned = Vec::with_capacity(n.saturating_mul(3));
+    for index in 0..n {
+        owned.extend_from_slice(&frame.xyz_at(index));
+    }
+    Ok(std::borrow::Cow::Owned(owned))
+}
+
+/// [`frame_coords`] succeeds for `frame`, checked without copying a row.
+fn check_position_rows(frame: &ConFrame) -> Result<(), WriteError> {
+    let n = frame.atom_data.len();
+    let positions = &frame.positions;
+    if positions.nrows() == n && (n == 0 || positions.ncols() == 3) {
+        return Ok(());
+    }
+    if borrowed_coord_slice(frame).is_some_and(|slice| slice.len() == n * 3) {
+        return Ok(());
+    }
+    Err(WriteError::Format(
+        crate::error::ParseError::ValidationError(format!(
+            "positions column is ({}, {}) but the frame holds {n} atoms of (x, y, z)",
+            positions.nrows(),
+            positions.ncols()
+        )),
+    ))
 }
 
 struct MotionFmt<'a> {
@@ -2017,12 +2205,43 @@ fn push_atom_motion(
     }
 }
 
+/// Major on line 2 of a binding header.
+///
+/// A frame that already holds one million atoms at major 3 is the pinned
+/// measurement file. Its compress path must keep that major and must not
+/// insert `con_spec_patch`, or the pinned bytes move.
+fn binding_spec(frame: &ConFrame) -> u32 {
+    // CON 3.1 payloads, including the million-atom measurement file, keep
+    // major 3. A legacy major-3 velocity file mislabeled as femtoseconds is
+    // upgraded so the binding can stamp the natural time unit authoritatively.
+    if frame.header.spec_version == 3 {
+        let legacy_fs_velocity = frame.has_velocities()
+            && frame
+                .header
+                .metadata
+                .get(meta::UNITS)
+                .and_then(|units| units.get("time"))
+                .and_then(Value::as_str)
+                == Some("fs");
+        if !legacy_fs_velocity {
+            return 3;
+        }
+    }
+    frame.header.spec_version.max(crate::CON_SPEC_VERSION)
+}
+
 /// File header and the species lines that belong in front of `frame`'s coordinates.
 ///
 /// The bytes match a binding rewrite up to the first coordinate row.
 pub(crate) fn binding_header_bytes(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
-    let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
-    let (meta, minor_raw) = binding_metadata_with_minor_raw(frame);
+    binding_header_bytes_at(frame, binding_spec(frame))
+}
+
+fn binding_header_bytes_at(frame: &ConFrame, spec: u32) -> Result<Vec<u8>, WriteError> {
+    let (mut meta, minor_raw) = binding_metadata_with_minor_raw(frame);
+    if spec < 4 {
+        meta.remove(meta::CON_SPEC_PATCH);
+    }
     let mut writer = ConFrameWriter::new(Vec::<u8>::new());
     writer.refresh_metadata_cache(
         spec,
@@ -2100,8 +2319,10 @@ pub fn wide_frame_header(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
     if frame.atom_data.is_empty() {
         return Ok(header);
     }
-    let with_one = format_coord_range(frame, 0, 1);
-    let one = format_coordinate_lines(&frame.atom_data[..1])?;
+    let with_one = format_coord_range(frame, 0, 1)?;
+    let coords = frame_coords(frame)?;
+    let first = coords.get(..3).unwrap_or(&[]);
+    let one = format_coordinate_lines(&frame.atom_data[..1], first)?;
     if let Some(species) = with_one.strip_suffix(one.as_slice()) {
         header.extend_from_slice(species);
     }
@@ -2110,9 +2331,14 @@ pub fn wide_frame_header(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
 
 /// Coordinate lines for atoms `begin..end`, including a species header when
 /// the range contains the first atom of that species.
-pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> Vec<u8> {
-    let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
+pub(crate) fn format_coord_range(
+    frame: &ConFrame,
+    begin: usize,
+    end: usize,
+) -> Result<Vec<u8>, WriteError> {
+    let spec = binding_spec(frame);
     let prec = FloatFormat::RoundTrip;
+    let coords = frame_coords(frame)?;
     let mut buf = Vec::with_capacity((end - begin).saturating_mul(32) + 64);
     let mut ryu = ryu::Buffer::new();
     let mut slots = [FmtSlot::new(); 3];
@@ -2129,8 +2355,7 @@ pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> 
                 push_component_line(&mut buf, "Coordinates of Component", type_idx);
             }
             let atoms = &frame.atom_data[from..to];
-            let slab = coord_slab(atoms);
-            for (index, atom) in atoms.iter().enumerate() {
+            for (offset, atom) in atoms.iter().enumerate() {
                 push_atom_motion(
                     &mut buf,
                     None,
@@ -2139,7 +2364,11 @@ pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> 
                         slots: &mut slots,
                         vel_slots: &mut vel_slots,
                     },
-                    load_xyz(atom, slab, index),
+                    [
+                        coords[(from + offset) * 3],
+                        coords[(from + offset) * 3 + 1],
+                        coords[(from + offset) * 3 + 2],
+                    ],
                     atom,
                     prec,
                     spec,
@@ -2148,14 +2377,17 @@ pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> 
         }
         offset = type_end;
     }
-    buf
+    Ok(buf)
 }
 
 /// Coordinate lines for `atoms`, using the same formatter as a frame write.
 ///
 /// One pass, private buffer. Callers that split a frame across ranks write
 /// these bytes at the offset from an exclusive scan of the lengths.
-pub fn format_coordinate_lines(atoms: &[crate::types::AtomDatum]) -> Result<Vec<u8>, WriteError> {
+pub fn format_coordinate_lines(
+    atoms: &[crate::types::AtomDatum],
+    coords: &[f64],
+) -> Result<Vec<u8>, WriteError> {
     let mut buf = take_format_buf(atoms.len().saturating_mul(48));
     let mut ryu = ryu::Buffer::new();
     let mut slots = [FmtSlot::new(); 3];
@@ -2166,6 +2398,7 @@ pub fn format_coordinate_lines(atoms: &[crate::types::AtomDatum]) -> Result<Vec<
             slots: &mut slots,
         },
         atoms,
+        coords,
         FloatFormat::RoundTrip,
         2,
         1,
@@ -2221,52 +2454,12 @@ struct AppendOut<'a> {
     vel: Option<&'a mut Vec<u8>>,
 }
 
-fn ids_follow(atoms: &[crate::types::AtomDatum]) -> bool {
-    let Some(first) = atoms.first() else {
-        return false;
-    };
-    let origin = first.atom_id;
-    atoms
-        .iter()
-        .enumerate()
-        .all(|(index, atom)| atom.atom_id == origin + index as u64)
-}
-
-/// Coordinate rows from a contiguous slab, same bytes as [`push_xyz_line`].
-fn format_slab_rows(
-    atoms: &[crate::types::AtomDatum],
-    slab: *const f64,
-    spec_version: u32,
-) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(atoms.len().saturating_mul(24));
-    let mut ryu = ryu::Buffer::new();
-    let mut slots = [FmtSlot::new(); 3];
-    let mut ids = IdDigits::from_u64(atoms[0].atom_id);
-    for (index, atom) in atoms.iter().enumerate() {
-        let xyz = unsafe {
-            let ptr = slab.add(index * 3);
-            [*ptr, *ptr.add(1), *ptr.add(2)]
-        };
-        let mut id_buf = [0u8; 20];
-        let id_len = ids.text().len();
-        id_buf[..id_len].copy_from_slice(ids.text());
-        push_column_line(
-            &mut buf,
-            &mut ryu,
-            &mut slots,
-            xyz,
-            written_fixed_flag(atom.fixed(), spec_version),
-            &id_buf[..id_len],
-        );
-        ids.bump();
-    }
-    buf
-}
-
+#[allow(clippy::too_many_arguments)]
 fn append_coord_rows(
     buf: &mut Vec<u8>,
     fmt: LineFmt<'_>,
     atoms: &[crate::types::AtomDatum],
+    coords: &[f64],
     prec: FloatFormat,
     spec_version: u32,
     workers: usize,
@@ -2287,6 +2480,7 @@ fn append_coord_rows(
             let vel_bytes = stream_coord_rows(
                 file,
                 atoms,
+                coords,
                 workers,
                 prec,
                 spec_version,
@@ -2300,14 +2494,7 @@ fn append_coord_rows(
         }
     }
     if workers < 2 || atoms.len() < WIDE_ATOM_GRAIN {
-        if !want_vel && prec == FloatFormat::RoundTrip && ids_follow(atoms) {
-            if let Some(slab) = coord_slab(atoms) {
-                buf.extend_from_slice(&format_slab_rows(atoms, slab, spec_version));
-                return Ok(());
-            }
-        }
         let mut vel_slots = [FmtSlot::new(); 3];
-        let slab = coord_slab(atoms);
         for (index, atom) in atoms.iter().enumerate() {
             push_atom_motion(
                 buf,
@@ -2317,7 +2504,7 @@ fn append_coord_rows(
                     slots,
                     vel_slots: &mut vel_slots,
                 },
-                load_xyz(atom, slab, index),
+                xyz_from(coords, index),
                 atom,
                 prec,
                 spec_version,
@@ -2357,7 +2544,6 @@ fn append_coord_rows(
                     } else {
                         Vec::new()
                     };
-                    let slab = coord_slab(group);
                     for (offset, atom) in group.iter().enumerate() {
                         if atom.atom_id != (start + offset) as u64 {
                             bad_ids.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -2370,7 +2556,7 @@ fn append_coord_rows(
                                 slots: &mut slots,
                                 vel_slots: &mut vel_slots,
                             },
-                            load_xyz(atom, slab, offset),
+                            xyz_from(coords, start + offset),
                             atom,
                             prec,
                             spec_version,
@@ -2448,7 +2634,6 @@ fn append_coord_rows(
     {
         let _ = workers;
         let mut vel_slots = [FmtSlot::new(); 3];
-        let slab = coord_slab(atoms);
         for (index, atom) in atoms.iter().enumerate() {
             push_atom_motion(
                 buf,
@@ -2458,7 +2643,7 @@ fn append_coord_rows(
                     slots,
                     vel_slots: &mut vel_slots,
                 },
-                load_xyz(atom, slab, index),
+                xyz_from(coords, index),
                 atom,
                 prec,
                 spec_version,
@@ -2587,6 +2772,7 @@ pub(crate) fn file_is_tmpfs(file: &File) -> bool {
 fn stream_coord_pipeline(
     file: &mut File,
     atoms: &[crate::types::AtomDatum],
+    coords: &[f64],
     workers: usize,
     prec: FloatFormat,
     spec_version: u32,
@@ -2637,7 +2823,6 @@ fn stream_coord_pipeline(
                     } else {
                         Vec::new()
                     };
-                    let slab = coord_slab(group);
                     for (offset, atom) in group.iter().enumerate() {
                         if atom.atom_id != (start + offset) as u64 {
                             flag.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -2650,7 +2835,7 @@ fn stream_coord_pipeline(
                                 slots: &mut slots_fmt,
                                 vel_slots: &mut vel_slots,
                             },
-                            load_xyz(atom, slab, offset),
+                            xyz_from(coords, start + offset),
                             atom,
                             prec,
                             spec_version,
@@ -2736,9 +2921,11 @@ fn mapped_line_budget(prec: FloatFormat) -> usize {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn stream_coord_rows(
     file: &mut File,
     atoms: &[crate::types::AtomDatum],
+    coords: &[f64],
     workers: usize,
     prec: FloatFormat,
     spec_version: u32,
@@ -2751,7 +2938,7 @@ fn stream_coord_rows(
     let workers = workers.max(1).min(atoms.len().max(1));
     let side_copies = side_copy_workers(workers);
     if !side_copies && !force_map {
-        return stream_coord_pipeline(file, atoms, workers, prec, spec_version, want_vel);
+        return stream_coord_pipeline(file, atoms, coords, workers, prec, spec_version, want_vel);
     }
     let groups = if side_copies {
         workers.saturating_mul(8).max(workers)
@@ -2867,7 +3054,6 @@ fn stream_coord_rows(
                     } else {
                         Vec::new()
                     };
-                    let slab = coord_slab(group);
                     for (offset, atom) in group.iter().enumerate() {
                         if atom.atom_id != (start + offset) as u64 {
                             flag.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -2880,7 +3066,7 @@ fn stream_coord_rows(
                                 slots: &mut slots,
                                 vel_slots: &mut vel_slots,
                             },
-                            load_xyz(atom, slab, offset),
+                            xyz_from(coords, start + offset),
                             atom,
                             prec,
                             spec_version,
@@ -3048,32 +3234,23 @@ fn push_scalar_line(
     buf.push(b'\n');
 }
 
-/// Record `units.time` for a v1 or v2 frame that carries velocities.
+/// Record `units.time` for a frame whose velocities are in the natural unit.
 ///
-/// Those velocities are already in [`crate::units::NATURAL_TIME_UNIT`]
-/// (CON-units.8). [`ConFrameBuilder::build`] stamps minor 1, and a minor
-/// of 1 or later rejects velocities with no `units.time` (CON-units.11).
-/// A 3.0 frame is treated the same way, overwriting any `units.time`
-/// label. A 3.1 frame is left alone so a caller who omitted time still fails.
+/// Versions 1, 2, and every minor of major 3 store those numbers in the
+/// natural unit whatever `units.time` says (CON-units.8, CON-units.9).
+/// The label those versions record is the historical spelling. It is not
+/// authoritative, and the published files of those versions use it
+/// (CON-units.5). A rewrite that emits major 4 makes the label
+/// authoritative (CON-units.10), so that path writes the symbol spelling.
+/// A major 4 frame is left alone.
 pub(crate) fn stamp_legacy_velocity_time(
     meta: &mut BTreeMap<String, Value>,
     spec_version: u32,
     has_velocity: bool,
 ) {
-    if !has_velocity {
+    if !has_velocity || spec_version >= 4 {
         return;
     }
-    let minor = meta
-        .get(meta::CON_SPEC_MINOR)
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    if spec_version >= 3 && minor >= 1 {
-        return;
-    }
-    // Versions 1, 2 and 3.0 store velocities in the natural unit whatever
-    // `units.time` says (CON-units.8, CON-units.9). Writing minor 1 makes
-    // the label authoritative (CON-units.10), so replace any label rather
-    // than keep one the old file never honoured.
     let mut units = match meta.get(meta::UNITS).cloned() {
         Some(Value::Object(map)) => Value::Object(map),
         Some(_) => return,
@@ -3082,13 +3259,27 @@ pub(crate) fn stamp_legacy_velocity_time(
     if let Some(object) = units.as_object_mut() {
         object.insert(
             "time".to_string(),
-            Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
+            Value::String(crate::units::HISTORICAL_NATURAL_TIME.to_string()),
         );
         meta.insert(meta::UNITS.to_string(), units);
-        // The label now holds, so the frame is written as minor 1.
-        if meta.contains_key(meta::CON_SPEC_MINOR) {
-            meta.insert(meta::CON_SPEC_MINOR.to_string(), Value::from(1u64));
-        }
+    }
+}
+
+/// Fill the length and energy keys CON-header.3 and CON-units.1 imply.
+///
+/// An absent length is angstrom. An absent energy is eV, which is what
+/// [`crate::units::default_v3_units_json`] writes when the file had no
+/// units object. A key that is present is left alone, including an
+/// invalid one (CON-units.14).
+fn materialize_header_units(meta: &mut BTreeMap<String, Value>) {
+    let Some(serde_json::Value::Object(object)) = meta.get_mut(meta::UNITS) else {
+        return;
+    };
+    if !object.contains_key("length") {
+        object.insert("length".to_string(), Value::String("angstrom".to_string()));
+    }
+    if !object.contains_key("energy") {
+        object.insert("energy".to_string(), Value::String("eV".to_string()));
     }
 }
 
@@ -3111,8 +3302,21 @@ pub fn binding_metadata(frame: &ConFrame) -> BTreeMap<String, Value> {
             crate::units::default_v3_units_json(),
         );
     }
+    // A file may name units.time and still omit length. CON-header.3 reads
+    // that as angstrom. Major 3 and later also require energy (CON-units.1),
+    // the same default a missing units object already gets.
+    materialize_header_units(&mut meta);
     if !meta.contains_key(meta::CON_SPEC_MINOR) {
-        meta.insert(meta::CON_SPEC_MINOR.to_string(), Value::from(1u64));
+        meta.insert(
+            meta::CON_SPEC_MINOR.to_string(),
+            Value::from(u64::from(crate::CON_SPEC_MINOR)),
+        );
+    }
+    if !meta.contains_key(meta::CON_SPEC_PATCH) {
+        meta.insert(
+            meta::CON_SPEC_PATCH.to_string(),
+            Value::from(u64::from(crate::CON_SPEC_PATCH)),
+        );
     }
     meta
 }
@@ -3127,14 +3331,16 @@ pub(crate) fn binding_metadata_with_minor_raw(
 /// Same bytes as a binding rewrite, without rebuilding each atom.
 pub fn binding_rewrite_frame(frame: &ConFrame) -> Result<ConFrame, crate::error::ParseError> {
     let mut out = frame.clone();
-    let (meta, minor_raw) = binding_metadata_with_minor_raw(frame);
+    let spec = binding_spec(frame);
+    let (mut meta, minor_raw) = binding_metadata_with_minor_raw(frame);
+    if spec < 4 {
+        meta.remove(meta::CON_SPEC_PATCH);
+    }
     out.header.metadata =
         crate::types::FrameMeta::from_map_with_minor_raw(meta, minor_raw.as_deref());
-    // A parsed spec 1 frame keeps line 2 as free text. The builder emits
-    // the current spec as JSON, so the rewrite does too.
-    if out.header.spec_version < crate::CON_SPEC_VERSION {
-        out.header.spec_version = crate::CON_SPEC_VERSION;
-    }
+    // A parsed spec 1 frame keeps line 2 as free text. The bound writer
+    // emits the binding major as JSON, so the rewrite does too.
+    out.header.spec_version = spec;
     Ok(out)
 }
 
@@ -4053,6 +4259,7 @@ fn column_header(
     symbol: &str,
     has_velocity: bool,
     has_force: bool,
+    written_spec: u32,
 ) -> Result<Vec<u8>, WriteError> {
     let mut builder =
         ConFrameBuilder::new([cell[0], cell[1], cell[2]], [cell[3], cell[4], cell[5]]);
@@ -4072,14 +4279,15 @@ fn column_header(
     frame.header.masses_per_type = mass_values.to_vec();
     frame.header.postbox_header = ["0 0".to_string(), "0 0".to_string()];
     frame.header.prebox_header = crate::types::PreboxHeader::new("readcon");
-    // Same stamp as `frame_from_column_slice`: spec 2 in the stored header,
-    // so the binding rewrite records units.time before it emits spec 3.
+    // Spec 2 in the stored header, so the binding stamp records the natural
+    // time unit. `written_spec` is the major on the line. Major 3 is the
+    // measurement file. Major 4 is the current writer.
     frame.header.spec_version = 2;
     let mut metadata = BTreeMap::new();
     metadata.insert(meta::CON_SPEC_MINOR.to_string(), json!(1));
     metadata.insert(meta::CON_SPEC_VERSION.to_string(), json!(2));
     frame.header.metadata = crate::types::FrameMeta::from_map(metadata);
-    binding_header_bytes(&frame)
+    binding_header_bytes_at(&frame, written_spec)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -4113,6 +4321,7 @@ pub fn write_binding_columns(
         forces,
         symbol,
         workers,
+        crate::CON_SPEC_VERSION,
     )?;
     publish_new(path, WriteError::Io, |file| {
         file.write_all(&file_bytes).map_err(WriteError::Io)
@@ -4136,6 +4345,7 @@ pub(crate) fn format_binding_columns(
     forces: Option<&[f64]>,
     symbol: &str,
     workers: usize,
+    written_spec: u32,
 ) -> Result<(), WriteError> {
     let workers = if workers == 0 {
         physical_cores()
@@ -4160,6 +4370,7 @@ pub(crate) fn format_binding_columns(
             symbol,
             vel.is_some(),
             force.is_some(),
+            written_spec,
         )?;
         file_bytes.extend_from_slice(&header);
         let mut offset = 0usize;
@@ -4448,7 +4659,10 @@ fn store_pipeline_in(
     if heavy
         && let Some(lengths) = cached_packed_lengths(frames, workers, precision, canonical, bind)
     {
-        return place_packed(file, frames, &lengths, workers, precision, canonical, bind);
+        match place_packed(file, frames, &lengths, workers, precision, canonical, bind) {
+            Err(err) if is_packed_drift(&err) => invalidate_packed_lengths(),
+            result => return result,
+        }
     }
     let groups = workers.saturating_mul(4).max(workers);
     let ranges = group_frame_ranges(frames, groups);
@@ -4593,7 +4807,10 @@ pub fn format_frame_refs_unstored(
     if heavy
         && let Some(lengths) = cached_packed_lengths(frames, workers, precision, canonical, bind)
     {
-        return format_packed_buffers(frames, &lengths, workers, precision, canonical, bind);
+        match format_packed_buffers(frames, &lengths, workers, precision, canonical, bind) {
+            Err(err) if is_packed_drift(&err) => invalidate_packed_lengths(),
+            result => return result,
+        }
     }
     format_pipeline_groups(frames, workers, precision, canonical, bind)
 }
@@ -4643,13 +4860,11 @@ fn format_packed_buffers(
     if cfg!(miri) {
         let mut parts = Vec::with_capacity(ranges.len());
         for &(start, end) in &ranges {
-            parts.push(format_group_bytes(
-                &frames[start..end],
-                1,
-                precision,
-                canonical,
-                bind,
-            )?);
+            let part = format_group_bytes(&frames[start..end], 1, precision, canonical, bind)?;
+            if part.len() != prefix[end] - prefix[start] {
+                return Err(packed_drift());
+            }
+            parts.push(part);
         }
         return Ok(parts);
     }
@@ -4992,22 +5207,23 @@ fn sum_spelling_widths(values: &[f64]) -> usize {
 }
 
 /// Floats the writer emits for `frame`, excluding the header text around them.
-fn packed_float_widths(frame: &ConFrame) -> usize {
+///
+/// `None` when the frame has no `(x, y, z)` row per atom, which the
+/// buffered path reports as an error.
+fn packed_float_widths(frame: &ConFrame) -> Option<usize> {
     let mut sum = 0usize;
     let (boxl, angles) = written_box(frame);
     add_widths(&mut sum, &boxl);
     add_widths(&mut sum, &angles);
     add_widths(&mut sum, &frame.header.masses_per_type);
-    if let Some(base) = coord_slab(&frame.atom_data) {
-        let n = frame.atom_data.len() * 3;
-        let coords = unsafe { std::slice::from_raw_parts(base, n) };
-        add_widths(&mut sum, coords);
-    } else {
-        for atom in &frame.atom_data {
-            sum += round_trip_width(atom.x());
-            sum += round_trip_width(atom.y());
-            sum += round_trip_width(atom.z());
-        }
+    // The positions column may have been moved into a slab. `frame_coords`
+    // borrows that row; `xyz_at` would only see the empty column.
+    let coords = frame_coords(frame).ok()?;
+    for index in 0..frame.atom_data.len() {
+        let at = index * 3;
+        sum += round_trip_width(coords[at]);
+        sum += round_trip_width(coords[at + 1]);
+        sum += round_trip_width(coords[at + 2]);
     }
     sum += optional_rows_width(frame.velocities.is_present().then(|| &*frame.velocities));
     sum += optional_rows_width(frame.forces.is_present().then(|| &*frame.forces));
@@ -5040,7 +5256,7 @@ fn packed_float_widths(frame: &ConFrame) -> usize {
             sum += round_trip_width(x) + round_trip_width(y) + round_trip_width(z);
         }
     }
-    sum
+    Some(sum)
 }
 
 fn optional_rows_width(storage: Option<&crate::storage_dtype::Array2Storage>) -> usize {
@@ -5152,15 +5368,15 @@ fn packed_frame_lengths(
                 frames[start..end]
                     .iter()
                     .map(|frame| packed_float_widths(frame))
-                    .collect::<Vec<_>>()
+                    .collect::<Option<Vec<_>>>()
             }));
         }
         let mut widths = Vec::with_capacity(frames.len());
         for guard in guards {
-            widths.extend(guard.join().unwrap_or_default());
+            widths.extend(guard.join().ok().flatten()?);
         }
-        widths
-    });
+        Some(widths)
+    })?;
     if widths.len() != frames.len() {
         return None;
     }
@@ -5191,8 +5407,25 @@ fn packed_frame_lengths(
     Some(lengths)
 }
 
-/// Format `group` into `dest`. `dest` is the exact concatenation, so the
-/// bytes are not copied into a second buffer afterwards.
+const PACKED_DRIFT: &str = "packed frame length drifted";
+
+fn packed_drift() -> WriteError {
+    WriteError::Io(io::Error::other(PACKED_DRIFT))
+}
+
+/// A priced length no longer matches the text. The price is keyed by frame
+/// address, and a public field store or a move out of a slot does not
+/// retire it.
+fn is_packed_drift(err: &WriteError) -> bool {
+    matches!(err, WriteError::Io(io) if io.kind() == io::ErrorKind::Other
+        && io.get_ref().is_some_and(|inner| inner.to_string() == PACKED_DRIFT))
+}
+
+/// Format `group` into `dest`, which must be exactly the length of the text.
+///
+/// `dest` is a bounded writer. Text longer than `dest` stops at its end and
+/// shorter text leaves a tail; both are [`is_packed_drift`]. Nothing past
+/// `dest` is written and its memory is never reallocated.
 pub(crate) fn format_group_into(
     group: &[&ConFrame],
     dest: &mut [u8],
@@ -5203,38 +5436,24 @@ pub(crate) fn format_group_into(
     if dest.is_empty() {
         return Ok(());
     }
-    struct Held {
-        writer: ConFrameWriter<Vec<u8>>,
-    }
-    impl Drop for Held {
-        fn drop(&mut self) {
-            // `scratch` aliases `dest`. Dropping it would free that memory.
-            std::mem::forget(std::mem::take(&mut self.writer.scratch));
+    let mut rest: &mut [u8] = dest;
+    {
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::with_precision(&mut rest, precision),
+            None => ConFrameWriter::new(&mut rest),
+        }
+        .canonical(canonical);
+        let result = write_group(&mut writer, group, bind)
+            .and_then(|()| writer.flush().map_err(WriteError::Io));
+        match result {
+            Err(WriteError::Io(err)) if err.kind() == io::ErrorKind::WriteZero => {
+                return Err(packed_drift());
+            }
+            other => other?,
         }
     }
-    let cap = dest.len();
-    let ptr = dest.as_mut_ptr();
-    let mut held = Held {
-        writer: match precision {
-            Some(precision) => ConFrameWriter::with_precision(Vec::new(), precision),
-            None => ConFrameWriter::new(Vec::new()),
-        }
-        .canonical(canonical)
-        .retain_scratch(true),
-    };
-    held.writer.exact_scratch = true;
-    let previous = std::mem::replace(&mut held.writer.scratch, unsafe {
-        Vec::from_raw_parts(ptr, 0, cap)
-    });
-    drop(previous);
-    let result = write_group(&mut held.writer, group, bind);
-    let written = held.writer.scratch.len();
-    let stable = held.writer.scratch.as_ptr() == ptr;
-    result?;
-    if written != cap || !stable {
-        return Err(WriteError::Io(io::Error::other(
-            "packed frame length drifted",
-        )));
+    if !rest.is_empty() {
+        return Err(packed_drift());
     }
     Ok(())
 }
@@ -5251,6 +5470,9 @@ fn place_packed(
 ) -> Result<(), WriteError> {
     let total: u64 = lengths.iter().map(|len| *len as u64).sum();
     allocate_len(file, total).map_err(WriteError::Io)?;
+    if file.metadata().map_err(WriteError::Io)?.len() > total {
+        file.set_len(total).map_err(WriteError::Io)?;
+    }
     if total == 0 {
         return Ok(());
     }
@@ -5264,13 +5486,11 @@ fn place_packed(
     if cfg!(miri) {
         let mut parts = Vec::with_capacity(ranges.len());
         for &(start, end) in &ranges {
-            parts.push(format_group_bytes(
-                &frames[start..end],
-                1,
-                precision,
-                canonical,
-                bind,
-            )?);
+            let part = format_group_bytes(&frames[start..end], 1, precision, canonical, bind)?;
+            if part.len() != prefix[end] - prefix[start] {
+                return Err(packed_drift());
+            }
+            parts.push(part);
         }
         return store_disjoint_parts(file, &parts).map_err(WriteError::Io);
     }
@@ -5338,7 +5558,10 @@ fn write_serial_frames(
     {
         let (staged, file) = begin_unpublished(path)?;
         let result = place_packed(&file, frames, &lengths, 1, precision, canonical, bind);
-        return finish_unpublished(staged, path, result);
+        match result {
+            Err(err) if is_packed_drift(&err) => invalidate_packed_lengths(),
+            result => return finish_unpublished(staged, path, result),
+        }
     }
     let (staged, file) = begin_unpublished(path)?;
     let mut writer = match precision {
@@ -5400,7 +5623,10 @@ fn pipeline_frame_groups(
     {
         let (staged, file) = begin_unpublished(path)?;
         let result = place_packed(&file, frames, &lengths, workers, precision, canonical, bind);
-        return finish_unpublished(staged, path, result);
+        match result {
+            Err(err) if is_packed_drift(&err) => invalidate_packed_lengths(),
+            result => return finish_unpublished(staged, path, result),
+        }
     }
     // Several groups per worker so the first one finishes early and the
     // copy overlaps the rest. Uniform frames skip the weight scan;
@@ -5740,6 +5966,9 @@ fn store_disjoint_parts(file: &File, parts: &[Vec<u8>]) -> io::Result<()> {
         total += part.len() as u64;
     }
     allocate_len(file, total)?;
+    if file.metadata()?.len() > total {
+        file.set_len(total)?;
+    }
     if total == 0 {
         return Ok(());
     }
@@ -6279,8 +6508,8 @@ mod float_format_tests {
             .map(|frame| frame.expect("parse"))
             .collect();
         let mut values = Vec::new();
-        for atom in &frames[0].atom_data {
-            values.extend([atom.x(), atom.y(), atom.z()]);
+        for index in 0..frames[0].atom_data.len() {
+            values.extend(frames[0].xyz_at(index));
         }
         for atom in &frames[0].atom_data {
             if let Some(v) = atom.velocity() {
@@ -6383,23 +6612,28 @@ mod float_format_tests {
 
 #[cfg(test)]
 mod section_arity_tests {
-    use super::require_minor2_section_arity;
+    use super::require_unreserved_section_arity;
     use serde_json::json;
 
+    /// CON-section.16. Major 3 lists a new section from minor 2. Major 4 lists one from minor 1.
     #[test]
     fn minor2_lists_a_new_section_in_section_arity() {
         let widgets = vec![json!("widgets")];
-        let err = require_minor2_section_arity(2, &widgets, &serde_json::Map::new()).unwrap_err();
+        let err =
+            require_unreserved_section_arity(3, 2, &widgets, &serde_json::Map::new()).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("section_arity"), "{msg}");
 
         let mut listed = serde_json::Map::new();
         listed.insert("section_arity".into(), json!({"widgets": 3}));
-        require_minor2_section_arity(2, &widgets, &listed).unwrap();
+        require_unreserved_section_arity(3, 2, &widgets, &listed).unwrap();
 
         let reserved = vec![json!("velocities"), json!("energies")];
-        require_minor2_section_arity(2, &reserved, &serde_json::Map::new()).unwrap();
-        require_minor2_section_arity(1, &widgets, &serde_json::Map::new()).unwrap();
+        require_unreserved_section_arity(3, 2, &reserved, &serde_json::Map::new()).unwrap();
+        require_unreserved_section_arity(3, 1, &widgets, &serde_json::Map::new()).unwrap();
+        // Major 4 reserves the table at minor 0, so minor 1 must list the section.
+        require_unreserved_section_arity(4, 1, &widgets, &serde_json::Map::new()).unwrap_err();
+        require_unreserved_section_arity(4, 0, &widgets, &serde_json::Map::new()).unwrap();
     }
 }
 
@@ -6818,7 +7052,7 @@ mod parallel_write_tests {
         let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
         let before = super::cached_packed_lengths(&refs, 2, None, false, true).unwrap();
         let old = before[2];
-        frames[2].atom_data[0].set_x(1.0e22);
+        frames[2].set_x_at(0, 1.0e22);
         let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
         let after = super::cached_packed_lengths(&refs, 2, None, false, true).unwrap();
         let formatted =
@@ -6902,6 +7136,53 @@ mod parallel_write_tests {
                 .unwrap_or_else(|err| err.into_inner())
                 .is_none()
         );
+    }
+
+    #[test]
+    fn format_group_into_detects_overrun_and_underrun_without_writing_past_slice() {
+        use crate::types::ConFrameBuilder;
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("Cu", 1.0, 2.0, 3.0, [false; 3], 0, 63.546);
+        let frame = builder.build().unwrap();
+        let refs = [&frame];
+        let exact = super::format_group_bytes(&refs, 1, None, false, true).unwrap();
+
+        let mut larger = vec![0xAAu8; exact.len() + 8];
+        let err = super::format_group_into(&refs, &mut larger, None, false, true).unwrap_err();
+        assert!(super::is_packed_drift(&err));
+
+        let mut smaller = vec![0xAAu8; exact.len() + 4];
+        let split = exact.len() - 3;
+        let (dest, guard) = smaller.split_at_mut(split);
+        let err = super::format_group_into(&refs, dest, None, false, true).unwrap_err();
+        assert!(super::is_packed_drift(&err));
+        assert!(guard.iter().all(|&b| b == 0xAA));
+    }
+
+    #[test]
+    fn format_packed_buffers_signals_drift_after_mutation() {
+        use crate::types::ConFrameBuilder;
+        let mut frames = Vec::new();
+        for _ in 0..4 {
+            let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+            builder.add_atom("Cu", 1.0, 2.0, 3.0, [false; 3], 0, 63.546);
+            frames.push(builder.build().unwrap());
+        }
+        let exact_len = super::format_group_bytes(&[&frames[0]], 1, None, false, false)
+            .unwrap()
+            .len();
+        let lengths = vec![exact_len; 4];
+        {
+            let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+            let parts =
+                super::format_packed_buffers(&refs, &lengths, 2, None, false, false).unwrap();
+            let combined: Vec<u8> = parts.into_iter().flatten().collect();
+            assert_eq!(combined, super::write_frames_to_vec(&frames).unwrap());
+        }
+        frames[0].positions.f64_mut_slice().unwrap()[0] = 1.2345678901234567e22;
+        let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+        let err = super::format_packed_buffers(&refs, &lengths, 2, None, false, false).unwrap_err();
+        assert!(super::is_packed_drift(&err));
     }
 }
 
@@ -7120,8 +7401,8 @@ mod parallel_write_bytes {
         super::write_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
         let original = std::fs::read(&path).unwrap();
         let mut changed = frames[0].clone();
-        let x = changed.atom_data[0].x();
-        changed.atom_data[0].set_x(x + 0.0001);
+        let x = changed.x_at(0);
+        changed.set_x_at(0, x + 0.0001);
         let changed_refs: Vec<&crate::types::ConFrame> = vec![&changed; n];
         let spare = path.with_file_name(format!(
             "{}.rewrite",
@@ -7226,7 +7507,8 @@ mod parallel_write_bytes {
     #[test]
     fn coordinate_lines_match_the_serial_frame_body() {
         let frames = frames_from_text(&wide_text(32), Some(1)).unwrap();
-        let lines = super::format_coordinate_lines(&frames[0].atom_data).unwrap();
+        let rows = super::frame_coords(&frames[0]).unwrap();
+        let lines = super::format_coordinate_lines(&frames[0].atom_data, &rows).unwrap();
         let serial = write_frames_to_vec(&frames).unwrap();
         let text = std::str::from_utf8(&serial).unwrap();
         let marker = "Coordinates of Component 1\n";
@@ -7318,7 +7600,8 @@ mod parallel_write_bytes {
     fn a_binding_header_plus_coordinate_lines_match_the_bound_writer() {
         let frame = copper_frame(4, "Cu", 63.546, |i| i as u64);
         let header = super::wide_frame_header(&frame).expect("header");
-        let coords = super::format_coordinate_lines(&frame.atom_data).expect("coords");
+        let rows = super::frame_coords(&frame).expect("coords");
+        let coords = super::format_coordinate_lines(&frame.atom_data, &rows).expect("coords");
         let mut full = Vec::new();
         {
             let mut writer = super::ConFrameWriter::new(&mut full);
@@ -7344,7 +7627,14 @@ mod parallel_write_bytes {
             let mut split = header.clone();
             for rank in 0..ranks {
                 let slice = &frame.atom_data[rank * share..(rank + 1) * share];
-                split.extend(super::format_coordinate_lines(slice).expect("slice"));
+                let rows = super::frame_coords(&frame).expect("coords");
+                split.extend(
+                    super::format_coordinate_lines(
+                        slice,
+                        &rows[rank * share * 3..(rank + 1) * share * 3],
+                    )
+                    .expect("slice"),
+                );
             }
             assert_eq!(split, full, "ranks {ranks}");
         }
@@ -7549,6 +7839,7 @@ mod gzip_stream_memory {
     /// Isolated measurements of that rewrite: 26 MiB high-water and 30 MB
     /// committed before, 4 MiB high-water and 5.5 MB committed after (the
     /// deflate arena, flat in the frame count).
+    #[cfg_attr(miri, ignore = "slow under Miri: superlinear in frame count")]
     #[test]
     fn parsed_frames_gzip_write_drops_the_metadata_maps() {
         let _scratch = tempfile::tempdir().unwrap();
@@ -7703,5 +7994,53 @@ Coordinates of Component 1
                 });
             }
         });
+    }
+}
+
+/// A version 2 file that names only units.time still rewrites.
+#[cfg(test)]
+mod binding_units {
+    use crate::iterators::frames_from_text;
+
+    #[test]
+    fn version_2_time_label_rewrites_at_major_4() {
+        let text = "\
+title
+{\"con_spec_version\":2,\"units\":{\"time\":\"fs\"},\"sections\":[\"velocities\"]}
+10 10 10
+90 90 90
+0 0
+0 0 0
+1
+1
+1.0
+H
+Coordinates of Component 1
+1 2 3 0 0
+
+H
+Velocities of Component 1
+0.1 0.2 0.3 0 0
+";
+        let read = frames_from_text(text, Some(1)).unwrap();
+        let mut bytes = Vec::new();
+        {
+            let mut writer = super::ConFrameWriter::new(&mut bytes);
+            writer.write_frame_bound(&read[0]).unwrap();
+            writer.flush().unwrap();
+        }
+        let written = String::from_utf8(bytes).unwrap();
+        let again = frames_from_text(&written, Some(1)).unwrap();
+        assert_eq!(again[0].header.spec_version, crate::CON_SPEC_VERSION);
+        assert_eq!(again[0].header.length_unit(), Some("angstrom"));
+        assert_eq!(again[0].header.unit_for("energy"), Some("eV"));
+        assert_eq!(
+            again[0].header.unit_for("time"),
+            Some(crate::units::NATURAL_TIME_UNIT)
+        );
+        assert_eq!(
+            again[0].atom_data[0].velocity(),
+            read[0].atom_data[0].velocity()
+        );
     }
 }

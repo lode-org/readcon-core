@@ -508,6 +508,7 @@ fn con_frame_from_chemfiles_at(
         sections,
         strict_validation: false,
         sections_declared: velocities.is_some(),
+        ids_from_file: false,
     };
     let mut con = crate::types::con_frame_coords_only_with_ids(
         header,
@@ -791,10 +792,15 @@ fn parallel_uniform(
                 for index in begin..end {
                     let arc = crate::types::share_arc_str(symbol_ref);
                     let coord = unsafe { xyz.add(index * 3) };
+                    let x = unsafe { *coord };
+                    let y = unsafe { *coord.add(1) };
+                    let z = unsafe { *coord.add(2) };
                     unsafe {
-                        (*slot_ptr.add(index)).write(AtomDatum::at_slot(
+                        (*slot_ptr.add(index)).write(AtomDatum::coords(
                             arc,
-                            coord,
+                            x,
+                            y,
+                            z,
                             [false, false, false],
                             index as u64,
                         ));
@@ -973,7 +979,6 @@ fn grouped_geometry(
     }
     let mut atoms = Vec::with_capacity(n);
     let mut ids = Vec::with_capacity(n);
-    let ptr = flat.as_mut_ptr();
     for (grouped, &chem) in chem_at.iter().enumerate() {
         let kind = sym_of[chem] as usize;
         let symbol = if velocities.is_none() {
@@ -1001,10 +1006,12 @@ fn grouped_geometry(
                 None,
             ));
         } else {
-            let slot = unsafe { ptr.add(grouped * 3) };
-            atoms.push(AtomDatum::at_slot(
+            let base = grouped * 3;
+            atoms.push(AtomDatum::coords(
                 symbol,
-                slot,
+                flat[base],
+                flat[base + 1],
+                flat[base + 2],
                 [false, false, false],
                 atom_id,
             ));
@@ -1089,13 +1096,14 @@ fn scan_uniform(
         flat.extend_from_slice(src);
         let mut atoms = Vec::with_capacity(n);
         let mut ids = Vec::with_capacity(n);
-        let ptr = flat.as_mut_ptr();
         crate::types::bump_arc_str(&symbol, n);
         for grouped in 0..n {
-            let slot = unsafe { ptr.add(grouped * 3) };
-            atoms.push(AtomDatum::at_slot(
+            let base = grouped * 3;
+            atoms.push(AtomDatum::coords(
                 crate::types::share_arc_str(&symbol),
-                slot,
+                flat[base],
+                flat[base + 1],
+                flat[base + 2],
                 [false, false, false],
                 grouped as u64,
             ));
@@ -1223,7 +1231,6 @@ fn import_geometry(
     }
     let mut atoms = Vec::with_capacity(n);
     let mut ids = Vec::with_capacity(n);
-    let ptr = flat.as_mut_ptr();
     for (grouped, &chem) in chem_at.iter().enumerate() {
         let kind = sym_of[chem] as usize;
         let symbol = Arc::clone(&kinds[kind].symbol);
@@ -1247,10 +1254,12 @@ fn import_geometry(
                 None,
             ));
         } else {
-            let slot = unsafe { ptr.add(grouped * 3) };
-            atoms.push(AtomDatum::at_slot(
+            let base = grouped * 3;
+            atoms.push(AtomDatum::coords(
                 symbol,
-                slot,
+                flat[base],
+                flat[base + 1],
+                flat[base + 2],
                 [false, false, false],
                 atom_id,
             ));
@@ -1258,7 +1267,6 @@ fn import_geometry(
         ids.push(atom_id);
     }
     let positions_soa = FloatArray2::from_f64_row_major(n, 3, flat);
-    // `from_f64_row_major` keeps the `Vec` allocation. Slots already point at it.
 
     let sidecars = if extras.is_empty() {
         None
@@ -1740,11 +1748,8 @@ H -0.240  0.927  0.000
         let con = con_frame_from_trajectory_path(&path).expect("read xyz path");
         assert_eq!(con.atom_data.len(), 3);
         assert_eq!(con.header.natm_types, 2);
-        let positions_ok = con.atom_data.iter().any(|a| {
-            a.symbol.as_ref() == "O"
-                && a.x().abs() < 1e-6
-                && a.y().abs() < 1e-6
-                && a.z().abs() < 1e-6
+        let positions_ok = con.atom_data.iter().enumerate().any(|(index, a)| {
+            a.symbol.as_ref() == "O" && con.xyz_at(index).iter().all(|value| value.abs() < 1e-6)
         });
         assert!(positions_ok, "expected O at origin in converted frame");
     }
@@ -1815,13 +1820,13 @@ water
         let hw = con
             .atom_data
             .iter()
-            .find(|a| a.symbol.as_ref() == "H" || a.symbol.as_ref() == "HW")
+            .position(|a| a.symbol.as_ref() == "H" || a.symbol.as_ref() == "HW")
             .expect("H");
         // 0.100 nm → 1.00 Å
         assert!(
-            (hw.x() - 1.0).abs() < 1e-6,
+            (con.x_at(hw) - 1.0).abs() < 1e-6,
             "H.x()={} (expected 1 Å)",
-            hw.x()
+            con.x_at(hw)
         );
         let residues = con
             .header
@@ -1861,9 +1866,9 @@ H  5.0 0.0 0.0
         let cu = mid
             .atom_data
             .iter()
-            .find(|a| a.symbol.as_ref() == "Cu")
+            .position(|a| a.symbol.as_ref() == "Cu")
             .expect("Cu");
-        assert!((cu.x() - 2.0).abs() < 1e-12);
+        assert!((mid.x_at(cu) - 2.0).abs() < 1e-12);
 
         let opts = ChemfilesReadOpts {
             start: 0,
@@ -1876,15 +1881,15 @@ H  5.0 0.0 0.0
         let cu0 = strided[0]
             .atom_data
             .iter()
-            .find(|a| a.symbol.as_ref() == "Cu")
+            .position(|a| a.symbol.as_ref() == "Cu")
             .unwrap();
         let cu2 = strided[1]
             .atom_data
             .iter()
-            .find(|a| a.symbol.as_ref() == "Cu")
+            .position(|a| a.symbol.as_ref() == "Cu")
             .unwrap();
-        assert!((cu0.x() - 0.0).abs() < 1e-12);
-        assert!((cu2.x() - 4.0).abs() < 1e-12);
+        assert!((strided[0].x_at(cu0) - 0.0).abs() < 1e-12);
+        assert!((strided[1].x_at(cu2) - 4.0).abs() < 1e-12);
 
         let err = con_frame_from_trajectory_path_nth(&path, 99).unwrap_err();
         assert!(err.to_string().contains("out of range"), "{err}");
@@ -1999,7 +2004,7 @@ Cu 0.00000000 0.00000000 0.00000000
             !con.header.metadata.contains_key(CHEMFILES_ATOM_NAMES_KEY),
             "a uniform frame stored a name string per atom"
         );
-        assert_eq!(con.atom_data[3].x(), 3.0);
+        assert_eq!(con.x_at(3), 3.0);
         assert!(
             delta < n as u64,
             "bridge allocated {delta} times for {n} identical atoms (limit {n})"

@@ -96,8 +96,12 @@ fn iterator_positions(bytes: &[u8]) -> Result<Vec<f64>, String> {
     let mut out = Vec::new();
     for frame in ConFrameIterator::from_bytes(bytes) {
         let frame = frame.map_err(|err| err.to_string())?;
-        for atom in &frame.atom_data {
-            out.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
+        for coord_i0 in 0..frame.atom_data.len() {
+            out.extend_from_slice(&[
+                frame.x_at(coord_i0),
+                frame.y_at(coord_i0),
+                frame.z_at(coord_i0),
+            ]);
         }
     }
     Ok(out)
@@ -162,8 +166,12 @@ fn assert_file(path: &Path) {
                 .unwrap_or_else(|err| panic!("{} frames threads {threads}: {err}", path.display()));
             let mut flat = Vec::new();
             for frame in &frames {
-                for atom in &frame.atom_data {
-                    flat.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
+                for coord_i1 in 0..frame.atom_data.len() {
+                    flat.extend_from_slice(&[
+                        frame.x_at(coord_i1),
+                        frame.y_at(coord_i1),
+                        frame.z_at(coord_i1),
+                    ]);
                 }
             }
             bits(want, &flat);
@@ -240,10 +248,19 @@ fn parallel_frames_match_the_serial_reader_on_a_multi_frame_file() {
         assert_eq!(parallel.len(), serial.len());
         for (left, right) in serial.iter().zip(&parallel) {
             assert_eq!(left.atom_data.len(), right.atom_data.len());
-            for (a, b) in left.atom_data.iter().zip(&right.atom_data) {
-                assert_eq!(a.x().to_bits(), b.x().to_bits());
-                assert_eq!(a.y().to_bits(), b.y().to_bits());
-                assert_eq!(a.z().to_bits(), b.z().to_bits());
+            for (coord_i2, (a, b)) in left.atom_data.iter().zip(&right.atom_data).enumerate() {
+                assert_eq!(
+                    left.x_at(coord_i2).to_bits(),
+                    right.x_at(coord_i2).to_bits()
+                );
+                assert_eq!(
+                    left.y_at(coord_i2).to_bits(),
+                    right.y_at(coord_i2).to_bits()
+                );
+                assert_eq!(
+                    left.z_at(coord_i2).to_bits(),
+                    right.z_at(coord_i2).to_bits()
+                );
                 assert_eq!(a.atom_id, b.atom_id);
                 assert_eq!(a.symbol.as_ref(), b.symbol.as_ref());
             }

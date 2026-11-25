@@ -51,7 +51,7 @@ def test_readcon_round_trip_keeps_positions_and_the_natural_time_unit(tmp_path):
         assert rows["positions"]["reader"] == "exact", (name, rows["positions"])
         if rows["velocities"]["reader"] != "absent":
             assert rows["velocities"]["reader"] == "exact", (name, rows["velocities"])
-            assert rows["velocity_unit"]["reader"] == "exact", (
+            assert rows["velocity_unit"]["reader"] == "label_changed", (
                 name,
                 rows["velocity_unit"],
             )
