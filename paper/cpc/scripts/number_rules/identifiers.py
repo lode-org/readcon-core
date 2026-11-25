@@ -252,6 +252,13 @@ _RULES = [
         lines(r"OVITO 3\.17\.2", (SUPP,)),
     ),
     Rule(
+        "1.11.2",
+        jget(FORMATS_1M, "versions.mdtraj"),
+        FORMATS_1M,
+        "MDTraj version of the cross-format campaign",
+        lines(r"MDTraj 1\.11\.2", (SUPP,)),
+    ),
+    Rule(
         "2026-10-21",
         release("OVITO", "3.17.0")["date"],
         RELEASES,
