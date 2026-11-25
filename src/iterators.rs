@@ -969,8 +969,16 @@ impl<'a> ConFrameIterator<'a> {
         // following blank is a section or the next frame. Skipping six lines
         // without reading that list was the thread split: the scan and the
         // parser ended the frame at different bytes.
-        if self.read_line_str().is_none() {
-            return Some(Err(error::ParseError::IncompleteHeader));
+        // CON-file.2: no frame may begin with U+FEFF. The full parse
+        // rejects it, and a skip of the same frame must too.
+        let line1 = match self.read_line_str() {
+            Some(line) => line,
+            None => return Some(Err(error::ParseError::IncompleteHeader)),
+        };
+        if line1.starts_with('\u{feff}') {
+            return Some(Err(error::ParseError::ValidationError(
+                "frame begins with a byte-order mark".into(),
+            )));
         }
         let line2 = match self.read_line_str() {
             Some(line) => line.to_string(),
