@@ -12,8 +12,9 @@ The colours are the Ruhi palette of chemparseplot, the theme is
 ``plot_figures.house_style`` and the face is Latin Modern Roman. The page
 is the double-column width, 17.8 cm, and the figure has no title.
 
-rgpot and amsel sit in a slot of their own that ``--optional`` draws. An
-entry of ``OPTIONAL`` without a cited call site is not drawn.
+rgpot sits above the left column. amsel has a slot of its own that
+``--optional`` draws; an entry of ``OPTIONAL`` without a cited call site is
+not drawn.
 
     python paper/cpc/scripts/fig_ecosystem.py
     python paper/cpc/scripts/fig_ecosystem.py --png /tmp/preview --optional
@@ -70,15 +71,16 @@ PX0, PX1 = 12.7, 14.45
 SX0, SX1 = 16.05, 17.65
 TOP_X0 = 13.6
 
-# (name, label of the arrow into readcon-core, call site). Drawn with --optional.
-OPTIONAL = (
+# (name, label of the arrow into readcon-core, call site), stacked above the left column.
+UPPER = (
     (
-        "rgpot",
-        f"Atoms {LR} ConFrame,\nlazy import readcon",
+        "rgpot\n(Python RPC\nhelpers)",
+        "read_con_as_ase,\nConFrame.from_ase,\nwrite_con",
         "OmniPotentRPC/rgpot CppCore/rgpot/rpc/ase_helpers.py:70-91",
     ),
-    ("amsel", "", ""),
 )
+# Drawn after UPPER with --optional.
+OPTIONAL = (("amsel", "", ""),)
 
 
 def box(
@@ -316,43 +318,27 @@ def left(ax, optional: bool) -> None:
     route(ax, [(LX1, rpc), (CX0, rpc)], dashed=True, heads=("start", "end"))
     label(ax, gx, rpc + 0.05, "parseFrames /\nwriteFrames")
 
+    entries = list(UPPER)
     if optional:
-        cited = [entry for entry in OPTIONAL if entry[2]]
-        for name, _label, _site in OPTIONAL:
-            if not any(name == entry[0] for entry in cited):
+        for entry in OPTIONAL:
+            if entry[2]:
+                entries.append(entry)
+            else:
                 print(
-                    f"fig_ecosystem: {name} has no cited call site; not drawn",
+                    f"fig_ecosystem: {entry[0]} has no cited call site; not drawn",
                     file=sys.stderr,
                 )
-        slot(ax, cited)
+    upper(ax, entries)
 
 
-def slot(ax, entries) -> None:
-    """The optional producers, above the left column, each routed into the core's top-left."""
-    if not entries:
-        return
-    pitch = 0.95
-    top = 8.25 + pitch * (len(entries) - 1)
-    box(
-        ax,
-        LX0 - 0.08,
-        7.8,
-        LX1 + 0.08,
-        top + 0.55,
-        "",
-        edge=GREY,
-        lw=0.6,
-        ls=(0, (1, 1.5)),
-        face="none",
-    )
-    ax.text(
-        LX0, top + 0.6, "optional", ha="left", va="bottom", fontsize=CHIP_PT, color=GREY
-    )
+def upper(ax, entries) -> None:
+    """Producers above the left column, each routed into the core's top-left."""
+    pitch = 1.3
     for i, (name, text, _site) in enumerate(entries):
-        y = 8.25 + pitch * i
+        y = 8.3 + pitch * i
         x_turn = 5.6 - 0.18 * i
         y_in = 7.38 - 0.16 * i
-        box(ax, LX0, y - 0.3, LX1, y + 0.3, name)
+        box(ax, LX0, y - 0.5, LX1, y + 0.5, name)
         route(ax, [(LX1, y), (x_turn, y), (x_turn, y_in), (CX0, y_in)])
         label(ax, (LX1 + x_turn) / 2, y + 0.05, text)
 
