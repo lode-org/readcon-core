@@ -46,7 +46,7 @@ end = "block"
 
 [header_line_two]
 file = "src/parser.rs"
-fn = "parse_frame_header"
+fn = "parse_frame_header_inner"
 parts = [
   { start = 'prebox1\.starts_with', end = "block" },
   { start = 'trimmed\.starts_with' },
@@ -54,7 +54,7 @@ parts = [
 
 [header_check]
 file = "src/parser.rs"
-start = '^pub fn parse_frame_header<'
+start = '^pub\(crate\) fn parse_frame_header_inner<'
 end = "block"
 
 [frame_body]
