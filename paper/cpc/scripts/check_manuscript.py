@@ -370,12 +370,11 @@ VERSION_KEYS = ("readcon_version", "readcon_core")
 
 @dataclass(frozen=True)
 class Named:
-    """A library a record names, its source commit, and the built artifact."""
+    """A library a record names: its version, its digest, and the module or binary built from it."""
 
     where: str
     version: str | None
     digest: str | None
-    commit: str | None
     module: str | None
     module_sha256: str | None
     newer: tuple[str, ...]
@@ -393,7 +392,6 @@ def named_builds(node, where: str, by_digest: bool):
                 where,
                 version,
                 node["library_digest"] if by_digest else library_at(commit),
-                commit,
                 node.get("readcon_module"),
                 node.get("readcon_module_sha256"),
                 tuple(node.get("newer_sources") or ()),
@@ -472,13 +470,48 @@ def campaign_commit(data: dict) -> str | None:
     return commit
 
 
+def stored_library(rel: str, data: dict) -> str | None:
+    """The library digest of the commit that stored the record ``rel``, or None.
+
+    A record that no longer names this tree keeps the build of the commit that
+    added it, as a campaign does. Git holds that commit, so the digest is not
+    the record's own word: ``data`` must be what git stored at the commit that
+    added the file, and the digest is the library of that commit. A record
+    that is untracked, edited since, or added when the library was another,
+    keeps nothing.
+    """
+    path = (ROOT / rel).relative_to(REPO).as_posix()
+    added = subprocess.run(
+        ["git", "log", "-1", "--diff-filter=A", "--format=%H", "--", path],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    commit = added.stdout.strip()
+    if added.returncode != 0 or not commit:
+        return None
+    stored = subprocess.run(
+        ["git", "cat-file", "blob", f"{commit}:{path}"],
+        cwd=REPO,
+        capture_output=True,
+        check=False,
+    )
+    try:
+        same = stored.returncode == 0 and json.loads(stored.stdout) == data
+    except json.JSONDecodeError:
+        same = False
+    return library_at(commit) if same else None
+
+
 def record_builds(
     stored: list[tuple[str, dict]], manifest: str, digest: str
 ) -> tuple[list[str], dict[tuple[str, str], list[str]], int]:
     """Problems with the builds that ``stored`` records name, the modules of ``manifest``, and the count.
 
     A record of version ``manifest`` names the library ``digest`` of this tree. An older measurement
-    keeps the build it recorded. A campaign keeps the library of the commit that stored it.
+    keeps the build it recorded. A campaign, and any record whose bytes git holds at the commit
+    that added it, keeps the library of that commit.
     """
     bad: list[str] = []
     modules: dict[tuple[str, str], list[str]] = {}
@@ -497,16 +530,10 @@ def record_builds(
             if build.version in measured:
                 continue
             where = f"{rel} ({build.where})" if build.where else rel
-            recorded = (
-                library_at(build.commit)
-                if build.commit and not isinstance(data.get("record"), str)
-                else None
-            )
-            if build.version == manifest and build.digest not in (
-                None,
-                digest,
-                kept,
-                recorded,
+            if (
+                build.version == manifest
+                and build.digest not in (None, digest, kept)
+                and build.digest != stored_library(rel, data)
             ):
                 bad.append(
                     f"{where}: library {(build.digest or 'of an unknown commit')[:12]}, this tree "
