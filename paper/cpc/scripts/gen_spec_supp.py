@@ -702,7 +702,7 @@ def release_rows(org: str) -> list[dict]:
                     f"no tag of {VERSIONS.relative_to(ROOT)} lists version "
                     f"{row['version']} of {row['date']}"
                 )
-            row["release"] = f"readcon-core {tree['release']} (untagged)"
+            row["release"] = f"readcon-core {tree['release']} (unreleased)"
         else:
             row["release"] = f"readcon-core {first[1:]}"
     texts = dict(
