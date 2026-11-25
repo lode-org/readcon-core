@@ -878,12 +878,11 @@ reason = "Probe D1: units.time m is a length, not a time."
 
 [[file]]
 file = "d02_legacy_velocity_no_time.convel"
-expected = "reject"
-error = "InvalidUnits"
-line = 14
-clause = "CON-section.1, CON-units.11"
+expected = "accept"
+frames = 1
+clause = "CON-section.1, CON-units.9"
 basis = "explicit"
-reason = "Probe D2: a minor-1 legacy velocity block without units.time fails on the blank line that opens it."
+reason = "Probe D2: a minor-1 legacy velocity block without units.time. CON-units.9 says a missing units.time must not reject that frame."
 
 [[file]]
 file = "d03_nbsp_after_id.con"

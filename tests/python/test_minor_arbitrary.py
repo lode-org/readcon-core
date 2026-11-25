@@ -754,8 +754,6 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     # files. Every other verdict that differs from BASE is the one
     # manifest.toml gives, except where CON 4 decides the file otherwise.
     con4_accepts = {
-        # CON-units.9: a missing units.time does not reject any minor of major 3.
-        "d02_legacy_velocity_no_time.convel": 3,
         # Major 4 is the current major, so CON-line2.6 does not reject it.
         "json_version_4.con": 4,
     }
@@ -863,6 +861,7 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     # The oracle still accepts these coordinate labels. CON-coord.1 rejects
     # them in every mode, and the manifest records that rejection.
     assert sorted(manifest_diffs) == [
+        "d02_legacy_velocity_no_time.convel",
         "v31_convel_no_time.convel",
         "v31_coord_label_mismatch.con",
         "v31_label_coordinates_1_xyz.con",
