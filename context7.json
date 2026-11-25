@@ -7,28 +7,45 @@
     "examples",
     "include",
     "fortran",
-    "julia"
+    "julia",
+    "paper/cpc",
+    "bench"
   ],
   "excludeFolders": [
     "docs/source",
     "changelog.d",
     "benches",
     "benchmarks",
-    "bench",
     "third_party",
     "tests",
     "scripts",
     ".github",
     "fuzz",
-    "paper",
     "packaging",
     "support",
-    "resources"
+    "resources",
+    "paper/cpc/bench",
+    "paper/cpc/data",
+    "paper/cpc/environment",
+    "paper/cpc/fonts",
+    "paper/cpc/logs",
+    "paper/cpc/packet",
+    "paper/cpc/src",
+    "bench/fidelity/fixtures",
+    "bench/h2h/formats",
+    "bench/h2h/logs",
+    "bench/h2h/million",
+    "bench/h2h/scaling"
   ],
   "excludeFiles": [
     "CHANGELOG.md",
     "CODE_OF_CONDUCT.md",
-    "LICENSE"
+    "LICENSE",
+    "highlights.txt",
+    "table-2b9b4e22.md",
+    "table-e8849a86.md",
+    "table-6244ed42.md",
+    "table-e8849a86-confirmation.md"
   ],
   "rules": [
     "Python package is readcon; Rust crate is readcon-core."
