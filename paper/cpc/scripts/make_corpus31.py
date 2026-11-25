@@ -1606,13 +1606,14 @@ reject(
     "class-open",
     "Begins with the UTF-8 byte-order mark EF BB BF; the clause names no class.",
 )
-accept(
+reject(
     "v31_bom_later_frame.con",
     BASE + b"\xef\xbb\xbf" + BASE_B,
-    2,
-    "CON-file.2, CON-header.2",
+    "ValidationError",
+    14,
+    "CON-file.2",
     "explicit",
-    "A U+FEFF begins line 1 of the second frame, which is text of that line.",
+    "U+FEFF begins the second frame. CON-file.2 rejects a byte-order mark at the start of any frame as ValidationError.",
 )
 reject(
     "v31_utf8_line1.con",

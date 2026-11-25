@@ -1076,11 +1076,12 @@ reason = "Begins with the UTF-8 byte-order mark EF BB BF; the clause names no cl
 
 [[file]]
 file = "v31_bom_later_frame.con"
-expected = "accept"
-frames = 2
-clause = "CON-file.2, CON-header.2"
+expected = "reject"
+error = "ValidationError"
+line = 14
+clause = "CON-file.2"
 basis = "explicit"
-reason = "A U+FEFF begins line 1 of the second frame, which is text of that line."
+reason = "U+FEFF begins the second frame. CON-file.2 rejects a byte-order mark at the start of any frame as ValidationError."
 
 [[file]]
 file = "v31_utf8_line1.con"
