@@ -57,6 +57,7 @@ holding '="', which org itself closes at that "=".
 
 import argparse
 import difflib
+import hashlib
 import json
 import math
 import os
@@ -459,7 +460,9 @@ def history_rows(org: str) -> list[dict]:
 
     A bare major 3 is minor 0.
     """
-    section = re.search(r"^\* Version history\n(.*?)(?=^\* |\Z)", org, re.M | re.S)
+    section = re.search(
+        r"^\* Version (?:history|chronology)\n(.*?)(?=^\* |\Z)", org, re.M | re.S
+    )
     rows, head = [], None
     for line in section[1].splitlines() if section else ():
         if not line.startswith("|") or line.startswith("|-"):
@@ -628,6 +631,40 @@ def read_versions() -> dict:
     return json.loads(VERSIONS.read_text())
 
 
+def _unreleased_history() -> list[dict]:
+    return [
+        {"version": row["version"], "date": row["date"]}
+        for row in history_rows(SPEC.read_text(encoding="utf-8"))
+        if row["version"] != "1"
+    ]
+
+
+def measurement_record() -> dict:
+    record = read_versions()
+    if not SPEC.is_file():
+        return record
+    contents = SPEC.read_bytes()
+    spec_blob = hashlib.sha1(f"blob {len(contents)}\0".encode() + contents).hexdigest()
+    tree = record["tree"]
+    release = package_version()
+    tagged_releases = {entry["tag"] for entry in record["tags"]}
+    live_untagged = (
+        not tree["tagged"]
+        and tree["release"] == release
+        and f"v{release}" not in tagged_releases
+    )
+    if VERSIONS == MEASUREMENT and live_untagged:
+        record["tree"] = {
+            "release": release,
+            "tagged": False,
+            "spec_blob": spec_blob,
+        }
+        record["unreleased_history"] = _unreleased_history()
+    elif live_untagged and tree.get("spec_blob") == spec_blob:
+        record["unreleased_history"] = _unreleased_history()
+    return record
+
+
 def release_rows(org: str) -> list[dict]:
     """The version history of a spec.org without a Release column, as a release tree ships it.
 
@@ -637,7 +674,7 @@ def release_rows(org: str) -> list[dict]:
     of that version. It is a row of its own after the version's rows, dated by the tag, and its change is
     what --measure recorded for the tag (second_text_change).
     """
-    record = read_versions()
+    record = measurement_record()
     rows = history_rows(org)
     for row in rows:
         if row["version"] == "1":
@@ -655,11 +692,19 @@ def release_rows(org: str) -> list[dict]:
             None,
         )
         if first is None:
-            raise SystemExit(
-                f"no tag of {VERSIONS.relative_to(ROOT)} lists version {row['version']} "
-                f"of {row['date']}"
+            tree = record["tree"]
+            listed = any(
+                (entry["version"], entry["date"]) == (row["version"], row["date"])
+                for entry in record.get("unreleased_history", [])
             )
-        row["release"] = f"readcon-core {first[1:]}"
+            if not listed or tree["tagged"] or tree["release"] != package_version():
+                raise SystemExit(
+                    f"no tag of {VERSIONS.relative_to(ROOT)} lists version "
+                    f"{row['version']} of {row['date']}"
+                )
+            row["release"] = f"readcon-core {tree['release']} (untagged)"
+        else:
+            row["release"] = f"readcon-core {first[1:]}"
     texts = dict(
         re.findall(r"^- (CON-[a-z0-9]+\.[0-9]+) :: [A-Z ]+ :: (.*)$", org, re.M)
     )
@@ -682,9 +727,13 @@ def release_rows(org: str) -> list[dict]:
                     f"{tag['tag']} added or reworded {missing}, which {SPEC.relative_to(ROOT)} "
                     "does not hold"
                 )
-            at = max(
+            matching = [
                 i for i, row in enumerate(rows) if row["version"] == newest(tag)[0]
-            )
+            ]
+            if not matching:
+                previous = tag
+                continue
+            at = max(matching)
             # The mark goes under the date, so the date column keeps the width of a bare date.
             rows.insert(
                 at + 1,
@@ -705,7 +754,7 @@ def spec_macros(org: str) -> str:
     A release-preparation tree may name the upcoming release before its tag
     exists. Any other spec.org that no release tag holds stops the build.
     """
-    record = read_versions()
+    record = measurement_record()
     blob = git("hash-object", str(SPEC)).stdout.strip()
     same = next((t["tag"][1:] for t in record["tags"] if t["spec_blob"] == blob), None)
     tree = record["tree"]
@@ -972,6 +1021,32 @@ def split_rows(block: str) -> list[list[str]]:
     return rows
 
 
+def p_spec(widths: list[float], least: list[int]) -> str:
+    """Column fractions of \\linewidth.
+
+    TABLE_CHARS underestimates a footnotesize word, so a short capitalised
+    header was wider than its column. 56 such characters fill the preprint
+    line. Extra width is taken from the widest column that can spare it.
+    """
+    word = 56
+    fracs = [
+        float(f"{max(w / TABLE_CHARS, m / word):.2f}") for w, m in zip(widths, least)
+    ]
+    mins = [float(f"{m / word:.2f}") for m in least]
+    limit = 1.0 - 0.04 * len(fracs)
+    overflow = sum(fracs) - limit
+    for _ in range(20):
+        if overflow <= 0.001:
+            break
+        i = max(range(len(fracs)), key=lambda k: fracs[k] - mins[k])
+        room = fracs[i] - mins[i]
+        if room <= 0.001:
+            break
+        fracs[i] = float(f"{fracs[i] - min(room, overflow):.2f}")
+        overflow = sum(fracs) - limit
+    return "".join(f"p{{{f:.2f}\\linewidth}}" for f in fracs)
+
+
 def tabular(match: re.Match) -> str:
     """A pandoc longtable as a tabular; a p column is never narrower than its longest word."""
     head = split_rows(match["head"])
@@ -998,7 +1073,7 @@ def tabular(match: re.Match) -> str:
             if sum(extra)
             else least
         )
-        spec = "".join(f"p{{{w / TABLE_CHARS:.2f}\\linewidth}}" for w in widths)
+        spec = p_spec(widths, least)
         end, lead = " \\tabularnewline", "\\raggedright "
     lines = [
         "\\begin{center}",
@@ -1241,12 +1316,14 @@ def main() -> None:
         f"% Written by paper/cpc/scripts/gen_spec_supp.py --as-is from {records} ({pandoc_version()}).\n"
         f"% Not included: {', '.join(INFORMATIVE)}, and the two sentences of the units section that round\n"
         "% the parsed natural time unit and its difference from eOn; velocity_case.py prints both values.\n"
-        "% Code words such as IncompleteSection have no break point; the local tolerance lets a line\n"
-        "% stretch rather than run into the margin.\n"
-        "\\begingroup\n\\tolerance=1000\n"
+        "% Code words such as IncompleteSection have no break point; emergency stretch\n"
+        "% lets that line break short of the margin.\n"
+        "\\begingroup\n\\tolerance=9999\n\\emergencystretch=3em\n"
         "\\providecommand{\\tightlist}{\\setlength{\\itemsep}{0pt}\\setlength{\\parskip}{0pt}}\n\n"
     )
-    outputs[OUT] = header + tex.rstrip("\n") + "\n\\endgroup\n"
+    # End the paragraph first. Otherwise the last line is broken after \\endgroup,
+    # outside this tolerance, and a code span runs past the margin.
+    outputs[OUT] = header + tex.rstrip("\n") + "\n\\par\n\\endgroup\n"
     if args.check:
         stale = [
             p.relative_to(ROOT).as_posix()

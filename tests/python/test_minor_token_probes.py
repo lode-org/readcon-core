@@ -167,5 +167,5 @@ def test_write_matches_julia(case: dict) -> None:
 def test_round_trip_matches_julia(case: dict) -> None:
     frames = readcon.read_con_string(_velocity_text(case["line2_w"]))
     written = readcon.write_con_string(frames)
-    assert _line2(written) == case["binding_w"]
+    assert _line2(written) == case["binding_n"]
     assert len(readcon.read_con_string(written)) == 1

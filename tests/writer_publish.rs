@@ -165,47 +165,52 @@ fn ranked_slices_round_trip_empty_and_one_byte_pieces() {
     assert_eq!(std::fs::read(&path).unwrap(), b"zz");
 }
 
-#[cfg(unix)]
 #[test]
 fn ranked_store_modes_round_trip_and_a_bad_override_keeps_the_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("modes.bin");
     std::fs::write(&path, b"keep-me").unwrap();
-    let slices: [&[u8]; 4] = [b"ab", &[], b"c", b"def"];
     for mode in ["parallel", "sequential"] {
-        let pid = unsafe { libc::fork() };
-        assert!(pid >= 0, "fork");
-        if pid == 0 {
-            unsafe { std::env::set_var("READCON_RANKED_WRITE", mode) };
-            let wrote = publish_ranked_slices(&path, &slices, false, false);
-            let got = std::fs::read(&path).unwrap_or_default();
-            let spare = path.with_file_name(format!(
-                "{}.rewrite",
-                path.file_name().unwrap().to_string_lossy()
-            ));
-            let ok = wrote.is_ok() && got == b"abcdef" && !spare.exists();
-            unsafe { libc::_exit(if ok { 0 } else { 1 }) };
-        }
-        let mut status = 0;
-        unsafe { libc::waitpid(pid, &mut status, 0) };
-        assert!(
-            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
-            "{mode} ranked store did not round-trip"
-        );
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--ignored", "--exact", "ranked_store_mode_child"])
+            .env("READCON_RANKED_WRITE", mode)
+            .env("READCON_RANKED_WRITE_TEST_PATH", &path)
+            .status()
+            .unwrap();
+        assert!(status.success(), "{mode} ranked store did not round-trip");
     }
-    let pid = unsafe { libc::fork() };
-    assert!(pid >= 0, "fork");
-    if pid == 0 {
-        unsafe { std::env::set_var("READCON_RANKED_WRITE", "ext4") };
-        let rejected = publish_ranked_slices(&path, &slices, false, false);
-        let kept = std::fs::read(&path).unwrap_or_default();
-        let ok = rejected.is_err() && kept == b"abcdef";
-        unsafe { libc::_exit(if ok { 0 } else { 1 }) };
-    }
-    let mut status = 0;
-    unsafe { libc::waitpid(pid, &mut status, 0) };
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--ignored", "--exact", "ranked_store_mode_child"])
+        .env("READCON_RANKED_WRITE", "ext4")
+        .env("READCON_RANKED_WRITE_TEST_PATH", &path)
+        .status()
+        .unwrap();
     assert!(
-        libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+        status.success(),
         "a bad ranked-store override changed the file"
     );
+}
+
+#[test]
+#[ignore]
+fn ranked_store_mode_child() {
+    let path = std::path::PathBuf::from(
+        std::env::var_os("READCON_RANKED_WRITE_TEST_PATH").expect("child path"),
+    );
+    let mode = std::env::var("READCON_RANKED_WRITE").expect("child mode");
+    let slices: [&[u8]; 4] = [b"ab", &[], b"c", b"def"];
+    let result = publish_ranked_slices(&path, &slices, false, false);
+    let got = std::fs::read(&path).unwrap_or_default();
+    if mode == "ext4" {
+        assert!(result.is_err());
+        assert_eq!(got, b"abcdef");
+    } else {
+        result.unwrap();
+        assert_eq!(got, b"abcdef");
+        let spare = path.with_file_name(format!(
+            "{}.rewrite",
+            path.file_name().unwrap().to_string_lossy()
+        ));
+        assert!(!spare.exists());
+    }
 }

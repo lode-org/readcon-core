@@ -259,6 +259,8 @@ allow_exact.update({
     "paper/cpc/bench-like-for-like/results/samples.csv",
     "paper/cpc/bench-like-for-like/results/summary.csv",
 })
+for extra in sorted((root / "paper/cpc/data").glob("referee_probes-*.json")):
+    allow_exact.add(extra.relative_to(root).as_posix())
 # Measured campaigns keep the package version they were timed with.
 # A later release must not rewrite that field to VERSION.
 recorded_results = {

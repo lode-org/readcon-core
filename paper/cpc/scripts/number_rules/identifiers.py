@@ -13,7 +13,6 @@ from numbers_lib import Rule, const, grep, jget, row, rows, text
 MAIN = "rg_main.tex"
 SUPP = "rg_supp.tex"
 GEN = "figures/generated/"
-LIB = "/src/lib.rs"
 SPEC = "/docs/orgmode/spec.org"
 OPENERS = "data/failure/con_openers.json"
 DRIFT_X = "data/failure/drift_extxyz.json"
@@ -42,12 +41,6 @@ NOT_DRIFT = r"(?!.*extxyz\}? 0\.4\.6)(?!.*protein data bank row)"
 
 def lines(pattern: str, docs: tuple[str, ...] = BOTH) -> tuple[str, ...]:
     return tuple(f"{doc}~{pattern}" for doc in docs)
-
-
-def grammar_minor() -> str:
-    major = grep(LIB, r"^pub const CON_SPEC_VERSION: u32 = (\d+);$")
-    minor = grep(LIB, r"^pub const CON_SPEC_MINOR: u32 = (\d+);$")
-    return f"{major}.{minor}"
 
 
 def peer_rules(record: str, prefix: str, guard: str, why: str) -> list[Rule]:
@@ -176,7 +169,12 @@ _ASE = object()
 
 
 _RULES = [
-    Rule("3.1", grammar_minor(), LIB, "CON_SPEC_VERSION.CON_SPEC_MINOR of the reader"),
+    Rule(
+        "3.1",
+        grep(SPEC, r"^\|\s+(3\.1) \| \d{4}-\d{2}-\d{2} \|"),
+        SPEC,
+        "the CON 3.1 row of the specification history",
+    ),
     Rule(
         "3.0",
         grep(SPEC, r"^\|\s+(3\.0) \| \d{4}-\d{2}-\d{2} \|"),

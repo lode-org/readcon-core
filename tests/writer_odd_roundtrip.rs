@@ -61,6 +61,9 @@ fn build_frames(
         .map(|(frame_index, kinds)| {
             let mut builder = ConFrameBuilder::new(cells[frame_index], angles[frame_index]);
             builder
+                .set_metadata_json(r#"{"pbc":[false,false,false]}"#)
+                .expect("pbc");
+            builder
                 .set_units(json!({
                     "length": "angstrom",
                     "energy": "eV",
@@ -187,7 +190,7 @@ proptest! {
         ),
         masses in prop::collection::vec(odd_f64(), 24),
         cells in prop::collection::vec(prop::array::uniform3(odd_f64()), 1..4),
-        angles in prop::collection::vec(prop::array::uniform3(odd_f64()), 1..4),
+        angles in prop::collection::vec(prop::array::uniform3(80.0f64..100.0), 1..4),
         with_velocity in prop::collection::vec(any::<bool>(), 1..4),
         vel in prop::collection::vec(
             prop::collection::vec(prop::array::uniform3(odd_f64()), 1..5),

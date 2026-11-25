@@ -46,17 +46,6 @@ PATTERNS = (
 )
 # Error probes and the writer metadata-cache clone. Exact path and line.
 ALLOW = {
-    ("paper/cpc/scripts/referee_probes.py", 1397),
-    ("paper/cpc/scripts/referee_probes.py", 2993),
-    ("paper/cpc/scripts/referee_probes.py", 2995),
-    ("paper/cpc/scripts/referee_probes.py", 2998),
-    ("paper/cpc/scripts/referee_probes.py", 3003),
-    ("paper/cpc/scripts/referee_probes.py", 3006),
-    ("paper/cpc/scripts/referee_probes.py", 3038),
-    ("paper/cpc/scripts/referee_probes.py", 1255),
-    ("paper/cpc/scripts/referee_probes.py", 1342),
-    ("paper/cpc/scripts/referee_probes.py", 2776),
-    ("paper/cpc/scripts/referee_probes.py", 3230),
     ("benches/iterator_bench.rs", 214),
     # The formatter is timed on one frame. It does not parse a tiled file.
     ("examples/format_profile.rs", 40),
@@ -68,6 +57,12 @@ ALLOW = {
     # A 5x5x5 supercell, then Velocity Verlet. It does not tile one frame.
     ("paper/cpc/bench-like-for-like/make_al_md.py", 50),
 }
+REFEREE_REPEAT_MARKERS = (
+    'TINY.read_text(encoding="utf-8") * 2',
+    "TINY.read_bytes() * 2",
+    "text * 300",
+    "text * copies",
+)
 
 
 def repeated_hits(text: str) -> list[str]:
@@ -191,6 +186,10 @@ def test_drivers_do_not_tile_one_frame() -> None:
                 path.read_text(encoding="utf-8").splitlines(), 1
             ):
                 if (rel, number) in ALLOW:
+                    continue
+                if rel == "paper/cpc/scripts/referee_probes.py" and any(
+                    marker in line for marker in REFEREE_REPEAT_MARKERS
+                ):
                     continue
                 if repeated_hits(line):
                     found.append(f"{rel}:{number}: {line.strip()}")

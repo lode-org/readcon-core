@@ -1,5 +1,5 @@
 pub mod read_con_capnp {
-    #![allow(unused_parens)]
+    #![allow(unused_parens, clippy::uninlined_format_args)]
     include!(concat!(env!("OUT_DIR"), "/ReadCon_capnp.rs"));
 }
 

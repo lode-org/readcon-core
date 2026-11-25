@@ -118,7 +118,7 @@ namespace readcon {
  * the convenience of either naming convention; they always carry the
  * same value.
  */
-#define RKR_CON_SPEC_VERSION 3
+#define RKR_CON_SPEC_VERSION 4
 
 #define RKR_DL_INT 0
 
@@ -1740,6 +1740,19 @@ enum RKRStatus rkr_frame_builder_set_units(struct RKRConFrameBuilder *builder_ha
  */
 enum RKRStatus rkr_frame_builder_set_con_spec_minor(struct RKRConFrameBuilder *builder_handle,
                                                     uint32_t minor);
+
+/**
+ * Sets the major the built frame writes on line 2.
+ * `0` writes the current major. `3` writes a CON 3 frame, as a binding
+ * rewrite of a major-3 file does. A major above the current one makes
+ * `rkr_frame_builder_build` fail.
+ * Returns `RKR_STATUS_SUCCESS` on success.
+ *
+ * # Safety
+ * builder_handle must be valid.
+ */
+enum RKRStatus rkr_frame_builder_set_spec_version(struct RKRConFrameBuilder *builder_handle,
+                                                  uint32_t version);
 
 /**
  * Sets a numeric metadata key on an existing frame builder.

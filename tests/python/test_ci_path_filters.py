@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -107,6 +108,80 @@ def test_cxx_wrap_pin_does_not_run_for_bench_only_changes():
     assert text.count("paths-ignore:") == 2
     assert text.count("- 'bench/**'") == 2
     assert "bash scripts/check_cxx_wrap_pin.sh" in text
+    assert "--pull-request" in text
+    assert "--strict" in text
+    assert "- main" in text
+    assert "- '**'" in text
+    assert "permissions:\n  contents: read" in text
+
+
+def test_cxx_wrap_pin_current_skips_only_an_unchanged_pin():
+    script = ROOT / "scripts" / "cxx-wrap-pin-current.sh"
+    pin = ROOT / "packaging" / "wrapdb" / "readcon-core.sha256"
+    original = pin.read_text(encoding="utf-8")
+    current = subprocess.run(
+        ["bash", str(script)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert current.returncode == 0
+    assert "current" in current.stdout
+
+    pin.write_text(original.rstrip() + "0\n", encoding="utf-8")
+    try:
+        stale = subprocess.run(
+            ["bash", str(script)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        pin.write_text(original, encoding="utf-8")
+    assert stale.returncode == 1
+    assert "needs recording" in stale.stdout
+
+
+def test_develop_pin_recorder_has_guard_and_one_retry():
+    workflow = (ROOT / ".github" / "workflows" / "record_cxx_wrap_pin.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "permissions:\n  contents: write" in workflow
+    assert "cancel-in-progress: false" in workflow
+    assert "steps.loop-guard.outputs.skip != 'true'" in workflow
+    assert workflow.count("git push origin HEAD:develop") == 2
+    assert 'git add -- "${pin_paths[@]}"' in workflow
+    assert "bash scripts/check_cxx_wrap_pin.sh --strict" in workflow
+    assert "statuses: write" in workflow
+    assert 'context="cxx wrap pin"' in workflow
+    assert "state=success" in workflow
+    assert "state=failure" in workflow
+    assert "gh api --method POST" in workflow
+    assert "git rebase" not in workflow
+    assert "commit --amend" not in workflow
+    assert "if ! record_pin" not in workflow
+    assert "bash scripts/record-cxx-wrap.sh || return 1" in workflow
+    assert "validate_changes || return 1" in workflow
+    assert "2) return 2" in workflow
+
+    retry = workflow.split(
+        'echo "develop moved; resetting and retrying once."',
+        maxsplit=1,
+    )[1]
+    commands = (
+        "git fetch origin develop",
+        "git reset --hard origin/develop",
+        "set +e",
+        "record_and_commit",
+        "rc=$?",
+        "set -e",
+        'case "$rc"',
+        "git push origin HEAD:develop",
+    )
+    positions = [retry.index(command) for command in commands]
+    assert positions == sorted(positions)
 
 
 def test_release_branch_pushes_build_wheels_before_the_tag():
