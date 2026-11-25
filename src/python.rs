@@ -3605,8 +3605,8 @@ fn staged_frames(per_frame: usize) -> usize {
 /// loads into a private buffer and formats that buffer detached. Every
 /// copied double is untorn; there is deliberately no cross-element
 /// atomicity, so stores between loads can appear in the same snapshot.
-#[derive(Clone, Copy)]
 struct SharedColumn {
+    owner: Option<Py<PyAny>>,
     ptr: *const f64,
     len: usize,
     per_frame: usize,
@@ -3632,6 +3632,7 @@ impl SharedColumn {
             crate::types::assert_atomic_f64_alignment(ptr);
         }
         Ok(Self {
+            owner: Some(value.clone().unbind()),
             ptr,
             len: expected,
             per_frame,
@@ -3639,20 +3640,30 @@ impl SharedColumn {
     }
 
     /// Copy the values of `frames` into `into`.
-    fn stage(&self, py: Python<'_>, frames: std::ops::Range<usize>, into: &mut Vec<f64>) {
+    fn stage(
+        &self,
+        py: Python<'_>,
+        frames: std::ops::Range<usize>,
+        into: &mut Vec<f64>,
+    ) -> PyResult<()> {
         let per_frame = self.per_frame;
-        self.stage_values(py, frames.start * per_frame..frames.end * per_frame, into);
+        self.stage_values(
+            py,
+            frames.start * per_frame..frames.end * per_frame,
+            into,
+        )
     }
 
-    fn snapshot(&self, py: Python<'_>) -> Vec<f64> {
-        let mut out: Vec<f64> = Vec::with_capacity(self.len);
+    fn snapshot(&self, py: Python<'_>) -> PyResult<Vec<f64>> {
+        let (ptr, len) = self.live_parts(py)?;
+        let mut out: Vec<f64> = Vec::with_capacity(len);
         let mut start = 0;
-        while start < self.len {
-            let end = (start + STAGE_VALUES).min(self.len);
+        while start < len {
+            let end = (start + STAGE_VALUES).min(len);
             let old_len = out.len();
             unsafe {
                 crate::types::atomic_copy_f64(
-                    self.ptr.add(start),
+                    ptr.add(start),
                     out.as_mut_ptr().add(old_len),
                     end - start,
                 );
@@ -3660,24 +3671,45 @@ impl SharedColumn {
             }
             start = end;
         }
-        let _ = py;
-        out
+        Ok(out)
+    }
+
+    fn live_parts(&self, py: Python<'_>) -> PyResult<(*const f64, usize)> {
+        let Some(owner) = &self.owner else {
+            return Ok((self.ptr, self.len));
+        };
+        let array = owner.bind(py).cast::<numpy::PyArrayDyn<f64>>()?;
+        if !array.is_c_contiguous() || array.len() != self.len {
+            return Err(PyValueError::new_err("column"));
+        }
+        let ptr = array.data().cast_const();
+        if self.len > 0 {
+            crate::types::assert_atomic_f64_alignment(ptr);
+        }
+        Ok((ptr, self.len))
     }
 
     /// Copy `values` into `into` while the binding keeps the NumPy allocation
-    /// alive. `_py` proves the caller has not returned the owning arguments.
-    fn stage_values(&self, _py: Python<'_>, values: std::ops::Range<usize>, into: &mut Vec<f64>) {
+    /// alive.
+    fn stage_values(
+        &self,
+        py: Python<'_>,
+        values: std::ops::Range<usize>,
+        into: &mut Vec<f64>,
+    ) -> PyResult<()> {
+        let (ptr, source_len) = self.live_parts(py)?;
         let len = values.len();
-        assert!(values.end <= self.len);
+        assert!(values.end <= source_len);
         into.clear();
         if len == 0 {
-            return;
+            return Ok(());
         }
         into.reserve(len);
         unsafe {
-            crate::types::atomic_copy_f64(self.ptr.add(values.start), into.as_mut_ptr(), len);
+            crate::types::atomic_copy_f64(ptr.add(values.start), into.as_mut_ptr(), len);
             into.set_len(len);
         }
+        Ok(())
     }
 }
 
@@ -3732,7 +3764,7 @@ fn write_columns(
         return Err(PyValueError::new_err("positions, masses and cell disagree"));
     }
     let cell_owned =
-        SharedColumn::from_array(&cell, "cell", 6, n_frames.saturating_mul(6))?.snapshot(py);
+        SharedColumn::from_array(&cell, "cell", 6, n_frames.saturating_mul(6))?.snapshot(py)?;
     check_cell_array(py, &cell_owned)?;
     let fixed_value = columns.get_item("fixed")?;
     let fixed_arr = match fixed_value.as_ref() {
@@ -3788,6 +3820,7 @@ fn write_columns(
             &masses, "masses", n_atoms, n_values,
         )?),
         Some(SharedColumn {
+            owner: None,
             ptr: cell_owned.as_ptr(),
             len: cell_owned.len(),
             per_frame: 6,
@@ -3810,10 +3843,10 @@ fn write_columns(
         let end = (start + step).min(n_frames);
         for (column, into) in columns.iter().zip(staged.iter_mut()) {
             if let Some(column) = column {
-                column.stage(py, start..end, into);
+                column.stage(py, start..end, into)?;
             }
         }
-        let present = |index: usize| columns[index].map(|_| staged[index].as_slice());
+        let present = |index: usize| columns[index].as_ref().map(|_| staged[index].as_slice());
         let (fixed, velocities, forces) = (present(3), present(4), present(5));
         py.detach(|| {
             crate::writer::format_binding_columns(
@@ -3879,12 +3912,12 @@ fn write_coords(
         n_atoms * 3,
         n_values.saturating_mul(3),
     )?
-    .snapshot(py);
+    .snapshot(py)?;
     let mass_owned =
-        SharedColumn::from_array(masses.as_any(), "masses", n_atoms, n_values)?.snapshot(py);
+        SharedColumn::from_array(masses.as_any(), "masses", n_atoms, n_values)?.snapshot(py)?;
     let cell_owned =
         SharedColumn::from_array(cell.as_any(), "cell", 6, n_frames.saturating_mul(6))?
-            .snapshot(py);
+            .snapshot(py)?;
     check_cell_array(py, &cell_owned)?;
     let copy_s = copy_start.elapsed().as_secs_f64();
     let path_owned = path.to_owned();
@@ -7869,14 +7902,20 @@ fn write_conbin_columns(
     {
         return Err(PyValueError::new_err("CON-bin columns disagree"));
     }
-    let cell_owned =
-        SharedColumn::from_array(cell.as_any(), "cell", 6, (n_frames as usize) * 6)?.snapshot(py);
+    let cell_owned = SharedColumn::from_array(
+        cell.as_any(),
+        "cell",
+        6,
+        (n_frames as usize) * 6,
+    )?
+    .snapshot(py)?;
     check_cell_array(py, &cell_owned)?;
     let columns = [
         SharedColumn::from_array(positions.as_any(), "positions", atoms * 3, xyz)?,
         SharedColumn::from_array(velocities.as_any(), "velocities", atoms * 3, xyz)?,
         SharedColumn::from_array(masses.as_any(), "masses", atoms, n)?,
         SharedColumn {
+            owner: None,
             ptr: cell_owned.as_ptr(),
             len: cell_owned.len(),
             per_frame: 6,
@@ -7890,7 +7929,7 @@ fn write_conbin_columns(
     let mut flag_start = 0;
     while flag_start < xyz {
         let flag_end = (flag_start + STAGE_VALUES - STAGE_VALUES % 3).min(xyz);
-        fixed_column.stage_values(py, flag_start..flag_end, &mut staged_flags);
+        fixed_column.stage_values(py, flag_start..flag_end, &mut staged_flags)?;
         for (offset, flag) in staged_flags.chunks_exact(3).enumerate() {
             let index = flag_start / 3 + offset;
             masks[index] = u8::from(flag[0] != 0.0)
@@ -7920,7 +7959,8 @@ fn write_conbin_columns(
         let (run, emit) = (
             STAGE_VALUES,
             move |column: usize, values: std::ops::Range<usize>, file: &mut std::fs::File| {
-                Python::attach(|py| columns[column].stage_values(py, values, &mut staged));
+                Python::attach(|py| columns[column].stage_values(py, values, &mut staged))
+                    .map_err(|err| ParseError::ValidationError(err.to_string()))?;
                 #[cfg(all(unix, target_endian = "little"))]
                 unsafe {
                     crate::conbin::write_f64_raw(file, staged.as_ptr(), staged.len())
@@ -10184,9 +10224,10 @@ fn write_extxyz(
         return Err(PyValueError::new_err("cell"));
     }
     let cell_owned =
-        SharedColumn::from_array(cell_array.as_any(), "cell", 6, cell_array.len())?.snapshot(py);
+        SharedColumn::from_array(cell_array.as_any(), "cell", 6, cell_array.len())?.snapshot(py)?;
     check_cell_array(py, &cell_owned[..n_frames * 6])?;
     let cell = SharedColumn {
+        owner: None,
         ptr: cell_owned.as_ptr(),
         len: cell_owned.len(),
         per_frame: 6,
@@ -10311,9 +10352,12 @@ fn staged_extxyz_bytes(
         if n_frames - end == 1 {
             end = n_frames;
         }
-        cell.stage(py, start..end, &mut cell_run);
+        cell.stage(py, start..end, &mut cell_run)
+            .map_err(|err| err.to_string())?;
         for ((_, _, column), run) in reals.iter().zip(real_runs.iter_mut()) {
-            column.stage(py, start..end, run);
+            column
+                .stage(py, start..end, run)
+                .map_err(|err| err.to_string())?;
         }
         let atoms = start * n_atoms..end * n_atoms;
         let text_runs: Vec<TextColumn<'_>> = texts

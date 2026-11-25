@@ -22,6 +22,8 @@ SRC = ROOT / "src"
 # the source digest.
 # READCON_TEST_PUBLISH_HOOK: integration-test control for kill-before-publish
 # paths in writer_publish_hooks.rs.
+# READCON_TEST_LINK_HOOK: integration-test control for kill-during-link
+# paths in writer_publish_hooks.rs.
 DOCUMENTED = {
     "READCON_RANKED_WRITE",
     "READCON_MPI_TEST_CHUNK",
@@ -30,6 +32,7 @@ DOCUMENTED = {
     "READCON_GIT_TREE",
     "READCON_SOURCE_DIGEST",
     "READCON_TEST_PUBLISH_HOOK",
+    "READCON_TEST_LINK_HOOK",
 }
 _LITERAL = re.compile(r'"((?:\\.|[^"\\])*)"')
 _LET = re.compile(
