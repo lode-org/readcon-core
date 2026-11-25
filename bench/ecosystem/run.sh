@@ -23,7 +23,7 @@ source "$CARGO_TARGET_DIR/release/readcon-metatensor.env"
 WORK="$ROOT/bench/ecosystem/work"
 mkdir -p "$WORK"
 
-cc -O3 -fPIC -shared \
+"${CC}" -O3 -fPIC -shared \
     -I "$READCON_METATENSOR_INCLUDE" \
     "$ROOT/bench/ecosystem/metatensor_probe.c" \
     -L "$READCON_METATENSOR_LIB_DIR" \
