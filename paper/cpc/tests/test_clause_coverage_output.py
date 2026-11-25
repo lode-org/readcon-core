@@ -150,6 +150,54 @@ def test_clause_coverage_appends_superseding_records_without_rewriting(
     assert second.read_bytes() == second_bytes
 
 
+def test_clause_coverage_capi_recount_continues_the_final_chain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _load()
+    repo, root, spec_dir, _, state = _configure(module, tmp_path, monkeypatch, 10)
+
+    def run(*args: str) -> int:
+        monkeypatch.setattr("sys.argv", ["clause_coverage.py", *args])
+        return module.main()
+
+    with pytest.raises(SystemExit, match="needs a final spec-major record"):
+        run("--record", "--capi")
+    assert run("--record") == 0
+    first = spec_dir / "clause_coverage-0.1.0-spec-major.json"
+    first_bytes = first.read_bytes()
+
+    # Unchanged sources add no recount.
+    assert run("--record", "--capi") == 0
+    assert not (spec_dir / "clause_coverage-0.1.0-capi-r1.json").exists()
+
+    state["rust_tests"] = 12
+    assert run("--check") == 1
+    assert run("--record", "--capi") == 0
+    capi1 = spec_dir / "clause_coverage-0.1.0-capi-r1.json"
+    assert first.read_bytes() == first_bytes
+    assert json.loads(capi1.read_text(encoding="utf-8"))["supersedes"] == (
+        "paper/cpc/data/spec/clause_coverage-0.1.0-spec-major.json"
+    )
+    assert run("--check") == 0
+    assert module.default_paths(root=root, repo=repo, version="0.1.0") == (first, capi1)
+
+    # After a recount, --record appends the next recount.
+    capi1_bytes = capi1.read_bytes()
+    state["rust_tests"] = 15
+    assert run("--record") == 0
+    capi2 = spec_dir / "clause_coverage-0.1.0-capi-r2.json"
+    assert capi1.read_bytes() == capi1_bytes
+    assert json.loads(capi2.read_text(encoding="utf-8"))["supersedes"] == (
+        "paper/cpc/data/spec/clause_coverage-0.1.0-capi-r1.json"
+    )
+    assert not (spec_dir / "clause_coverage-0.1.0-spec-major-2.json").exists()
+    assert [p.name for p in module.final_chain()] == [
+        first.name,
+        capi1.name,
+        capi2.name,
+    ]
+
+
 def test_default_paths_rejects_broken_supersedes_chain(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

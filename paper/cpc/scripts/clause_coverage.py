@@ -25,7 +25,10 @@ gives a reason for a clause that something names.
 It also writes clauses_macros.tex, the counts the paper prints. A committed
 final record is never rewritten: when the sources change, --record writes
 clause_coverage-<version>-spec-major-<n>.json, which supersedes record n - 1,
-and --check compares the newest one.
+and --check compares the newest one. The C ABI gate recounts continue the
+same chain as clause_coverage-<version>-capi-r<k>.json: recount 1
+supersedes the last spec-major record, recount k supersedes recount k - 1,
+and once a recount exists --record appends the next one.
 """
 
 from __future__ import annotations
@@ -439,6 +442,11 @@ def main() -> int:
         "--record",
         action="store_true",
         help="write the final record as well as the live TeX",
+    )
+    parser.add_argument(
+        "--capi",
+        action="store_true",
+        help="with --record, append a C ABI recount rather than a spec-major record",
     )
     args = parser.parse_args()
     chain = recounts()
