@@ -27,15 +27,6 @@
       "date": "2026-10-02"
     }
   ],
-  "extxyz-ng": [
-    {
-      "url": "https://pypi.org/project/extxyz-ng/0.0.2/",
-      "pypi_version": "0.0.2",
-      "first_upload": "2026-04-29T12:06:45.997183Z",
-      "version": "0.0.2",
-      "date": "2026-04-29"
-    }
-  ],
   "metatensor-core": [
     {
       "url": "https://api.github.com/repos/metatensor/metatensor/releases/456636429",
@@ -62,6 +53,15 @@
       "published_at": "2026-11-19T16:16:21Z",
       "version": "2.14.1",
       "date": "2026-11-19"
+    }
+  ],
+  "extxyz-ng": [
+    {
+      "url": "https://pypi.org/project/extxyz-ng/0.0.2/",
+      "pypi_version": "0.0.2",
+      "first_upload": "2026-04-29T12:06:45.997183Z",
+      "version": "0.0.2",
+      "date": "2026-04-29"
     }
   ]
 }
