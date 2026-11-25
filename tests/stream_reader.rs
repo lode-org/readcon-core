@@ -137,6 +137,11 @@ fn a_bom_on_a_later_frame_is_rejected_in_the_stream() {
         "{want:?}"
     );
     assert_same("bom on frame 2", &bytes);
+    let text = std::str::from_utf8(&bytes).unwrap();
+    let mut iter = readcon_core::iterators::ConFrameIterator::new(text);
+    assert!(iter.forward().unwrap().is_ok());
+    let err = iter.forward().unwrap().unwrap_err();
+    assert_eq!(err.class_name(), "ValidationError", "{err}");
 }
 
 #[test]
