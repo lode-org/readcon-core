@@ -346,6 +346,7 @@ A gzip or zstd envelope wraps the same text \cite{deutschGzipFileFormat1996,coll
 
 Table~\ref{tab:keys} lists the reserved keys of the JSON line.
 The major version is \texttt{con\_spec\_version}, and the minor version is \texttt{con\_spec\_minor}, which is zero when absent.
+A header that repeats the \texttt{con\_spec\_minor} key is illegal, and readcon-core rejects it as invalid metadata.
 For a frame whose header is a JSON object, let \(\mu\) be its minor, \(U\) the set of keys of its \texttt{units} object, and \(V\) true when the frame has a velocity section.
 The reader accepts that header only when
 \begin{equation}

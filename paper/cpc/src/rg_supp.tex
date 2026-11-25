@@ -155,6 +155,7 @@ CON-frame.1 & After the last complete frame, lines that hold only white space ar
 CON-frame.7 & After a complete frame with its sections, or with the legacy velocity block where that applies, the next line is line 1 of the next frame, even when it is empty. \\
 CON-token.3 & Fields inside a line are separated by spaces and tabs only, so a form feed or a no-break space belongs to the field it touches. \\
 CON-token.4 & Where the PEG admits a token that a clause rejects, the clause decides. \\
+CON-line2.14 & The header names \texttt{con\_spec\_minor} at most once. \\
 CON-cell.1 & When the header carries \texttt{lattice\_vectors}, the reader takes the cell from it and not from lines 3 and 4. \\
 \begin{tabular}[t]{@{}l@{}}CON-cell.3\\CON-cell.4\end{tabular} & A frame without \texttt{pbc} is periodic in all three directions, and a \texttt{pbc} that is present is three booleans, one per cell vector. \\
 CON-cell.6 & Without \texttt{lattice\_vectors}, the reader builds the cell of Eq.~\eqref{eq:cell} from lines 3 and 4, with the angles in degrees. \\
@@ -210,6 +211,7 @@ JSON object without \texttt{con\_spec\_version} & Rejected. \\
 JSON major other than 2 or 3, a negative one included & Unsupported version. \\
 Later minor of a known major, of any size & Accepted. \\
 \texttt{con\_spec\_minor} not a non-negative JSON integer & Invalid metadata. \\
+\texttt{con\_spec\_minor} repeated in the header & Invalid metadata. \\
 Major 3 without \texttt{units.length} or \texttt{units.energy} & Rejected. \\
 Unknown metadata key & Kept on rewrite, each number with the digits the file gave it. \\
 Unknown section at the reader's minor or earlier & Rejected. \\
