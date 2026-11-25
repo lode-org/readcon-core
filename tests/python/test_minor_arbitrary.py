@@ -845,6 +845,7 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     assert sorted(manifest_diffs) == [
         "d02_legacy_velocity_no_time.convel",
         "json_version_4.con",
+        "v31_blank_symbol_velocities.convel",
         "v31_bom_later_frame.con",
         "v31_convel_no_time.convel",
         "v31_coord_label_mismatch.con",
