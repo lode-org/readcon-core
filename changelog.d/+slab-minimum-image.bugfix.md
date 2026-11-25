@@ -1,0 +1,1 @@
+On two periodic axes the wrap now Gauss-reduces the periodic pair and searches the 9 neighbours, which can be shorter than the per-axis fractional wrap that three periodic axes still use. A flat 3x3 cell whose periodic pair is non-degenerate now wraps instead of raising SingularCell.
