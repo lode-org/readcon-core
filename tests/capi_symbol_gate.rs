@@ -1,6 +1,6 @@
 //! Default and non-`capi` feature builds must not export unmangled C ABI
 //! symbols (`rkr_*` or legacy C entry points); `--features capi` builds must
-//! export the exact 236-symbol C ABI manifest in `tests/capi_symbols.txt` and
+//! export the exact 237-symbol C ABI manifest in `tests/capi_symbols.txt` and
 //! declared in `include/readcon-core.h` (plus `rkr_block_range` from
 //! `include/readcon-core-mpi.h`).
 
@@ -156,8 +156,8 @@ fn expected_capi_symbols() -> BTreeSet<String> {
         .collect();
     assert_eq!(
         syms.len(),
-        236,
-        "tests/capi_symbols.txt must list all 236 C ABI symbols (found {})",
+        237,
+        "tests/capi_symbols.txt must list all 237 C ABI symbols (found {})",
         syms.len()
     );
     syms
@@ -525,7 +525,7 @@ fn mpi_header_declares_exact_mpi_capi_symbols() {
     let declared_all = declared_header_symbols(true);
     assert_eq!(
         declared_all, expected_all,
-        "combined shipped headers must declare all 240 capi+mpi symbols"
+        "combined shipped headers must declare all 241 capi+mpi symbols"
     );
 }
 
