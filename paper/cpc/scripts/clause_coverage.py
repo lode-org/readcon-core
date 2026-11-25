@@ -24,9 +24,11 @@ gives a reason for a clause that something names.
 
 It also writes clauses_macros.tex, the counts the paper prints. A committed
 final record is never rewritten: when the sources change, --record appends a
-spec-major record, or --record --writer-series appends a writer-r<n> record.
-Each supersedes the current terminal record, and --check compares the newest
-one.
+record that supersedes the newest one, and --check compares the newest. A
+record is spec-major[-n] or <series>-r<n>; --series names the series to
+extend (default: the series of the newest record). The order of the chain is
+the order of the supersedes links, not the series names, so a series that
+lands before or after another one stays one chain.
 """
 
 from __future__ import annotations
@@ -59,82 +61,90 @@ RECORD_DIR = ROOT / "data" / "spec"
 LEGACY_RECORD = RECORD_DIR / f"clause_coverage-{VERSION}.json"
 
 
-def final_record(n: int) -> Path:
-    """Final record n of this version. Record n supersedes record n - 1."""
-    suffix = "" if n == 1 else f"-{n}"
-    return RECORD_DIR / f"clause_coverage-{VERSION}-spec-major{suffix}.json"
+SERIES = re.compile(
+    r"spec-major(?:-(?P<major>[0-9]+))?|(?P<name>[a-z]+)-r(?P<n>[0-9]+)"
+)
 
 
-def final_count() -> int:
-    n = 0
-    while final_record(n + 1).is_file():
-        n += 1
-    return n
-
-
-def writer_record(
+def series_record(
+    series: str,
     n: int,
     spec_dir: Path | None = None,
     version: str | None = None,
 ) -> Path:
-    """Writer-series record n."""
-    return (spec_dir or RECORD_DIR) / (
-        f"clause_coverage-{version or VERSION}-writer-r{n}.json"
-    )
+    """Record n of a series. spec-major names record 1 without a number."""
+    if series == "spec-major":
+        stem = "spec-major" if n == 1 else f"spec-major-{n}"
+    else:
+        stem = f"{series}-r{n}"
+    return (
+        spec_dir or RECORD_DIR
+    ) / f"clause_coverage-{version or VERSION}-{stem}.json"
 
 
-def writer_count() -> int:
-    n = 0
-    while writer_record(n + 1).is_file():
-        n += 1
-    return n
+def final_record(n: int) -> Path:
+    """Spec-major record n of this version. Record n supersedes record n - 1."""
+    return series_record("spec-major", n)
+
+
+def record_series(path: Path, version: str | None = None) -> tuple[str, int] | None:
+    """The series and number a final record's file name gives, or None."""
+    prefix = f"clause_coverage-{version or VERSION}-"
+    if not path.name.startswith(prefix) or path.suffix != ".json":
+        return None
+    found = SERIES.fullmatch(path.name[len(prefix) : -len(".json")])
+    if found is None:
+        return None
+    if found["name"]:
+        return found["name"], int(found["n"])
+    return "spec-major", int(found["major"] or 1)
 
 
 def final_chain(spec_dir: Path | None = None, version: str | None = None) -> list[Path]:
     """The active final records of one version, oldest first.
 
-    Final record 1 supersedes the legacy record of the version and record n
-    supersedes record n - 1. The writer-r records extend the spec-major
-    records. No other record of data/spec may supersede a final record, so
-    the newest one is the only tip of the active chain.
+    A final record is named spec-major[-n] or <series>-r<n>. The first one
+    supersedes the legacy record of the version and each later one supersedes
+    the one before it, whatever its series, so the chain follows the
+    supersedes links and not the names. No other record of data/spec may
+    supersede a final record, so the newest one is the only tip of the active
+    chain, and a final record outside the chain is an error.
     """
     spec_dir = spec_dir or RECORD_DIR
     ver = version or VERSION
-
-    def named(n: int) -> Path:
-        suffix = "" if n == 1 else f"-{n}"
-        return spec_dir / f"clause_coverage-{ver}-spec-major{suffix}.json"
-
-    chain: list[Path] = []
-    while named(len(chain) + 1).is_file():
-        chain.append(named(len(chain) + 1))
-    writer = 1
-    while writer_record(writer, spec_dir, ver).is_file():
-        chain.append(writer_record(writer, spec_dir, ver))
-        writer += 1
-    links = {
-        path.name: Path(prior).name
+    legacy = f"clause_coverage-{ver}.json"
+    finals = {
+        path.name: path
         for path in spec_dir.glob(f"clause_coverage-{ver}-*.json")
-        if (prior := json.loads(path.read_text(encoding="utf-8")).get("supersedes"))
+        if record_series(path, ver)
     }
-    parent = f"clause_coverage-{ver}.json"
-    for record in chain:
-        if links.get(record.name) != parent:
+    children: dict[str, list[str]] = {}
+    for path in sorted(spec_dir.glob(f"clause_coverage-{ver}-*.json")):
+        prior = json.loads(path.read_text(encoding="utf-8")).get("supersedes")
+        if prior:
+            children.setdefault(Path(prior).name, []).append(path.name)
+    chain: list[Path] = []
+    parent = legacy
+    while True:
+        later = children.get(parent, [])
+        following = [name for name in later if name in finals]
+        if len(following) > 1 or (chain and len(later) > len(following)):
             sys.exit(
-                f"{record.name} supersedes {links.get(record.name)}, not {parent}; "
-                f"the {len(chain)} final clause coverage records of {ver} must "
-                "form one chain"
+                f"{len(later)} records of data/spec supersede {parent} "
+                f"({', '.join(later)}); the final clause coverage records of "
+                f"{ver} must form one chain"
             )
-        parent = record.name
-    for record, after in zip(chain, [*chain[1:], None]):
-        children = sorted(name for name, prior in links.items() if prior == record.name)
-        allowed = [after.name] if after else []
-        if children != allowed:
-            sys.exit(
-                f"{len(children)} records of data/spec supersede {record.name} "
-                f"({', '.join(children) or 'none'}); the {len(chain)} final clause "
-                f"coverage records of {ver} must form one chain"
-            )
+        if not following:
+            break
+        chain.append(finals[following[0]])
+        parent = following[0]
+    if len(chain) != len(finals):
+        stray = sorted(set(finals) - {path.name for path in chain})
+        sys.exit(
+            f"{', '.join(stray)} does not supersede the end of the chain "
+            f"({parent}); the final clause coverage records of {ver} must "
+            "form one chain"
+        )
     return chain
 
 
@@ -549,51 +559,36 @@ def build(supersedes: Path | None = None) -> dict:
     }
 
 
-def final_payload(n: int, payload: dict) -> dict:
-    if n == 1:
-        supersedes = LEGACY_RECORD
-        reason = (
-            f"Final spec-major recount of specification coverage for "
-            f"readcon-core {VERSION}."
-        )
-    else:
-        supersedes = final_record(n - 1)
-        reason = (
-            f"Final spec-major recount of specification coverage for "
-            f"readcon-core {VERSION} after the sources counted in "
-            f"{supersedes.name} changed."
-        )
-    return {"supersedes": rel(supersedes), "reason": reason, **payload}
-
-
-def writer_payload(n: int, payload: dict) -> dict:
-    if n == 1:
-        count = final_count()
-        supersedes = final_record(count) if count else LEGACY_RECORD
-    else:
-        supersedes = writer_record(n - 1)
-    reason = (
-        f"Writer-series recount of specification coverage for "
-        f"readcon-core {VERSION} after the sources counted in "
-        f"{supersedes.name} changed."
+def final_payload(parent: Path, series: str, payload: dict) -> dict:
+    """Payload of a final record of ``series`` that supersedes ``parent``."""
+    first = series == "spec-major" and parent == LEGACY_RECORD
+    label = (
+        "Final spec-major"
+        if series == "spec-major"
+        else f"{series.capitalize()}-series"
     )
-    return {"supersedes": rel(supersedes), "reason": reason, **payload}
+    reason = f"{label} recount of specification coverage for readcon-core {VERSION}"
+    reason += "." if first else f" after the sources counted in {parent.name} changed."
+    return {"supersedes": rel(parent), "reason": reason, **payload}
 
 
 def record_for_sources() -> tuple[Path, dict]:
-    n = writer_count()
-    if n:
-        return writer_record(n), writer_payload(n, build())
-    n = max(final_count(), 1)
-    return final_record(n), final_payload(n, build())
+    chain = final_chain()
+    if not chain:
+        return final_record(1), final_payload(LEGACY_RECORD, "spec-major", build())
+    series, _ = record_series(chain[-1])
+    parent = chain[-2] if len(chain) > 1 else LEGACY_RECORD
+    return chain[-1], final_payload(parent, series, build())
 
 
-def next_record_for_sources(writer_series: bool = False) -> tuple[Path, dict]:
-    if writer_series or writer_count():
-        n = writer_count() + 1
-        return writer_record(n), writer_payload(n, build())
-    n = final_count() + 1
-    return final_record(n), final_payload(n, build())
+def next_record_for_sources(series: str | None = None) -> tuple[Path, dict]:
+    chain = final_chain()
+    series = series or (record_series(chain[-1])[0] if chain else "spec-major")
+    if not SERIES.fullmatch(f"{series}-r1") and series != "spec-major":
+        sys.exit(f"{series!r} is not a series name: use lower-case letters")
+    count = sum(1 for path in chain if record_series(path)[0] == series)
+    tip = chain[-1] if chain else LEGACY_RECORD
+    return series_record(series, count + 1), final_payload(tip, series, build())
 
 
 def macros(record: dict) -> str:
@@ -643,9 +638,8 @@ def main() -> int:
         help="write the final record as well as the live TeX",
     )
     parser.add_argument(
-        "--writer-series",
-        action="store_true",
-        help="append a writer-r<n> record instead of a spec-major record",
+        "--series",
+        help="series of the record --record appends (default: that of the newest record)",
     )
     args = parser.parse_args()
     generated_out, record = record_for_sources()
@@ -680,7 +674,7 @@ def main() -> int:
             and out.is_file()
             and out.read_text(encoding="utf-8") != wanted
         ):
-            out, record = next_record_for_sources(args.writer_series)
+            out, record = next_record_for_sources(args.series)
             wanted = text(record)
         if out.is_file() and out.read_text(encoding="utf-8") != wanted:
             sys.exit(f"refusing to overwrite committed record {rel(out)}")
