@@ -614,9 +614,13 @@ impl<'a> ConFrameIterator<'a> {
         {
             return self.frame_origin.saturating_add(2).max(1);
         }
+        // A read that already counted the missing line at EOF keeps that
+        // number. A header that stopped on the last stored line names the
+        // next one.
         if matches!(error, ParseError::IncompleteHeader)
             && self.lines.peeked.is_none()
             && self.lines.pos >= self.lines.bytes.len()
+            && !self.lines.eof_counted
         {
             return self.lines.line_no().saturating_add(1).max(1);
         }
