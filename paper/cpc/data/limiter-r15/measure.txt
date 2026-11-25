@@ -1,0 +1,640 @@
+hostname=host
+SEALED_TIP=a2499ab697691f0d46ac27218509a123247e3b62
+SEALED_TREE=8704be1b38d42b62247c6e265624e53b5d1cc0e1
+checksum-function=fold_shared_symbols
+harness-sha256=0892c50911a98177dab264b8d892b87733fae560fc1350e9ef85e05adf188c88
+fold-lib-sha256=51cc00b8ecd33cee064ceac28a9521956fcfd212e38912088db706684d4206a0
+hostname=host
+commit=ac4f437989dea5aad9f75ff045af09ccf7127eba
+check=shared-touch-digest
+serial-digest workers=1 digest=7345014615454105600
+serial-digest workers=2 digest=10387267436995117056
+serial-digest workers=4 digest=16970085207913201664
+serial-digest workers=8 digest=1377863775199559680
+meminfo before touch hostname=host MemTotal:49342768kB MemFree:17196724kB MemAvailable:22354696kB SwapFree:0kB Committed_AS:1978360kB
+hostname=host before touch workers=1 sample_s=1.738560 minflt=363203 majflt=18 rss_kb=7567304 rss_per_worker_kb=7567304 checksum=fold_shared_symbols digest=7345014615454105600
+hostname=host before touch workers=2 sample_s=3.075534 minflt=723504 majflt=0 rss_kb=8162680 rss_per_worker_kb=4081340 checksum=fold_shared_symbols digest=10387267436995117056
+hostname=host before touch workers=4 sample_s=6.335096 minflt=1480143 majflt=91 rss_kb=10851052 rss_per_worker_kb=2712763 checksum=fold_shared_symbols digest=16970085207913201664
+hostname=host before touch workers=8 sample_s=14.374618 minflt=3409558 majflt=25 rss_kb=18302680 rss_per_worker_kb=2287835 checksum=fold_shared_symbols digest=1377863775199559680
+hostname=host before touch workers=1 sample_s=1.650571 minflt=359103 majflt=0 rss_kb=8286764 rss_per_worker_kb=8286764 checksum=fold_shared_symbols digest=7345014615454105600
+hostname=host before touch workers=2 sample_s=3.115915 minflt=731711 majflt=0 rss_kb=8232472 rss_per_worker_kb=4116236 checksum=fold_shared_symbols digest=10387267436995117056
+hostname=host before touch workers=4 sample_s=6.243333 minflt=1475988 majflt=0 rss_kb=10500208 rss_per_worker_kb=2625052 checksum=fold_shared_symbols digest=16970085207913201664
+hostname=host before touch workers=8 sample_s=14.561606 minflt=3446257 majflt=0 rss_kb=18310080 rss_per_worker_kb=2288760 checksum=fold_shared_symbols digest=1377863775199559680
+hostname=host before touch workers=1 sample_s=1.635584 minflt=358335 majflt=0 rss_kb=8294164 rss_per_worker_kb=8294164 checksum=fold_shared_symbols digest=7345014615454105600
+hostname=host before touch workers=2 sample_s=3.269167 minflt=748501 majflt=0 rss_kb=8310088 rss_per_worker_kb=4155044 checksum=fold_shared_symbols digest=10387267436995117056
+hostname=host before touch workers=4 sample_s=6.046161 minflt=1471357 majflt=0 rss_kb=10755032 rss_per_worker_kb=2688758 checksum=fold_shared_symbols digest=16970085207913201664
+hostname=host before touch workers=8 sample_s=12.818039 minflt=3559177 majflt=0 rss_kb=18294504 rss_per_worker_kb=2286813 checksum=fold_shared_symbols digest=1377863775199559680
+hostname=host before touch workers=1 sample_s=1.646299 minflt=357321 majflt=0 rss_kb=8278588 rss_per_worker_kb=8278588 checksum=fold_shared_symbols digest=7345014615454105600
+hostname=host before touch workers=2 sample_s=3.162615 minflt=720402 majflt=0 rss_kb=8185204 rss_per_worker_kb=4092602 checksum=fold_shared_symbols digest=10387267436995117056
+hostname=host before touch workers=4 sample_s=6.236197 minflt=1457150 majflt=0 rss_kb=10975440 rss_per_worker_kb=2743860 checksum=fold_shared_symbols digest=16970085207913201664
+hostname=host before touch workers=8 sample_s=12.848255 minflt=3415964 majflt=0 rss_kb=18342720 rss_per_worker_kb=2292840 checksum=fold_shared_symbols digest=1377863775199559680
+hostname=host before touch workers=1 sample_s=1.685282 minflt=357313 majflt=0 rss_kb=8326804 rss_per_worker_kb=8326804 checksum=fold_shared_symbols digest=7345014615454105600
+hostname=host before touch workers=2 sample_s=2.998861 minflt=720146 majflt=0 rss_kb=8234444 rss_per_worker_kb=4117222 checksum=fold_shared_symbols digest=10387267436995117056
+hostname=host before touch workers=4 sample_s=5.726467 minflt=1469245 majflt=0 rss_kb=10629748 rss_per_worker_kb=2657437 checksum=fold_shared_symbols digest=16970085207913201664
+hostname=host before touch workers=8 sample_s=13.431437 minflt=3425496 majflt=0 rss_kb=18366816 rss_per_worker_kb=2295852 checksum=fold_shared_symbols digest=1377863775199559680
+hostname=host before touch workers=1 sample_s=1.564112 minflt=355793 majflt=0 rss_kb=8350900 rss_per_worker_kb=8350900 checksum=fold_shared_symbols digest=7345014615454105600
+hostname=host before touch workers=2 sample_s=3.038509 minflt=747223 majflt=0 rss_kb=8374000 rss_per_worker_kb=4187000 checksum=fold_shared_symbols digest=10387267436995117056
+hostname=host before touch workers=4 sample_s=5.667734 minflt=1462068 majflt=0 rss_kb=11115852 rss_per_worker_kb=2778963 checksum=fold_shared_symbols digest=16970085207913201664
+hostname=host before touch workers=8 sample_s=13.160727 minflt=3489752 majflt=0 rss_kb=18322464 rss_per_worker_kb=2290308 checksum=fold_shared_symbols digest=1377863775199559680
+meminfo after touch hostname=host MemTotal:49342768kB MemFree:12922000kB MemAvailable:17633808kB SwapFree:0kB Committed_AS:8907012kB
+hostname=host summary before touch workers=1 median_s=1.648435 iqr_s=0.038342 total_s=9.920408 eff=1.000 minflt=357828 majflt=0 rss_kb=8290464
+hostname=host summary before touch workers=2 median_s=3.095725 iqr_s=0.103175 total_s=18.660601 eff=0.532 minflt=727608 majflt=0 rss_kb=8233458
+hostname=host summary before touch workers=4 median_s=6.141179 iqr_s=0.435159 total_s=36.254988 eff=0.268 minflt=1470301 majflt=0 rss_kb=10803042
+hostname=host summary before touch workers=8 median_s=13.296082 iqr_s=1.212450 total_s=81.194683 eff=0.124 minflt=3435876 majflt=0 rss_kb=18316272
+meminfo before open-only hostname=host MemTotal:49342768kB MemFree:12925052kB MemAvailable:17636860kB SwapFree:0kB Committed_AS:8902916kB
+hostname=host before open-only workers=1 sample_s=1.514992 minflt=354954 majflt=0 rss_kb=8334384 rss_per_worker_kb=8334384 touch_s=0
+hostname=host before open-only workers=2 sample_s=2.870767 minflt=730842 majflt=0 rss_kb=9482720 rss_per_worker_kb=4741360 touch_s=0
+hostname=host before open-only workers=4 sample_s=5.288303 minflt=1461166 majflt=0 rss_kb=12206092 rss_per_worker_kb=3051523 touch_s=0
+hostname=host before open-only workers=8 sample_s=11.235418 minflt=3036368 majflt=0 rss_kb=18292100 rss_per_worker_kb=2286512 touch_s=0
+hostname=host before open-only workers=1 sample_s=1.532536 minflt=353689 majflt=0 rss_kb=8276916 rss_per_worker_kb=8276916 touch_s=0
+hostname=host before open-only workers=2 sample_s=2.988575 minflt=717088 majflt=0 rss_kb=9615176 rss_per_worker_kb=4807588 touch_s=0
+hostname=host before open-only workers=4 sample_s=5.493296 minflt=1468027 majflt=0 rss_kb=12072256 rss_per_worker_kb=3018064 touch_s=0
+hostname=host before open-only workers=8 sample_s=11.000061 minflt=3036604 majflt=0 rss_kb=18293116 rss_per_worker_kb=2286639 touch_s=0
+hostname=host before open-only workers=1 sample_s=1.540739 minflt=352925 majflt=0 rss_kb=8277932 rss_per_worker_kb=8277932 touch_s=0
+hostname=host before open-only workers=2 sample_s=2.893483 minflt=715850 majflt=0 rss_kb=9714684 rss_per_worker_kb=4857342 touch_s=0
+hostname=host before open-only workers=4 sample_s=5.654268 minflt=1561202 majflt=0 rss_kb=12227660 rss_per_worker_kb=3056915 touch_s=0
+hostname=host before open-only workers=8 sample_s=11.034460 minflt=3102469 majflt=0 rss_kb=18388420 rss_per_worker_kb=2298552 touch_s=0
+hostname=host before open-only workers=1 sample_s=1.480944 minflt=351904 majflt=0 rss_kb=8373236 rss_per_worker_kb=8373236 touch_s=0
+hostname=host before open-only workers=2 sample_s=2.887019 minflt=715577 majflt=0 rss_kb=9707556 rss_per_worker_kb=4853778 touch_s=0
+hostname=host before open-only workers=4 sample_s=5.646392 minflt=1527601 majflt=0 rss_kb=12242544 rss_per_worker_kb=3060636 touch_s=0
+hostname=host before open-only workers=8 sample_s=11.098659 minflt=3102186 majflt=0 rss_kb=18406248 rss_per_worker_kb=2300781 touch_s=0
+hostname=host before open-only workers=1 sample_s=1.481326 minflt=350889 majflt=0 rss_kb=8391064 rss_per_worker_kb=8391064 touch_s=0
+hostname=host before open-only workers=2 sample_s=2.737051 minflt=733976 majflt=0 rss_kb=9908512 rss_per_worker_kb=4954256 touch_s=0
+hostname=host before open-only workers=4 sample_s=5.589335 minflt=1453793 majflt=0 rss_kb=12159548 rss_per_worker_kb=3039887 touch_s=0
+hostname=host before open-only workers=8 sample_s=11.206628 minflt=3116910 majflt=0 rss_kb=18310940 rss_per_worker_kb=2288867 touch_s=0
+hostname=host before open-only workers=1 sample_s=1.484483 minflt=349873 majflt=0 rss_kb=8295756 rss_per_worker_kb=8295756 touch_s=0
+hostname=host before open-only workers=2 sample_s=2.714925 minflt=712526 majflt=0 rss_kb=9729452 rss_per_worker_kb=4864726 touch_s=0
+hostname=host before open-only workers=4 sample_s=5.325813 minflt=1492786 majflt=0 rss_kb=12218328 rss_per_worker_kb=3054582 touch_s=0
+hostname=host before open-only workers=8 sample_s=11.398376 minflt=3086603 majflt=0 rss_kb=18305676 rss_per_worker_kb=2288209 touch_s=0
+meminfo after open-only hostname=host MemTotal:49342768kB MemFree:13282028kB MemAvailable:17994576kB SwapFree:0kB Committed_AS:8909984kB
+hostname=host summary before open-only workers=1 median_s=1.499737 iqr_s=0.046035 total_s=9.035021 eff=1.000 minflt=352414 majflt=0 rss_kb=8315070
+hostname=host summary before open-only workers=2 median_s=2.878893 iqr_s=0.121387 total_s=17.091820 eff=0.521 minflt=716469 majflt=0 rss_kb=9711120
+hostname=host summary before open-only workers=4 median_s=5.541316 iqr_s=0.264445 total_s=32.997408 eff=0.271 minflt=1480406 majflt=0 rss_kb=12212210
+hostname=host summary before open-only workers=8 median_s=11.152643 iqr_s=0.177711 total_s=66.973601 eff=0.134 minflt=3094394 majflt=0 rss_kb=18308308
+meminfo before ranks hostname=host MemTotal:49342768kB MemFree:13283204kB MemAvailable:17995752kB SwapFree:0kB Committed_AS:8908960kB
+hostname=host before ranks=1 sample_s=0.585489 minflt=105946 majflt=0 rss_kb=405288 rss_per_worker_kb=405288
+hostname=host before ranks=2 sample_s=0.668918 minflt=212113 majflt=0 rss_kb=406024 rss_per_worker_kb=203012
+hostname=host before ranks=4 sample_s=0.901589 minflt=425322 majflt=0 rss_kb=406772 rss_per_worker_kb=101693
+hostname=host before ranks=8 sample_s=1.226912 minflt=854742 majflt=0 rss_kb=408012 rss_per_worker_kb=51001
+hostname=host before ranks=1 sample_s=0.555493 minflt=105947 majflt=0 rss_kb=405484 rss_per_worker_kb=405484
+hostname=host before ranks=2 sample_s=0.665697 minflt=212115 majflt=0 rss_kb=405932 rss_per_worker_kb=202966
+hostname=host before ranks=4 sample_s=0.972918 minflt=425323 majflt=0 rss_kb=406780 rss_per_worker_kb=101695
+hostname=host before ranks=8 sample_s=1.271900 minflt=854749 majflt=0 rss_kb=408024 rss_per_worker_kb=51003
+hostname=host before ranks=1 sample_s=0.611142 minflt=105946 majflt=0 rss_kb=405428 rss_per_worker_kb=405428
+hostname=host before ranks=2 sample_s=0.683154 minflt=212116 majflt=0 rss_kb=405944 rss_per_worker_kb=202972
+hostname=host before ranks=4 sample_s=1.032340 minflt=425322 majflt=0 rss_kb=406744 rss_per_worker_kb=101686
+hostname=host before ranks=8 sample_s=1.395876 minflt=854745 majflt=0 rss_kb=408084 rss_per_worker_kb=51010
+hostname=host before ranks=1 sample_s=0.588572 minflt=105946 majflt=0 rss_kb=405496 rss_per_worker_kb=405496
+hostname=host before ranks=2 sample_s=0.694270 minflt=212113 majflt=0 rss_kb=405968 rss_per_worker_kb=202984
+hostname=host before ranks=4 sample_s=0.967790 minflt=425323 majflt=0 rss_kb=406640 rss_per_worker_kb=101660
+hostname=host before ranks=8 sample_s=1.260418 minflt=854744 majflt=0 rss_kb=408052 rss_per_worker_kb=51006
+hostname=host before ranks=1 sample_s=0.570236 minflt=105946 majflt=0 rss_kb=405372 rss_per_worker_kb=405372
+hostname=host before ranks=2 sample_s=0.666008 minflt=212112 majflt=0 rss_kb=405940 rss_per_worker_kb=202970
+hostname=host before ranks=4 sample_s=0.997980 minflt=425320 majflt=0 rss_kb=406792 rss_per_worker_kb=101698
+hostname=host before ranks=8 sample_s=1.429354 minflt=854751 majflt=0 rss_kb=407956 rss_per_worker_kb=50994
+hostname=host before ranks=1 sample_s=0.577332 minflt=105947 majflt=0 rss_kb=405452 rss_per_worker_kb=405452
+hostname=host before ranks=2 sample_s=0.721156 minflt=212115 majflt=0 rss_kb=405852 rss_per_worker_kb=202926
+hostname=host before ranks=4 sample_s=0.990423 minflt=425323 majflt=0 rss_kb=406592 rss_per_worker_kb=101648
+hostname=host before ranks=8 sample_s=1.406455 minflt=854751 majflt=0 rss_kb=407744 rss_per_worker_kb=50968
+meminfo after ranks hostname=host MemTotal:49342768kB MemFree:10869712kB MemAvailable:15584416kB SwapFree:0kB Committed_AS:8901792kB
+hostname=host summary before ranks=1 median_s=0.581411 iqr_s=0.015791 total_s=3.488264 eff=1.000 minflt=105946 majflt=0 rss_kb=405440
+hostname=host summary before ranks=2 median_s=0.676036 iqr_s=0.024756 total_s=4.099203 eff=0.860 minflt=212114 majflt=0 rss_kb=405942
+hostname=host summary before ranks=4 median_s=0.981671 iqr_s=0.027019 total_s=5.863040 eff=0.592 minflt=425322 majflt=0 rss_kb=406758
+hostname=host summary before ranks=8 median_s=1.333888 iqr_s=0.140522 total_s=7.990915 eff=0.436 minflt=854747 majflt=0 rss_kb=408018
+AFTER_BEGIN
+git-head=a2499ab697691f0d46ac27218509a123247e3b62
+git-tree=8704be1b38d42b62247c6e265624e53b5d1cc0e1
+checksum-function=fold_shared_symbols
+harness-sha256=0892c50911a98177dab264b8d892b87733fae560fc1350e9ef85e05adf188c88
+fold-lib-sha256=51cc00b8ecd33cee064ceac28a9521956fcfd212e38912088db706684d4206a0
+write workers=1 frames=16384
+serial-digest workers=1 digest=7345014615454105600
+write workers=2 frames=32768
+serial-digest workers=2 digest=10387267436995117056
+write workers=4 frames=65536
+serial-digest workers=4 digest=16970085207913201664
+write workers=8 frames=131072
+serial-digest workers=8 digest=1377863775199559680
+meminfo before touch hostname=host MemTotal:49342768kB MemFree:14915784kB MemAvailable:19632336kB SwapFree:0kB Committed_AS:5039048kB
+touch ladder
+hostname=host touch workers=1 sample_s=0.561082 coverage=0.9998 scan_kind=serial chunks=0.452237 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4307 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=2 sample_s=0.720265 coverage=0.9999 scan_kind=equal-span chunks=0.394605,0.488671 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50660 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=4 sample_s=1.056389 coverage=0.9999 scan_kind=equal-span chunks=0.396556,0.436738,0.390089,0.495918 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192 call_minflt=128366 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=8 sample_s=1.248061 coverage=0.9999 scan_kind=equal-span chunks=0.433794,0.559287,0.435225,0.497953,0.433852,0.428047,0.426482,0.538977 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4195,4192,4191,4191,4192,4192 call_minflt=283967 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=1 sample_s=0.442859 coverage=0.9999 scan_kind=serial chunks=0.358044 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=2 sample_s=0.623721 coverage=0.9999 scan_kind=equal-span chunks=0.361410,0.429827 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50257 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=4 sample_s=0.825067 coverage=0.9999 scan_kind=equal-span chunks=0.400189,0.398863,0.367848,0.418859 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192 call_minflt=127761 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=8 sample_s=1.170539 coverage=0.9999 scan_kind=equal-span chunks=0.380520,0.388815,0.392072,0.432800,0.364879,0.446019,0.378539,0.434363 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192,4191,4191,4192,4192 call_minflt=283435 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=1 sample_s=0.434212 coverage=0.9999 scan_kind=serial chunks=0.351766 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=2 sample_s=0.601164 coverage=0.9999 scan_kind=equal-span chunks=0.349926,0.404979 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50254 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=4 sample_s=0.822703 coverage=0.9999 scan_kind=equal-span chunks=0.428682,0.406502,0.385382,0.413573 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192 call_minflt=118542 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=8 sample_s=1.228484 coverage=0.9999 scan_kind=equal-span chunks=0.410804,0.411264,0.404164,0.481417,0.403974,0.489514,0.400128,0.468491 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192,4191,4191,4192,4192 call_minflt=282944 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=1 sample_s=0.532851 coverage=0.9999 scan_kind=serial chunks=0.424633 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=2 sample_s=0.689508 coverage=0.9999 scan_kind=equal-span chunks=0.397361,0.479250 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50247 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=4 sample_s=0.798805 coverage=0.9999 scan_kind=equal-span chunks=0.413437,0.434730,0.396680,0.442482 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192 call_minflt=100907 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=8 sample_s=1.254620 coverage=1.0000 scan_kind=equal-span chunks=0.402865,0.408369,0.398164,0.405802,0.456892,0.493141,0.401401,0.461038 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192,4191,4191,4192,4192 call_minflt=282460 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=1 sample_s=0.540862 coverage=0.9999 scan_kind=serial chunks=0.439430 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=2 sample_s=0.697706 coverage=0.9999 scan_kind=equal-span chunks=0.393266,0.497039 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50243 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=4 sample_s=0.812170 coverage=0.9999 scan_kind=equal-span chunks=0.436631,0.425905,0.402133,0.451707 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,16357,4192,4195 call_minflt=112660 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=8 sample_s=1.246191 coverage=0.9999 scan_kind=equal-span chunks=0.420693,0.431414,0.421802,0.453431,0.417307,0.499690,0.524683,0.488301 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192,4191,4191,4192,4192 call_minflt=282097 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=1 sample_s=0.520657 coverage=0.9999 scan_kind=serial chunks=0.415764 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=2 sample_s=0.722573 coverage=0.9999 scan_kind=equal-span chunks=0.417427,0.513256 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50243 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=4 sample_s=0.812658 coverage=0.9999 scan_kind=equal-span chunks=0.411037,0.400868,0.390829,0.433166 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,4191,16358,4192 call_minflt=125585 call_majflt=0 checksum=fold_shared_symbols
+hostname=host touch workers=8 sample_s=1.174306 coverage=0.9999 scan_kind=equal-span chunks=0.470833,0.435865,0.431713,0.441285,0.431337,0.501719,0.499163,0.516696 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192,4191,4191,4192,4192 call_minflt=281840 call_majflt=0 checksum=fold_shared_symbols
+meminfo after touch hostname=host MemTotal:49342768kB MemFree:11214264kB MemAvailable:15930876kB SwapFree:0kB Committed_AS:10546784kB
+meminfo before open-only hostname=host MemTotal:49342768kB MemFree:11214264kB MemAvailable:15930876kB SwapFree:0kB Committed_AS:10546784kB
+open-only ladder
+hostname=host open-only workers=1 sample_s=0.427719 coverage=0.9999 scan_kind=serial chunks=0.351933 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.628641 coverage=0.9999 scan_kind=equal-span chunks=0.361758,0.450545 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50243 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.536672 coverage=0.9999 scan_kind=equal-span chunks=0.378013,0.371604,0.348888,0.392915 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192 call_minflt=100487 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.701703 coverage=0.9999 scan_kind=equal-span chunks=0.440628,0.387360,0.408234,0.384473,0.374273,0.384781,0.430897,0.437802 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192,4191,4191,4192,4192 call_minflt=278580 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.420645 coverage=0.9999 scan_kind=serial chunks=0.345672 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.576094 coverage=0.9999 scan_kind=equal-span chunks=0.371432,0.434963 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50243 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.585703 coverage=0.9999 scan_kind=equal-span chunks=0.400959,0.397822,0.375675,0.426580 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192 call_minflt=100487 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.749885 coverage=0.9999 scan_kind=equal-span chunks=0.419387,0.374843,0.469109,0.374852,0.460868,0.370837,0.417833,0.411679 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192,4191,4191,4192,4192 call_minflt=278565 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.591626 coverage=0.9989 scan_kind=serial chunks=0.487717 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.565993 coverage=0.9999 scan_kind=equal-span chunks=0.379512,0.426620 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50244 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.576351 coverage=0.9999 scan_kind=equal-span chunks=0.415276,0.414128,0.379754,0.434140 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192 call_minflt=100488 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.793259 coverage=0.9999 scan_kind=equal-span chunks=0.470647,0.352915,0.355222,0.342991,0.348184,0.351073,0.376835,0.377803 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192,4191,4191,4192,4192 call_minflt=278566 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.837391 coverage=0.9991 scan_kind=serial chunks=0.691091 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.520821 coverage=0.9999 scan_kind=equal-span chunks=0.338088,0.389923 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50243 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.534856 coverage=0.9998 scan_kind=equal-span chunks=0.365966,0.367915,0.344092,0.405084 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192 call_minflt=100487 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.621569 coverage=0.9999 scan_kind=equal-span chunks=0.374677,0.361663,0.347135,0.371993,0.339264,0.362302,0.365533,0.391362 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192,4194,4191,4192,4192 call_minflt=278581 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.409771 coverage=0.9999 scan_kind=serial chunks=0.334179 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.503451 coverage=0.9999 scan_kind=equal-span chunks=0.332431,0.373489 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50243 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.536819 coverage=0.9998 scan_kind=equal-span chunks=0.373442,0.360896,0.353608,0.388267 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192 call_minflt=100488 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.637015 coverage=0.9999 scan_kind=equal-span chunks=0.385586,0.356196,0.368804,0.362800,0.352838,0.359291,0.356451,0.360705 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192,4191,4191,4192,4192 call_minflt=278570 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.451015 coverage=0.9990 scan_kind=serial chunks=0.366532 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.519084 coverage=0.9999 scan_kind=equal-span chunks=0.350611,0.390277 share_frames=16384,16384 share_bytes=274776064,274776064 worker_minflt=4191,4192 call_minflt=50243 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.571102 coverage=0.9998 scan_kind=equal-span chunks=0.400953,0.391362,0.386468,0.431016 share_frames=16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192 call_minflt=100487 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.611810 coverage=0.9999 scan_kind=equal-span chunks=0.381351,0.363212,0.352876,0.379000,0.360633,0.366554,0.354017,0.359957 share_frames=16384,16384,16384,16384,16384,16384,16384,16384 share_bytes=274776064,274776064,274776064,274776064,274776064,274776064,274776064,274776064 worker_minflt=4191,4191,4192,4192,4191,4191,4192,4192 call_minflt=278574 call_majflt=0
+meminfo after open-only hostname=host MemTotal:49342768kB MemFree:11248376kB MemAvailable:15965028kB SwapFree:0kB Committed_AS:10546800kB
+fixed-slab parse
+hostname=host open-only workers=1 sample_s=0.413276 coverage=0.9992 scan_kind=serial chunks=0.336122 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.241471 coverage=0.9998 scan_kind=equal-span chunks=0.163461,0.175399 share_frames=8192,8192 share_bytes=137388032,137388032 worker_minflt=2095,2096 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.127779 coverage=0.9997 scan_kind=equal-span chunks=0.083648,0.086147,0.086474,0.090050 share_frames=4096,4096,4096,4096 share_bytes=68694016,68694016,68694016,68694016 worker_minflt=1047,1047,1047,1048 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.069202 coverage=0.9995 scan_kind=equal-span chunks=0.043269,0.044994,0.044548,0.045646,0.042620,0.045437,0.042311,0.045771 share_frames=2048,2048,2048,2048,2048,2048,2048,2048 share_bytes=34347008,34347008,34347008,34347008,34347008,34347008,34347008,34347008 worker_minflt=523,523,523,523,523,523,523,524 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.403059 coverage=0.9989 scan_kind=serial chunks=0.328597 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.240515 coverage=0.9998 scan_kind=equal-span chunks=0.163396,0.177355 share_frames=8192,8192 share_bytes=137388032,137388032 worker_minflt=2095,2096 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.125729 coverage=0.9997 scan_kind=equal-span chunks=0.083129,0.083740,0.082183,0.085419 share_frames=4096,4096,4096,4096 share_bytes=68694016,68694016,68694016,68694016 worker_minflt=1047,1047,1047,1048 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.068220 coverage=0.9994 scan_kind=equal-span chunks=0.043448,0.044353,0.042482,0.044109,0.042513,0.043992,0.043173,0.045976 share_frames=2048,2048,2048,2048,2048,2048,2048,2048 share_bytes=34347008,34347008,34347008,34347008,34347008,34347008,34347008,34347008 worker_minflt=523,523,523,523,523,523,523,524 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.408791 coverage=0.9988 scan_kind=serial chunks=0.322851 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.244311 coverage=0.9999 scan_kind=equal-span chunks=0.165932,0.180097 share_frames=8192,8192 share_bytes=137388032,137388032 worker_minflt=2095,2096 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.125838 coverage=0.9996 scan_kind=equal-span chunks=0.084436,0.087719,0.083496,0.084843 share_frames=4096,4096,4096,4096 share_bytes=68694016,68694016,68694016,68694016 worker_minflt=1047,1047,1047,1048 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.071485 coverage=0.9991 scan_kind=equal-span chunks=0.043570,0.044820,0.044324,0.043489,0.042416,0.043734,0.042534,0.046843 share_frames=2048,2048,2048,2048,2048,2048,2048,2048 share_bytes=34347008,34347008,34347008,34347008,34347008,34347008,34347008,34347008 worker_minflt=523,523,523,523,523,523,523,524 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.409875 coverage=0.9989 scan_kind=serial chunks=0.334780 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.259526 coverage=0.9998 scan_kind=equal-span chunks=0.168760,0.193521 share_frames=8192,8192 share_bytes=137388032,137388032 worker_minflt=2095,2096 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.129900 coverage=0.9997 scan_kind=equal-span chunks=0.084681,0.087835,0.086503,0.088366 share_frames=4096,4096,4096,4096 share_bytes=68694016,68694016,68694016,68694016 worker_minflt=1047,1047,1047,1048 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.084914 coverage=0.9993 scan_kind=equal-span chunks=0.043756,0.045188,0.045169,0.044825,0.041573,0.042782,0.040960,0.045328 share_frames=2048,2048,2048,2048,2048,2048,2048,2048 share_bytes=34347008,34347008,34347008,34347008,34347008,34347008,34347008,34347008 worker_minflt=523,523,523,523,523,523,523,524 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.434918 coverage=0.9988 scan_kind=serial chunks=0.357552 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.256052 coverage=0.9998 scan_kind=equal-span chunks=0.170661,0.195187 share_frames=8192,8192 share_bytes=137388032,137388032 worker_minflt=2095,2096 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.138910 coverage=0.9996 scan_kind=equal-span chunks=0.086170,0.087253,0.084437,0.087520 share_frames=4096,4096,4096,4096 share_bytes=68694016,68694016,68694016,68694016 worker_minflt=1047,1047,1047,1048 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.069799 coverage=0.9995 scan_kind=equal-span chunks=0.044550,0.046209,0.045946,0.045419,0.042468,0.043311,0.042173,0.046041 share_frames=2048,2048,2048,2048,2048,2048,2048,2048 share_bytes=34347008,34347008,34347008,34347008,34347008,34347008,34347008,34347008 worker_minflt=523,523,523,523,523,523,523,524 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.405773 coverage=0.9988 scan_kind=serial chunks=0.332397 share_frames=16384 share_bytes=274776064 worker_minflt=4193 call_minflt=4193 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.263312 coverage=0.9999 scan_kind=equal-span chunks=0.165683,0.192583 share_frames=8192,8192 share_bytes=137388032,137388032 worker_minflt=2095,2096 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.129661 coverage=0.9997 scan_kind=equal-span chunks=0.084225,0.087454,0.084673,0.088604 share_frames=4096,4096,4096,4096 share_bytes=68694016,68694016,68694016,68694016 worker_minflt=1047,1047,1047,1048 call_minflt=25122 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.070583 coverage=0.9994 scan_kind=equal-span chunks=0.043747,0.045086,0.044563,0.045542,0.040433,0.044753,0.043832,0.045120 share_frames=2048,2048,2048,2048,2048,2048,2048,2048 share_bytes=34347008,34347008,34347008,34347008,34347008,34347008,34347008,34347008 worker_minflt=523,523,523,523,523,523,523,524 call_minflt=25122 call_majflt=0
+burn
+scan crossover
+scan size_mib=4 threads=1 chunked=0 sample_s=0.000530
+scan size_mib=4 threads=2 chunked=0 sample_s=0.000389
+scan size_mib=4 threads=2 chunked=1 sample_s=0.001266
+scan size_mib=4 threads=4 chunked=0 sample_s=0.000386
+scan size_mib=4 threads=4 chunked=1 sample_s=0.001105
+scan size_mib=4 threads=8 chunked=0 sample_s=0.000387
+scan size_mib=4 threads=8 chunked=1 sample_s=0.000633
+scan size_mib=8 threads=1 chunked=0 sample_s=0.000962
+scan size_mib=8 threads=2 chunked=0 sample_s=0.000820
+scan size_mib=8 threads=2 chunked=1 sample_s=0.002039
+scan size_mib=8 threads=4 chunked=0 sample_s=0.000809
+scan size_mib=8 threads=4 chunked=1 sample_s=0.000976
+scan size_mib=8 threads=8 chunked=0 sample_s=0.000808
+scan size_mib=8 threads=8 chunked=1 sample_s=0.007671
+scan size_mib=16 threads=1 chunked=0 sample_s=0.001745
+scan size_mib=16 threads=2 chunked=0 sample_s=0.001554
+scan size_mib=16 threads=2 chunked=1 sample_s=0.003282
+scan size_mib=16 threads=4 chunked=0 sample_s=0.001541
+scan size_mib=16 threads=4 chunked=1 sample_s=0.002376
+scan size_mib=16 threads=8 chunked=0 sample_s=0.001568
+scan size_mib=16 threads=8 chunked=1 sample_s=0.002012
+scan size_mib=32 threads=1 chunked=0 sample_s=0.005757
+scan size_mib=32 threads=2 chunked=0 sample_s=0.003285
+scan size_mib=32 threads=2 chunked=1 sample_s=0.004530
+scan size_mib=32 threads=4 chunked=0 sample_s=0.003322
+scan size_mib=32 threads=4 chunked=1 sample_s=0.003606
+scan size_mib=32 threads=8 chunked=0 sample_s=0.003398
+scan size_mib=32 threads=8 chunked=1 sample_s=0.002377
+scan size_mib=64 threads=1 chunked=0 sample_s=0.013551
+scan size_mib=64 threads=2 chunked=0 sample_s=0.006486
+scan size_mib=64 threads=2 chunked=1 sample_s=0.012875
+scan size_mib=64 threads=4 chunked=0 sample_s=0.007527
+scan size_mib=64 threads=4 chunked=1 sample_s=0.006938
+scan size_mib=64 threads=8 chunked=0 sample_s=0.006501
+scan size_mib=64 threads=8 chunked=1 sample_s=0.003119
+scan size_mib=128 threads=1 chunked=0 sample_s=0.027053
+scan size_mib=128 threads=2 chunked=0 sample_s=0.014144
+scan size_mib=128 threads=2 chunked=1 sample_s=0.024191
+scan size_mib=128 threads=4 chunked=0 sample_s=0.016424
+scan size_mib=128 threads=4 chunked=1 sample_s=0.012052
+scan size_mib=128 threads=8 chunked=0 sample_s=0.013719
+scan size_mib=128 threads=8 chunked=1 sample_s=0.007300
+scan size_mib=4 threads=1 chunked=0 sample_s=0.000691
+scan size_mib=4 threads=2 chunked=0 sample_s=0.000404
+scan size_mib=4 threads=2 chunked=1 sample_s=0.000762
+scan size_mib=4 threads=4 chunked=0 sample_s=0.000388
+scan size_mib=4 threads=4 chunked=1 sample_s=0.000832
+scan size_mib=4 threads=8 chunked=0 sample_s=0.000401
+scan size_mib=4 threads=8 chunked=1 sample_s=0.000507
+scan size_mib=8 threads=1 chunked=0 sample_s=0.001395
+scan size_mib=8 threads=2 chunked=0 sample_s=0.000823
+scan size_mib=8 threads=2 chunked=1 sample_s=0.001372
+scan size_mib=8 threads=4 chunked=0 sample_s=0.000834
+scan size_mib=8 threads=4 chunked=1 sample_s=0.000851
+scan size_mib=8 threads=8 chunked=0 sample_s=0.000881
+scan size_mib=8 threads=8 chunked=1 sample_s=0.000979
+scan size_mib=16 threads=1 chunked=0 sample_s=0.003052
+scan size_mib=16 threads=2 chunked=0 sample_s=0.001549
+scan size_mib=16 threads=2 chunked=1 sample_s=0.001536
+scan size_mib=16 threads=4 chunked=0 sample_s=0.001549
+scan size_mib=16 threads=4 chunked=1 sample_s=0.001449
+scan size_mib=16 threads=8 chunked=0 sample_s=0.001532
+scan size_mib=16 threads=8 chunked=1 sample_s=0.001322
+scan size_mib=32 threads=1 chunked=0 sample_s=0.006467
+scan size_mib=32 threads=2 chunked=0 sample_s=0.003282
+scan size_mib=32 threads=2 chunked=1 sample_s=0.002874
+scan size_mib=32 threads=4 chunked=0 sample_s=0.003293
+scan size_mib=32 threads=4 chunked=1 sample_s=0.002626
+scan size_mib=32 threads=8 chunked=0 sample_s=0.003330
+scan size_mib=32 threads=8 chunked=1 sample_s=0.001864
+scan size_mib=64 threads=1 chunked=0 sample_s=0.013072
+scan size_mib=64 threads=2 chunked=0 sample_s=0.006490
+scan size_mib=64 threads=2 chunked=1 sample_s=0.008718
+scan size_mib=64 threads=4 chunked=0 sample_s=0.006501
+scan size_mib=64 threads=4 chunked=1 sample_s=0.005776
+scan size_mib=64 threads=8 chunked=0 sample_s=0.006501
+scan size_mib=64 threads=8 chunked=1 sample_s=0.004446
+scan size_mib=128 threads=1 chunked=0 sample_s=0.025213
+scan size_mib=128 threads=2 chunked=0 sample_s=0.014529
+scan size_mib=128 threads=2 chunked=1 sample_s=0.016028
+scan size_mib=128 threads=4 chunked=0 sample_s=0.013315
+scan size_mib=128 threads=4 chunked=1 sample_s=0.007628
+scan size_mib=128 threads=8 chunked=0 sample_s=0.013324
+scan size_mib=128 threads=8 chunked=1 sample_s=0.012616
+scan size_mib=4 threads=1 chunked=0 sample_s=0.000692
+scan size_mib=4 threads=2 chunked=0 sample_s=0.000388
+scan size_mib=4 threads=2 chunked=1 sample_s=0.000763
+scan size_mib=4 threads=4 chunked=0 sample_s=0.000401
+scan size_mib=4 threads=4 chunked=1 sample_s=0.000657
+scan size_mib=4 threads=8 chunked=0 sample_s=0.000386
+scan size_mib=4 threads=8 chunked=1 sample_s=0.000859
+scan size_mib=8 threads=1 chunked=0 sample_s=0.001536
+scan size_mib=8 threads=2 chunked=0 sample_s=0.000826
+scan size_mib=8 threads=2 chunked=1 sample_s=0.001308
+scan size_mib=8 threads=4 chunked=0 sample_s=0.000803
+scan size_mib=8 threads=4 chunked=1 sample_s=0.001266
+scan size_mib=8 threads=8 chunked=0 sample_s=0.000828
+scan size_mib=8 threads=8 chunked=1 sample_s=0.000775
+scan size_mib=16 threads=1 chunked=0 sample_s=0.003079
+scan size_mib=16 threads=2 chunked=0 sample_s=0.001547
+scan size_mib=16 threads=2 chunked=1 sample_s=0.001827
+scan size_mib=16 threads=4 chunked=0 sample_s=0.001569
+scan size_mib=16 threads=4 chunked=1 sample_s=0.001342
+scan size_mib=16 threads=8 chunked=0 sample_s=0.001532
+scan size_mib=16 threads=8 chunked=1 sample_s=0.000926
+scan size_mib=32 threads=1 chunked=0 sample_s=0.006573
+scan size_mib=32 threads=2 chunked=0 sample_s=0.003288
+scan size_mib=32 threads=2 chunked=1 sample_s=0.004209
+scan size_mib=32 threads=4 chunked=0 sample_s=0.003295
+scan size_mib=32 threads=4 chunked=1 sample_s=0.002410
+scan size_mib=32 threads=8 chunked=0 sample_s=0.003289
+scan size_mib=32 threads=8 chunked=1 sample_s=0.001828
+scan size_mib=64 threads=1 chunked=0 sample_s=0.013561
+scan size_mib=64 threads=2 chunked=0 sample_s=0.006610
+scan size_mib=64 threads=2 chunked=1 sample_s=0.007773
+scan size_mib=64 threads=4 chunked=0 sample_s=0.006592
+scan size_mib=64 threads=4 chunked=1 sample_s=0.003939
+scan size_mib=64 threads=8 chunked=0 sample_s=0.006605
+scan size_mib=64 threads=8 chunked=1 sample_s=0.003419
+scan size_mib=128 threads=1 chunked=0 sample_s=0.025490
+scan size_mib=128 threads=2 chunked=0 sample_s=0.014746
+scan size_mib=128 threads=2 chunked=1 sample_s=0.011447
+scan size_mib=128 threads=4 chunked=0 sample_s=0.013421
+scan size_mib=128 threads=4 chunked=1 sample_s=0.013320
+scan size_mib=128 threads=8 chunked=0 sample_s=0.015007
+scan size_mib=128 threads=8 chunked=1 sample_s=0.006733
+scan size_mib=4 threads=1 chunked=0 sample_s=0.000759
+scan size_mib=4 threads=2 chunked=0 sample_s=0.000390
+scan size_mib=4 threads=2 chunked=1 sample_s=0.000602
+scan size_mib=4 threads=4 chunked=0 sample_s=0.000389
+scan size_mib=4 threads=4 chunked=1 sample_s=0.000808
+scan size_mib=4 threads=8 chunked=0 sample_s=0.000390
+scan size_mib=4 threads=8 chunked=1 sample_s=0.000408
+scan size_mib=8 threads=1 chunked=0 sample_s=0.001557
+scan size_mib=8 threads=2 chunked=0 sample_s=0.000824
+scan size_mib=8 threads=2 chunked=1 sample_s=0.000919
+scan size_mib=8 threads=4 chunked=0 sample_s=0.000798
+scan size_mib=8 threads=4 chunked=1 sample_s=0.000938
+scan size_mib=8 threads=8 chunked=0 sample_s=0.000838
+scan size_mib=8 threads=8 chunked=1 sample_s=0.000856
+scan size_mib=16 threads=1 chunked=0 sample_s=0.003111
+scan size_mib=16 threads=2 chunked=0 sample_s=0.001532
+scan size_mib=16 threads=2 chunked=1 sample_s=0.001601
+scan size_mib=16 threads=4 chunked=0 sample_s=0.001870
+scan size_mib=16 threads=4 chunked=1 sample_s=0.001120
+scan size_mib=16 threads=8 chunked=0 sample_s=0.001532
+scan size_mib=16 threads=8 chunked=1 sample_s=0.001123
+scan size_mib=32 threads=1 chunked=0 sample_s=0.006774
+scan size_mib=32 threads=2 chunked=0 sample_s=0.003289
+scan size_mib=32 threads=2 chunked=1 sample_s=0.002837
+scan size_mib=32 threads=4 chunked=0 sample_s=0.003295
+scan size_mib=32 threads=4 chunked=1 sample_s=0.002156
+scan size_mib=32 threads=8 chunked=0 sample_s=0.003328
+scan size_mib=32 threads=8 chunked=1 sample_s=0.001870
+scan size_mib=64 threads=1 chunked=0 sample_s=0.013460
+scan size_mib=64 threads=2 chunked=0 sample_s=0.006609
+scan size_mib=64 threads=2 chunked=1 sample_s=0.005327
+scan size_mib=64 threads=4 chunked=0 sample_s=0.006620
+scan size_mib=64 threads=4 chunked=1 sample_s=0.007145
+scan size_mib=64 threads=8 chunked=0 sample_s=0.007433
+scan size_mib=64 threads=8 chunked=1 sample_s=0.003380
+scan size_mib=128 threads=1 chunked=0 sample_s=0.025443
+scan size_mib=128 threads=2 chunked=0 sample_s=0.018165
+scan size_mib=128 threads=2 chunked=1 sample_s=0.010998
+scan size_mib=128 threads=4 chunked=0 sample_s=0.013337
+scan size_mib=128 threads=4 chunked=1 sample_s=0.008777
+scan size_mib=128 threads=8 chunked=0 sample_s=0.015213
+scan size_mib=128 threads=8 chunked=1 sample_s=0.008960
+scan size_mib=4 threads=1 chunked=0 sample_s=0.000708
+scan size_mib=4 threads=2 chunked=0 sample_s=0.000389
+scan size_mib=4 threads=2 chunked=1 sample_s=0.000767
+scan size_mib=4 threads=4 chunked=0 sample_s=0.000387
+scan size_mib=4 threads=4 chunked=1 sample_s=0.000876
+scan size_mib=4 threads=8 chunked=0 sample_s=0.000391
+scan size_mib=4 threads=8 chunked=1 sample_s=0.000350
+scan size_mib=8 threads=1 chunked=0 sample_s=0.001565
+scan size_mib=8 threads=2 chunked=0 sample_s=0.000810
+scan size_mib=8 threads=2 chunked=1 sample_s=0.001102
+scan size_mib=8 threads=4 chunked=0 sample_s=0.000808
+scan size_mib=8 threads=4 chunked=1 sample_s=0.001303
+scan size_mib=8 threads=8 chunked=0 sample_s=0.000844
+scan size_mib=8 threads=8 chunked=1 sample_s=0.000821
+scan size_mib=16 threads=1 chunked=0 sample_s=0.003132
+scan size_mib=16 threads=2 chunked=0 sample_s=0.001543
+scan size_mib=16 threads=2 chunked=1 sample_s=0.002049
+scan size_mib=16 threads=4 chunked=0 sample_s=0.001541
+scan size_mib=16 threads=4 chunked=1 sample_s=0.001415
+scan size_mib=16 threads=8 chunked=0 sample_s=0.001542
+scan size_mib=16 threads=8 chunked=1 sample_s=0.000979
+scan size_mib=32 threads=1 chunked=0 sample_s=0.006578
+scan size_mib=32 threads=2 chunked=0 sample_s=0.003322
+scan size_mib=32 threads=2 chunked=1 sample_s=0.002800
+scan size_mib=32 threads=4 chunked=0 sample_s=0.003305
+scan size_mib=32 threads=4 chunked=1 sample_s=0.002425
+scan size_mib=32 threads=8 chunked=0 sample_s=0.003287
+scan size_mib=32 threads=8 chunked=1 sample_s=0.002164
+scan size_mib=64 threads=1 chunked=0 sample_s=0.013374
+scan size_mib=64 threads=2 chunked=0 sample_s=0.006624
+scan size_mib=64 threads=2 chunked=1 sample_s=0.006433
+scan size_mib=64 threads=4 chunked=0 sample_s=0.006628
+scan size_mib=64 threads=4 chunked=1 sample_s=0.004419
+scan size_mib=64 threads=8 chunked=0 sample_s=0.006641
+scan size_mib=64 threads=8 chunked=1 sample_s=0.003884
+scan size_mib=128 threads=1 chunked=0 sample_s=0.025002
+scan size_mib=128 threads=2 chunked=0 sample_s=0.016286
+scan size_mib=128 threads=2 chunked=1 sample_s=0.010875
+scan size_mib=128 threads=4 chunked=0 sample_s=0.013301
+scan size_mib=128 threads=4 chunked=1 sample_s=0.008375
+scan size_mib=128 threads=8 chunked=0 sample_s=0.013421
+scan size_mib=128 threads=8 chunked=1 sample_s=0.011338
+scan size_mib=4 threads=1 chunked=0 sample_s=0.000754
+scan size_mib=4 threads=2 chunked=0 sample_s=0.000391
+scan size_mib=4 threads=2 chunked=1 sample_s=0.000480
+scan size_mib=4 threads=4 chunked=0 sample_s=0.000392
+scan size_mib=4 threads=4 chunked=1 sample_s=0.001014
+scan size_mib=4 threads=8 chunked=0 sample_s=0.000389
+scan size_mib=4 threads=8 chunked=1 sample_s=0.000904
+scan size_mib=8 threads=1 chunked=0 sample_s=0.001510
+scan size_mib=8 threads=2 chunked=0 sample_s=0.000808
+scan size_mib=8 threads=2 chunked=1 sample_s=0.000897
+scan size_mib=8 threads=4 chunked=0 sample_s=0.000801
+scan size_mib=8 threads=4 chunked=1 sample_s=0.000842
+scan size_mib=8 threads=8 chunked=0 sample_s=0.000798
+scan size_mib=8 threads=8 chunked=1 sample_s=0.000749
+scan size_mib=16 threads=1 chunked=0 sample_s=0.003126
+scan size_mib=16 threads=2 chunked=0 sample_s=0.001562
+scan size_mib=16 threads=2 chunked=1 sample_s=0.001679
+scan size_mib=16 threads=4 chunked=0 sample_s=0.001541
+scan size_mib=16 threads=4 chunked=1 sample_s=0.001230
+scan size_mib=16 threads=8 chunked=0 sample_s=0.001539
+scan size_mib=16 threads=8 chunked=1 sample_s=0.001354
+scan size_mib=32 threads=1 chunked=0 sample_s=0.006590
+scan size_mib=32 threads=2 chunked=0 sample_s=0.003303
+scan size_mib=32 threads=2 chunked=1 sample_s=0.002771
+scan size_mib=32 threads=4 chunked=0 sample_s=0.003286
+scan size_mib=32 threads=4 chunked=1 sample_s=0.002867
+scan size_mib=32 threads=8 chunked=0 sample_s=0.003303
+scan size_mib=32 threads=8 chunked=1 sample_s=0.001967
+scan size_mib=64 threads=1 chunked=0 sample_s=0.013220
+scan size_mib=64 threads=2 chunked=0 sample_s=0.006503
+scan size_mib=64 threads=2 chunked=1 sample_s=0.007385
+scan size_mib=64 threads=4 chunked=0 sample_s=0.006486
+scan size_mib=64 threads=4 chunked=1 sample_s=0.003224
+scan size_mib=64 threads=8 chunked=0 sample_s=0.006490
+scan size_mib=64 threads=8 chunked=1 sample_s=0.003400
+scan size_mib=128 threads=1 chunked=0 sample_s=0.024682
+scan size_mib=128 threads=2 chunked=0 sample_s=0.014661
+scan size_mib=128 threads=2 chunked=1 sample_s=0.015746
+scan size_mib=128 threads=4 chunked=0 sample_s=0.013157
+scan size_mib=128 threads=4 chunked=1 sample_s=0.011567
+scan size_mib=128 threads=8 chunked=0 sample_s=0.013496
+scan size_mib=128 threads=8 chunked=1 sample_s=0.007347
+scan-policy=no byte-length cutoff; two or more workers scan any file length qualifying=[16, 32, 64, 128]
+unequal-frame scan
+write unequal frames=6004
+hostname=host open-only workers=1 sample_s=0.156932 coverage=0.9997 scan_kind=serial chunks=0.132295 share_frames=6004 share_bytes=100699088 worker_minflt=1537 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.087777 coverage=0.9996 scan_kind=indexed chunks=0.055083,0.057767 share_frames=3002,3002 share_bytes=50349544,50349544 worker_minflt=0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.057068 coverage=0.9994 scan_kind=indexed chunks=0.027817,0.030199,0.033885,0.034902 share_frames=1501,1501,1501,1501 share_bytes=25174771,25174773,25174771,25174773 worker_minflt=0,0,0,0 call_minflt=1538 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.031954 coverage=0.9990 scan_kind=indexed chunks=0.014718,0.013843,0.014713,0.014039,0.015281,0.013734,0.015106,0.014513 share_frames=751,751,751,751,751,751,751,747 share_bytes=12595771,12595773,12595771,12595773,12595771,12595773,12595771,12528685 worker_minflt=0,0,0,0,0,0,0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.163251 coverage=0.9998 scan_kind=serial chunks=0.125985 share_frames=6004 share_bytes=100699088 worker_minflt=1537 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.090512 coverage=0.9996 scan_kind=indexed chunks=0.055081,0.059852 share_frames=3002,3002 share_bytes=50349544,50349544 worker_minflt=0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.048094 coverage=0.9993 scan_kind=indexed chunks=0.028371,0.027734,0.027581,0.028225 share_frames=1501,1501,1501,1501 share_bytes=25174771,25174773,25174771,25174773 worker_minflt=0,0,0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.029048 coverage=0.9987 scan_kind=indexed chunks=0.013872,0.014080,0.013580,0.014687,0.013977,0.013830,0.014151,0.014104 share_frames=751,751,751,751,751,751,751,747 share_bytes=12595771,12595773,12595771,12595773,12595771,12595773,12595771,12528685 worker_minflt=0,0,0,0,0,0,0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.149881 coverage=0.9998 scan_kind=serial chunks=0.126189 share_frames=6004 share_bytes=100699088 worker_minflt=1537 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.083652 coverage=0.9996 scan_kind=indexed chunks=0.053689,0.055006 share_frames=3002,3002 share_bytes=50349544,50349544 worker_minflt=0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.048446 coverage=0.9991 scan_kind=indexed chunks=0.027385,0.027220,0.029113,0.028191 share_frames=1501,1501,1501,1501 share_bytes=25174771,25174773,25174771,25174773 worker_minflt=0,0,0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.030947 coverage=0.9983 scan_kind=indexed chunks=0.013854,0.013693,0.013641,0.013828,0.014004,0.013610,0.014057,0.014184 share_frames=751,751,751,751,751,751,751,747 share_bytes=12595771,12595773,12595771,12595773,12595771,12595773,12595771,12528685 worker_minflt=0,0,0,0,0,0,0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.148548 coverage=0.9998 scan_kind=serial chunks=0.125179 share_frames=6004 share_bytes=100699088 worker_minflt=1537 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.103200 coverage=0.9995 scan_kind=indexed chunks=0.073823,0.066244 share_frames=3002,3002 share_bytes=50349544,50349544 worker_minflt=0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.055918 coverage=0.9994 scan_kind=indexed chunks=0.033372,0.027325,0.032547,0.026998 share_frames=1501,1501,1501,1501 share_bytes=25174771,25174773,25174771,25174773 worker_minflt=0,0,0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.029809 coverage=0.9984 scan_kind=indexed chunks=0.013861,0.013902,0.013902,0.014115,0.013992,0.013690,0.013963,0.013938 share_frames=751,751,751,751,751,751,751,747 share_bytes=12595771,12595773,12595771,12595773,12595771,12595773,12595771,12528685 worker_minflt=0,0,0,0,0,0,0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.185141 coverage=0.9997 scan_kind=serial chunks=0.151872 share_frames=6004 share_bytes=100699088 worker_minflt=1537 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.085185 coverage=0.9996 scan_kind=indexed chunks=0.053404,0.054043 share_frames=3002,3002 share_bytes=50349544,50349544 worker_minflt=0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.051456 coverage=0.9994 scan_kind=indexed chunks=0.027127,0.029377,0.027049,0.027341 share_frames=1501,1501,1501,1501 share_bytes=25174771,25174773,25174771,25174773 worker_minflt=0,0,0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.028498 coverage=0.9985 scan_kind=indexed chunks=0.013651,0.013822,0.013728,0.014137,0.013929,0.013551,0.014108,0.013976 share_frames=751,751,751,751,751,751,751,747 share_bytes=12595771,12595773,12595771,12595773,12595771,12595773,12595771,12528685 worker_minflt=0,0,0,0,0,0,0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=1 sample_s=0.162290 coverage=0.9998 scan_kind=serial chunks=0.136126 share_frames=6004 share_bytes=100699088 worker_minflt=1537 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=2 sample_s=0.099579 coverage=0.9996 scan_kind=indexed chunks=0.060037,0.068390 share_frames=3002,3002 share_bytes=50349544,50349544 worker_minflt=0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=4 sample_s=0.049555 coverage=0.9993 scan_kind=indexed chunks=0.028454,0.027200,0.027869,0.026769 share_frames=1501,1501,1501,1501 share_bytes=25174771,25174773,25174771,25174773 worker_minflt=0,0,0,0 call_minflt=1537 call_majflt=0
+hostname=host open-only workers=8 sample_s=0.029464 coverage=0.9987 scan_kind=indexed chunks=0.013899,0.013932,0.013804,0.015065,0.014122,0.013773,0.014119,0.013592 share_frames=751,751,751,751,751,751,751,747 share_bytes=12595771,12595773,12595771,12595773,12595771,12595773,12595771,12528685 worker_minflt=0,0,0,0,0,0,0,0 call_minflt=1537 call_majflt=0
+meminfo before ranks hostname=host MemTotal:49342768kB MemFree:8648524kB MemAvailable:13365244kB SwapFree:0kB Committed_AS:13173960kB
+rank ladder
+hostname=host ranks=1 repeat=0 sample_s=0.343382 minflt=4193 warmup_s=0.342120 steal_ticks=0
+hostname=host ranks=2 repeat=0 sample_s=0.363161 minflt=8387 warmup_s=0.340591 steal_ticks=0
+hostname=host ranks=4 repeat=0 sample_s=0.362351 minflt=16774 warmup_s=0.408883 steal_ticks=0
+hostname=host ranks=8 repeat=0 sample_s=0.363940 minflt=33548 warmup_s=0.400096 steal_ticks=1
+hostname=host ranks=1 repeat=1 sample_s=0.327746 minflt=4193 warmup_s=0.340569 steal_ticks=0
+hostname=host ranks=2 repeat=1 sample_s=0.444865 minflt=8387 warmup_s=0.341466 steal_ticks=0
+hostname=host ranks=4 repeat=1 sample_s=0.381296 minflt=16774 warmup_s=0.359464 steal_ticks=0
+hostname=host ranks=8 repeat=1 sample_s=0.360635 minflt=33549 warmup_s=0.395256 steal_ticks=0
+hostname=host ranks=1 repeat=2 sample_s=0.327544 minflt=4193 warmup_s=0.343267 steal_ticks=0
+hostname=host ranks=2 repeat=2 sample_s=0.342535 minflt=8387 warmup_s=0.339232 steal_ticks=1
+hostname=host ranks=4 repeat=2 sample_s=0.352996 minflt=16774 warmup_s=0.465356 steal_ticks=0
+hostname=host ranks=8 repeat=2 sample_s=0.355189 minflt=33548 warmup_s=0.350255 steal_ticks=0
+hostname=host ranks=1 repeat=3 sample_s=0.330590 minflt=4193 warmup_s=0.402934 steal_ticks=0
+hostname=host ranks=2 repeat=3 sample_s=0.340990 minflt=8387 warmup_s=0.338048 steal_ticks=0
+hostname=host ranks=4 repeat=3 sample_s=0.347844 minflt=16774 warmup_s=0.348302 steal_ticks=0
+hostname=host ranks=8 repeat=3 sample_s=0.369033 minflt=33548 warmup_s=0.372135 steal_ticks=1
+hostname=host ranks=1 repeat=4 sample_s=0.327911 minflt=4193 warmup_s=0.340897 steal_ticks=0
+hostname=host ranks=2 repeat=4 sample_s=0.338531 minflt=8387 warmup_s=0.335936 steal_ticks=0
+hostname=host ranks=4 repeat=4 sample_s=0.358232 minflt=16774 warmup_s=0.361165 steal_ticks=0
+hostname=host ranks=8 repeat=4 sample_s=0.356598 minflt=33548 warmup_s=0.353989 steal_ticks=0
+hostname=host ranks=1 repeat=5 sample_s=0.330994 minflt=4193 warmup_s=0.340732 steal_ticks=0
+hostname=host ranks=2 repeat=5 sample_s=0.343301 minflt=8387 warmup_s=0.386861 steal_ticks=0
+hostname=host ranks=4 repeat=5 sample_s=0.356711 minflt=16774 warmup_s=0.365239 steal_ticks=0
+hostname=host ranks=8 repeat=5 sample_s=0.354703 minflt=33548 warmup_s=0.350325 steal_ticks=0
+ranks=1 median_s=0.329250 coverage=1.0000 clock=map-fault-span
+ranks=2 median_s=0.342918 coverage=1.0000 clock=map-fault-span
+ranks=4 median_s=0.357471 coverage=1.0000 clock=map-fault-span
+ranks=8 median_s=0.358616 coverage=1.0000 clock=map-fault-span
+meminfo after ranks hostname=host MemTotal:49342768kB MemFree:10511816kB MemAvailable:15225864kB SwapFree:0kB Committed_AS:13139896kB
+serial base versus tip
+serial file=one-frame arm=base mode=default launch_median_s=0.000026
+serial file=one-frame arm=tip mode=default launch_median_s=0.000025
+serial file=one-frame arm=base mode=one launch_median_s=0.000024
+serial file=one-frame arm=tip mode=one launch_median_s=0.000024
+serial file=one-mib arm=base mode=default launch_median_s=0.001567
+serial file=one-mib arm=tip mode=default launch_median_s=0.001472
+serial file=one-mib arm=base mode=one launch_median_s=0.001527
+serial file=one-mib arm=tip mode=one launch_median_s=0.001419
+serial file=worker-file arm=base mode=default launch_median_s=0.518372
+serial file=worker-file arm=tip mode=default launch_median_s=0.581008
+serial file=worker-file arm=base mode=one launch_median_s=0.514535
+serial file=worker-file arm=tip mode=one launch_median_s=0.515144
+serial file=one-frame arm=tip mode=default launch_median_s=0.000023
+serial file=one-frame arm=base mode=default launch_median_s=0.000024
+serial file=one-frame arm=tip mode=one launch_median_s=0.000024
+serial file=one-frame arm=base mode=one launch_median_s=0.000024
+serial file=one-mib arm=tip mode=default launch_median_s=0.001612
+serial file=one-mib arm=base mode=default launch_median_s=0.001492
+serial file=one-mib arm=tip mode=one launch_median_s=0.001517
+serial file=one-mib arm=base mode=one launch_median_s=0.001460
+serial file=worker-file arm=tip mode=default launch_median_s=0.582939
+serial file=worker-file arm=base mode=default launch_median_s=0.516222
+serial file=worker-file arm=tip mode=one launch_median_s=0.517158
+serial file=worker-file arm=base mode=one launch_median_s=0.513958
+serial file=one-frame arm=base mode=default launch_median_s=0.000022
+serial file=one-frame arm=tip mode=default launch_median_s=0.000023
+serial file=one-frame arm=base mode=one launch_median_s=0.000023
+serial file=one-frame arm=tip mode=one launch_median_s=0.000022
+serial file=one-mib arm=base mode=default launch_median_s=0.001536
+serial file=one-mib arm=tip mode=default launch_median_s=0.001541
+serial file=one-mib arm=base mode=one launch_median_s=0.001415
+serial file=one-mib arm=tip mode=one launch_median_s=0.001484
+serial file=worker-file arm=base mode=default launch_median_s=0.531896
+serial file=worker-file arm=tip mode=default launch_median_s=0.724177
+serial file=worker-file arm=base mode=one launch_median_s=0.519441
+serial file=worker-file arm=tip mode=one launch_median_s=0.525918
+serial file=one-frame arm=tip mode=default launch_median_s=0.000024
+serial file=one-frame arm=base mode=default launch_median_s=0.000024
+serial file=one-frame arm=tip mode=one launch_median_s=0.000024
+serial file=one-frame arm=base mode=one launch_median_s=0.000022
+serial file=one-mib arm=tip mode=default launch_median_s=0.001588
+serial file=one-mib arm=base mode=default launch_median_s=0.001498
+serial file=one-mib arm=tip mode=one launch_median_s=0.001493
+serial file=one-mib arm=base mode=one launch_median_s=0.001525
+serial file=worker-file arm=tip mode=default launch_median_s=0.527714
+serial file=worker-file arm=base mode=default launch_median_s=0.527221
+serial file=worker-file arm=tip mode=one launch_median_s=0.593261
+serial file=worker-file arm=base mode=one launch_median_s=0.520694
+serial file=one-frame arm=base mode=default launch_median_s=0.000023
+serial file=one-frame arm=tip mode=default launch_median_s=0.000023
+serial file=one-frame arm=base mode=one launch_median_s=0.000022
+serial file=one-frame arm=tip mode=one launch_median_s=0.000023
+serial file=one-mib arm=base mode=default launch_median_s=0.001523
+serial file=one-mib arm=tip mode=default launch_median_s=0.001595
+serial file=one-mib arm=base mode=one launch_median_s=0.001424
+serial file=one-mib arm=tip mode=one launch_median_s=0.001518
+serial file=worker-file arm=base mode=default launch_median_s=0.517474
+serial file=worker-file arm=tip mode=default launch_median_s=0.578965
+serial file=worker-file arm=base mode=one launch_median_s=0.541067
+serial file=worker-file arm=tip mode=one launch_median_s=0.519390
+serial file=one-frame arm=tip mode=default launch_median_s=0.000023
+serial file=one-frame arm=base mode=default launch_median_s=0.000023
+serial file=one-frame arm=tip mode=one launch_median_s=0.000023
+serial file=one-frame arm=base mode=one launch_median_s=0.000024
+serial file=one-mib arm=tip mode=default launch_median_s=0.001552
+serial file=one-mib arm=base mode=default launch_median_s=0.001529
+serial file=one-mib arm=tip mode=one launch_median_s=0.001501
+serial file=one-mib arm=base mode=one launch_median_s=0.001465
+serial file=worker-file arm=tip mode=default launch_median_s=0.575391
+serial file=worker-file arm=base mode=default launch_median_s=0.523289
+serial file=worker-file arm=tip mode=one launch_median_s=0.573503
+serial file=worker-file arm=base mode=one launch_median_s=0.520188
+python open-only base versus tip
+python file=one-frame arm=base sample_s=0.000054
+python file=one-frame arm=tip sample_s=0.000068
+python file=one-mib arm=base sample_s=0.001595
+python file=one-mib arm=tip sample_s=0.001632
+python file=worker-file arm=base sample_s=0.601168
+python file=worker-file arm=tip sample_s=0.447909
+python file=one-frame arm=tip sample_s=0.000070
+python file=one-frame arm=base sample_s=0.000055
+python file=one-mib arm=tip sample_s=0.001525
+python file=one-mib arm=base sample_s=0.001535
+python file=worker-file arm=tip sample_s=0.433942
+python file=worker-file arm=base sample_s=0.702229
+python file=one-frame arm=base sample_s=0.000052
+python file=one-frame arm=tip sample_s=0.000063
+python file=one-mib arm=base sample_s=0.001645
+python file=one-mib arm=tip sample_s=0.001511
+python file=worker-file arm=base sample_s=0.632486
+python file=worker-file arm=tip sample_s=0.460338
+python file=one-frame arm=tip sample_s=0.000067
+python file=one-frame arm=base sample_s=0.000052
+python file=one-mib arm=tip sample_s=0.001602
+python file=one-mib arm=base sample_s=0.001524
+python file=worker-file arm=tip sample_s=0.453815
+python file=worker-file arm=base sample_s=0.633132
+python file=one-frame arm=base sample_s=0.000052
+python file=one-frame arm=tip sample_s=0.000067
+python file=one-mib arm=base sample_s=0.001618
+python file=one-mib arm=tip sample_s=0.001533
+python file=worker-file arm=base sample_s=0.629916
+python file=worker-file arm=tip sample_s=0.422614
+python file=one-frame arm=tip sample_s=0.000063
+python file=one-frame arm=base sample_s=0.000050
+python file=one-mib arm=tip sample_s=0.001769
+python file=one-mib arm=base sample_s=0.001524
+python file=worker-file arm=tip sample_s=0.420243
+python file=worker-file arm=base sample_s=0.615804
+wrote limiter-r15.json
+summary touch workers=1 median_s=0.526754 iqr_s=0.076551 eff=1.000 coverage=0.9999 scan_s=0.000000 parse_s=0.420198 slab_s=0.025539 teardown_s=0.000064 parse_minflt=4193 call_minflt=4193 call_majflt=0 numa_remote=0 touch_s=0.063657
+summary touch workers=2 median_s=0.693607 iqr_s=0.074457 eff=0.759 coverage=0.9999 scan_s=0.000087 parse_s=0.484186 slab_s=0.059411 teardown_s=0.000416 parse_minflt=8383 call_minflt=50250 call_majflt=0 numa_remote=0 touch_s=0.115202
+summary touch workers=4 median_s=0.817681 iqr_s=0.012184 eff=0.644 coverage=0.9999 scan_s=0.000160 parse_s=0.438162 slab_s=0.059779 teardown_s=0.001789 parse_minflt=16766 call_minflt=122064 call_majflt=0 numa_remote=0 touch_s=0.264357
+summary touch workers=8 median_s=1.237338 iqr_s=0.059744 eff=0.426 coverage=0.9999 scan_s=0.000271 parse_s=0.505241 slab_s=0.072317 teardown_s=0.003647 parse_minflt=33532 call_minflt=282702 call_majflt=0 numa_remote=0 touch_s=0.532144
+summary open-only workers=1 median_s=0.439367 iqr_s=0.134060 eff=1.000 coverage=0.9995 scan_s=0.000000 parse_s=0.359232 slab_s=0.019165 teardown_s=0.049206 parse_minflt=4193 call_minflt=4193 call_majflt=0 numa_remote=0 touch_s=0.000000
+summary open-only workers=2 median_s=0.543407 iqr_s=0.054051 eff=0.809 coverage=0.9999 scan_s=0.000082 parse_s=0.408672 slab_s=0.055603 teardown_s=0.057323 parse_minflt=8383 call_minflt=50243 call_majflt=0 numa_remote=0 touch_s=0.000000
+summary open-only workers=4 median_s=0.553961 iqr_s=0.038330 eff=0.793 coverage=0.9999 scan_s=0.000151 parse_s=0.416189 slab_s=0.057052 teardown_s=0.047608 parse_minflt=16766 call_minflt=100487 call_majflt=0 numa_remote=0 touch_s=0.000000
+summary open-only workers=8 median_s=0.669359 iqr_s=0.112409 eff=0.656 coverage=0.9999 scan_s=0.000334 parse_s=0.416133 slab_s=0.069482 teardown_s=0.062140 parse_minflt=33532 call_minflt=278572 call_majflt=0 numa_remote=0 touch_s=0.000000
+summary parse workers=1 parse_s=0.333588 sum_s=0.333588 max_s=0.333588 speedup=1.000 kf=0.000 n_chunks=1
+summary parse workers=2 parse_s=0.186528 sum_s=0.352148 max_s=0.186340 speedup=1.788 kf=0.118 n_chunks=2
+summary parse workers=4 parse_s=0.088793 sum_s=0.345168 max_s=0.088042 speedup=3.757 kf=0.022 n_chunks=4
+summary parse workers=8 parse_s=0.046187 sum_s=0.352403 max_s=0.045873 speedup=7.223 kf=0.015 n_chunks=8
+summary strong workers=1 median_s=0.159611 iqr_s=0.011366 speedup=1.000 scan_s=0.000000 kind=serial
+summary strong workers=2 median_s=0.089145 iqr_s=0.011479 speedup=1.790 scan_s=0.013984 kind=indexed
+summary strong workers=4 median_s=0.050505 iqr_s=0.006079 speedup=3.160 scan_s=0.009581 kind=indexed
+summary strong workers=8 median_s=0.029636 iqr_s=0.001511 speedup=5.386 scan_s=0.006991 kind=indexed
+summary ranks=1 median_s=0.329250 iqr_s=0.003106 eff=1.000 coverage=1.0000 fault_s=0.010419 parse_s=0.290327 barrier_s=0.000001 minflt=4193 residual=
+summary ranks=2 median_s=0.342918 iqr_s=0.016820 eff=0.960 coverage=1.0000 fault_s=0.010121 parse_s=0.305116 barrier_s=0.000007 minflt=8387 residual=
+summary ranks=4 median_s=0.357471 iqr_s=0.007397 eff=0.921 coverage=1.0000 fault_s=0.014363 parse_s=0.307723 barrier_s=0.000013 minflt=16774 residual=
+summary ranks=8 median_s=0.358616 iqr_s=0.007573 eff=0.918 coverage=1.0000 fault_s=0.014221 parse_s=0.313791 barrier_s=0.000016 minflt=33548 residual=parse_s
+MEASURE_EXIT:0

@@ -74,6 +74,8 @@ Elsevier%
 \input{figures/generated/si_macros}
 \input{figures/generated/dlpack_macros}
 \input{figures/generated/format_h2h_macros}
+\input{figures/generated/readcon_db_macros}
+\input{figures/generated/host_macros}
 % Import labels from the main text without its \\bibcite entries (same keys in both aux files).
 % Captions in the main text contain generated macros, so those macros are defined first.
 \makeatletter
@@ -124,13 +126,13 @@ We draw each restored figure from a stored record.
 We build the library from the commit named in Data availability of the manuscript, and we name no version deposit before its record exists.
 The machine line of a record gives only the architecture, the processor count and the processor string.
 
-\section{Normative specification}\label{sec:spec-normative} The normative specification of CON 3.1 is that of the \readconcommitrole{} \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}), taken from the specification source of that commit at git blob \texttt{\rcMeasuredSpecBlob}.
+\section{Normative specification}\label{sec:spec-normative} The typeset normative specification is \texttt{docs/orgmode/spec.org} of commit \texttt{7be34016}, git blob \texttt{\specTextBlob}, with its version line, its date and its \specClauses{} numbered clauses.
 A script of the paper typesets that file, and its check mode fails unless the typeset text matches the file.
-That file is byte for byte the CON 3.1 text of readcon-core~\specTextRelease{}, the first release that includes it, with its version line, its date and its \specClauses{} numbered clauses.
-A continuous-integration test of the library fails when the two differ.
+The version line names readcon-core~\specTextRelease{}, and that version is not a release tag.
+The \readconcommitrole{} \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}) has specification source git blob \texttt{\rcMeasuredSpecBlob}, and that blob is not the typeset text.
 Two informative sentences of its units section round the value the parser gives the natural time unit and its difference from the value of eOn, and the supplement omits them.
 The parser reads \texttt{(amu*angstrom\^{}2/eV)\^{}0.5} as the binary64 number \(\velNaturalFsBinary\,\mathrm{fs}\), eOn hard-codes \(\velEonFs\,\mathrm{fs}\), and their difference relative to the parsed value, computed in binary64, is \(\velEonRelDiff\) (Section~\ref{sec:supp-velocity}).
-readcon-core~\readconversion{} ships the reader that this specification describes.
+readcon-core~\readconCargoVersion{} is the program this paper describes, and the reader it ships follows blob \texttt{\rcMeasuredSpecBlob}, not the typeset text.
 Each clause keeps its identifier, so a clause that the corpus manifest or an error message cites has the same text in the supplement.
 The manuscript measures the clauses against the reader on the conformance corpus (Section~\ref{sec:conformance}).
 The specification also points to an informative parsing expression grammar (PEG) that the library ships, which is not reproduced.
@@ -139,6 +141,53 @@ The reader-compatibility notes and the references of the source are omitted, bec
 \input{figures/generated/spec_normative}
 
 \input{figures/generated/corpus_table} \input{figures/generated/drift_table} \input{figures/generated/survey_table}
+
+\FloatBarrier \section{Clauses and version history}\label{sec:supp-clauses} Table~\ref{tab:clauses} gives the clauses that Sections~\ref{sec:worked} and~\ref{sec:format} of the main text apply, and Table~\ref{tab:versions} lists each CON version, its date, the release that carries it and the change.
+
+\begin{table}[tbp] \centering \footnotesize \caption{Clauses of the specification that Sections~\ref{sec:worked} and~\ref{sec:format} apply.
+Their normative text is in Section~\ref{sec:spec-normative}.}
+\label{tab:clauses}
+\begin{tabular}{@{}lp{0.74\linewidth}@{}}
+\toprule
+Clause & Rule \\
+\midrule
+CON-frame.1 & After the last complete frame, lines that hold only white space are ignored. \\
+CON-frame.7 & After a complete frame with its sections, or with the legacy velocity block where that applies, the next line is line 1 of the next frame, even when it is empty. \\
+CON-token.3 & Fields inside a line are separated by spaces and tabs only, so a form feed or a no-break space belongs to the field it touches. \\
+CON-token.4 & Where the PEG admits a token that a clause rejects, the clause decides. \\
+CON-cell.1 & When the header carries \texttt{lattice\_vectors}, the reader takes the cell from it and not from lines 3 and 4. \\
+\begin{tabular}[t]{@{}l@{}}CON-cell.3\\CON-cell.4\end{tabular} & A frame without \texttt{pbc} is periodic in all three directions, and a \texttt{pbc} that is present is three booleans, one per cell vector. \\
+CON-cell.6 & Without \texttt{lattice\_vectors}, the reader builds the cell of Eq.~\eqref{eq:cell} from lines 3 and 4, with the angles in degrees. \\
+CON-validate.4 & With \texttt{validate} true, the reader also rejects, among other checks, a cell length that is not positive and an angle outside the open interval from 0 to 180 degrees. \\
+\begin{tabular}[t]{@{}l@{}}CON-mask.2\\CON-mask.3\end{tabular} & In version 1 the mask is 0 for a free atom or 1 for an atom fixed in every component, and any other token is an illegal flag. \\
+CON-mask.4 & From version 2 the mask is an integer from 0 to 7, read by Eq.~\eqref{eq:mask}. \\
+CON-mask.5 & A float spelling, a sign or a value outside the set of the version is an illegal flag in every mode. \\
+\begin{tabular}[t]{@{}l@{}}CON-id.1\\CON-id.3\\CON-id.4\end{tabular} & The identifier is an integer from 0 through \(2^{64}-1\) that is never read through binary64, a writer emits identifiers unique within a frame, and a reader accepts repeated ones. \\
+\begin{tabular}[t]{@{}l@{}}CON-num.1\\CON-num.5\end{tabular} & A decimal rounds to the nearest binary64 value, and a field that spells \texttt{nan}, \texttt{inf} or \texttt{infinity} with any sign and in any case, or a decimal that rounds to an infinity, is rejected as a non-finite value in every mode. \\
+\begin{tabular}[t]{@{}l@{}}CON-units.8 to\\CON-units.10\end{tabular} & Versions 1, 2 and 3.0 are read in \texttt{units.length} per natural time unit whatever \texttt{units.time} names, and from version 3.1 \texttt{units.time} sets the unit of the velocities. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+{\small
+\begin{longtable}{@{}llp{0.25\linewidth}p{0.42\linewidth}@{}}
+\caption{CON versions.
+A row with an unmarked date takes its version, date and change from the specification.
+Its release is the first readcon-core release whose specification lists that version with that date, and version 1 is the text eOn writes.
+A date marked (tag) is the tag date of a release that changed the text of a version without a new version number, and its row names the clauses that release changed.}
+\label{tab:versions}\\
+\toprule
+Version & Date & Release & Change \\
+\midrule
+\endfirsthead
+\toprule
+Version & Date & Release & Change \\
+\midrule
+\endhead
+\input{figures/generated/versions_table}
+\end{longtable}
+}
 
 \FloatBarrier \section{Reader rules}\label{sec:appendix-rules} Tables~\ref{tab:rules}, \ref{tab:rules-numbers} and~\ref{tab:rules-framing} collect the edge cases a reader applies, stated as input and outcome.
 Each row restates clauses of Section~\ref{sec:spec-normative}.
@@ -236,7 +285,7 @@ Its record keeps the commands, the toolchain and what the program printed for ea
 
 Table~\ref{tab:anchors} gives the source lines of each step of Algorithm~\ref{alg:parser} and of the other read and write paths of Section~\ref{sec:implementation}.
 
-\begin{table}[tbp] \centering \small \caption{Source lines of the reader and the writers, in the Rust sources of readcon-core~\readconversion{}.
+\begin{table}[tbp] \centering \small \caption{Source lines of the reader and the writers, in the Rust sources of readcon-core~\readconCargoVersion{}.
 A script of the paper finds each range from a list of text anchors and fails when an anchor matches no line or more than one.}
 \label{tab:anchors}
 \begin{tabular}{@{}p{0.52\linewidth}p{0.42\linewidth}@{}}
@@ -270,7 +319,7 @@ Binary image: header check & \texttt{\srcRcbinCrc} \\
 \FloatBarrier \section{The CON 3.1 corpus, the cross-check and the header variants}\label{sec:supp-corpus31} The CON 3.1 corpus, the second corpus of Section~\ref{sec:conformance}, has \cthreeoneFiles{} files in the records of the paper, which a script of the paper writes byte for byte, and its manifest names for each file the outcome, the clauses that decide it and the basis of that outcome in the released text.
 Its results record holds the outcome of every file at one, two and eight threads and the default, from the \texttt{corpus31\_report} example of readcon-core, and the build that read the files.
 The corpus-path run reads the \cpathsFiles{} files of both corpora through the string, file, mapped, gzip and iterator reads and the frame count of the readcon module and of the C library.
-The C library is read in its default build and built with \texttt{parallel}, as the release archives build it, and the module also reads the plain and the gzip file through its stream reader, \texttt{iter\_con(stream=True)}.
+The C library is read in its serial C library build and built with \texttt{parallel}, as the release archives build it, and the module also reads the plain and the gzip file through its stream reader, \texttt{iter\_con(stream=True)}.
 Every file takes \cpathsReadKinds{} reads, except that the \cpathsNotText{} files that are not UTF-8 take no \texttt{read\_con\_string} read.
 All \cpathsMatch{} of the \cpathsReads{} reads return the outcome of the manifest entry of their file, with its frame count or error class (Table~\ref{tab:corpus-paths}).
 The record keeps the verdict of every read with the builds that made them.
@@ -282,17 +331,14 @@ The mutant differential reads edited copies of corpus files with readcon-core an
 A case takes one of the \mutantFiles{} files of the CON 3.1 corpus under \mutantMaxBytes{} bytes and makes one to three edits at random places: it inserts a token, deletes one to eight characters or replaces one character with a token.
 The tokens are whitespace and line ends, digits, signs and JSON punctuation, component headers, keys of line 2, element symbols and a whole velocity block, and the record lists them.
 \texttt{random.Random} draws the file, the edits and the tokens from the seed.
-Each of the \mutantSeeds{} seeds gives the same \mutantPerSeed{} cases on every run, and a check run reruns them.
+Each of the \mutantSeeds{} seeds gives the same \mutantPerSeed{} cases on every run, and a check run repeats them.
 The comparison covers the verdicts and the frame counts or error classes and leaves out the lines, since the exceptions of the readcon module carry none.
 The record still keeps the error line of each reader.
-Each group has a variant of the independent reader that follows readcon-core on one rule.
-A differing case belongs to the first group whose variant returns the verdict and class of readcon-core.
-In the first group, a count line has the wrong number of tokens and a token that is not an unsigned integer, so it breaks CON-error.3 and CON-num.9 on one line; CON-error.4 orders errors by line alone, and readcon-core checks the number of tokens first, the independent reader each token first.
-In the second, line 2 contains a number such as \texttt{1e999}, which the JSON grammar of Request for Comments (RFC)~8259 admits and binary64 cannot represent.
+All \mutantDiffer{} differing cases fall in one group, and a variant of the independent reader that follows readcon-core on the rule of that group returns the verdict and class of readcon-core on each of them.
+In each case, line 2 contains a number such as \texttt{1e999}, which the JSON grammar of Request for Comments (RFC)~8259 admits and binary64 cannot represent.
 The independent reader rejects such a number anywhere in line 2, and readcon-core keeps it in an unreserved key and reads on; no clause requires either reading.
-In the third, the last byte of the input is a carriage return, of which CON-file.3 states nothing: readcon-core reads it as a line end, so the input ends in trailing whitespace, and the independent reader takes it for line 1 of a further frame, which ends before its line 2.
 The clause-coverage record lists for each of the \clauseTotal{} clauses the corpus files whose manifest entries name it, the probes whose rules name it, the tests of the library whose names or documentation name it and whether the independent reader names it.
-No file, probe or test names CON-count.5, a SHOULD NOT on writing for a given consumer, since no writer of readcon-core takes a consumer or a target version; CON-section.10 and CON-section.11, which govern how a later revision adds a reserved section name; and CON-section.18, a SHOULD on the energies a producer stores, whose reader side CON-section.19, accepting a frame whose energy differs from the sum of its energies rows, a clause-coverage test of the library reads.
+No file, probe or test names CON-file.6, CON-header.1, CON-count.5, CON-count.6, CON-mask.6, CON-mask.7, CON-id.2, CON-id.7, CON-section.3, CON-section.5, CON-section.6, CON-section.10, CON-section.11, CON-section.18, CON-section.19, CON-validate.2, CON-bonds.1, CON-bonds.2, CON-units.15, CON-num.4, CON-compress.4, CON-compress.5 and CON-token.1; \texttt{paper/cpc/scripts/clause\_coverage.py} writes this list from the specification, corpus manifests, probes and test sources.
 
 \begin{footnotesize} \input{figures/generated/corpus31_table} \end{footnotesize}
 
@@ -302,7 +348,7 @@ No file, probe or test names CON-count.5, a SHOULD NOT on writing for a given co
 
 Table~\ref{tab:versionsafety} applies the version rule of Eq.~\eqref{eq:version} and the velocity rule of Section~\ref{sec:format} to seven headers of one velocity frame.
 The Python module and the C library follow the rule on each row.
-They reject a velocity block of version 3.1 without a time unit, an unknown major, a missing version and a mask of 9, keep an unknown key of a later minor, and read a CON 3.0 block labeled fs in the natural unit.
+They reject a velocity block of version 3.1 without a time unit, an unknown major, a header without \texttt{con\_spec\_version} and a mask of 9, keep an unknown key of a later minor, and read a CON 3.0 block labeled fs in the natural unit.
 The Python rewrite of that block stays at version 3.0 and keeps its fs label, so the next reader again applies the natural unit.
 
 \input{figures/generated/versionsafety_table}
@@ -350,6 +396,18 @@ The readers are ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package \cite{ker
 On the reference file chemfiles moves \driftChemMoved{} coordinates, \driftChemCoords{}, by \driftChemUlps{} units in the last place from the binary64 values nearest their decimals.
 The binary64 value nearest \(\driftXOne\) has the bit pattern \texttt{\driftXOneBits}; chemfiles returns \texttt{\driftXOneChemBits}.
 
+On the other routes of Table~\ref{tab:survey}, the main text grades the fields only.
+Extended XYZ returns the mask through the \texttt{move\_mask} column of ASE and the identifiers through a column named \texttt{id}, which chemfiles and OVITO also read.
+ASE writes that file with eight decimals, a shift of \(\num{\surveyAseXyzShiftNum}\,\text{\AA}\); chemfiles moves the coordinates by \(\num{\surveyChemXyzShiftNum}\,\text{\AA}\), rounds the cell lengths to six significant digits and drops the velocities.
+MDAnalysis 2.10.0 returns single precision, which changes a coordinate by up to \(\num{\surveyMdaShiftNum}\,\text{\AA}\), and Open Babel keeps the identifiers only inside the site labels of a CIF file.
+MDAnalysis 2.11.0 still writes the H5MD positions, velocities and forces in single precision, as \texttt{float32} \cite{gowersMdanalysismdanalysisRelease21102026,gowersMdanalysisH5mdPy21102026}.
+
+Extended XYZ is the text format to compare with CON on drift between readers, because it has a published grammar, the specification of the libAtoms extxyz package \cite{kermodeLibatomsExtxyzV0462026}, and parsers in C, C++ and Python.
+We gave seven three-atom files (Table~\ref{tab:drift}) to \(\driftAllPaths\) reader paths from \(\driftAllLibraries\) libraries, and on the reference frame the \(\driftXyzPaths\) extended XYZ paths, from \(\driftXyzLibraries\) libraries, return \(\driftXyzOutcomes\) different outcomes.
+That grammar admits a \texttt{d} or \texttt{D} exponent and reads \texttt{T}, \texttt{true}, \texttt{True} and \texttt{TRUE} as true, and the paths split on both files.
+It leaves open whether a comment line that is not key-value pairs makes a file plain XYZ or an error, and on such a file the C parser of libAtoms departs from the default periodicity while its Python parser fails.
+OVITO 3.17.0, released 2026-10-21, writes the periodicity of the cell as \texttt{pbc} in its extended XYZ files, but those files name no velocity time unit and have no place for a per-component constraint \cite{ovitoNewFeatures31702026}.
+
 \FloatBarrier \section{Records beside the checkpoint}\label{sec:supp-neighbors} Table~\ref{tab:compare} answers four questions for the checkpoint and for the other routes of Table~\ref{tab:survey}.
 Restart-exact means binary64 coordinates, the per-component mask, the identifier and the periodic flags all come back.
 Velocities is how the file states the velocity unit.
@@ -391,11 +449,27 @@ Five movable images were interpolated with the constraints applied.
 The band uses the improved tangent with a climbing image, and each step adds \(0.02\,\text{\AA}^2/\mathrm{eV}\) times the projected force.
 The band is interrupted after step 25.
 Each route writes all seven images and reads them back with the reader the route names, keeping whatever constraints and periodicity that reader returns, and the resumed band runs to \(0.01\,\mathrm{eV/\text{\AA}}\) or the cap of \(\rfStepCap\) steps.
+Table~\ref{tab:restartfmt} gives each resumed band, and Section~\ref{sec:cases} of the main text discusses it.
 
+\input{figures/generated/restart_main}
 \input{figures/generated/restart_kernels}
 
 
-\FloatBarrier \section{Velocity unit and identifiers}\label{sec:supp-velocity} Figure~\ref{fig:supp-velocity} is the step of Section~\ref{sec:cases} on the \(\velFixtureAtoms\)-atom fixture.
+\FloatBarrier \section{eOn resuming a Morse band}\label{sec:eon-band} The public eOn client resumes a band from its own output files, and we time the readers of that client on every frame (Section~\ref{sec:host}), through \texttt{eon.fileio.loadcons} and through a loop of \texttt{con2matter} over the frames that \texttt{ConFileIO} reads, with the eon format of \texttt{ase.io} as an independent CON reader beside them.
+The default band optimizer of eOn is L-BFGS, the limited-memory form of the Broyden, Fletcher, Goldfarb and Shanno update \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008}, and no geometry file stores its memory vectors, so a restart cannot repeat an L-BFGS path from the geometry alone and the band of Figure~\ref{fig:restart} uses steepest descent.
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/restart.pdf} \caption{\textbf{The resumed Morse band ends on the uninterrupted barrier.}
+Left: force calls of the uninterrupted steepest-descent band and of the three resumes.
+Right: each barrier minus the uninterrupted barrier, in micro-electronvolts.
+A bar on the zero line ends on the uninterrupted barrier.
+The four routes use teal, sky, coral and magenta, and the zero line is sunshine.}
+\label{fig:restart} \end{figure}
+
+\FloatBarrier \section{Velocity unit and identifiers}\label{sec:supp-velocity} A \(\velFixtureAtoms\)-atom fixture stores velocities in the declared natural unit.
+Its kinetic energy is \(\velFixtureKe\,\mathrm{eV}\) in that unit and \(\velFixtureKeFs\,\mathrm{eV}\) with the same numbers read as \(\text{\AA}/\mathrm{fs}\), the factor \(\velFactorSq\) of Eq.~\eqref{eq:tau}.
+After one velocity Verlet step of 1~fs \cite{swopeComputerSimulationMethod1982}, the misread positions differ from the declared ones by \(\velVerletRmsd\,\text{\AA}\) root mean square and by at most \(\velVerletMax\,\text{\AA}\).
+A \(\velSlabAtoms\)-atom slab drawn at \(\velSlabTemperature\,\mathrm{K}\) has a kinetic energy of \(\velSlabKe\,\mathrm{eV}\), and the misread gives \(\num{\velSlabKeFsNum}\,\mathrm{eV}\).
+Figure~\ref{fig:supp-velocity} is that step on the \(\velFixtureAtoms\)-atom fixture.
 The fixture declares the natural unit, \(\velNaturalFs\,\mathrm{fs}\) for the CODATA 2018 constants.
 A misread scales the kinetic energy by the square of that number, \(\velFactorSq\).
 The step integrates the EMT forces of the fixture with velocity Verlet over \(1\,\mathrm{fs}\), once with the declared unit and once with the numbers read as \(\text{\AA}/\mathrm{fs}\).
@@ -414,12 +488,51 @@ Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frame
 
 \input{figures/generated/hcn_table}
 
+\FloatBarrier \section{Host log}\label{sec:host} We read one synthetic CON file of 100000 frames of 32 copper atoms six times for each reader, with the readers interleaved and each sample in a fresh process.
+The coordinates are the modulo pattern \texttt{((frame * 17 + atom * 3 + axis) \% 10000) / 1000}, written with the symbol Cu, and not a recorded trajectory.
+Each library is imported before the clock starts, and memory is the high-water mark of the resident set (VmHWM) after the read minus that after the import.
+The host is an \texttt{x86\_64} machine with 8 cores whose processor reports itself as Intel Xeon Processor, and the timing record names the commit of readcon-core that Data availability gives.
+CON readers read the CON file, XYZ readers the XYZ file and HDF5 readers one HDF5 file; readcon reads neither XYZ nor HDF5.
+
+\begin{figure*}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/timing.pdf} \caption{Wall time on one synthetic CON file of 100000 frames of 32 copper atoms, six interleaved repeats.
+The tip bar is a coordinate array on all 8 cores.
+The release and main bars build full frames with no thread count, which at those commits parses this file on all 8 cores, the ASE and eOn bars each build a full frame on one thread, and the readcon-db bar is coordinates from the store.
+The bar is the type 7 median.
+The repeats ran on the host of Section~\ref{sec:host}, with readcon-core at the commit named in Data availability.}
+\label{fig:timing} \end{figure*}
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{Time of the main-branch full-frame read and of ASE, each divided by the time of release readcon-core, six repeats.
+The release and main-branch reads parse on all 8 cores, and ASE builds a full frame on one thread.
+The horizontal line is 1.
+A point above the line means that the release read is that many times as fast.
+eOn is not in this figure, and the coordinate read is not in it either.}
+\label{fig:ratios} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/memory.pdf} \caption{MiB added to the high-water mark by the read, after the import, six repeats.}
+\label{fig:memory} \end{figure}
+
+The measured commit calls \texttt{read\_positions} with no thread count, which returns only a coordinate array, and Rayon uses all 8 cores of this host, for a median of \rcTipMedian~s.
+Release \rcReleaseVersion{} calls \texttt{read\_con} with no thread count, which builds full frames and, at that release, parses a file of this size on the global Rayon pool, here all 8 cores, in \rcReleaseMedian~s.
+The main-branch build does the same in \rcBaseMedian~s.
+ASE \texttt{ase.io} builds an Atoms object per frame on one thread, in \rcAseMedian~s.
+eOn 3.6.0 \texttt{loadcons} builds a frame per frame on one thread, in \rcEonMedian~s.
+The readcon rows therefore run on 8 cores and the ASE and eOn rows on one, so these medians are the host log and not the like-for-like comparison of Section~\ref{sec:like}.
+The eOn C++ row calls \texttt{read\_all\_frames} with no thread count and then builds a Matter for each frame, in \rcApiMedian~s.
+The readcon-db row returns coordinates from the store, with the ingest of the file outside the clock, in \rcDbMedian~s.
+Every all-frame reader matches all 100000 frames with no failure.
+The coordinate read adds \rcTipMib~MiB, the ASE full-frame read \rcAseMib~MiB, chemfiles reading XYZ \rcChemMib~MiB and OVITO reading XYZ \rcOvitoMib~MiB.
+To initialize from the first frame alone, \texttt{Matter.con2matter} builds a Matter in \rcMatterMedian~s and \texttt{read\_first\_frame} returns the first frame in \rcFirstMedian~s, with both matching 1 of 1 frame.
+
+\input{figures/generated/host_table}
+
 \FloatBarrier \section{Timing}\label{sec:supp-timing} The read performance of the main text rests on the measurements of Section~\ref{sec:host}, whose timing records are those of the reader exchange, the readcon-db ingest, the distributed read and the DLPack exchange.
 Each head-to-head arm reports how many frames match the reference and how many do not.
-A fair rerun times the OVITO 3.17.0 reader and the OVITO 3.17.0 writer, and the record has a loss column.
-A fair rerun of the MDAnalysis readers times each format of the trajectory-reader benchmark of MDAnalysis 2.11.0, namely XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, PDB and XYZ \cite{gowersMdanalysisTrajReader21102026}, keeps the fastest, and records what that format loses.
+A fair run times the OVITO 3.17.0 reader and the OVITO 3.17.0 writer, and the record has a loss column.
+A fair run of the MDAnalysis readers times each format of the trajectory-reader benchmark of MDAnalysis 2.11.0, namely XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, PDB and XYZ \cite{gowersMdanalysisTrajReader21102026}, keeps the fastest, and records what that format loses.
 The protein data bank row of Section~\ref{sec:h2h} stays the MDAnalysis 2.10.0 measurement.
-A fair rerun also times \texttt{cextxyz} and the ASE trajectory format, with a loss column.
+Release 2.11.0 adds read benchmarks for XYZ and the Protein Data Bank, and its trajectory-reader benchmark covers XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, Protein Data Bank and XYZ \cite{gowersMdanalysisTrajReader21102026,gowersMdanalysisTrajReader21002026}.
+The ase-extxyz package 0.1.2, released 2026-10-02, registers the libAtoms C parser as the ASE format \texttt{cextxyz} \cite{kermodeAseExtxyzV0122026,kermodeAseExtxyzPyproject2026,kermodeAseExtxyzIo2026}.
+A fair run also times \texttt{cextxyz} and the ASE trajectory format, with a loss column.
 That column records no file version, no velocity time unit, and a mask and an identifier that come back only by column name or only by the ASE layout.
 We time the newer extended-XYZ reader extxyz-ng 0.0.2 beside libAtoms \texttt{extxyz}, with readcon on CON \cite{yuExtxyzNgV0022026,kermodeLibatomsExtxyzV0462026}.
 A time is the median of the runs of its cell \cite{hoeflerScientificBenchmarkingParallel2015}, and since each run is a new process, the repeats sample the variation between executions and within one \cite{kaliberaRigorousBenchmarkingReasonable2013}.
@@ -431,16 +544,166 @@ We draw the resumed bands on the $(s, d)$ plane \cite{goswamiTwodimensionalRmsdP
 MDTraj is an analysis tool beside these readers \cite{mcgibbonMdtrajModernOpen2015}.
 Software is cited by version, following the principles for research software \cite{smithSoftwareCitationPrinciples2016}.
 The DLPack export of readcon-core is a dense tensor without labels, and labeled, block-sparse atomistic data are the subject of metatensor \cite{bigiMetatensorMetatomicFoundational2026}.
+Figure~\ref{fig:dlpack} shows the six repeats of the DLPack exchange of Section~\ref{sec:dlpack} of the main text.
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/dlpack.pdf} \caption{\textbf{A borrowed DLPack view costs \dlpackRatio{} times a copy of the same positions.}
+Six repeats on \dlpackAtoms{} atoms.
+The bar is the median and the whisker is the type 7 interquartile range.}
+\label{fig:dlpack} \end{figure}
 
 Table~\ref{tab:format-context} is context for choosing a format, and readcon reads neither XYZ nor HDF5.
-\input{figures/generated/host_macros} h5py reads the same frames in \rcHdfMedian~s against readcon's \rcTipMedian~s on the coordinate file.
+h5py reads an HDF5 coordinate array in \rcHdfMedian~s.
+The readcon coordinate median on the CON file is \rcTipMedian~s on 8 cores, so the two are not one comparison.
 The mapped binary coordinate file reads those frames in \rcConbinMedian~s.
 The chemfiles row copies each frame out of the trajectory iterator, and that copy matches 100000 of 100000 frames.
 
 \input{figures/generated/sizes_table}
 \input{figures/generated/format_context}
 
-\section{Measured versions}\label{sec:supp-versions} The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
+Table~\ref{tab:format-h2h} gives every reader and format of the cross-format campaign that Figure~\ref{fig:pareto} of the main text plots, with the cold read, the peak resident set, the fields that each format drops, the trajectory and the rows that a reader cannot open.
+
+\input{figures/generated/format_h2h}
+
+\FloatBarrier \section{Python bindings and thread safety}\label{sec:supp-threads}
+The PyO3 module declares that it does not need the global interpreter lock (\texttt{gil\_used = false}).
+Continuous integration runs the tests on free-threaded Python \texttt{3.13t} and \texttt{3.14t}, and on the standard builds.
+Parsing, formatting, file writes and correspondence checks detach the Python thread state with \texttt{py.detach}, so other Python threads run while they do.
+Each write path first copies or converts whatever input Python can reach, while still attached, and only then formats, compresses and writes while detached.
+This includes compressed writes of frame lists that do not keep their parsed frames, plain writes after indexing, and appends of \texttt{ConFrame} lists.
+\texttt{touch\_checksum()} needs the shared coordinate slab, so it copies the slab element by element while attached and then walks the frames detached.
+On a frame that Python has not indexed, \texttt{coords\_array()} copies the coordinates from the parsed buffer into a new NumPy array without building a Python object for each atom.
+Once the atom list of a frame exists, \texttt{coords\_array()} reads that list, so edits made in place remain visible.
+
+\texttt{ConFrameList} keeps its parsed frames behind a read-write lock of its own.
+When every frame is still in the list, plain writes, compressed writes, string output, identifier checks and \texttt{touch\_checksum()} hold one read lock across the detached call instead of moving frames out, so other threads see the full list and a panic leaves the frames intact.
+When indexing has moved a frame out into a Python object, the writers go through the list frame by frame.
+A thread that waits for the list lock or the frame cache detaches before it blocks, so a detached holder can attach again without deadlock.
+Indexing a frame locks the cache before the list and caches the indexed frame object.
+Under the write lock of the list, indexing also marks any shared coordinate slab as reachable from Python before it moves that slot out.
+\texttt{columns()} takes the write lock, so detached readers finish before Python receives the shared coordinate array.
+
+When Python can reach the coordinates of a frame, through the shared array of \texttt{columns()} or the \texttt{xyz} array of the frame, the attached thread copies them into a private buffer before the detached work starts, and the other fields are borrowed from the frames.
+Each aligned double is copied with one relaxed \texttt{AtomicU64} load \cite{bosRustAtomicsLocks2023}, so no single value is torn.
+The loads are not atomic across elements, and a thread that writes during the copy can leave the buffer holding elements from different instants.
+Frames whose coordinates Python cannot reach are written without the copy.
+When a shared list is written again, the writer keeps the copied buffer of the previous write and reuses its packed frame lengths while every frame matches that buffer bit for bit.
+From the first frame that differs, the writer makes a fresh copy.
+
+\texttt{write\_columns}, \texttt{write\_extxyz} and \texttt{write\_conbin\_columns} treat NumPy arrays the same way, copying them in runs of about \(4\) MiB while attached, validating each run there where the format requires it, and formatting or writing each run while detached.
+No Rust slice is ever formed over numeric memory that Python owns and can change.
+
+
+\FloatBarrier \section{readcon-db and the distributed read}\label{sec:supp-readcon-db}
+readcon-db is the companion campaign store (\url{https://github.com/lode-org/readcon-db}), and this paper reports its reviewed records, whose commit pins and fidelity test Section~\ref{sec:supp-repro} names.
+The fair store comparison ingests the same 40 frames of 8 copper atoms into readcon-db and into the ASE database on one thread, twelve samples each, each insert one transaction and one commit, and each sample the mean of a 2~s span.
+readcon-db takes a median of \num{\rdbIngestMedian}~s and the ASE database takes \num{\rdbAseIngestMedian}~s.
+Type, positions, the cell lengths, angles and matrix on a triclinic cell, periodic boundary conditions, masses, fixed flags, velocities, the frame index and the unset energy (zero, with \texttt{energy\_set} false) are bit-exact in both stores, while atom ids, units and the \texttt{velocities\_set} and \texttt{pbc\_set} flags are kept only by readcon-db.
+Both stores keep the force array bit-exact, including the explicit zeros on odd frames; the ASE database keeps it on the row, and \texttt{Atoms.get\_forces()} then zeros the components on fixed axes.
+On a 500-frame corpus readcon-db reads every frame in a mean of \num{\rdbCorpusReadMs}~ms.
+The fair one-million-atom warm read on one thread runs from \num{\rdbMillionReadMin}~s to \num{\rdbMillionReadMax}~s across the readcon-db campaigns on this host and is \num{\rdbFairReadMedian}~s in the fair-store run, each under a 50~ms sampling window.
+Figure~\ref{fig:db-disk} gives the allocated size of each store.
+
+readcon-db also keeps a derived cache of the same CON text with each coordinate column byte-shuffled and compressed with zstd.
+On one thread the warm full read of the shuffled cache on the lattice trajectory divided by the raw read is \num{\rdbShuffleFirst} in the first campaign and \num{\rdbShuffleSecond} in the second, and the paired interval of the second runs from \num{\rdbShuffleSecondLo} to \num{\rdbShuffleSecondHi}, so the shuffled read is the faster of the two.
+A third campaign compares the raw warm full read of the measured code with an earlier commit on one thread, in \rdbRawPairs{} pairs (\rdbRawPairedCIMethod; \rdbRawPairOrder).
+Each pair divides the time of the measured code by that of the earlier commit; the paired median is \num{\rdbRawPairedMedian}, and its interval runs from \num{\rdbRawPairedLo} to \num{\rdbRawPairedHi}, so it includes 1.
+A commit bisect of the raw read returns a paired interval at each stored step, and every stored bisect interval includes 1.
+In a fourth campaign the lattice best case reads the shuffled cache in \num{\rdbLatticeBest} of the raw time, and the paired median of that read in a fifth is \num{\rdbLatticePaired}.
+The shuffled cache uses the shuffle-zstd codec, which readcon-db applies only when asked: it stores the raw codec by default and for warm point access, and shuffle-zstd for cold bulk access.
+The fourth campaign asks for shuffle-zstd on every read, so it measures what the codec trades.
+On the membrane-protein trajectory the shuffled cache stores its frames in \num{\rdbMembraneFrameShare} of the raw bytes and the whole corpus in \num{\rdbMembraneCorpusShare} of them.
+On one thread the median warm full read of the shuffled cache takes \num{\rdbMembraneRatio} of the median raw time, and the paired interval of the shuffled over the raw time runs from \num{\rdbMembraneColdLo} to \num{\rdbMembraneColdHi} for a cold full read and from \num{\rdbMembraneWarmLo} to \num{\rdbMembraneWarmHi} for a warm full read, each from \rdbMembranePairs{} pairs (\rdbMembraneCIMethod).
+The codec saves storage and cold read time and costs warm decode time.
+
+\input{figures/generated/mpi_macros}
+
+We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4 and 8 ranks, in shared mode and in scatter mode, \mpiRepeats{} launches at each count.
+\mpiSharedLine.
+\mpiScatterLine.
+\mpiCompareLine.
+\mpiScatterIqrLine.
+Figure~\ref{fig:mpi-weak} repeats the read-only ladder from one to eight ranks on one virtual machine.
+Rank 0 reads the file once to build the index, and every other rank reads only its own byte range.
+In scatter mode the waiting ranks sleep on a file lock, which needs a filesystem with coherent flock across the ranks, and where flock is not coherent they fall back to the blocking broadcast.
+The timing record of these launches and the record of a scatter run that takes the fallback are part of the records of this paper (Data availability).
+
+\input{figures/generated/mpi_host_table}
+
+\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf} \caption{Distributed read on this host, the same launches as Table~\ref{tab:mpi-host}.
+The marker is the type 7 median and the whisker is the type 7 interquartile range.}
+\label{fig:mpi-host} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf} \caption{A single 1-8 read-only ladder at 6 repetitions on one VM. Touch is drawn with open-only. Ranks is one read\_block on each rank, then a barrier. Dashed lines are public main ac4f4379 and solid lines are tip a2499ab6. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
+\label{fig:mpi-weak} \end{figure}
+
+\FloatBarrier \section{Stored campaigns}\label{sec:stored} Figures~\ref{fig:fairness} to~\ref{fig:supp-neb} are drawn from the stored records of the paper, which Data availability of the main text names, and not from the timed repeats of Section~\ref{sec:host}.
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf} \caption{Allocated size of the stored 1000-frame copies, one bar per store.}
+\label{fig:db-disk} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf} \caption{Median wall time of readcon-core divided by the median wall time of a peer, from the stored timing record.
+The peers are ASE XYZ, the extended-XYZ C parser, OVITO, an ASE trajectory, an HDF5 array through h5py and an H5MD file through MDAnalysis.
+Those files are not the CON file, so the bars compare different formats.}
+\label{fig:fairness} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/layers.pdf} \caption{Frames per second, from the median wall time, of three Python reads of one stored file: the full frame, the fields and the coordinates, each at one thread and at eight threads.}
+\label{fig:layers} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/roofline.pdf} \caption{The same three Python reads, the full frame, the fields and the coordinates, at one thread and at eight threads.
+The vertical axis is frames per second from the median wall time.
+This figure is not a roofline model.}
+\label{fig:roofline} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf} \caption{Energy of each image above the first image, for the height-held POSCAR band and for the uninterrupted band, from the stored failure record.}
+\label{fig:asemask} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf} \caption{Speedup against one rank for five stored series of reads and writes of readcon-core.
+The dashed line is linear speedup.}
+\label{fig:mpi-strong} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf} \caption{Median frames per second while ingesting one thousand frames, one bar per store in the stored database record.
+The ASE database commits every write.
+The readcon-db directory store has no write loop and no per-row commit, so those two bars are not the same work.
+The fair comparison is the fair-store campaign named in Data availability.}
+\label{fig:db-throughput} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf} \caption{Median megabytes per second for the same one thousand frames and the same stores.
+The work is unequal, as the throughput figure states, and the fair comparison is the fair-store campaign named in Data availability.}
+\label{fig:db-bandwidth} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf} \caption{Median seconds for a composition query over the same one thousand frames.
+Each bar is one store and one cache state.}
+\label{fig:db-query} \end{figure}
+
+
+\begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/db_dedup.pdf} \caption{Count of stored frames beside the count of unique frame hashes, from the deduplication record of the database campaign.}
+\label{fig:db-dedup} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/frame_anatomy.pdf} \caption{Byte width of each span of one stored CON frame.
+The bar labels are the span names in the stored anatomy record.}
+\label{fig:supp-anatomy} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/error_classes.pdf} \caption{One bar of height one for each illegal file in the stored error record.
+The height marks that the file is present.
+It is not a count of failures.}
+\label{fig:supp-errors} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=0.92\textwidth]{figures/generated/roundtrip_fidelity.pdf} \caption{How many of the four fields, the mask, the identifier, the time unit and the binary64 coordinates, are exact after a write and a read.
+The bar label is the format.}
+\label{fig:supp-fidelity} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/restart_diff.pdf} \caption{Largest absolute component of the minimum-image displacement, in angstrom, along each stored resume.
+Each line is one resume and the horizontal axis is the image.}
+\label{fig:supp-restart} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=0.86\textwidth]{figures/generated/dedup_graph.pdf} \caption{Count of hashed images in each stored campaign run of the deduplication graph.}
+\label{fig:supp-dedup} \end{figure}
+
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/neb_multiples.pdf} \caption{Five stored EMT bands, drawn as the energy of each image above the first image.
+The bands are the uninterrupted band, the shortest round trip, the six-decimal write, the extended XYZ write and the ASE trajectory.}
+\label{fig:supp-neb} \end{figure}
+
+\FloatBarrier \section{Measured versions}\label{sec:supp-versions} The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
 chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both.
 The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
 The timed readers ran at the versions that Section~\ref{sec:host} of the main text names.
@@ -459,6 +722,22 @@ Nor does it list the clause-coverage record, which is read from the specificatio
 
 \input{figures/generated/version_map}
 
+The generated table rows the records whose printed numbers the tracer ties to a build.
+Two commits of the main branch carry parts of the measured reader: \texttt{\readconpbccommit} gives the Python binding one periodic flag per cell vector, and \texttt{\readconrcidxcommit} (pull request~\readconrcidxpr) adds the frame index.
+The library of a commit is its Rust sources, its C headers, its Cargo build script, its Cargo manifest and lock file and its Python package manifest.
+Its digest is the SHA-256 over their \texttt{sha256sum} lines in byte order of their paths, and a record names the library it ran by that digest: \rcRecordDigestCount{} of the \rcDigestRecordCount{} records that name a library name readcon-core~\rcRecordDigestVersion{}, whose digest begins \texttt{\rcRecordDigest}, and Table~\ref*{tab:versionmap} names the library of each record it rows.
+The eOn build record names eOn commit \texttt{579738a}.
+The readcon-db records are copied verbatim from two commits on the fix/ingest-species-count branch of \url{https://github.com/lode-org/readcon-db}: the reviewed commit \texttt{ff1210e3} with the measured code at \texttt{a584a288}, and the fair-store run at readcon-db commit \texttt{227e45cf} with the measured code at \texttt{d8bf1cb5}.
+The fidelity test is the two-store fidelity test of lode-org/readcon-db at commit \texttt{0afbaa0b}, and its field table is copied with the fair-store records.
+The equal store comparison is the fair-db32 campaign; the legacy copper-dimer bench of the reviewed records is an unequal-workload stand-in and is not that comparison.
+The five shuffled-cache campaigns of Section~\ref*{sec:supp-readcon-db} are db24, db25, db26, db28 and db29 in the order given there, and the third compares the raw read of readcon-db commit \texttt{a584a288} with an earlier commit.
+Five printed results come from records that table does not row.
+The like-for-like tables are written from \path{bench-like-for-like/results/summary.csv}.
+The host-log medians are written from \path{logs/reader-exchange.log}.
+The DLPack exchange is written from \path{paper/cpc/data/dlpack_cost.txt}.
+The MPI host table and its figure are written from \path{logs/mpi.log}.
+The cross-format table is written from the campaign directory named in Section~\ref{sec:h2h}.
+
 The git bundle readcon-core.bundle of the supplementary material carries commit \texttt{\readconcommitshort} with its whole history, and the archive paper-cpc.tar.gz contains the paper directory with the scripts, the records and the TeX sources of both documents.
 That commit has no paper directory.
 Listing~\ref{lst:repro} clones that commit from the bundle without a network, unpacks the paper directory into the checkout, installs the Python environment that ran the scripts, and rebuilds both documents.
@@ -475,10 +754,10 @@ The regeneration script rewrites every table, figure and macro from the records 
 The number trace then traces every printed number to its record and writes a ledger of the record and the rule behind each one.
 
 The measurements are separate steps, each of which rewrites its own records.
-The measure mode of the regeneration script reruns the survey, the survey listing, the worked example of Listing~\ref{lst:frame}, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history before it formats.
+The measure mode of the regeneration script repeats the survey, the survey listing, the worked example of Listing~\ref{lst:frame}, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history before it formats.
 A further script runs the example program of Listing~\ref{lst:testrun} in a clone of the bundle.
-Each other measurement is a named task of the pixi environment of the paper, and the description of each task says what it reruns.
-The tasks rerun the eOn band, the wall times of Table~\ref{tab:restartfmt} and the sizes of Table~\ref{tab:sizes}; the timed files, the provenance record, the C++ programs and the timing, heap and Cachegrind records; the chemfiles builds, the head-to-head records and the records of the native readers; and, for the conformance records, the CON 3.1 corpus at each thread count, both corpora through the readcon module and through the default and parallel builds of the C library, the reader-path tests, the three readers of Table~\ref{tab:corpus-crosscheck}, the reader probes, the mutants of Section~\ref{sec:supp-corpus31} and the clause list.
+Each other measurement is a named task of the pixi environment of the paper, and the description of each task says what it measures.
+The tasks repeat the eOn band, the wall times of Table~\ref{tab:restartfmt} and the sizes of Table~\ref{tab:sizes}; the timed files, the provenance record, the C++ programs and the timing, heap and Cachegrind records; the chemfiles builds, the head-to-head records and the records of the native readers; and, for the conformance records, the CON 3.1 corpus at each thread count, both corpora through the readcon module and through the serial C library build and the parallel build of the C library, the reader-path tests, the three readers of Table~\ref{tab:corpus-crosscheck}, the reader probes, the mutants of Section~\ref{sec:supp-corpus31} and the clause list.
 The scripts of those tasks hold the command lines that they run for each cell, file or build, among them those of memray, Valgrind and cargo, and the environment variables that they read, with their defaults.
 The timing scripts run their cells in interleaved rounds, one untimed round and then the timed rounds, each round a new shuffle of the cells from a fixed seed and each run of a cell a new process, and each timing record keeps its seed and its number of rounds.
 The comparison of the earlier releases of CON 3.1 reads each of the four published wheels of Section~\ref{sec:supp-versions} in its own process and rewrites its record.

@@ -8,11 +8,9 @@ committed CSVs. This script does not time anything.
 
 from __future__ import annotations
 
-import base64
 import csv
 import json
 import os
-import shutil
 from pathlib import Path
 
 import matplotlib
@@ -170,20 +168,24 @@ def _type7(samples: list[float]) -> tuple[float, float, float]:
 
 
 READER_LOG = ROOT / "logs" / "reader-exchange.log"
-READER_JSON = Path(
-    os.environ.get("READER_EXCHANGE_JSON", str(ROOT / "logs" / "reader-exchange.json"))
-)
 
 
 def _reader_document() -> dict | None:
-    """The campaign JSON. The historical log remains the fallback."""
-    if READER_JSON.is_file():
-        return json.loads(READER_JSON.read_text(encoding="utf-8"))
-    return None
+    """The campaign JSON that READER_EXCHANGE_JSON names, or None to read the log.
+
+    A named file that is absent is an error: the log is a different record.
+    """
+    named = os.environ.get("READER_EXCHANGE_JSON")
+    if not named:
+        return None
+    path = Path(named)
+    if not path.is_file():
+        raise SystemExit(f"READER_EXCHANGE_JSON names {path}, which does not exist")
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _reader_samples() -> dict[str, list[float]]:
-    """Wall times, one list per arm. Prefer reader-exchange.json."""
+    """Wall times, one list per arm, from READER_EXCHANGE_JSON or the stored log."""
     doc = _reader_document()
     if doc is not None:
         arms = {}
@@ -198,7 +200,7 @@ def _reader_samples() -> dict[str, list[float]]:
         return arms
     if not READER_LOG.is_file():
         raise SystemExit(
-            "reader-exchange.json is missing. Run the reader_exchange campaign first."
+            f"{READER_LOG} is missing. Run the reader_exchange campaign first."
         )
     arms: dict[str, list[float]] = {}
     for line in READER_LOG.read_text(encoding="utf-8").splitlines():
@@ -240,24 +242,33 @@ CON_ARMS = (
     "readcon_db",
 )
 CON_LABELS = {
-    "readcon_tip": "readcon tip",
-    "readcon_v0173": "readcon release",
-    "readcon_base": "readcon main",
-    "ase_eon": "ASE ase.io (format eon)",
-    "eon_py": "eOn loadcons",
-    "readcon_db": "readcon-db",
+    "readcon_tip": "readcon tip, coordinates, 8 cores",
+    "readcon_v0173": "readcon release, full frames, 8 cores",
+    "readcon_base": "readcon main, full frames, 8 cores",
+    "ase_eon": "ASE Atoms, 1 thread",
+    "eon_py": "eOn loadcons, 1 thread",
+    "readcon_db": "readcon-db positions",
 }
+# Full frames. The release and main arms parse on the global Rayon pool, and
+# ASE on one thread. The tip arm is coordinates on every core, and readcon-db
+# is a store read, so neither is a ratio against these.
+# eOn stays off this ratio plot. The points are the main-branch read and ASE.
+LIKE_ARMS = (
+    "readcon_base",
+    "ase_eon",
+)
 
 
 def ratios(theme) -> None:
+    """Full-frame CON readers over the release arm of the same file."""
     arms = _reader_samples()
-    tip = arms["readcon_tip"]
-    order = [name for name in CON_ARMS if name in arms and name != "readcon_tip"]
+    base = arms["readcon_v0173"]
+    order = [name for name in LIKE_ARMS if name in arms]
     fig, ax = plt.subplots(figsize=(7.2, 3.2))
     y = list(range(len(order)))
     med, lo, hi = [], [], []
     for name in order:
-        ratios_rep = [p / t for t, p in zip(tip, arms[name], strict=True)]
+        ratios_rep = [p / t for t, p in zip(base, arms[name], strict=True)]
         m, q1, q3 = _type7(ratios_rep)
         med.append(m)
         lo.append(q1)
@@ -267,7 +278,7 @@ def ratios(theme) -> None:
     ax.axvline(1.0, color=BLACK, lw=0.6)
     ax.set_yticks(y)
     ax.set_yticklabels([CON_LABELS.get(name, name) for name in order], fontsize=8)
-    ax.set_xlabel("other CON time / readcon tip time")
+    ax.set_xlabel("full-frame time / release readcon time")
     ax.set_xscale("log")
     pf._theme_axes([ax], theme)
     pf._save(fig, "ratios", None)
@@ -392,143 +403,6 @@ def matrix(theme) -> None:
     pf._save(fig, "matrix", None)
 
 
-def structures() -> None:
-    """xyzrender panels of the benchmark geometries, Ruhi axis colours."""
-    import re
-
-    import cairosvg
-    import xyzrender as xr
-
-    work = OUT / "work"
-    work.mkdir(parents=True, exist_ok=True)
-    sources = [
-        ("CuH2 survey", REPO / "resources" / "test" / "tiny_cuh2.con"),
-        ("CuH2 timing", REPO / "resources" / "test" / "cuh2.con"),
-        ("NEB band", REPO / "resources" / "examples" / "neb_band.con"),
-    ]
-
-    def con_atoms(src: Path) -> tuple[list[str], list[list[float]], list[float]]:
-        lines = src.read_text(encoding="utf-8").splitlines()
-        cell = [float(x) for x in lines[2].split()[:3]]
-        symbols: list[str] = []
-        positions: list[list[float]] = []
-        element = "X"
-        in_coord = False
-        for raw in lines:
-            text = raw.strip()
-            if text.startswith("Coordinates of"):
-                in_coord = True
-                continue
-            if text.startswith(("Forces", "Velocities", "Energy", "Charges")):
-                in_coord = False
-                continue
-            if not in_coord:
-                if (
-                    text
-                    and text[0].isalpha()
-                    and " " not in text
-                    and not text.startswith("{")
-                ):
-                    element = text
-                continue
-            parts = text.split()
-            if len(parts) < 3:
-                continue
-            try:
-                positions.append([float(parts[0]), float(parts[1]), float(parts[2])])
-            except ValueError:
-                in_coord = False
-                continue
-            symbols.append(element)
-        return symbols, positions, cell
-
-    def one(src: Path, dest: Path) -> None:
-        symbols, positions, cell = con_atoms(src)
-        xyz = work / (dest.stem + ".xyz")
-        lattice = f"{cell[0]} 0 0 0 {cell[1]} 0 0 0 {cell[2]}"
-        atoms = "\n".join(
-            f"{symbol} {x:.17g} {y:.17g} {z:.17g}"
-            for symbol, (x, y, z) in zip(symbols, positions, strict=True)
-        )
-        xyz.write_text(
-            f'{len(symbols)}\nLattice="{lattice}" '
-            'Properties=species:S:1:pos:R:3 pbc="T T T"\n'
-            f"{atoms}\n",
-            encoding="utf-8",
-        )
-        molecule = xr.load(str(xyz))
-        cfg = xr.build_config("default")
-        cfg.canvas_size = 480
-        cfg.background = "white"
-        cfg.axis_colors = (SKY, CORAL, TEAL)
-        cfg.cell_color = "#333333"
-        xr.render(molecule, config=cfg, output=str(dest))
-        svg = dest.read_text(encoding="utf-8")
-        svg = re.sub(r"<text\b[^>]*>.*?</text>", "", svg, flags=re.DOTALL)
-        dest.write_text(svg, encoding="utf-8")
-
-    def isolate(svg: str, prefix: str) -> tuple[str, str]:
-        view = re.search(r'viewBox="([^"]+)"', svg)
-        viewbox = view.group(1) if view else "0 0 480 480"
-        inner_match = re.search(r"<svg\b[^>]*>(.*)</svg>\s*$", svg, flags=re.DOTALL)
-        if inner_match is None:
-            raise SystemExit("xyzrender did not write an svg root")
-        inner = inner_match.group(1)
-        inner = re.sub(r'\bid="([^"]+)"', lambda m: f'id="{prefix}{m.group(1)}"', inner)
-        inner = re.sub(
-            r"url\(#([^)]+)\)", lambda m: f"url(#{prefix}{m.group(1)})", inner
-        )
-        return viewbox, inner
-
-    panels = []
-    try:
-        for label, src in sources:
-            dest = work / f"{src.stem}.svg"
-            one(src, dest)
-            panels.append((label, dest))
-        font_bytes = (
-            ROOT
-            / "fonts"
-            / "atkinson-hyperlegible"
-            / "AtkinsonHyperlegible-Regular.ttf"
-        ).read_bytes()
-        font = "data:font/otf;base64," + base64.b64encode(font_bytes).decode("ascii")
-        width, height = 1780, 700
-        slot = 540
-        gap = (width - 3 * slot) / 4
-        parts = [
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="17.8cm" '
-            f'height="{17.8 * height / width:.2f}cm" viewBox="0 0 {width} {height}">',
-            "<defs><style>",
-            "@font-face {",
-            '  font-family: "Atkinson Hyperlegible";',
-            f'  src: url("{font}");',
-            "}",
-            "</style></defs>",
-            '<rect width="100%" height="100%" fill="white"/>',
-        ]
-        for index, (label, path) in enumerate(panels):
-            viewbox, inner = isolate(path.read_text(encoding="utf-8"), f"p{index}")
-            x = gap + index * (slot + gap)
-            parts.append(
-                f'<text x="{x + slot / 2:.1f}" y="48" text-anchor="middle" '
-                f'font-family="Atkinson Hyperlegible" font-size="28" fill="#000000">{label}</text>'
-            )
-            inset = 6
-            parts.append(
-                f'<svg x="{x + inset:.1f}" y="{70 + inset}" width="{slot - 2 * inset}" '
-                f'height="{slot - 2 * inset}" viewBox="{viewbox}" '
-                f'preserveAspectRatio="xMidYMid meet">{inner}</svg>'
-            )
-        parts.append("</svg>")
-        page = work / "structures.svg"
-        page.write_text("\n".join(parts), encoding="utf-8")
-        cairosvg.svg2pdf(url=str(page), write_to=str(OUT / "structures.pdf"))
-    finally:
-        shutil.rmtree(work, ignore_errors=True)
-
-
 def reader_figures() -> None:
     """Timing, ratio and memory figures from reader-exchange.log."""
     OUT.mkdir(parents=True, exist_ok=True)
@@ -548,7 +422,6 @@ def main() -> None:
     timing(theme)
     memory(theme)
     matrix(theme)
-    structures()
     print("wrote extra figures under paper/cpc/src/figures/generated")
 
 

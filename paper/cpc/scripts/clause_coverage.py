@@ -53,6 +53,7 @@ INDEP = ROOT / "scripts" / "indep_reader.py"
 TEST_ROOTS = ("tests", "src")
 SKIP_DIRS = {"target", "build", "__pycache__"}
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
+MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 RECORD_DIR = ROOT / "data" / "spec"
 LEGACY_RECORD = RECORD_DIR / f"clause_coverage-{VERSION}.json"
 
@@ -70,7 +71,50 @@ def final_count() -> int:
     return n
 
 
-FINAL_RECORD = final_record(max(final_count(), 1))
+def final_chain(spec_dir: Path | None = None, version: str | None = None) -> list[Path]:
+    """The final spec-major records of one version, oldest first.
+
+    Final record 1 supersedes the legacy record of the version and record n
+    supersedes record n - 1. No other record of data/spec may supersede a
+    final record, so the newest one is the only tip of the active chain.
+    """
+    spec_dir = spec_dir or RECORD_DIR
+    ver = version or VERSION
+
+    def named(n: int) -> Path:
+        suffix = "" if n == 1 else f"-{n}"
+        return spec_dir / f"clause_coverage-{ver}-spec-major{suffix}.json"
+
+    chain: list[Path] = []
+    while named(len(chain) + 1).is_file():
+        chain.append(named(len(chain) + 1))
+    links = {
+        path.name: Path(prior).name
+        for path in spec_dir.glob(f"clause_coverage-{ver}-*.json")
+        if (prior := json.loads(path.read_text(encoding="utf-8")).get("supersedes"))
+    }
+    parent = f"clause_coverage-{ver}.json"
+    for record in chain:
+        if links.get(record.name) != parent:
+            sys.exit(
+                f"{record.name} supersedes {links.get(record.name)}, not {parent}; "
+                f"the {len(chain)} final clause coverage records of {ver} must "
+                "form one chain"
+            )
+        parent = record.name
+    for record, after in zip(chain, [*chain[1:], None]):
+        children = sorted(name for name, prior in links.items() if prior == record.name)
+        allowed = [after.name] if after else []
+        if children != allowed:
+            sys.exit(
+                f"{len(children)} records of data/spec supersede {record.name} "
+                f"({', '.join(children) or 'none'}); the {len(chain)} final clause "
+                f"coverage records of {ver} must form one chain"
+            )
+    return chain
+
+
+FINAL_RECORD = (final_chain() or [final_record(1)])[-1]
 
 
 def default_paths(
@@ -79,7 +123,11 @@ def default_paths(
     spec: Path | None = None,
     version: str | None = None,
 ) -> tuple[Path, Path]:
-    """Previous and newest blob-named coverage records for one spec.org."""
+    """Previous and newest coverage records for one spec.org.
+
+    A spec.org with a blob-named record follows that chain. Otherwise the
+    final spec-major chain of the version is the active one.
+    """
     root = root or ROOT
     repo_root = (repo or REPO).resolve()
     spec_path = spec or (repo_root / "docs" / "orgmode" / "spec.org")
@@ -90,14 +138,18 @@ def default_paths(
     )
     spec_dir = root / "data" / "spec"
     base = spec_dir / f"clause_coverage-{ver}.json"
-    blob8 = subprocess.run(
-        ["git", "-C", str(repo_root), "hash-object", str(spec_path)],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()[:8]
-    by_blob = spec_dir / f"clause_coverage-{ver}-{blob8}.json"
-    if by_blob.is_file():
+    blob8 = (
+        subprocess.run(
+            ["git", "-C", str(repo_root), "hash-object", str(spec_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()[:8]
+        if spec_path.is_file()
+        else None
+    )
+    by_blob = spec_dir / f"clause_coverage-{ver}-{blob8}.json" if blob8 else None
+    if by_blob is not None and by_blob.is_file():
         # A later record of the same spec names the one it supersedes; the
         # newest is the end of that chain, whatever its file name sorts as.
         later = {
@@ -106,7 +158,11 @@ def default_paths(
         }
         previous, newest = base, by_blob
         for _ in later:
-            name = newest.resolve().relative_to(repo_root).as_posix()
+            name = (
+                newest.resolve().relative_to(repo_root).as_posix()
+                if newest.resolve().is_relative_to(repo_root)
+                else f"paper/cpc/data/spec/{newest.name}"
+            )
             after = [path for path, prior in later.items() if prior == name]
             if len(after) != 1:
                 sys.exit(
@@ -116,11 +172,17 @@ def default_paths(
                 )
             previous, newest = newest, after[0]
         return previous, newest
+    finals = final_chain(spec_dir, ver)
+    if finals:
+        return (finals[-2] if len(finals) > 1 else base), finals[-1]
+    if not spec_path.is_file():
+        return spec_dir / "clause_coverage.json", base
     if base.is_file():
         existing = (
             json.loads(base.read_text(encoding="utf-8")).get("spec", {}).get("sha256")
         )
         if existing != hashlib.sha256(spec_path.read_bytes()).hexdigest():
+            assert by_blob is not None
             return base, by_blob
         return spec_dir / "clause_coverage.json", base
     return spec_dir / "clause_coverage.json", base
@@ -131,7 +193,6 @@ def _default_paths() -> tuple[Path, Path]:
 
 
 SUPERSEDES, OUT = _default_paths()
-MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)
 ID = re.compile(r"CON-[a-z][a-z0-9]*\.[0-9]+")
@@ -166,8 +227,7 @@ REASONS = {
     "CON-section.5": "The per-atom energy section name is energies. The parser looks up that name.",
     "CON-section.6": "atom_energies is not a section name. An unknown name is skipped with the unknown-section rule.",
     "CON-section.19": "A reader must not reject a frame whose energy differs from the sum of its energies rows. "
-    "tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads that frame, and "
-    "its name does not spell this clause.",
+    "scripts/clause_coverage.py shows that no corpus file, probe or named test cites that clause.",
     "CON-validate.2": "validate true must not relax a check that already applies. The flag only adds checks.",
     "CON-bonds.1": "bonds must not appear in sections. The named bonds probes are CON-bonds.2, a malformed bonds entry.",
     "CON-bonds.2": "scripts/indep_reader.py rejects a malformed bonds entry. The scan reads the corpus, the "
@@ -229,7 +289,11 @@ def sha256(path: Path) -> str:
 
 
 def rel(path: Path) -> str:
-    return path.resolve().relative_to(REPO).as_posix()
+    resolved = path.resolve()
+    repo = REPO.resolve()
+    if resolved.is_relative_to(repo):
+        return resolved.relative_to(repo).as_posix()
+    return f"paper/cpc/scripts/{path.name}"
 
 
 def spec_clauses() -> list[tuple[str, str]]:

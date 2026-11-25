@@ -61,11 +61,29 @@ def _listed(*flags: str) -> list[str]:
     return [name for name in out.split("\0") if name]
 
 
+def _keep_origin_refs(src: Path, dst: Path) -> None:
+    """Copy ``refs/remotes/origin`` into a clone.
+
+    ``git clone --local`` from a detached HEAD omits those refs. A later
+    checkout that is already detached then has no origin to read.
+    """
+    listed = _git(
+        src,
+        "for-each-ref",
+        "--format=%(objectname) %(refname)",
+        "refs/remotes/origin",
+    )
+    for line in listed.splitlines():
+        sha, ref = line.split()
+        _git(dst, "update-ref", ref, sha)
+
+
 @pytest.fixture
 def clone(tmp_path: Path) -> Path:
     """A clone of this checkout's commit, with the uncommitted changes of the working tree committed on top."""
     dst = tmp_path / "clone"
     _git(ROOT, "clone", "-q", "--local", str(ROOT), str(dst))
+    _keep_origin_refs(ROOT, dst)
     _git(dst, "checkout", "-q", "--detach", _git(ROOT, "rev-parse", "HEAD").strip())
     changed = _listed("--modified", "--others", "--exclude-standard")
     removed = _listed("--deleted")

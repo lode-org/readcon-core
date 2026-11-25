@@ -121,3 +121,100 @@ def test_recorded_result_version_must_match_its_source_commit():
     output = result.stdout + result.stderr
     assert "bench/h2h/versions.json" in output
     assert "9.9.9" in output
+
+
+def test_claisen_build_record_must_match_its_source_commit():
+    gate = ROOT / "scripts" / "check_version_sot.sh"
+    record = ROOT / "paper" / "cpc" / "data" / "claisen" / "readcon-build.json"
+    original = record.read_text(encoding="utf-8")
+    payload = json.loads(original)
+    assert re.fullmatch(r"\d+\.\d+\.\d+", payload["readcon_version"])
+    payload["readcon_version"] = "9.9.9"
+    record.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    try:
+        result = subprocess.run(
+            ["bash", str(gate)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        record.write_text(original, encoding="utf-8")
+    assert result.returncode != 0, "gate passed an invented Claisen build version"
+    output = result.stdout + result.stderr
+    assert "paper/cpc/data/claisen/readcon-build.json" in output
+    assert "9.9.9" in output
+
+    # A commit with the same VERSION that did not store results.json must fail.
+    unrelated = subprocess.check_output(
+        ["git", "rev-parse", "faa998d8"], cwd=ROOT, text=True
+    ).strip()
+    tampered = json.loads(original)
+    tampered["source_commit"] = unrelated
+    record.write_text(json.dumps(tampered, indent=2) + "\n", encoding="utf-8")
+    try:
+        result = subprocess.run(
+            ["bash", str(gate)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        record.write_text(original, encoding="utf-8")
+    assert result.returncode != 0, (
+        "gate accepted a source_commit that did not store the campaign"
+    )
+    output = result.stdout + result.stderr
+    assert "paper/cpc/data/claisen/readcon-build.json" in output
+    assert unrelated in output
+
+    # An earlier commit that wrote a different results.json blob must also fail.
+    earlier = subprocess.check_output(
+        ["git", "rev-parse", "60e4d58f"], cwd=ROOT, text=True
+    ).strip()
+    tampered = json.loads(original)
+    tampered["source_commit"] = earlier
+    record.write_text(json.dumps(tampered, indent=2) + "\n", encoding="utf-8")
+    try:
+        result = subprocess.run(
+            ["bash", str(gate)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        record.write_text(original, encoding="utf-8")
+    assert result.returncode != 0, (
+        "gate accepted a source_commit whose stored campaign blob differs"
+    )
+    output = result.stdout + result.stderr
+    assert "paper/cpc/data/claisen/results.json" in output
+    assert earlier in output
+
+
+def test_claisen_campaign_version_must_match_the_build_record():
+    gate = ROOT / "scripts" / "check_version_sot.sh"
+    record = ROOT / "paper" / "cpc" / "data" / "claisen" / "results.json"
+    original = record.read_bytes()
+    payload = json.loads(original)
+    payload["software"]["readcon"] = "9.9.9"
+    record.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    try:
+        result = subprocess.run(
+            ["bash", str(gate)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        record.write_bytes(original)
+    assert result.returncode != 0, (
+        "gate passed a campaign version the build record does not name"
+    )
+    output = result.stdout + result.stderr
+    assert "paper/cpc/data/claisen/results.json" in output
+    assert "9.9.9" in output

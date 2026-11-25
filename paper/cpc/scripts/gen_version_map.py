@@ -87,6 +87,8 @@ NO_BUILD = {
     "data/novel/fidelity.json",
     "data/novel/restart_diff.json",
     "data/novel/velocity.json",
+    # The Claisen band is an eOn and PET-MAD-S measurement. It names no readcon-core build.
+    "data/claisen/results.json",
     # Release metadata of eOn and of peer libraries, read from their upstream pages.
     "data/eon/readcon_pins.json",
     "data/peers/releases.json",
@@ -117,6 +119,7 @@ RECORD_NAMES = (
     (r"bench/results/r0174/", "Timing campaign r0174"),
     (r"bench/results/velocity_case\.json", "Velocity case"),
     (r"bench/results/hcn_loss\.csv", "HCN loss measurement"),
+    (r"data/limiter-r15/", "Limiter r15 read ladder"),
     (r"data/corpus_crosscheck\.json", "Corpus cross-check"),
     (r"data/corpus_paths\.json", "Corpus read paths"),
     (r"data/corpus31-results\.json", "CON 3.1 corpus results"),
@@ -140,7 +143,10 @@ RECORD_NAMES = (
     (r"data/failure/version_safety\.csv", "Failure campaign, version safety"),
     (r"data/restart_walls/restart_walls\.(?:csv|json)", "Restart wall times"),
     (r"data/sizes\.csv", "File sizes"),
-    (r"data/spec/corpus_recount\.json", "Specification campaign, corpus recount"),
+    (
+        r"data/spec/corpus_recount(?:-\d+)?\.json",
+        "Specification campaign, corpus recount",
+    ),
     (
         r"data/spec/mutant_differential\.json",
         "Specification campaign, mutant differential",

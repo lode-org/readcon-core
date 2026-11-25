@@ -18,6 +18,10 @@ exclude = [
   "bench/**",
   # cargo-fuzz crate. It is not part of the published library or the cxx wrap.
   "fuzz/**",
+  # The CPC paper sources, records and scripts. scripts/package-cxx.sh builds
+  # the cxx archive from cargo package, so a paper edit must not change the
+  # wrap digest.
+  "paper/**",
 ]
 
 [lints.rust]

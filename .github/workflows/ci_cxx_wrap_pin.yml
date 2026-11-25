@@ -2,7 +2,8 @@ name: cxx wrap pin
 
 # Rebuild the slim cxx archive on protected refs and pull requests.
 # Pull requests report stale pins without failing. Branch and tag pushes
-# remain strict release gates.
+# remain strict release gates. bench/** and paper/** do not enter the
+# archive, so a campaign-only or paper-only change does not run this job.
 on:
   push:
     branches:
@@ -11,9 +12,11 @@ on:
       - '**'
     paths-ignore:
       - 'bench/**'
+      - 'paper/**'
   pull_request:
     paths-ignore:
       - 'bench/**'
+      - 'paper/**'
   workflow_dispatch:
 
 permissions:

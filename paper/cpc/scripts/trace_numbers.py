@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Trace every number printed in the CPC manuscript and supplement to a rule.
 
-The scan covers the prose of ``rg_main.tex`` and ``rg_supp.tex`` and the
-captions of every generated table they input.  Table cells and figures are
-written by the generator scripts from the committed records; the scan leaves
-them out and instead requires every generated fragment to equal its generator's
-output.  It leaves out macros, except in the front matter (title, abstract,
+The scan covers the prose of ``rg_main.tex`` and ``rg_supp.tex``, the
+captions of every generated table they input, the cells of those tables, and
+the labels of the figures they include.  A generated fragment must still equal
+its generator's output.  An exponent or an index with no measurement record
+is recorded as ``whitelist: exponent`` or ``whitelist: index``.  A measurement
+row keeps the record that names it.  An empty source is a failure.  It leaves out macros, except in the front matter (title, abstract,
 Program Summary, highlights) and the Conclusions, where every macro of a
 generated file is expanded and traced like a printed number.
 
@@ -92,6 +93,7 @@ RULE_MODULES = (
     "versions",
     "readcon_db",
     "identifiers",
+    "claisen",
 )
 # Format steps that write PDFs, which no number is traced from.
 _FORMAT_SKIP = frozenset({"scripts/gen_figures.py"})
@@ -875,6 +877,132 @@ def export_problems() -> list[str]:
     return [f"rg_main.tex is not the Org export of {ORG}:\n  " + "\n  ".join(diff[:8])]
 
 
+_EXPONENT_MARK = re.compile(r"\^|\\sin|\\cos")
+_BESIDE_COUNT = re.compile(
+    r"(?:^|[\s\$(~])(?P<n>\+?\d)\s+(?:cores|repetitions|decimals)\b"
+    r"|\b(?:cores|repetitions|decimals)\s+(?P<m>\+?\d)(?![\d.])"
+)
+
+
+def uncovered_source(kind: str, text: str, context: str) -> str:
+    """An explicit whitelist for an exponent, an index, or a named standard.
+
+    A count written beside cores, repetitions, or decimals is a measurement
+    and stays empty until a record names it.
+    """
+    if kind == "named standard":
+        return "whitelist: named standard"
+    if kind != "integer 0-9":
+        return ""
+    if _EXPONENT_MARK.search(context):
+        return "whitelist: exponent"
+    token = text.lstrip("+")
+    for match in _BESIDE_COUNT.finditer(context):
+        if token in {match.group("n"), match.group("m")}:
+            return ""
+    return "whitelist: index"
+
+
+def _written_by(path: Path) -> str:
+    first = path.read_text(errors="replace").splitlines()[:1]
+    match = re.match(r"% Written by (\S+)", first[0] if first else "")
+    return match.group(1).rstrip(".") if match else ""
+
+
+def _figure_script(stem: str) -> str:
+    pattern = re.compile(rf"""[\"']{re.escape(stem)}(?:\.pdf)?[\"']""")
+    hits = [
+        path
+        for path in sorted((ROOT / "scripts").rglob("*.py"))
+        if pattern.search(path.read_text(errors="replace"))
+    ]
+    writers = [path for path in hits if "pdf" in path.read_text(errors="replace")]
+    chosen = writers[0] if writers else (hits[0] if hits else None)
+    if chosen is None:
+        return ""
+    return "paper/cpc/" + chosen.relative_to(ROOT).as_posix()
+
+
+def table_cell_rows() -> list[list]:
+    """One ledger row per number in a generated table cell."""
+    rows = []
+    number = re.compile(r"(?<![\w])[-+]?(?:\d+\.\d+|\d+)(?:[eE][-+]?\d+)?")
+    for document in DOCUMENTS:
+        text = (SRC / document).read_text()
+        for target in re.findall(
+            r"\\input\{(figures/generated/[^}]+)\}", _strip_comment_all(text)
+        ):
+            path = tex_input_path(target)
+            if path.name.endswith("macros.tex") or not path.is_file():
+                continue
+            source = _written_by(path)
+            rel = str(path.relative_to(SRC))
+            in_table = False
+            for line_no, line in enumerate(path.read_text().splitlines(), 1):
+                if r"\begin{tabular}" in line:
+                    in_table = True
+                    continue
+                if r"\end{tabular}" in line:
+                    in_table = False
+                    continue
+                if not in_table or "&" not in line:
+                    continue
+                for match in number.finditer(line):
+                    rows.append(
+                        [
+                            rel,
+                            line_no,
+                            match.group(0),
+                            "generated cell",
+                            source,
+                            "table cell",
+                            "",
+                            "",
+                        ]
+                    )
+    return rows
+
+
+def figure_label_rows() -> list[list]:
+    """One ledger row per number drawn in an included figure."""
+    rows = []
+    number = re.compile(r"(?<![\w])[-+]?(?:\d+\.\d+|\d+)(?:[eE][-+]?\d+)?")
+    seen: set[str] = set()
+    pdftotext = shutil.which("pdftotext")
+    if pdftotext is None:
+        raise SystemExit("pdftotext is not on PATH; figure labels are not scanned")
+    for document in DOCUMENTS:
+        text = (SRC / document).read_text()
+        for stem in re.findall(
+            r"\\includegraphics(?:\[[^\]]*\])?\{figures/generated/([^}]+)\.pdf\}",
+            text,
+        ):
+            if stem in seen:
+                continue
+            seen.add(stem)
+            pdf = SRC / "figures" / "generated" / f"{stem}.pdf"
+            if not pdf.is_file():
+                continue
+            rendered = subprocess.check_output(
+                [pdftotext, "-layout", str(pdf), "-"], text=True
+            )
+            source = _figure_script(stem)
+            for match in number.finditer(rendered):
+                rows.append(
+                    [
+                        f"figures/generated/{stem}.pdf",
+                        1,
+                        match.group(0),
+                        "figure label",
+                        source,
+                        "figure label",
+                        "",
+                        "",
+                    ]
+                )
+    return rows
+
+
 def scan() -> tuple[list[Printed], list[Identifier]]:
     printed: list[Printed] = []
     identifiers: list[Identifier] = []
@@ -1005,13 +1133,14 @@ def trace(
             )
         used.update(id(r) for r in candidates)
         hit = candidates[0] if candidates and not wrong else None
+        source = hit.source if hit else uncovered_source(kind, text, context)
         rows.append(
             [
                 document,
                 line,
                 text,
                 "identifier",
-                hit.source if hit else "",
+                source,
                 f"{kind}: {hit.rule}" if hit else kind,
                 hit.value if hit else "",
                 "",
@@ -1025,7 +1154,12 @@ def trace(
                 )
     if not only:
         problems += org_parity()
-    rows.sort(key=lambda r: (r[0], int(r[1])))
+        rows.extend(table_cell_rows())
+        rows.extend(figure_label_rows())
+    for row in rows:
+        if not row[4]:
+            problems.append(f"{row[0]}:{row[1]}: {row[2]}: no source")
+    rows.sort(key=lambda r: (r[0], int(r[1]), r[2]))
     return rows, problems
 
 

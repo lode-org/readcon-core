@@ -1,38 +1,38 @@
 {
-  "readcon_version": "0.17.4",
+  "readcon_version": "0.24.0",
   "readcon_package": "readcon",
-  "tree_commit": "ae4131ff056da306ac5d8bd9beeb74328513e114",
+  "tree_commit": "b8a1ad30f958d301216e10f51c0dae7fa848e96e",
   "manifest": "resources/conformance/manifest.toml",
   "provenance": {
     "build": {
-      "readcon_version": "0.17.4",
+      "readcon_version": "0.24.0",
       "readcon_module": "paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
-      "readcon_module_sha256": "7a74a7329002f94fbb29d0f1d86deb6b868c74744ece133bbf76df2edf7cfe10",
+      "readcon_module_sha256": "5e1ab9531886e6b2e2dd00dba7680117159d676fd527d4549aa9816d64637769",
       "rustc": "1.88.0 (6b00bc388 2025-06-23)",
       "newer_sources": [],
-      "library_digest": "3b4d00ae2427e0e19795552d523d7597cea5fa005ce2b26f3942e5681a4458f9",
-      "source_files": 47,
+      "library_digest": "bf1b8bde7299870fbea43a1d62e0f2f74097d18cd6952e1d600ec2729ed3cc24",
+      "source_files": 53,
       "source_tag": null,
-      "source_commit": "ae4131ff056da306ac5d8bd9beeb74328513e114"
+      "source_commit": "b8a1ad30f958d301216e10f51c0dae7fa848e96e"
     },
     "host": {
-      "kernel": "6.12.94+",
+      "kernel": "6.12.113+",
       "uname_m": "x86_64",
       "nproc": 8,
       "family": "6",
       "model": "207",
-      "cpu_model": "Intel(R) Xeon(R) Processor",
+      "cpu_model": "Intel Xeon Processor",
       "mhz": 2400.0,
-      "mem_kb": 49342768
+      "mem_kb": 49342816
     },
     "peers": {
       "ase": "3.29.0",
       "chemfiles": "0.10.4",
-      "MDAnalysis": "2.10.0",
+      "MDAnalysis": "2.11.0",
       "h5py": "3.16.0",
       "numpy": "2.5.4",
       "scipy": "1.18.1",
-      "ovito": "3.16.1",
+      "ovito": "3.17.2",
       "openbabel": "3.2.1",
       "python": "3.12.16"
     }

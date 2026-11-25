@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 
 from numbers_lib import REPO, ROOT, Rule, grep, jget
@@ -34,6 +33,7 @@ def _drift() -> dict:
 
 
 DOC = "rg_main.tex"
+SUPP = "rg_supp.tex"
 OPENERS = "data/failure/con_openers.json"
 DRIFT = "data/spec/version_drift.json"
 OPEN_NEITHER = (r"rg_supp.tex~open neither a version-1 CON file nor a CON 3.1 file",)
@@ -44,20 +44,6 @@ DRIFT_LINE = (
 
 
 READER_EXCHANGE = "logs/reader-exchange.log"
-EON_PINS = "data/eon/readcon_pins.json"
-EON_PIN = "goswamiTheochemuieonCommitBf5d3282026"
-
-
-def eon_pin() -> str:
-    """The readcon-core tag that the readcon-core wrap of eOn commit bf5d328 builds; that commit is in no eOn release."""
-    dev = jget(EON_PINS, "development")
-    if not dev["eon_commit"].startswith("bf5d328") or dev["in_release"]:
-        raise SystemExit(
-            f"{EON_PINS}: the development commit is not bf5d328 or is in an eOn release"
-        )
-    if not re.fullmatch(r"v\d+\.\d+\.\d+", dev["readcon_revision"]):
-        raise SystemExit(f"{EON_PINS}: the bf5d328 wrap names no readcon-core tag")
-    return dev["readcon_revision"]
 
 
 def opener(library: str, peer: str) -> str:
@@ -124,17 +110,10 @@ RULES = [
         for v in ("0.17.0", "0.17.1", "0.17.2")
     ),
     Rule(
-        "0.20.0",
-        eon_pin(),
-        EON_PINS,
-        "readcon-core tag in subprojects/readcon-core.wrap at eOn commit bf5d328, which no eOn release contains",
-        (rf"{DOC}~{EON_PIN}",),
-    ),
-    Rule(
         "3.6.0",
         grep(READER_EXCHANGE, r"^eon_version (\S+)$"),
         READER_EXCHANGE,
         "eon_version of the timed eon.fileio.loadcons arm",
-        (rf"{DOC}~times faster than eOn 3\.6\.0 \\texttt\{{loadcons\}}",),
+        (rf"{SUPP}~eOn 3\.6\.0 \\texttt\{{loadcons\}}",),
     ),
 ]

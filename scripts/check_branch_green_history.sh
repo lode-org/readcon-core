@@ -15,6 +15,17 @@ RECORD_PATHS=(
     bench/h2h/versions.json
 )
 
+# Derived ledger. figure_reads.json is the figure-step open list, rewritten
+# when the figures are regenerated. It is not a measurement record.
+derived_ledger() {
+    case "$1" in
+        paper/cpc/data/figure_reads.json)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
 if [[ "$(git -C "$ROOT" rev-parse "$BASE:$VERSIONS")" != "$EXPECTED_VERSIONS_BLOB" ]]; then
     echo "$BASE has an unexpected $VERSIONS blob" >&2
     exit 1
@@ -38,6 +49,9 @@ while read -r commit; do
 
     while read -r status path; do
         [[ -z "$status" ]] && continue
+        if derived_ledger "$path"; then
+            continue
+        fi
         case "$status" in
             A)
                 # A record the series adds and the tip removes never lands.
@@ -60,13 +74,21 @@ while read -r commit; do
         git -C "$ROOT" diff --name-status "$BASE..$commit" -- "${RECORD_PATHS[@]}"
     )
 
-    python3 - "$worktree" <<'PY'
+    python3 - "$worktree" "$ROOT" <<'PY'
 import json
 import subprocess
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
+sys.path.insert(0, str(Path(sys.argv[2]) / "scripts"))
+from spec_measurement_schema import (
+    MeasurementSchemaError,
+    measured_commit,
+    require_ancestor,
+    resolve_measurement,
+)
+
 version = (root / "VERSION").read_text().strip()
 spec_blob = subprocess.run(
     ["git", "-C", str(root), "hash-object", str(root / "docs/orgmode/spec.org")],
@@ -83,8 +105,26 @@ path = (
 if not path.is_file():
     print(f"PENDING: {path.name} has not been measured")
     raise SystemExit(0)
-record = json.loads(path.read_text())
-commit = record["measured_at"]["commit"]
+spec_dir = root / "paper/cpc/data/spec"
+records = {}
+for spec_path in sorted(spec_dir.glob("spec-measurement-*.json")):
+    rel = spec_path.resolve().relative_to(root.resolve()).as_posix()
+    records[rel] = json.loads(spec_path.read_text())
+relpath = path.resolve().relative_to(root.resolve()).as_posix()
+try:
+    chosen, record = resolve_measurement(records, relpath)
+    commit = measured_commit(record, chosen)
+except MeasurementSchemaError as exc:
+    raise SystemExit(str(exc)) from None
+if chosen != relpath:
+    print(f"OK: {relpath} superseded by {chosen}")
+if commit is None:
+    print(f"OK: {path.name} uses legacy schema without measured_at.commit")
+    raise SystemExit(0)
+try:
+    require_ancestor(root, commit, chosen)
+except MeasurementSchemaError as exc:
+    raise SystemExit(str(exc)) from None
 
 def git(*args: str) -> str:
     done = subprocess.run(
@@ -94,14 +134,15 @@ def git(*args: str) -> str:
         raise SystemExit(done.stderr)
     return done.stdout.strip()
 
+name = Path(chosen).name
 if git("show", f"{commit}:VERSION") != record["tree"]["release"]:
-    raise SystemExit(f"{path.name} does not match {commit}:VERSION")
+    raise SystemExit(f"{name} does not match {commit}:VERSION")
 if git("rev-parse", f"{commit}:{record['spec']}") != record["tree"]["spec_blob"]:
-    raise SystemExit(f"{path.name} does not match {commit}:{record['spec']}")
+    raise SystemExit(f"{name} does not match {commit}:{record['spec']}")
 release_tag = f"v{record['tree']['release']}"
 if record["tree"]["tagged"] or release_tag in {entry["tag"] for entry in record["tags"]}:
-    raise SystemExit(f"{path.name} falsely claims the pending {release_tag} tag")
-print(f"OK: {path.name} records untagged measurement commit {commit}")
+    raise SystemExit(f"{name} falsely claims the pending {release_tag} tag")
+print(f"OK: {name} records untagged measurement commit {commit}")
 PY
 
     if [[ "${READCON_HISTORY_RECORDS_ONLY:-0}" == "1" ]]; then
@@ -127,4 +168,4 @@ PY
 
     git -C "$ROOT" worktree remove --force "$worktree"
     echo "=== passed $commit ==="
-done < <(git -C "$ROOT" rev-list --reverse "$BASE..$TIP")
+done < <(git -C "$ROOT" rev-list --first-parent --reverse "$BASE..$TIP")

@@ -144,6 +144,90 @@ def compose_svg(panels: list[tuple[str, Path]]) -> str:
     return "\n".join(parts)
 
 
+def pin_creation_date(pdf: Path) -> None:
+    """Replace cairo's wall-clock CreationDate with SOURCE_DATE_EPOCH.
+
+    cairo 1.18 writes the clock into an object stream and ignores
+    SOURCE_DATE_EPOCH, so two renders of the same SVG differ. The new date
+    has the same width. The stream is recompressed and padded back to its
+    old length, so the cross-reference offsets stay valid.
+    """
+    import os
+    import re
+    import zlib
+    from datetime import datetime, timezone
+
+    epoch = os.environ.get("SOURCE_DATE_EPOCH")
+    if not epoch:
+        import regen_paper
+
+        epoch = regen_paper.SOURCE_DATE_EPOCH
+    fixed = datetime.fromtimestamp(int(epoch), timezone.utc).strftime("D:%Y%m%d%H%M%SZ")
+    raw = pdf.read_bytes()
+    streams = re.compile(
+        rb"<< /Type /ObjStm\n   /Length (\d+) 0 R\n   /N (\d+)\n   /First (\d+)\n"
+        rb"   /Filter /FlateDecode\n>>\nstream\n(.*?)\nendstream",
+        re.S,
+    )
+    chosen = None
+    for match in streams.finditer(raw):
+        try:
+            plain = zlib.decompress(match.group(4))
+        except zlib.error:
+            continue
+        if b"/CreationDate (D:" in plain:
+            chosen = (match, plain)
+            break
+    if chosen is None:
+        raise SystemExit(f"{pdf} has no cairo CreationDate to pin")
+    match, plain = chosen
+    new_plain, count = re.subn(
+        rb"/CreationDate \(D:\d{14}Z\)",
+        f"/CreationDate ({fixed})".encode(),
+        plain,
+        count=1,
+    )
+    if count != 1 or len(new_plain) != len(plain):
+        raise SystemExit(f"{pdf} has a CreationDate this pin does not recognise")
+    original = match.group(4)
+    compressed = None
+    for level in range(1, 10):
+        candidate = zlib.compress(new_plain, level)
+        if len(candidate) <= len(original):
+            compressed = candidate
+            break
+    if compressed is None:
+        raise SystemExit(f"{pdf} CreationDate stream grew from {len(original)} bytes")
+    padded = compressed + b"\n" * (len(original) - len(compressed))
+    decoder = zlib.decompressobj()
+    if decoder.decompress(padded) + decoder.flush() != new_plain:
+        raise SystemExit(f"{pdf} CreationDate stream did not round-trip")
+    pdf.write_bytes(raw[: match.start(4)] + padded + raw[match.end(4) :])
+
+
+def _fontconfig() -> None:
+    """Point cairo at the bundled Latin Modern, so the titles are not Noto."""
+    import os
+
+    directory = LATIN.parent
+    config = WORK / "fonts.conf"
+    config.write_text(
+        "<?xml version='1.0'?>\n"
+        "<!DOCTYPE fontconfig SYSTEM 'fonts.dtd'>\n"
+        "<fontconfig>\n"
+        f"  <dir>{directory}</dir>\n"
+        "  <alias><family>Latin Modern Roman</family>"
+        "<prefer><family>LM Roman 10</family></prefer></alias>\n"
+        "  <alias><family>serif</family>"
+        "<prefer><family>LM Roman 10</family></prefer></alias>\n"
+        "  <alias><family>sans-serif</family>"
+        "<prefer><family>LM Roman 10</family></prefer></alias>\n"
+        "</fontconfig>\n",
+        encoding="utf-8",
+    )
+    os.environ["FONTCONFIG_FILE"] = str(config)
+
+
 def main() -> None:
     import cairosvg
 
@@ -164,7 +248,9 @@ def main() -> None:
         page = WORK / "structures.svg"
         page.write_text(svg, encoding="utf-8")
         out_pdf = OUT / "structures.pdf"
+        _fontconfig()
         cairosvg.svg2pdf(url=str(page), write_to=str(out_pdf))
+        pin_creation_date(out_pdf)
         cairosvg.svg2png(
             url=str(page), write_to=str(OUT / "structures.png"), output_width=1600
         )

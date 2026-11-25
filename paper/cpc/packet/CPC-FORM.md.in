@@ -42,7 +42,7 @@ build of the paper, for readcon-core ${version}, ${commit_role} `${commit}`, lib
 | Competing interests | Statement plus the Elsevier declarations tool `.docx` uploaded at Attach Files | GFA | Section "Declaration of competing interest" declares none; the `.docx` comes from the declarations tool during submission. |
 | Funding | Guide asks for disclosure | GFA | Section "Funding" carries the guide's sentence for research without specific funding. |
 | Generative AI in writing | Declare in a section before the references if used in writing | GFA | Section "${ai_heading}", the last section before the references, in Elsevier's form. |
-| Data availability | Option C: deposit, cite and link data, plus a data statement at submission | GFA | Section "Data availability" names readcon-core ${version}, its ${commit_role} `${commit}`, the digest `${digest}` of its library and the git bundle `readcon-core.bundle` of the supplementary material, and links ${links}. |
+| Data availability | Option C: deposit, cite and link data, plus a data statement at submission | GFA | Section "Data availability" names readcon-core ${version}, its ${commit_role} `${commit}`, the digest `${digest}` of that commit's library, and says the records name the libraries they ran. The version map names each of those libraries. The git bundle is `readcon-core.bundle`. Links: ${links}. |
 | References | Numbered, elsarticle-num, software cited with identifier | GFA | elsarticle-num; ${n_refs} references in the manuscript and ${n_refs_supp} in the supplement; no undefined reference or citation in either pdfTeX log. |
 | Tables | Editable, no vertical rules | GFA | ${n_tab} tables; no tabular has a vertical rule. |
 | Preprint | Sharing a preprint anywhere at any time is allowed, and a preprint is not prior publication | GFA, SHARE | The preprint is on arXiv. |
@@ -107,7 +107,7 @@ Upload the `.docx` the tool produces.
 
 **Generative AI declaration question:** AI tools were used, as Section "${ai_heading}" states: "${ai}"
 
-**Data statement:** "The software is readcon-core ${version}, ${commit_role} ${commit}, which the git bundle readcon-core.bundle of the supplementary material holds with its whole history. ${tag_state} Every record of the paper names the library of that commit by its digest, ${digest}. The concept record of readcon-core is https://doi.org/${concept_doi}. The scripts, records and sources of the paper are the directory paper/cpc of the supplementary material." Links: ${links}
+**Data statement:** "The software is readcon-core ${version}, ${commit_role} ${commit}, which the git bundle readcon-core.bundle of the supplementary material holds with its whole history. ${tag_state} The library of that commit has digest ${digest}. A record names the library it ran, and that digest is not ${digest} for every record. The version map in the supplement names the library of each record. The concept record of readcon-core is https://doi.org/${concept_doi}. The scripts, records and sources of the paper are the directory paper/cpc of the supplementary material." Links: ${links}
 
 **Preprint:** the arXiv identifier of the preprint. Decline the SSRN option, since the preprint is on arXiv.
 

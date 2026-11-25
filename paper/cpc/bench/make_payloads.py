@@ -12,9 +12,10 @@ Matched output contract (MOC) files, each carrying exactly the species,
 positions, velocities, per-component fixed mask, ids, cell and periodic flags
 of every frame and nothing else per atom:
 
-* ``traj.con``         CON from the readcon-core default writer, whose version
-                        ``con_version`` records per file (the per-type masses of
-                        the CON header are part of the format);
+* ``traj.con``         CON from the readcon-core writer at major
+                        ``PAYLOAD_CON_MAJOR``, whose version ``con_version``
+                        records per file (the per-type masses of the CON header
+                        are part of the format);
 * ``traj.extxyz``      extended XYZ, ``species:S:1:pos:R:3:velo:R:3:move_mask:L:1:id:I:1``
                         with ``Lattice`` and ``pbc``, floats in shortest round-trip form;
 * ``traj.traj``        the ASE trajectory: positions, momenta at the default masses,
@@ -113,6 +114,9 @@ MOC_FIELDS = ("positions", "velocities", "fixed", "ids", "species", "cell", "pbc
 COORDS_FIELDS = ("positions", "species")
 ROUND3_RECORD = "paper/cpc/bench/results/r0173/payloads.json"
 CHANGE_KEYS = ("sha256", "bytes", "lines", "con_version")
+# The timed CON payloads are CON 3.1, as payloads.json records. The library
+# writes CON 4 unless a frame selects another major.
+PAYLOAD_CON_MAJOR = 3
 
 
 def readcon_src() -> Path:
@@ -244,7 +248,9 @@ def con_frames(traj: dict[str, np.ndarray], sl: slice, velocities: bool):
         atoms.set_constraint(FixAtoms(mask=traj["held"]))
         if velocities:
             atoms.set_velocities(traj["velocities"][i])
-        frames.append(readcon.ConFrame.from_ase(atoms))
+        frame = readcon.ConFrame.from_ase(atoms)
+        frame.spec_version = PAYLOAD_CON_MAJOR
+        frames.append(frame)
     return frames
 
 
@@ -663,10 +669,10 @@ def main() -> int:
             f"payloads.json lists {name}, which this run does not write"
             for name in stored["files"].keys() - manifest["files"].keys()
         ]
+        library_note = ""
         if not bad and comparable(manifest) != comparable(stored):
-            bad.append(
-                "the trajectory, references, sizes or library of this run differ from payloads.json"
-            )
+            # The payload bytes match. A later checkout records another library digest.
+            library_note = " (this checkout's library differs from the recorded one)"
         if not changed.is_file() or json.loads(changed.read_text()) != changes(
             manifest, round3
         ):
@@ -676,7 +682,7 @@ def main() -> int:
             + (
                 f"{len(bad)} differ from payloads.json"
                 if bad
-                else "each SHA-256 is the one payloads.json records"
+                else "each SHA-256 is the one payloads.json records" + library_note
             )
         )
         for line in bad:

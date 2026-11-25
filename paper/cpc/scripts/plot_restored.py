@@ -9,8 +9,10 @@ Each PDF is written from a committed record.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 import matplotlib
@@ -22,8 +24,10 @@ from matplotlib import font_manager as fm
 from matplotlib.colors import LinearSegmentedColormap
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parents[1]
 OUT = ROOT / "src" / "figures" / "generated"
 DATA = ROOT / "data"
+LIMITER = DATA / "limiter-r15"
 FONT = ROOT / "fonts" / "latin-modern" / "lmroman10-regular.otf"
 
 CORAL = "#FF655D"
@@ -72,6 +76,7 @@ def bars(name: str, labels, values, ylabel: str, colors=None) -> None:
 
 
 def dlpack() -> None:
+    """Median of the recorded repeats of each arm, with the type 7 interquartile range."""
     view, copy = [], []
     record = Path(os.environ.get("DLPACK_COST_RECORD", str(DATA / "dlpack_cost.txt")))
     for line in record.read_text().splitlines():
@@ -79,84 +84,133 @@ def dlpack() -> None:
             parts = line.split()
             view.append(int(parts[3]) / 1e3)
             copy.append(int(parts[5]) / 1e3)
+    if not view or len(view) != len(copy):
+        raise SystemExit(f"{record}: no repeats, or unequal view and copy repeats")
     fig, ax = plt.subplots(figsize=(7.0, 3.2))
-    x = np.arange(len(view))
-    ax.bar(
-        x - 0.18,
-        view,
-        width=0.36,
-        color=TEAL,
-        edgecolor=BLACK,
-        linewidth=0.4,
-        label="DLPack view",
-    )
-    ax.bar(
-        x + 0.18,
-        copy,
-        width=0.36,
-        color=CORAL,
-        edgecolor=BLACK,
-        linewidth=0.4,
-        label="explicit copy",
-    )
-    ax.set_xlabel("repeat")
-    ax.set_ylabel("time (microseconds)")
-    ax.legend(frameon=False)
+    for x, values, color, label in (
+        (0, view, TEAL, "DLPack view"),
+        (1, copy, CORAL, "explicit copy"),
+    ):
+        low, median, high = np.percentile(values, [25, 50, 75], method="linear")
+        ax.bar(
+            x,
+            median,
+            width=0.5,
+            color=color,
+            edgecolor=BLACK,
+            linewidth=0.4,
+            label=label,
+            yerr=[[median - low], [high - median]],
+            error_kw={"ecolor": BLACK, "capsize": 4, "linewidth": 0.8},
+        )
+    ax.set_xticks([0, 1], ["DLPack view", "explicit copy"])
+    ax.set_ylabel(f"time (microseconds), median of {len(view)} repeats")
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     save(fig, "dlpack")
 
 
 def toc() -> None:
-    """The graphical abstract: the uninterrupted climbing-image band and its CON 3.1 resume."""
-    bands = DATA / "failure" / "bands"
-    full = band_energy(bands / "uninterrupted.npz")
-    resumed = band_energy(bands / "CON_3_1__shortest_round_trip.npz")
-    fig, ax = plt.subplots(figsize=(5, 5))
-    ax.plot(
-        range(len(full)),
-        full - full[0],
-        color=TEAL,
-        marker="o",
-        label="uninterrupted band",
+    """Schematic graphical abstract. The words are readcon and competitors. No digits."""
+    from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+
+    fig, ax = plt.subplots(figsize=(5.6, 3.2))
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+    fields = ("mask", "identifier", "time unit", "coordinates")
+    for index, label in enumerate(fields):
+        y = 0.78 - index * 0.22
+        ax.add_patch(
+            FancyBboxPatch(
+                (0.02, y),
+                0.26,
+                0.16,
+                boxstyle="round,pad=0.01,rounding_size=0.02",
+                facecolor="white",
+                edgecolor=BLACK,
+                linewidth=0.6,
+            )
+        )
+        ax.text(
+            0.15,
+            y + 0.08,
+            label,
+            ha="center",
+            va="center",
+            color=BLACK,
+            fontsize=7,
+        )
+        ax.add_patch(
+            FancyArrowPatch(
+                (0.29, y + 0.08),
+                (0.36, 0.50),
+                arrowstyle="-|>",
+                mutation_scale=8,
+                color=BLACK,
+                linewidth=0.5,
+            )
+        )
+    for origin, label, width in (
+        (0.38, "readcon", 0.24),
+        (0.72, "competitors", 0.26),
+    ):
+        ax.add_patch(
+            FancyBboxPatch(
+                (origin, 0.28),
+                width,
+                0.44,
+                boxstyle="round,pad=0.02,rounding_size=0.04",
+                facecolor=TEAL if label == "readcon" else CORAL,
+                edgecolor=BLACK,
+                linewidth=0.8,
+            )
+        )
+        ax.text(
+            origin + width / 2,
+            0.50,
+            label,
+            ha="center",
+            va="center",
+            color="white",
+            fontsize=11,
+        )
+    ax.add_patch(
+        FancyArrowPatch(
+            (0.64, 0.50),
+            (0.70, 0.50),
+            arrowstyle="-|>",
+            mutation_scale=14,
+            color=BLACK,
+            linewidth=0.8,
+        )
     )
-    ax.plot(
-        range(len(resumed)),
-        resumed - resumed[0],
-        linestyle="none",
-        marker="x",
-        markersize=9,
-        color=CORAL,
-        label="resumed from CON 3.1",
-    )
-    ax.set_xlabel("image")
-    ax.set_ylabel("energy above the first image (eV)")
-    ax.legend(frameon=False)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
     save(fig, "toc")
 
 
 def _reads_path() -> Path:
-    """``reads.json`` from the roofline rule, or the historical r0174 record."""
-    override = os.environ.get("READS_JSON")
-    if override:
-        return Path(override)
-    return ROOT / "bench" / "results" / "r0174" / "reads.json"
+    """The reads record this build plots. A missing file stops the build."""
+    path = (
+        Path(os.environ["READS_JSON"])
+        if os.environ.get("READS_JSON")
+        else ROOT / "bench" / "results" / "r0174" / "reads.json"
+    )
+    if not path.is_file():
+        raise SystemExit(f"{path} is absent; this build has no other reads record")
+    return path
 
 
 def timing_and_fairness() -> None:
     cells = json.loads(_reads_path().read_text())["cells"]
 
+    def cell_of(reader: str, threads: int = 1) -> dict:
+        key = f"python:{reader}:{threads}"
+        if key not in cells:
+            raise SystemExit(f"{_reads_path()}: no cell {key}")
+        return cells[key]
+
     def med(reader: str, threads: int = 1) -> float:
-        for cell in cells.values():
-            if (
-                cell["reader"] == reader
-                and cell["threads"] == threads
-                and cell["kind"] == "python"
-            ):
-                return cell["median_s"]
-        raise KeyError(reader)
+        return cell_of(reader, threads)["median_s"]
 
     labels = [
         "readcon",
@@ -176,11 +230,8 @@ def timing_and_fairness() -> None:
         "h5py",
         "mda_h5md",
     ]
-    values = [med(key) for key in keys]
-    bars("timing", labels, values, "median wall time (s)")
     ratios = [med("readcon") / med(key) for key in keys[1:]]
     bars("fairness_ratios", labels[1:], ratios, "readcon median / peer median")
-    frames = 10000
     rate_labels = [
         "full, 1",
         "full, 8",
@@ -189,34 +240,62 @@ def timing_and_fairness() -> None:
         "coords, 1",
         "coords, 8",
     ]
-    rates = [
-        frames / med("readcon", 1),
-        frames / med("readcon", 8),
-        frames / med("readcon_fields", 1),
-        frames / med("readcon_fields", 8),
-        frames / med("readcon_coords", 1),
-        frames / med("readcon_coords", 8),
+    rate_cells = [
+        cell_of(reader, threads)
+        for reader in ("readcon", "readcon_fields", "readcon_coords")
+        for threads in (1, 8)
     ]
+    counts = {cell["printed"]["frames"] for cell in rate_cells}
+    if len(counts) != 1:
+        raise SystemExit(
+            f"{_reads_path()}: the rate cells read {sorted(counts)} frames"
+        )
+    frames = counts.pop()
+    rates = [frames / cell["median_s"] for cell in rate_cells]
     bars("layers", rate_labels, rates, "frames per second")
     bars("roofline", rate_labels, rates, "frames per second")
 
 
-def mpi_plots() -> None:
+MPI_STRONG_SERIES = (
+    ("read", "con-100k-disk"),
+    ("read", "con-1e6-disk"),
+    ("read", "convel-disk"),
+    ("write", "con-100k-disk"),
+    ("write", "con-1e6-disk"),
+)
+
+
+def mpi_strong() -> None:
+    """Speedup against one rank for the named series of ``data/mpi/strong.csv``.
+
+    The record holds more series than the palette has colours. Five of the
+    sixteen series are named here. A named series that the record lacks is
+    an error.
+    """
     rows = list(csv.DictReader((DATA / "mpi" / "strong.csv").open()))
-    fig, ax = plt.subplots(figsize=(7.0, 3.2))
-    series = {}
+    series: dict[tuple[str, str], list[tuple[int, float]]] = {}
     for row in rows:
         if row["system"] != "readcon-core":
             continue
-        series.setdefault(f"{row['operation']} {row['mode']}", []).append(
+        series.setdefault((row["operation"], row["mode"]), []).append(
             (int(row["ranks"]), float(row["seconds"]))
         )
-    for (label, points), color in zip(series.items(), CYCLE):
-        points.sort()
+    missing = [key for key in MPI_STRONG_SERIES if key not in series]
+    if missing:
+        raise SystemExit(f"data/mpi/strong.csv has no series {missing}")
+    fig, ax = plt.subplots(figsize=(7.0, 3.2))
+    for key, color in zip(MPI_STRONG_SERIES, CYCLE):
+        points = sorted(series[key])
         ranks, seconds = zip(*points)
+        if ranks[0] != 1:
+            raise SystemExit(f"data/mpi/strong.csv series {key} has no one-rank row")
         base = seconds[0]
         ax.plot(
-            ranks, [base / s for s in seconds], marker="o", color=color, label=label
+            ranks,
+            [base / s for s in seconds],
+            marker="o",
+            color=color,
+            label=" ".join(key),
         )
     ax.plot([1, 8], [1, 8], color=BLACK, linewidth=0.6, linestyle="--")
     ax.set_xlabel("ranks")
@@ -225,78 +304,218 @@ def mpi_plots() -> None:
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     save(fig, "mpi_strong")
-    weak = (
-        list(csv.DictReader((DATA / "cloud-runs-2" / "04" / "weak.csv").open()))
-        if (DATA / "cloud-runs-2" / "04" / "weak.csv").is_file()
-        else []
-    )
-    if not weak:
-        # The stored weak file in this tree is the serial shard table.
-        shard = list(csv.DictReader((DATA / "mpi" / "db_serial.csv").open()))
-        fig, ax = plt.subplots(figsize=(7.0, 3.2))
-        ranks = [int(row["ranks"]) for row in shard]
-        ax.plot(
-            ranks,
-            [float(row["single"]) for row in shard],
-            marker="o",
-            color=TEAL,
-            label="single",
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _type7(values: list[float], probability: float) -> float:
+    """Hyndman-Fan type 7 quantile."""
+    ordered = sorted(values)
+    if not ordered:
+        raise SystemExit("a weak-scaling point has no samples")
+    if len(ordered) == 1:
+        return ordered[0]
+    index = (len(ordered) - 1) * probability
+    low = int(index)
+    high = min(low + 1, len(ordered) - 1)
+    fraction = index - low
+    return ordered[low] * (1 - fraction) + ordered[high] * fraction
+
+
+def _limiter_record() -> dict:
+    """The limiter-r15 read ladder. A missing or altered file stops the build."""
+    prov_path = LIMITER / "provenance.json"
+    if not prov_path.is_file():
+        raise SystemExit(
+            f"{prov_path} is absent; the weak-scaling figure has no other record"
         )
-        ax.plot(
-            ranks,
-            [float(row["sharded"]) for row in shard],
+    provenance = json.loads(prov_path.read_text())
+    files = provenance.get("files") or {}
+    loaded = {}
+    for name, digest in files.items():
+        path = LIMITER / name
+        if not path.is_file():
+            raise SystemExit(
+                f"{path} is absent; the weak-scaling figure has no other record"
+            )
+        found = _sha256(path)
+        if found != digest:
+            raise SystemExit(f"{path} sha256 {found} is not {digest}")
+        loaded[name] = path
+    if "limiter-r15.json" not in loaded or "measure.txt" not in loaded:
+        raise SystemExit(f"{prov_path} does not name the limiter-r15 read files")
+    return {
+        "provenance": provenance,
+        "after": json.loads(loaded["limiter-r15.json"].read_text()),
+        "measure": loaded["measure.txt"].read_text(),
+    }
+
+
+def _before_samples(measure: str) -> dict[str, dict[int, list[float]]]:
+    """Raw samples from the public-main arm of the campaign log."""
+    head = measure.split("AFTER_BEGIN", 1)[0]
+    patterns = {
+        "touch": re.compile(r"before touch workers=(\d+) sample_s=([0-9.]+)"),
+        "open-only": re.compile(r"before open-only workers=(\d+) sample_s=([0-9.]+)"),
+        "ranks": re.compile(r"before ranks=(\d+) sample_s=([0-9.]+)"),
+    }
+    found = {name: {} for name in patterns}
+    for line in head.splitlines():
+        if "summary" in line or "meminfo" in line:
+            continue
+        for name, pattern in patterns.items():
+            match = pattern.search(line)
+            if match:
+                found[name].setdefault(int(match.group(1)), []).append(
+                    float(match.group(2))
+                )
+    return found
+
+
+def _after_samples(record: dict) -> dict[str, dict[int, list[float]]]:
+    """Raw samples from the tip arm. The JSON holds that arm only."""
+    for key, label in (
+        ("touch", "touch"),
+        ("open_only", "open-only"),
+        ("ranks", "ranks"),
+    ):
+        if key not in record:
+            raise SystemExit(f"the limiter-r15 record has no {label} samples")
+    found = {}
+    for name, block in (("touch", record["touch"]), ("open-only", record["open_only"])):
+        found[name] = {
+            int(point["workers"]): [float(sample) for sample in point["samples_s"]]
+            for point in block["points"]
+        }
+    found["ranks"] = {
+        int(point["ranks"]): [float(sample) for sample in point["samples_s"]]
+        for point in record["ranks"]
+    }
+    return found
+
+
+def _ladder(
+    samples: dict[int, list[float]], workers: list[int]
+) -> list[tuple[int, float, float, float]]:
+    points = []
+    for worker in workers:
+        values = samples.get(worker) or []
+        if len(values) != 6:
+            raise SystemExit(f"worker {worker} has {len(values)} samples, not 6")
+        median = _type7(values, 0.5)
+        low = _type7(values, 0.25)
+        high = _type7(values, 0.75)
+        points.append((worker, median, median - low, high - median))
+    return points
+
+
+def weak_figure() -> None:
+    """Plot the limiter-r15 read ladder. A missing record stops the build."""
+    record = _limiter_record()
+    workers = [int(worker) for worker in record["provenance"]["workers"]]
+    after = _after_samples(record["after"])
+    before = _before_samples(record["measure"])
+    if "touch" not in after or not after["touch"]:
+        raise SystemExit("the limiter-r15 record has no touch samples")
+    if "open-only" not in after or not after["open-only"]:
+        raise SystemExit("the limiter-r15 record has no open-only samples")
+    series = []
+    for name, color in (("touch", TEAL), ("open-only", CORAL), ("ranks", SKY)):
+        series.append((f"{name}, tip", color, "-", _ladder(after[name], workers)))
+        main = before.get(name) or {}
+        if name == "ranks" and not main:
+            continue
+        if not main:
+            raise SystemExit(f"the campaign log has no {name} samples before the tip")
+        series.append((f"{name}, main", color, "--", _ladder(main, workers)))
+    fig, ax = plt.subplots(figsize=(7.0, 3.2))
+    for label, color, style, points in series:
+        ax.errorbar(
+            [point[0] for point in points],
+            [point[1] for point in points],
+            yerr=[[point[2] for point in points], [point[3] for point in points]],
             marker="o",
-            color=CORAL,
-            label="sharded",
+            color=color,
+            linestyle=style,
+            linewidth=1.4,
+            capsize=2,
+            label=label,
         )
-        ax.set_xlabel("ranks")
-        ax.set_ylabel("seconds")
-        ax.legend(frameon=False)
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        save(fig, "mpi_weak")
+    ax.set_xlabel("width")
+    ax.set_ylabel("seconds")
+    ax.set_xticks(workers)
+    ax.legend(frameon=False, fontsize=7)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    save(fig, "mpi_weak")
+
+
+DB_FRAMES = "1000"
+
+
+def _db_rows(rows, name: str, label, **where) -> list[dict[str, str]]:
+    """The rows of one store size that match ``where``, one for each label."""
+    found = [
+        row for row in rows if all(row[key] == want for key, want in where.items())
+    ]
+    if not found:
+        raise SystemExit(f"{name}: no row matches {where}")
+    labels = [label(row) for row in found]
+    if len(set(labels)) != len(labels):
+        raise SystemExit(f"{name}: {where} leaves repeated labels {labels}")
+    return found
 
 
 def db_plots() -> None:
     summary = list(csv.DictReader((DATA / "db" / "summary.csv").open()))
-    ingest = [
-        row
-        for row in summary
-        if row["kind"] == "frames_per_s" and row["n_frames"] == "1000"
-    ]
+    ingest = _db_rows(
+        summary,
+        "db_ingest_throughput",
+        lambda row: row["system"],
+        kind="frames_per_s",
+        n_frames=DB_FRAMES,
+    )
     bars(
         "db_ingest_throughput",
         [row["system"] for row in ingest],
         [float(row["median"]) for row in ingest],
         "median frames per second",
     )
-    bandwidth = [
-        row
-        for row in summary
-        if row["kind"] == "mb_per_s" and row["n_frames"] == "1000"
-    ]
+    bandwidth = _db_rows(
+        summary,
+        "db_ingest_bandwidth",
+        lambda row: row["system"],
+        kind="mb_per_s",
+        n_frames=DB_FRAMES,
+    )
     bars(
         "db_ingest_bandwidth",
         [row["system"] for row in bandwidth],
         [float(row["median"]) for row in bandwidth],
         "median MB/s",
     )
-    queries = [
-        row
-        for row in summary
-        if row["kind"] == "query_s" and row["query"] == "composition"
-    ]
+    queries = _db_rows(
+        summary,
+        "db_query_latency",
+        lambda row: f"{row['system']} {row['cache']}",
+        kind="query_s",
+        query="composition",
+        n_frames=DB_FRAMES,
+    )
     bars(
         "db_query_latency",
         [f"{row['system']} {row['cache']}" for row in queries],
         [float(row["median"]) for row in queries],
         "median seconds",
     )
-    sizes = [
-        row
-        for row in csv.DictReader((DATA / "db" / "sizes.csv").open())
-        if row["n_frames"] == "1000"
-    ]
+    sizes = _db_rows(
+        list(csv.DictReader((DATA / "db" / "sizes.csv").open())),
+        "db_disk_footprint",
+        lambda row: row["store"],
+        n_frames=DB_FRAMES,
+    )
     bars(
         "db_disk_footprint",
         [row["store"] for row in sizes],
@@ -381,18 +600,6 @@ def landscapes() -> None:
     ax.legend(frameon=False, fontsize=7)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    save(fig, "restart_formats")
-    fig, ax = plt.subplots(figsize=(7.0, 3.4))
-    for (label, path), color in zip(pairs, CYCLE):
-        energy = band_energy(path)
-        ax.plot(
-            range(len(energy)), energy - energy[0], marker="o", color=color, label=label
-        )
-    ax.set_xlabel("image")
-    ax.set_ylabel("energy above the first image (eV)")
-    ax.legend(frameon=False, fontsize=7)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
     save(fig, "neb_multiples")
     mask_pairs = [
         ("held", bands / "POSCAR__ASE___FixScaled_z.npz"),
@@ -410,9 +617,6 @@ def landscapes() -> None:
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     save(fig, "ase_mask")
-    # Morse restart energies are not in this npz set. Plot the held band again
-    # under the restart name only when a Morse record is absent, and keep the
-    # existing restart.pdf when this function is not asked to replace it.
     fig, ax = plt.subplots(figsize=(7.0, 3.2))
     velocity = json.loads((DATA / "novel" / "velocity.json").read_text())
     norms = np.array(velocity["atom_norm_A"])
@@ -424,81 +628,26 @@ def landscapes() -> None:
     save(fig, "velocity_mislabel")
 
 
-def architecture() -> None:
-    fig, ax = plt.subplots(figsize=(7.0, 3.6))
-    ax.set_xlim(0, 10)
-    ax.set_ylim(0, 6)
-    ax.axis("off")
-    boxes = [
-        (0.4, 4.2, "C"),
-        (2.6, 4.2, "C++"),
-        (4.8, 4.2, "Julia"),
-        (7.0, 4.2, "Fortran"),
-        (3.6, 2.2, "Rust core"),
-        (3.6, 0.4, "Python / NumPy"),
-    ]
-    for (x, y, text), color in zip(boxes, CYCLE + (TEAL,)):
-        ax.add_patch(plt.Rectangle((x, y), 2.0, 1.0, facecolor=color, edgecolor=BLACK))
-        ax.text(
-            x + 1.0,
-            y + 0.5,
-            text,
-            ha="center",
-            va="center",
-            color="white" if color != SUNSHINE else BLACK,
-        )
-    save(fig, "architecture")
-
-
-def structures() -> None:
-    """Three orthographic views. xyzrender is used when it imports."""
-    try:
-        import xyzrender  # noqa: F401
-
-        used = "xyzrender"
-    except Exception:
-        used = "orthographic"
-    survey = OUT / "survey_frame.con"
-    band = DATA / "failure" / "bands" / "uninterrupted.npz"
-    fig, axes = plt.subplots(1, 3, figsize=(7.2, 2.6))
-    # Survey frame coordinates are the fifth field group of each atom line.
-    coords = []
-    for line in survey.read_text().splitlines():
-        parts = line.split()
-        if len(parts) >= 4:
-            try:
-                coords.append([float(parts[1]), float(parts[2]), float(parts[3])])
-            except ValueError:
-                continue
-    coords = np.array(coords) if coords else np.zeros((1, 3))
-    panels = [
-        coords,
-        np.load(band)["pos"][len(np.load(band)["pos"]) // 2],
-        np.load(band)["pos"][0],
-    ]
-    titles = ["survey", "band middle", "band end"]
-    for ax, xyz, title, color in zip(axes, panels, titles, CYCLE):
-        ax.scatter(
-            xyz[:, 0], xyz[:, 1], s=18, c=color, edgecolors=BLACK, linewidths=0.3
-        )
-        ax.set_aspect("equal")
-        ax.set_title(title)
-        ax.set_xticks([])
-        ax.set_yticks([])
-    fig.suptitle(used, fontsize=8)
-    save(fig, "structures")
-
-
 def main() -> None:
     face()
-    dlpack()
-    toc()
-    timing_and_fairness()
-    mpi_plots()
-    db_plots()
-    anatomy_and_errors()
-    landscapes()
+    failures = []
+    for step in (
+        dlpack,
+        toc,
+        timing_and_fairness,
+        mpi_strong,
+        weak_figure,
+        db_plots,
+        anatomy_and_errors,
+        landscapes,
+    ):
+        try:
+            step()
+        except (Exception, SystemExit) as exc:
+            failures.append(f"{step.__name__}: {exc}")
     print("wrote", sorted(p.name for p in OUT.glob("*.pdf")))
+    if failures:
+        raise SystemExit("figures not drawn:\n" + "\n".join(failures))
 
 
 if __name__ == "__main__":

@@ -42,6 +42,9 @@ build/
 logs/reader-work/
 logs/dlpack-work/
 
+# Claisen model cache and NEB scratch. Not a record.
+cache/
+
 # Records under data/ are inputs of scripts/regen_paper.py.
 # regen_paper.py and the format steps rewrite the ledgers under data/trace.
 data/trace/

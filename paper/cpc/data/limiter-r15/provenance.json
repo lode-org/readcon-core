@@ -1,0 +1,33 @@
+{
+  "build": {
+    "readcon_version": "0.17.3",
+    "library_digest": "b501ba6b6ca8e8b4998d07ed4c5812edb172be63fee097dbffafad56bf61f510",
+    "source_commit": "a2499ab697691f0d46ac27218509a123247e3b62"
+  },
+  "host": {
+    "family": 6,
+    "model": 207,
+    "mhz": 2400,
+    "nproc": 8
+  },
+  "kit_outer_sha256": "7f4b439cd2721fd0d983938d3f53471029f09fdc99770cb091b98f29a88d3c75",
+  "tip": "a2499ab697691f0d46ac27218509a123247e3b62",
+  "tree": "8704be1b38d42b62247c6e265624e53b5d1cc0e1",
+  "base": "449af44ff01b87f9d72b02eeaf281de0bdfd6a47",
+  "before": "ac4f437989dea5aad9f75ff045af09ccf7127eba",
+  "before_library_digest": "e5ace3f9cd6cf1a988f052e3a1456ad87dfa777e205210c405464ab3299704bc",
+  "measures_release": "0.17.3",
+  "frames_per_worker": 16384,
+  "atoms_per_frame": 218,
+  "repeats": 6,
+  "workers": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "files": {
+    "limiter-r15.json": "f91f7934845b899af1214b51737a2517847d8ff94eb3e1399a3dfe2d3480b951",
+    "measure.txt": "f3b7fcb897c778634e3e38da60e6afef34ec0c89c4de75e59e37db3f8c0531be"
+  }
+}

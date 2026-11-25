@@ -3,7 +3,7 @@
 The counts printed in that subsection are recomputed here, and its other
 numbers are macros that readcon_db_macros.py writes with the helpers of this
 module.  All of them come from the reviewed db31 records
-(lode-org/readcon-db ``ff1210e3``) and the fair-store rerun in the db32 records
+(lode-org/readcon-db ``ff1210e3``) and the fair-store run in the db32 records
 (lode-org/readcon-db ``227e45cf``, measured code ``d8bf1cb5``) that now holds
 the fair-store numbers, with the one-million-atom warm-read range taken across
 the one-thread campaigns in db30, db31 and db32.  Each rule is scoped to its
@@ -25,7 +25,7 @@ DB29 = "data/db31/db29/ab.json"
 DB8 = "data/db30/db8/campaign.json"
 FAIRDB30 = "data/db30/fair-db30/campaign.json"
 
-MAIN = "rg_main.tex"
+SUPP = "rg_supp.tex"
 
 
 def fair_row(path: str, **wanted: object) -> dict:
@@ -79,20 +79,20 @@ RULES = [
         INGEST_RDB["n_frames"],
         FAIRDB32,
         "fair paper40x8 insert cold-file readcon-db rayon=1 n_frames",
-        (f"{MAIN}~copper atoms",),
+        (f"{SUPP}~copper atoms",),
     ),
     Rule(
         "500",
         CORPUS500["n_frames"],
         CORPUS,
         "readcon-db corpus row n_frames",
-        (f"{MAIN}~reads every frame",),
+        (f"{SUPP}~reads every frame",),
     ),
     Rule(
         "50",
         READ1M_FAIR["span_s"] * 1000,
         FAIRDB32,
         "fair atoms-1000000 full_read warm readcon-db rayon=1 span_s in ms",
-        (f"{MAIN}~million-atom",),
+        (f"{SUPP}~million-atom",),
     ),
 ]

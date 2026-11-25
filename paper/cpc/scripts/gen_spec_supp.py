@@ -38,7 +38,10 @@ name its upcoming version before the tag exists; any other spec.org that no
 release tag ships stops the build. --measure writes a versioned specification
 measurement, preserving earlier records, with the version history and clause
 ids of spec.org at every release tag vX.Y.Z and, for a second text, what it
-changed in each section, from the git objects of this repository alone.
+changed in each section, from the git objects of this repository alone. When
+the versioned file already exists, --measure writes a new file that names the
+newest earlier file in supersedes and records measured_at.commit from git
+rev-parse HEAD. No stored file is rewritten.
 --check exits 1 unless the three generated files are byte for byte what
 --as-is writes from spec.org.
 
@@ -49,7 +52,7 @@ holding '="', which org itself closes at that "=".
     gen_spec_supp.py --as-is            write figures/generated/spec_normative.tex, versions_table.tex and spec_macros.tex
     gen_spec_supp.py --check            compare those three files with what --as-is writes
     gen_spec_supp.py --as-is --compile  also compile spec_normative.tex with pdflatex in a test document
-    gen_spec_supp.py --measure          write a versioned specification measurement from the release tags
+    gen_spec_supp.py --measure          write a new measurement; it supersedes the newest stored one
 """
 
 import argparse
@@ -619,6 +622,15 @@ def second_text_change(changes: list[dict], texts: dict[str, str]) -> str:
     return " ".join(parts)
 
 
+def read_versions() -> dict:
+    """The tag record of this release. No other release's record stands in for it."""
+    if not VERSIONS.is_file():
+        raise SystemExit(
+            f"{VERSIONS.relative_to(ROOT)} is absent. Run gen_spec_supp.py --measure for this release."
+        )
+    return json.loads(VERSIONS.read_text())
+
+
 def _unreleased_history() -> list[dict]:
     return [
         {"version": row["version"], "date": row["date"]}
@@ -628,7 +640,7 @@ def _unreleased_history() -> list[dict]:
 
 
 def measurement_record() -> dict:
-    record = json.loads(VERSIONS.read_text())
+    record = read_versions()
     if not SPEC.is_file():
         return record
     contents = SPEC.read_bytes()
@@ -656,7 +668,7 @@ def measurement_record() -> dict:
 def release_rows(org: str) -> list[dict]:
     """The version history of a spec.org without a Release column, as a release tree ships it.
 
-    A row's release is the first tag of versions.json whose history lists the row's version with the row's
+    A row's release is the first tag of the measurement record whose history lists the row's version with the row's
     date; version 1 is the eOn text and has no readcon-core release.  A tag whose spec.org differs from that
     of the tag before it under the same newest version, both with numbered clauses, published a second text
     of that version. It is a row of its own after the version's rows, dated by the tag, and its change is
@@ -690,7 +702,7 @@ def release_rows(org: str) -> list[dict]:
                     f"no tag of {VERSIONS.relative_to(ROOT)} lists version "
                     f"{row['version']} of {row['date']}"
                 )
-            row["release"] = f"readcon-core {tree['release']} (untagged)"
+            row["release"] = f"readcon-core {tree['release']} (unreleased)"
         else:
             row["release"] = f"readcon-core {first[1:]}"
     texts = dict(
@@ -866,27 +878,55 @@ def versions_record() -> dict:
 
 
 def measure(commit: str | None = None) -> None:
-    spec_rel = SPEC.relative_to(ROOT).as_posix()
-    # The record pairs the release in VERSION with the spec.org blob, so the
-    # measured commit is the last one to change either file.
+    """Write the specification measurement. An existing versioned file stays.
+
+    The record pairs the release in VERSION with the spec.org blob, so the
+    measured commit is the last one to change either file.
+    """
+    spec_rel = (
+        SPEC.relative_to(ROOT).as_posix()
+        if SPEC.is_relative_to(ROOT)
+        else "docs/orgmode/spec.org"
+    )
     measured_commit = (
         commit
         or git(
             "log", "-n", "1", "--format=%H", "HEAD", "--", spec_rel, "VERSION"
         ).stdout.strip()
+        or git("rev-parse", "HEAD").stdout.strip()
     )
-    record = versions_record()
+    if not re.fullmatch(r"[0-9a-f]{40}", measured_commit):
+        raise SystemExit("git did not return a commit")
+    body = versions_record()
+    stored = measurement_path(body["tree"]["release"], body["tree"]["spec_blob"])
+    # Each rerun on the same (release, spec_blob) supersedes the newest file
+    # of its chain: -measured.json, then -measured-2.json, and so on.
+    previous, out, n = None, stored, 1
+    while out.is_file():
+        previous = out
+        suffix = "measured" if n == 1 else f"measured-{n}"
+        out = stored.with_name(f"{stored.stem}-{suffix}.json")
+        n += 1
     versions = {
         "generator": "paper/cpc/scripts/gen_spec_supp.py --measure",
         "measured_at": {"commit": measured_commit},
-        **record,
+        **body,
     }
-    target = measurement_path(record["tree"]["release"], record["tree"]["spec_blob"])
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(versions, indent=2) + "\n")
+    if previous is not None:
+        versions = {
+            "generator": versions["generator"],
+            "supersedes": previous.relative_to(ROOT).as_posix(),
+            "measured_at": versions["measured_at"],
+            "spec": versions["spec"],
+            "tags": versions["tags"],
+            "tree": versions["tree"],
+        }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("x") as handle:
+        handle.write(json.dumps(versions, indent=2) + "\n")
     print(
-        f"wrote {target.relative_to(ROOT)}: {len(versions['tags'])} tags, "
-        f"release {versions['tree']}"
+        f"wrote {out.relative_to(ROOT)}: {len(versions['tags'])} tags, "
+        f"release {versions['tree']}, measured_at.commit {measured_commit}"
     )
 
 
@@ -1130,12 +1170,24 @@ def postprocess(tex: str) -> str:
 
 
 def pandoc_version() -> str:
-    out = subprocess.run(
-        [*PANDOC, "--version"], capture_output=True, text=True, check=True
-    ).stdout
+    # paper/cpc/pixi.toml pins pandoc == 3.13. A different binary must not
+    # rewrite the fragment. The comparison stays a literal so number_rules
+    # can read the version.
+    try:
+        out = subprocess.run(
+            [*PANDOC, "--version"], capture_output=True, text=True, check=True
+        ).stdout
+    except FileNotFoundError:
+        raise SystemExit(
+            "pandoc is not on PATH; the fragment is written with pandoc 3.13 "
+            "(paper/cpc/pixi.toml pins pandoc == 3.13)"
+        ) from None
     first = out.splitlines()[0]
     if first != "pandoc 3.13":
-        raise SystemExit(f"{first} on PATH; the fragment is written with pandoc 3.13")
+        raise SystemExit(
+            f"{first} on PATH; the fragment is written with pandoc 3.13 "
+            "(paper/cpc/pixi.toml pins pandoc == 3.13)"
+        )
     return first
 
 

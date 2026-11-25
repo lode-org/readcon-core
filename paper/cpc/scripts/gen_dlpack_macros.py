@@ -80,8 +80,8 @@ def main() -> int:
         "dlpackRatioHi": f"{float(hi):.3f}",
     }
     lines = [
-        f"% From {RECORD.relative_to(CPC.parents[1]).as_posix()}, "
-        "median and type 7 IQR of the recorded repeats."
+        "% Written by paper/cpc/scripts/gen_dlpack_macros.py. "
+        "Median and type 7 IQR of the recorded repeats."
     ]
     lines += [f"\\newcommand{{\\{name}}}{{{value}}}" for name, value in macros.items()]
     OUT.write_text("\n".join(lines) + "\n")

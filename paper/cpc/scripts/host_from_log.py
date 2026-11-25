@@ -104,6 +104,73 @@ def rev_short(text: str) -> str:
     raise SystemExit("reader-exchange.log has no rev_parse line")
 
 
+class UnequalWork(Exception):
+    """Two rows are not the same work, thread count, or input."""
+
+
+def _field(row: dict[str, str], key: str):
+    if key not in row:
+        return None
+    value = row[key]
+    if value is None or value == "":
+        return None
+    return value
+
+
+def require_same(arm: dict[str, str], tip: dict[str, str]) -> float:
+    """Return arm median / tip median when the rows are the same work.
+
+    ``work``, ``threads``, ``input``, ``input_kind``, and ``input_sha256``
+    must be present and equal. A missing field is not treated as a match.
+    """
+    for key in ("work", "threads", "input", "input_kind", "input_sha256"):
+        left = _field(arm, key)
+        right = _field(tip, key)
+        if left is None or right is None or left != right:
+            raise UnequalWork(f"refuse to divide: {key} {left} vs {right}")
+    numerator = float(arm["median_s"])
+    denom = float(tip["median_s"])
+    if not denom > 0.0 or numerator < 0.0:
+        raise UnequalWork("refuse to divide: median is not a positive duration")
+    return numerator / denom
+
+
+def self_check() -> int:
+    base = {
+        "work": "full-frame",
+        "threads": "1",
+        "input": "synthetic",
+        "input_kind": "synthetic",
+        "input_sha256": "abc",
+        "median_s": "1",
+    }
+    arm = dict(base, median_s="2")
+    if require_same(arm, base) != 2.0:
+        raise SystemExit("ratio")
+    for key, value in (
+        ("work", "coords-only"),
+        ("threads", "8"),
+        ("input", "other"),
+        ("input_kind", "real"),
+        ("input_sha256", "def"),
+    ):
+        bad = dict(base, **{key: value})
+        try:
+            require_same(arm, bad)
+        except UnequalWork:
+            continue
+        raise SystemExit(f"divided mismatched {key}")
+    missing = dict(base)
+    del missing["work"]
+    try:
+        require_same(arm, missing)
+    except UnequalWork:
+        pass
+    else:
+        raise SystemExit("divided a row with no work field")
+    return 0
+
+
 def arm_s(found: dict[str, dict[str, str]], name: str) -> float:
     return float(found[name]["median_s"])
 
@@ -113,33 +180,35 @@ def arm_mib(found: dict[str, dict[str, str]], name: str) -> float:
 
 
 def main() -> int:
+    if sys.argv[1:] == ["--self-check"]:
+        return self_check()
     text = LOG.read_text(encoding="utf-8")
     found = rows(text)
     tip = arm_s(found, "readcon_tip")
     base = arm_s(found, "readcon_v0173")
+    main_s = arm_s(found, "readcon_base")
     h5 = arm_s(found, "h5py")
     conbin = arm_s(found, "conbin")
     ase = arm_s(found, "ase_eon")
     eon = arm_s(found, "eon_py")
     db = arm_s(found, "readcon_db")
     GEN.mkdir(parents=True, exist_ok=True)
+    # Medians of the host log only. A quotient is omitted: the log rows do not
+    # name matching work, threads and input, and the harness refuses that division.
     macros = "\n".join(
         [
-            "% Generated from paper/cpc/logs/reader-exchange.log by scripts/host_from_log.py.",
+            "% Written by paper/cpc/scripts/host_from_log.py.",
             f"\\newcommand{{\\rcHostCommit}}{{{rev_short(text)}}}",
             f"\\newcommand{{\\rcTipMedian}}{{{tip:.4g}}}",
             f"\\newcommand{{\\rcReleaseMedian}}{{{base:.4g}}}",
-            f"\\newcommand{{\\rcTipOverRelease}}{{{base / tip:.3g}}}",
+            f"\\newcommand{{\\rcBaseMedian}}{{{main_s:.4g}}}",
             f"\\newcommand{{\\rcHdfMedian}}{{{h5:.4g}}}",
             f"\\newcommand{{\\rcConbinMedian}}{{{conbin:.4g}}}",
             f"\\newcommand{{\\rcTipMib}}{{{arm_mib(found, 'readcon_tip'):.4g}}}",
             f"\\newcommand{{\\rcAseMedian}}{{{ase:.4g}}}",
-            f"\\newcommand{{\\rcTipOverAse}}{{{ase / tip:.3g}}}",
             f"\\newcommand{{\\rcEonMedian}}{{{eon:.4g}}}",
-            f"\\newcommand{{\\rcTipOverEon}}{{{eon / tip:.3g}}}",
             f"\\newcommand{{\\rcApiMedian}}{{{arm_s(found, 'readcon_eon_api'):.4g}}}",
             f"\\newcommand{{\\rcDbMedian}}{{{db:.4g}}}",
-            f"\\newcommand{{\\rcTipOverDb}}{{{db / tip:.3g}}}",
             f"\\newcommand{{\\rcAseMib}}{{{arm_mib(found, 'ase_eon'):.4g}}}",
             f"\\newcommand{{\\rcChemMib}}{{{arm_mib(found, 'chemfiles'):.4g}}}",
             f"\\newcommand{{\\rcOvitoMib}}{{{arm_mib(found, 'ovito'):.4g}}}",
@@ -149,20 +218,32 @@ def main() -> int:
         ]
     )
     (GEN / "host_macros.tex").write_text(macros, encoding="utf-8")
+    header = "% Written by paper/cpc/scripts/host_from_log.py.\n"
     (GEN / "host_table.tex").write_text(
-        table(
+        header
+        + table(
             found,
             CON_ORDER,
-            "All-frame coordinate reads of 100000 frames, six fresh processes, type 7 median. "
-            "The last two rows are first-frame reads of the same file. "
-            "The eOn C++ row is readcon through that API.",
+            "Synthetic CON file of 100000 frames of 32 copper atoms. "
+            "The coordinates are a modulo pattern, not a recorded trajectory. "
+            "Six fresh processes, type 7 median. "
+            "readcon, tip returns only coordinates and uses Rayon on all 8 cores. "
+            "readcon-core at the release and readcon, main each build a full frame, and with no "
+            "thread count both parse this file on the global Rayon pool, on all 8 cores. "
+            "ASE builds an Atoms object per frame on one thread. "
+            "eOn loadcons builds a frame per frame on one thread. "
+            "The eOn C++ row reads full frames with no thread count and then builds a Matter for each frame. "
+            "readcon-db returns coordinates from the store; the ingest is outside the clock. "
+            "The last two rows are first-frame reads of the same file: "
+            "readcon returns the first frame, and eOn builds a Matter from it.",
             "tab:host",
         )
         + "\n",
         encoding="utf-8",
     )
     (GEN / "format_context.tex").write_text(
-        table(
+        header
+        + table(
             found,
             CONTEXT_ORDER,
             "Context for choosing a format. These readers open XYZ, HDF5, or the mapped binary coordinate file.",

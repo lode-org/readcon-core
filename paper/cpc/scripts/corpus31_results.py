@@ -202,7 +202,7 @@ def table(record: dict) -> str:
     ]
     lines += [
         rf"\path{{{f['file']}}} & {outcome(f['expected'])}; {f['basis']} & {latex(f['clause'])} & "
-        rf"{prose(reasons[f['file']])}\\"
+        rf"{prose(reasons[f['file']].replace(' as missing', ' as absent'))}\\"
         for f in record["files"]
         if f["basis"] != "explicit"
     ]
@@ -248,6 +248,26 @@ def main() -> int:
         TABLE.write_text(table(stored))
         print(f"wrote {MACROS} and {TABLE} from {args.out}")
         return 0
+    if args.check:
+        stored = json.loads(args.out.read_text())
+        recorded = stored["provenance"]["build"]["library_digest"]
+        if recorded != provenance.library_digest():
+            stale = [
+                path.name
+                for path, text in ((MACROS, macros(stored)), (TABLE, table(stored)))
+                if not path.is_file() or path.read_text() != text
+            ]
+            if stale:
+                print(
+                    f"{' and '.join(stale)} differ from {args.out.name}",
+                    file=sys.stderr,
+                )
+                return 1
+            print(
+                f"{args.out.name} names library {recorded[:12]}; "
+                f"{MACROS.name} and {TABLE.name} match it"
+            )
+            return 0
     if not args.binary.is_file():
         sys.exit(
             f"{args.binary} is missing; build it with "

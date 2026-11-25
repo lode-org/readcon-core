@@ -2,7 +2,7 @@
 
 The paper rests on two archives, both in its supplementary material.
 
-- `readcon-core.bundle`, a git bundle of readcon-core that holds commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, the candidate commit `src/commit.tex` names, with its whole history; `git clone readcon-core.bundle` checks it out without a network.
+- `readcon-core.bundle`, a git bundle of readcon-core that holds the measured commit `src/commit.tex` names, with its whole history; `git clone readcon-core.bundle` checks it out without a network.
   That commit is readcon-core 0.17.3 and is not a release tag. Tag v0.17.3 names a different commit. The measurement logs name tree `7df8390b6ee7cfd73f0b849b02313a365121d4a2`, which is the tree of this commit.
   It holds the library and its bindings, the specification `docs/orgmode/spec.org` of that commit, the conformance corpus `resources/conformance/`, and `paper/cpc`.
   Besides that commit, the bundle holds the branch `main`, the branch `paper/cpc-v7.16` of the previous submission, and the release tags. The logs do not name a second commit with tree `7df8390b6ee7cfd73f0b849b02313a365121d4a2`.
@@ -27,8 +27,8 @@ The script takes the client from `EONCLIENT`, then from `PATH`, then from `paper
 
 ## Release
 
-`src/commit.tex` holds one value, `\readconcommit`: commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, the candidate commit. That commit is readcon-core 0.17.3 and is not a release tag.
-`scripts/gen_release.py` writes `src/release.tex` from that commit's Cargo.toml. `\readconversion` and `\rcMeasuredVersion` are 0.17.3. The role is candidate commit. The tag sentence says this commit is not a release tag.
+`src/commit.tex` holds one value, `\readconcommit`, the measured commit. That commit is readcon-core 0.17.3 and is not a release tag.
+`scripts/gen_release.py` writes `src/release.tex` from that commit's Cargo.toml. `\readconversion` and `\rcMeasuredVersion` are 0.17.3. The role is measured commit. The tag sentence says this commit is not a release tag.
 `\rcMeasuredSpecBlob` is the `docs/orgmode/spec.org` of that commit.
 Every record names the library it measured by that digest and the commit of the checkout that ran it.
 One record also depends on the commit of `src/commit.tex`: `data/test_run.json`, the run of the example program in a clone of that commit, prints the commit in its commands, and `scripts/test_run.py --tables` stops when the record names another.
@@ -49,7 +49,7 @@ python3 scripts/pack_paper.py ../paper-cpc.tar.gz
 
 These rewrite `src/release.tex`, `data/test_run.json` with `src/figures/generated/test_run.tex`, the two PDFs, `packet/CPC-FORM.md`, the arXiv source `readcon-arxiv-v2.tar.gz` and `paper-cpc.tar.gz`.
 The test run builds the example program in the checkout with rustup's toolchain 1.88.0, whose rustc and cargo `data/test_run.json` names.
-The bundle is then written again from the repository. The measurement logs name commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f` and tree `7df8390b6ee7cfd73f0b849b02313a365121d4a2`. The latest release tag is v0.23.2 at commit `8c2d9984c40aedfb2e0084fedefaa02e930957f2`.
+The bundle is then written again from the repository. The measurement logs name the commit of `src/commit.tex` and tree `7df8390b6ee7cfd73f0b849b02313a365121d4a2`. The latest release tag is v0.23.2 at commit `8c2d9984c40aedfb2e0084fedefaa02e930957f2`.
 The patch series of the review package is `git format-patch` from commit d0b7d3c7 to the commit of the tag.
 
 The commit of the tag decides which of these files change:

@@ -427,7 +427,10 @@ def _landscape_labels(ax, ylabel: bool) -> None:
 
 def restart(theme, settings, png_dir: Path | None) -> None:
     if not (E1 / "full" / "neb.con").is_file():
-        # The eOn band is not a committed record. Keep the figures already written.
+        print(
+            f"{E1 / 'full' / 'neb.con'} is absent, so restart_landscape.pdf is not drawn. "
+            "No figure of the paper uses it."
+        )
         return
     ira_kmax = float(settings["ira_kmax"])
     reference = _eon_images(E1 / "full")
@@ -469,7 +472,7 @@ def restart(theme, settings, png_dir: Path | None) -> None:
     side.set_ylabel("energy (eV)")
     side.legend(frameon=False, fontsize=8)
     _theme_axes([ax, side], theme)
-    _save(fig, "restart", png_dir, width_cm=DOUBLE_CM)
+    _save(fig, "restart_landscape", png_dir, width_cm=DOUBLE_CM)
 
 
 def main(png_dir: Path | None = None) -> None:

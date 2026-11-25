@@ -694,12 +694,9 @@ def write_tex(summary: dict) -> None:
         r"\begin{table}[tbp]",
         r"\centering",
         r"\scriptsize",
-        r"\caption{The FIRE climbing-image band of the Table~\ref{tab:restartfmt} slab after each reading of its endpoints. "
-        r"The endpoints are written and read back before they are relaxed, then the band and the Hessians use "
-        r"the constraints that reader returns. "
+        r"\caption{FIRE climbing-image band of the EMT slab of Table~\ref{tab:params} after each "
+        r"reading of its endpoints. "
         r"Modes and imaginary count the free coordinates of the highest interior image. "
-        r"Before the Hessians are taken, Newton steps on the free coordinates bring the relaxed endpoints to "
-        r"their minima and, where it has one imaginary mode, that image to its saddle. "
         r"Barrier to four significant figures, prefactor to three.}",
         r"\label{tab:prefactor-routes}",
         r"\resizebox{\textwidth}{!}{%",
