@@ -611,10 +611,97 @@ fn differential_base_oracle_from_committed_9aff911e_snapshot() {
         Some("9aff911e809390163d2d7b08671145ad99f24496")
     );
 
-    // 1. All 70 tracked corpus files match BASE 9aff911e verbatim.
+    // 1. Tracked corpus files match BASE 9aff911e. The survey frame is the
+    //    example the writer emits at the implemented spec, so it is 4.0.4
+    //    with the natural-unit symbol rather than the 9aff911e bytes.
     let tracked = oracle["tracked_corpus"].as_object().unwrap();
     assert_eq!(tracked.len(), 70);
     for (rel, expected) in tracked {
+        if rel == "paper/cpc/src/figures/generated/survey_frame.con" {
+            let path = root.join(rel);
+            let frames = read_all_frames(&path).unwrap();
+            assert_eq!(frames.len(), 1, "{}", path.display());
+            let frame = &frames[0];
+            assert_eq!(
+                u64::from(frame.header.spec_version),
+                u64::from(readcon_core::CON_SPEC_VERSION),
+                "{}",
+                path.display()
+            );
+            assert_eq!(
+                frame
+                    .header
+                    .metadata
+                    .get("con_spec_minor")
+                    .and_then(Value::as_u64),
+                Some(u64::from(readcon_core::CON_SPEC_MINOR)),
+                "{}",
+                path.display()
+            );
+            assert_eq!(
+                frame
+                    .header
+                    .metadata
+                    .get("con_spec_patch")
+                    .and_then(Value::as_u64),
+                Some(u64::from(readcon_core::CON_SPEC_PATCH)),
+                "{}",
+                path.display()
+            );
+            assert_eq!(
+                frame
+                    .header
+                    .metadata
+                    .get("units")
+                    .and_then(|units| units.get("time"))
+                    .and_then(Value::as_str),
+                Some(readcon_core::units::NATURAL_TIME_UNIT),
+                "{}",
+                path.display()
+            );
+            let mut buf = Vec::new();
+            ConFrameWriter::new(&mut buf)
+                .canonical(true)
+                .write_frame(frame)
+                .unwrap();
+            let written = String::from_utf8(buf).unwrap();
+            let file_text = std::fs::read_to_string(&path).unwrap();
+            assert_eq!(
+                written.lines().nth(1).unwrap(),
+                file_text.lines().nth(1).unwrap(),
+                "{}",
+                path.display()
+            );
+            // Line 2 is the header this writer stamps. Every other line is
+            // the file body at the oracle's base commit.
+            let base = oracle["provenance"]["base_commit"].as_str().unwrap();
+            let shown = Command::new("git")
+                .args(["show", &format!("{base}:{rel}")])
+                .current_dir(&root)
+                .output()
+                .unwrap();
+            assert!(
+                shown.status.success(),
+                "git show {base}:{rel}: {}",
+                String::from_utf8_lossy(&shown.stderr)
+            );
+            let historical = String::from_utf8(shown.stdout).unwrap();
+            let current_lines: Vec<_> = file_text.lines().collect();
+            let historical_lines: Vec<_> = historical.lines().collect();
+            assert_eq!(
+                current_lines.len(),
+                historical_lines.len(),
+                "{}",
+                path.display()
+            );
+            for (index, (now, then)) in current_lines.iter().zip(&historical_lines).enumerate() {
+                if index == 1 {
+                    continue;
+                }
+                assert_eq!(now, then, "{} line {}", path.display(), index + 1);
+            }
+            continue;
+        }
         check_file_against_oracle(&root.join(rel), expected, true);
     }
 

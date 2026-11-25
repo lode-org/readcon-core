@@ -7,8 +7,8 @@ The frame is ``failure_matrix.fixture()`` and the writer is
 * ``src/figures/generated/survey_frame.con``, the file itself, which the
   listing prints byte for byte;
 * ``src/figures/generated/survey_listing.tex``, the listing with its caption;
-* ``data/survey_frame.json``, the readcon version, byte count, SHA-256 and
-  provenance.
+* ``data/survey_frame-<version>.json``, the readcon version, byte count, SHA-256 and
+  provenance. ``data/survey_frame.json`` is the earlier record and is left in place.
 
 The script reads the file back and stops unless the identifiers, masks and
 binary64 coordinates survive. ``--tables`` writes the listing from the
@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -27,16 +28,31 @@ import numpy as np
 import failure_matrix as fm
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parents[1]
 GENERATED = ROOT / "src" / "figures" / "generated"
 FRAME = GENERATED / "survey_frame.con"
 
 
-RECORD = ROOT / "data" / "survey_frame.json"
+def library_version() -> str:
+    return re.search(
+        r'^version = "([^"]+)"',
+        (REPO / "Cargo.toml").read_text(),
+        re.MULTILINE,
+    ).group(1)
+
+
+def survey_record_path() -> Path:
+    """Provenance of the frame this checkout's writer emits. The earlier file stays."""
+    return ROOT / "data" / f"survey_frame-{library_version()}.json"
+
+
+RECORD = survey_record_path()
 
 
 def write_listing(record: dict) -> None:
     caption = (
-        "A Pt(100) slab of two layers of four atoms with one adatom, as one CON 3.1 frame with velocities "
+        "A Pt(100) slab of two layers of four atoms with one adatom, as one CON "
+        f"{record['spec']} frame with velocities "
         f"written by readcon-core {record['readcon']}. Section~\\ref{{sec:worked}} reads it line by line."
     )
     (GENERATED / "survey_listing.tex").write_text(
@@ -63,8 +79,13 @@ def measure() -> dict:
     ):
         raise SystemExit("the survey frame does not read back to the fixture")
     data = FRAME.read_bytes()
+    header = json.loads(data.splitlines()[1])
+    spec = f"{header.get('con_spec_version')}.{header.get('con_spec_minor', 0)}"
+    if "con_spec_patch" in header:
+        spec = f"{spec}.{header.get('con_spec_patch')}"
     record = {
         "readcon": readcon.__version__,
+        "spec": spec,
         "bytes": len(data),
         "lines": data.count(b"\n"),
         "sha256": hashlib.sha256(data).hexdigest(),

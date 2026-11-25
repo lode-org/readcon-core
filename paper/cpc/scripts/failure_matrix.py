@@ -29,7 +29,8 @@ its version, and its name says private when the file adds a particle element
 H5MD does not define (h5md_layout); any other outcome exits before an output is
 written.
 
-Writes data/failure/matrix.csv and data/failure/matrix.json.
+Writes data/failure/matrix-<readcon version>.csv and its JSON sidecar.
+data/failure/matrix.csv is the earlier matrix and is left in place.
 """
 
 from __future__ import annotations
@@ -62,6 +63,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # (amu*angstrom^2/eV)^0.5 in fs, the value unit_conversion_factor returns
 # for the CODATA 2018 constants (src/units.rs).
 NAT_FS = 10.180505710759414
+# The symbol spelling of the natural unit. The historical spelling contains
+# "amu", so the older check still recognises it.
+SYMBOL = "(u*\u00c5^2/eV)^0.5"
 
 
 def fixture():
@@ -172,20 +176,19 @@ def w_readcon(fx, path):
     ]
     c = fx["cell"]
     L = np.linalg.norm(c, axis=1)
-    # The rows are CON 3.1; a frame given no minor gets the minor this library stamps.
+    # Velocities are natural-unit numbers. Leaving the version keys unset lets
+    # the binding stamp the spec it implements and the symbol spelling of that
+    # unit (CON-units.5, CON-units.19). A pinned minor would write an older identity.
     f = readcon.ConFrame(
         list(L),
         [90.0, 90.0, 90.0],
         atoms,
         metadata={
-            "con_spec_version": 3,
-            "con_spec_minor": 1,
             "pbc": fx["pbc"],
             "units": {
                 "length": "angstrom",
                 "energy": "eV",
                 "mass": "amu",
-                "time": "(amu*angstrom^2/eV)^0.5",
             },
         },
     )
@@ -355,7 +358,7 @@ def r_readcon(path):
         ids=np.asarray(f.atom_ids_array()),
         vel=np.asarray(f.velocities_array()) if f.has_velocities else None,
         unit_label=unit,
-        vel_unit_fs=NAT_FS if unit and "amu" in unit else None,
+        vel_unit_fs=(NAT_FS if unit == SYMBOL or (unit and "amu" in unit) else None),
         version=md.get("con_spec_version"),
         cell=np.asarray(f.cell, float),
     )
@@ -672,11 +675,13 @@ def version_carried(fmt, path):
             md = json.loads(path.read_text().splitlines()[1])
         except (ValueError, IndexError):
             return "none"
-        return (
-            f"{md['con_spec_version']}.{md.get('con_spec_minor', 0)}"
-            if "con_spec_version" in md
-            else "none"
-        )
+        if "con_spec_version" not in md:
+            return "none"
+        major = md["con_spec_version"]
+        minor = md.get("con_spec_minor", 0)
+        if "con_spec_patch" in md:
+            return f"{major}.{minor}.{md['con_spec_patch']}"
+        return f"{major}.{minor}"
     if fmt == "ASE trajectory":
         from ase.io import ulm
 
@@ -953,11 +958,12 @@ def main():
         "error",
         "error_at",
     ]
-    with open(OUT / "matrix.csv", "w", newline="") as fh:
-        wtr = csv.DictWriter(fh, fieldnames=fields, restval="")
+    stem = f"matrix-{readcon.__version__}"
+    with open(OUT / f"{stem}.csv", "w", newline="") as fh:
+        wtr = csv.DictWriter(fh, fieldnames=fields, restval="", lineterminator="\n")
         wtr.writeheader()
         wtr.writerows(rows)
-    (OUT / "matrix.json").write_text(
+    (OUT / f"{stem}.json").write_text(
         json.dumps(
             dict(
                 meta=meta,
