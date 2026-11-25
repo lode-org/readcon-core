@@ -251,23 +251,13 @@ def main() -> int:
     if args.check:
         stored = json.loads(args.out.read_text())
         recorded = stored["provenance"]["build"]["library_digest"]
-        if recorded != provenance.library_digest():
-            stale = [
-                path.name
-                for path, text in ((MACROS, macros(stored)), (TABLE, table(stored)))
-                if not path.is_file() or path.read_text() != text
-            ]
-            if stale:
-                print(
-                    f"{' and '.join(stale)} differ from {args.out.name}",
-                    file=sys.stderr,
-                )
-                return 1
+        current = provenance.library_digest()
+        if recorded != current:
             print(
-                f"{args.out.name} names library {recorded[:12]}; "
-                f"{MACROS.name} and {TABLE.name} match it"
+                f"{args.out.name} names library {recorded[:12]}, not {current[:12]}",
+                file=sys.stderr,
             )
-            return 0
+            return 1
     if not args.binary.is_file():
         sys.exit(
             f"{args.binary} is missing; build it with "
