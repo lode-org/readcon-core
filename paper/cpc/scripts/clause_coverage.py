@@ -23,9 +23,10 @@ gives a reason for a clause that something names.
     python paper/cpc/scripts/clause_coverage.py --record   # appends a final spec-major record
 
 It also writes clauses_macros.tex, the counts the paper prints. A committed
-final record is never rewritten: when the sources change, --record writes
-clause_coverage-<version>-spec-major-<n>.json, which supersedes record n - 1,
-and --check compares the newest one.
+final record is never rewritten: when the sources change, --record appends a
+spec-major record, or --record --writer-series appends a writer-r<n> record.
+Each supersedes the current terminal record, and --check compares the newest
+one.
 """
 
 from __future__ import annotations
@@ -71,12 +72,31 @@ def final_count() -> int:
     return n
 
 
+def writer_record(
+    n: int,
+    spec_dir: Path | None = None,
+    version: str | None = None,
+) -> Path:
+    """Writer-series record n."""
+    return (spec_dir or RECORD_DIR) / (
+        f"clause_coverage-{version or VERSION}-writer-r{n}.json"
+    )
+
+
+def writer_count() -> int:
+    n = 0
+    while writer_record(n + 1).is_file():
+        n += 1
+    return n
+
+
 def final_chain(spec_dir: Path | None = None, version: str | None = None) -> list[Path]:
-    """The final spec-major records of one version, oldest first.
+    """The active final records of one version, oldest first.
 
     Final record 1 supersedes the legacy record of the version and record n
-    supersedes record n - 1. No other record of data/spec may supersede a
-    final record, so the newest one is the only tip of the active chain.
+    supersedes record n - 1. The writer-r records extend the spec-major
+    records. No other record of data/spec may supersede a final record, so
+    the newest one is the only tip of the active chain.
     """
     spec_dir = spec_dir or RECORD_DIR
     ver = version or VERSION
@@ -88,6 +108,10 @@ def final_chain(spec_dir: Path | None = None, version: str | None = None) -> lis
     chain: list[Path] = []
     while named(len(chain) + 1).is_file():
         chain.append(named(len(chain) + 1))
+    writer = 1
+    while writer_record(writer, spec_dir, ver).is_file():
+        chain.append(writer_record(writer, spec_dir, ver))
+        writer += 1
     links = {
         path.name: Path(prior).name
         for path in spec_dir.glob(f"clause_coverage-{ver}-*.json")
@@ -542,12 +566,32 @@ def final_payload(n: int, payload: dict) -> dict:
     return {"supersedes": rel(supersedes), "reason": reason, **payload}
 
 
+def writer_payload(n: int, payload: dict) -> dict:
+    if n == 1:
+        count = final_count()
+        supersedes = final_record(count) if count else LEGACY_RECORD
+    else:
+        supersedes = writer_record(n - 1)
+    reason = (
+        f"Writer-series recount of specification coverage for "
+        f"readcon-core {VERSION} after the sources counted in "
+        f"{supersedes.name} changed."
+    )
+    return {"supersedes": rel(supersedes), "reason": reason, **payload}
+
+
 def record_for_sources() -> tuple[Path, dict]:
+    n = writer_count()
+    if n:
+        return writer_record(n), writer_payload(n, build())
     n = max(final_count(), 1)
     return final_record(n), final_payload(n, build())
 
 
-def next_record_for_sources() -> tuple[Path, dict]:
+def next_record_for_sources(writer_series: bool = False) -> tuple[Path, dict]:
+    if writer_series or writer_count():
+        n = writer_count() + 1
+        return writer_record(n), writer_payload(n, build())
     n = final_count() + 1
     return final_record(n), final_payload(n, build())
 
@@ -580,7 +624,7 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        help="final record path (default: the newest data/spec/clause_coverage-<version>-spec-major*.json)",
+        help="final record path (default: the newest active record)",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -597,6 +641,11 @@ def main() -> int:
         "--record",
         action="store_true",
         help="write the final record as well as the live TeX",
+    )
+    parser.add_argument(
+        "--writer-series",
+        action="store_true",
+        help="append a writer-r<n> record instead of a spec-major record",
     )
     args = parser.parse_args()
     generated_out, record = record_for_sources()
@@ -631,7 +680,7 @@ def main() -> int:
             and out.is_file()
             and out.read_text(encoding="utf-8") != wanted
         ):
-            out, record = next_record_for_sources()
+            out, record = next_record_for_sources(args.writer_series)
             wanted = text(record)
         if out.is_file() and out.read_text(encoding="utf-8") != wanted:
             sys.exit(f"refusing to overwrite committed record {rel(out)}")

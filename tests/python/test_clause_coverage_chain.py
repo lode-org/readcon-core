@@ -336,7 +336,8 @@ def test_repo_final_clause_coverage_chain_is_linear() -> None:
     assert finals
     tip = finals[-1]
     assert clause_coverage.FINAL_RECORD == tip
-    assert tip.name == f"clause_coverage-{version}-spec-major-{len(finals)}.json"
+    assert tip.name == f"clause_coverage-{version}-writer-r1.json"
+    assert [p.name for p in finals if "-writer-r" in p.name] == [tip.name]
     assert clause_coverage.default_paths() == (
         finals[-2] if len(finals) > 1 else spec_dir / f"clause_coverage-{version}.json",
         tip,
@@ -376,7 +377,17 @@ def test_final_chain_rejects_a_second_child_of_a_final_record(tmp_path: Path) ->
         clause_coverage.final_chain(spec_dir, version)
 
     fork.unlink()
+    writer = spec_dir / f"clause_coverage-{version}-writer-r1.json"
+    _write_json(writer, {"supersedes": f"paper/cpc/data/spec/{second}"})
+    assert [p.name for p in clause_coverage.final_chain(spec_dir, version)] == [
+        first,
+        second,
+        writer.name,
+    ]
+
     after_tip = spec_dir / f"clause_coverage-{version}-after-tip.json"
-    _write_json(after_tip, {"supersedes": f"paper/cpc/data/spec/{second}"})
-    with pytest.raises(SystemExit, match=f"1 records of data/spec supersede {second}"):
+    _write_json(after_tip, {"supersedes": f"paper/cpc/data/spec/{writer.name}"})
+    with pytest.raises(
+        SystemExit, match=f"1 records of data/spec supersede {writer.name}"
+    ):
         clause_coverage.final_chain(spec_dir, version)
