@@ -376,9 +376,9 @@ def right(ax) -> None:
     gx = (CX1 + PX0) / 2
     db0, db1 = 6.25, 7.95
     h5md, ranks, db_in = 7.575, 6.625, 7.1
-    box(ax, PX0, db0, PX1, db1, "readcon-db")
+    box(ax, PX0, db0, PX1, db1, "readcon-db\n(xxHash3\ndedup)")
     route(ax, [(PX0, db_in), (CX1, db_in)])
-    label(ax, gx, db_in + 0.05, "decode, index;\nxxHash3 dedup")
+    label(ax, gx, db_in + 0.05, "decode;\nframe index")
     box(ax, SX0, h5md - 0.32, SX1, h5md + 0.32, "H5MD")
     route(ax, [(PX1, h5md), (SX0, h5md)], dashed=True)
     label(ax, (PX1 + SX0) / 2, h5md + 0.05, "export_h5md")
