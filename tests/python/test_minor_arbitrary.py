@@ -757,15 +757,6 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
         # Major 4 is the current major, so CON-line2.6 does not reject it.
         "json_version_4.con": 4,
     }
-    # CON-units.21. Major 3 assigns the natural time unit, and units.time
-    # must not decide the quotient. The base oracle and the corpus manifest
-    # still accept velocity nm/ps. The reader rejects that scale.
-    con21_rejects = {
-        "v31_units_compound.convel": (
-            "units.velocity must equal units.length divided by the time unit, "
-            "not 'nm/ps'"
-        ),
-    }
     bom = "CON validation failed: frame begins with a byte-order mark"
     con4_messages = {
         "v31_bom.con": bom,
@@ -820,12 +811,6 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
             assert frames[0].spec_version == con4_accepts[name], name
             con4_diffs.append(name)
             continue
-        if name in con21_rejects:
-            assert expected["status"] == "ok", name
-            assert labels[name] == "accept", name
-            with pytest.raises(readcon.InvalidUnits, match=con21_rejects[name]):
-                readcon.read_con(p)
-            continue
         if name.endswith(".zst"):
             frames = readcon.read_con(p)
             assert len(frames) >= 1, name
@@ -867,6 +852,7 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
         "v31_label_coordinates_1_xyz.con",
         "v31_label_coordinates_2.con",
         "v31_legacy_velocity_no_time.convel",
+        "v31_units_compound.convel",
     ]
 
 

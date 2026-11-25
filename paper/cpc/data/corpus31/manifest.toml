@@ -143,11 +143,12 @@ reason = "mol is a count, so kcal/mol is an energy."
 
 [[file]]
 file = "v31_units_compound.convel"
-expected = "accept"
-frames = 1
-clause = "CON-units.1, CON-units.2, CON-units.16"
-basis = "open"
-reason = "Products, quotients and parentheses of the matching dimensions (Units). The energy is written kJ / mol; the text does not say whether white space may stand inside an expression, and the reader removes it."
+expected = "reject"
+error = "InvalidUnits"
+line = 2
+clause = "CON-units.21"
+basis = "explicit"
+reason = "units.velocity is nm/ps. In major 3 the time of that quotient is the natural unit, not units.time ps, so the scale differs and CON-units.21 requires InvalidUnits."
 
 [[file]]
 file = "v31_length_area.con"

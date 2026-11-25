@@ -450,7 +450,7 @@ accept(
     "explicit",
     "mol is a count, so kcal/mol is an energy.",
 )
-accept(
+reject(
     "v31_units_compound.convel",
     con(
         "corpus31 compound units",
@@ -462,11 +462,11 @@ accept(
         ),
         tail=VEL2,
     ),
-    1,
-    "CON-units.1, CON-units.2, CON-units.16",
-    "open",
-    "Products, quotients and parentheses of the matching dimensions (Units). The energy is written kJ / mol; "
-    "the text does not say whether white space may stand inside an expression, and the reader removes it.",
+    "InvalidUnits",
+    2,
+    "CON-units.21",
+    "explicit",
+    "units.velocity is nm/ps. In major 3 the time of that quotient is the natural unit, not units.time ps, so the scale differs and CON-units.21 requires InvalidUnits.",
 )
 reject(
     "v31_length_area.con",
