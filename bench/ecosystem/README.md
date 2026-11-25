@@ -43,7 +43,8 @@ Sizes are 1,000, 10,000, 100,000, and 1,000,000 atoms.
 For item 2, pointer equality was asserted for every size for NumPy,
 PyTorch, and JAX. JAX uses `copy=False` and x64 mode. Each explicit-copy
 arm performs one copy (`torch.tensor`, `jnp.array(..., copy=True)`, or
-`np.array(..., copy=True)`). CuPy was not run.
+`np.array(..., copy=True)`). CuPy was not run. Its rows use the same device
+probe status as item 1.
 For item 3, a file requesting `storage_dtypes.positions=float32` is read
 through the C API. Direct float32 DLPack export is compared with float64
 DLPack export followed by `astype(float32)`. For item 4, both arms read the
@@ -54,13 +55,20 @@ ASE arm deletes the Python TensorBlock before returning. Both frees are
 inside the measured interval. Before timing, the native and ASE shapes and
 all position values are asserted equal.
 
-Item 1 is `NO_CUDA` rather than simulated. `results.csv` contains explicit
-`NO_CUDA` rows for all requested sizes, fields, and arms.
+Item 1 does not simulate a device. It probes with `torch.cuda.is_available()`
+and the JAX device list. The status is `NO_CUDA` when at least one of those
+libraries imports and neither reports a CUDA or GPU device. It is
+`NOT_TIMED` when a CUDA or GPU device is visible, because this harness does
+not time a CUDA export. It is `NOT_PROBED` when neither library imports.
+The checked-in item 1 and CuPy rows say `NO_CUDA`. They were written before
+this probe, on a host with no NVIDIA device.
 
 Status by item:
 
-- 1: `NO_CUDA`; feature compile passed, but no NVIDIA device or driver existed
-- 2: `MEASURED` on CPU for NumPy, PyTorch, and JAX; CuPy rows are `NO_CUDA`
+- 1: probe via `torch.cuda.is_available()` and `jax.devices()`; checked-in
+  rows predate the probe
+- 2: `MEASURED` on CPU for NumPy, PyTorch, and JAX; CuPy rows use the item 1
+  probe status
 - 3: `MEASURED`
 - 4: both arms free the TensorBlock inside the timer; published medians are pending a rerun
 
