@@ -101,6 +101,7 @@ OTHER_FIGURES: dict[str, tuple[str, tuple[str, ...]]] = {
     "velocity_quiver": ("plot_supp", ("bench/results/velocity_case.json",)),
     "threads": ("plot_union_extra", ("bench/results/threads_summary.csv",)),
     "matrix": ("plot_union_extra", ("data/failure/matrix.csv",)),
+    "ecosystem": ("fig_ecosystem", ()),
 }
 
 # Drawn only when its band is in the tree. No figure of the paper uses it.
@@ -112,6 +113,7 @@ OPTIONAL_FIGURES: dict[str, tuple[str, tuple[str, ...]]] = {
 # attributes that name its output directory.
 PLOTTERS = (
     "gen_figures",
+    "fig_ecosystem",
     "plot_restored",
     "plot_union_extra",
     "plot_perf",
