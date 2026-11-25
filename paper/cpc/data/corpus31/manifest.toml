@@ -757,12 +757,11 @@ reason = "JSON con_spec_version 0 or 1 is UnsupportedVersion; version 1 exists o
 
 [[file]]
 file = "json_version_4.con"
-expected = "reject"
-error = "UnsupportedVersion"
-line = 2
-clause = "CON-line2.6"
+expected = "accept"
+frames = 1
+clause = "CON-line2.6, CON-status.1"
 basis = "explicit"
-reason = "Unknown major 4 is UnsupportedVersion."
+reason = "Major 4 is the current major. CON-line2.6 rejects an unknown major, and CON-status.1 requires every minor of major 4 to be accepted."
 
 [[file]]
 file = "v31_version_float.con"
