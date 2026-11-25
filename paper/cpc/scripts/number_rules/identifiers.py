@@ -20,6 +20,7 @@ H2H = "bench/results/r0174/h2h/python_coords.json"
 CROSSCHECK = "data/corpus_crosscheck.json"
 RELEASES = "data/peers/releases.json"
 FORMATS = "/bench/h2h/formats/v0.23.3/extra"
+FORMATS_1M = "/bench/h2h/formats/v0.23.3/1m/cross-format.json"
 MANIFEST = "data/corpus31/manifest.toml"
 VELOCITY = "bench/results/velocity_case.json"
 VELOCITY_DRIVER = "scripts/velocity_case.py"
@@ -242,6 +243,13 @@ _RULES = [
         RELEASES,
         "OVITO release heading of its release notes",
         lines(r"OVITO 3\.17\.0"),
+    ),
+    Rule(
+        "3.17.2",
+        jget(FORMATS_1M, "versions.ovito"),
+        FORMATS_1M,
+        "OVITO version of the cross-format campaign",
+        lines(r"OVITO 3\.17\.2", (SUPP,)),
     ),
     Rule(
         "2026-10-21",
