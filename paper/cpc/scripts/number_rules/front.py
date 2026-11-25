@@ -10,7 +10,7 @@ from pathlib import Path
 
 import scipy.constants
 from scipy.constants import _codata
-from numbers_lib import Rule, grep, jget, text
+from numbers_lib import Rule, grep, jget, rows, text
 
 DOC = "rg_main.tex"
 SUPP = "rg_supp.tex"
@@ -103,6 +103,25 @@ def safety_version(label: str) -> float:
         raise SystemExit(f"scripts/version_safety.py has no case {label}")
     major = label.split(".", 1)[0]
     return float(f"{major}.{minor.group(1)}")
+
+
+def ecosystem_powers() -> list[tuple[int, int]]:
+    """Atom counts of the exchange summary that the prose prints as ``10^k``."""
+    counts: list[int] = []
+    for record in rows("data/ecosystem/summary.csv"):
+        count = int(record["n_atoms"])
+        if count not in counts:
+            counts.append(count)
+    powers = []
+    for count in counts:
+        exponent = 0
+        value = count
+        while value % 10 == 0 and value > 1:
+            value //= 10
+            exponent += 1
+        if value == 1:
+            powers.append((exponent, count))
+    return powers
 
 
 def variance_contours() -> list[float]:
@@ -277,6 +296,16 @@ RULES: list[Rule] = [
         "scripts/version_safety.py",
         "major 3 minor 3 case of the version-safety table",
         (f"{SUPP}~keeps the 3\\.1 and 3\\.3 frames",),
+    ),
+    *(
+        Rule(
+            f"10^{exponent}",
+            count,
+            "data/ecosystem/summary.csv",
+            f"n_atoms {count} of the ecosystem exchange",
+            (f"{DOC}~10\\^{exponent}",),
+        )
+        for exponent, count in ecosystem_powers()
     ),
     Rule(
         "0.002",

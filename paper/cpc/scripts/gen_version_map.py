@@ -93,6 +93,9 @@ NO_BUILD = {
     # Release metadata of eOn and of peer libraries, read from their upstream pages.
     "data/eon/readcon_pins.json",
     "data/peers/releases.json",
+    # Host timing of the ecosystem exchange. The summary carries ratios and
+    # atom counts, and it names no readcon-core build.
+    "data/ecosystem/summary.csv",
 }
 
 

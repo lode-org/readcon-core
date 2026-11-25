@@ -81,6 +81,7 @@ Elsevier%
 \input{figures/generated/test_run_macros}
 \input{figures/generated/si_macros}
 \input{figures/generated/dlpack_macros}
+\input{figures/generated/ecosystem_exchange_macros}
 \input{figures/generated/host_macros}
 \input{figures/generated/db_macros}
 \input{figures/generated/readcon_db_macros}
@@ -547,7 +548,12 @@ A 95 percent bootstrap interval for that ratio, drawn from those six samples, is
 The type 7 interquartile ranges are \dlpackViewIqr{} microseconds and \dlpackCopyIqr{} microseconds, and Figure~\ref*{fig:dlpack} of the supplementary material shows the six repeats.
 
 We also time the exchange from Python, on an eight-core Xeon host with 47~GiB of memory, with two warm-up runs and six repeats of each arm in ABBA order.
-Every timing in this section runs on the CPU, and the CUDA export is compiled and not timed.
+At \(10^6\) atoms, a DLPack hand-off takes \ecoNpRatioM{} times a NumPy copy, \ecoThRatioM{} times a PyTorch copy and \ecoJxRatioM{} times a JAX copy.
+That JAX hand-off is slower than the JAX copy at \(10^3\) atoms, where it takes \ecoJxRatioK{} times the copy, and at \(10^4\) atoms, where it takes \ecoJxRatioT{} times the copy.
+At \(10^5\) atoms the same JAX hand-off takes \ecoJxRatioH{} times the copy.
+A direct float32 export takes \ecoF32RatioK{} times a float64 export followed by a cast to float32 at \(10^3\) atoms, and \ecoF32RatioM{} times that cast route at \(10^6\) atoms.
+A metatensor positions block from readcon-core takes \ecoMtRatioK{}, \ecoMtRatioT{}, \ecoMtRatioH{} and \ecoMtRatioM{} of the time of the ASE route at \(10^3\), \(10^4\), \(10^5\) and \(10^6\) atoms, and both routes include the file read.
+Every timing in this section runs on the CPU, and the CUDA export is compile-checked only.
 
 \section{The readcon ecosystem}\label{sec:ecosystem} In Figure~\ref{fig:ecosystem} we group the programs around readcon-core by what crosses each connection.
 Four companion packages take the cell convention of Section~\ref{sec:cell}, and the other programs reach CON through a binding of the core.
