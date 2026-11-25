@@ -1,0 +1,6 @@
+maturin==1.16.0
+numpy==2.5.5
+torch==2.15.0
+jax==0.12.1
+ase==3.29.0
+metatensor-core==0.2.0
