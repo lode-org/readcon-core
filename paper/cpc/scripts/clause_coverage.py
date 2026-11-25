@@ -21,11 +21,15 @@ gives a reason for a clause that something names.
     python paper/cpc/scripts/clause_coverage.py            # writes clauses_macros.tex from the live tree
     python paper/cpc/scripts/clause_coverage.py --check    # compares the live regeneration without writing
     python paper/cpc/scripts/clause_coverage.py --record   # appends a final spec-major record
+    python paper/cpc/scripts/clause_coverage.py --record --capi   # appends a C ABI recount
 
 It also writes clauses_macros.tex, the counts the paper prints. A committed
 final record is never rewritten: when the sources change, --record writes
 clause_coverage-<version>-spec-major-<n>.json, which supersedes record n - 1,
-and --check compares the newest one.
+and --check compares the newest one. The C ABI gate recounts continue the
+same chain as clause_coverage-<version>-capi-r<k>.json: recount 1
+supersedes the last spec-major record, recount k supersedes recount k - 1,
+and once a recount exists --record appends the next one.
 """
 
 from __future__ import annotations
@@ -64,11 +68,20 @@ def final_record(n: int) -> Path:
     return RECORD_DIR / f"clause_coverage-{VERSION}-spec-major{suffix}.json"
 
 
-def final_count() -> int:
-    n = 0
-    while final_record(n + 1).is_file():
-        n += 1
-    return n
+def capi_record(
+    k: int, spec_dir: Path | None = None, version: str | None = None
+) -> Path:
+    """C ABI recount k of this version, a final record after the spec-major ones."""
+    return (
+        spec_dir or RECORD_DIR
+    ) / f"clause_coverage-{version or VERSION}-capi-r{k}.json"
+
+
+def is_capi(path: Path) -> bool:
+    return (
+        re.fullmatch(r"clause_coverage-.+-capi-r[1-9][0-9]*\.json", path.name)
+        is not None
+    )
 
 
 def final_chain(spec_dir: Path | None = None, version: str | None = None) -> list[Path]:
@@ -88,6 +101,9 @@ def final_chain(spec_dir: Path | None = None, version: str | None = None) -> lis
     chain: list[Path] = []
     while named(len(chain) + 1).is_file():
         chain.append(named(len(chain) + 1))
+    majors = len(chain)
+    while majors and capi_record(len(chain) - majors + 1, spec_dir, ver).is_file():
+        chain.append(capi_record(len(chain) - majors + 1, spec_dir, ver))
     links = {
         path.name: Path(prior).name
         for path in spec_dir.glob(f"clause_coverage-{ver}-*.json")
@@ -542,14 +558,32 @@ def final_payload(n: int, payload: dict) -> dict:
     return {"supersedes": rel(supersedes), "reason": reason, **payload}
 
 
+def chain_payload(chain: list[Path], payload: dict) -> dict:
+    """payload as the last record of chain."""
+    if not is_capi(chain[-1]):
+        return final_payload(len(chain), payload)
+    supersedes = chain[-2]
+    reason = (
+        f"Recount of specification coverage for readcon-core {VERSION} after "
+        f"the C ABI gate changed the sources counted in {supersedes.name}."
+    )
+    return {"supersedes": rel(supersedes), "reason": reason, **payload}
+
+
 def record_for_sources() -> tuple[Path, dict]:
-    n = max(final_count(), 1)
-    return final_record(n), final_payload(n, build())
+    chain = final_chain()
+    if not chain:
+        return final_record(1), final_payload(1, build())
+    return chain[-1], chain_payload(chain, build())
 
 
-def next_record_for_sources() -> tuple[Path, dict]:
-    n = final_count() + 1
-    return final_record(n), final_payload(n, build())
+def next_record_for_sources(capi: bool = False) -> tuple[Path, dict]:
+    chain = final_chain()
+    if chain and (capi or is_capi(chain[-1])):
+        out = capi_record(sum(map(is_capi, chain)) + 1)
+    else:
+        out = final_record(len(chain) + 1)
+    return out, chain_payload([*chain, out], build())
 
 
 def macros(record: dict) -> str:
@@ -598,7 +632,16 @@ def main() -> int:
         action="store_true",
         help="write the final record as well as the live TeX",
     )
+    parser.add_argument(
+        "--capi",
+        action="store_true",
+        help="with --record, append a C ABI recount rather than a spec-major record",
+    )
     args = parser.parse_args()
+    if args.capi and not args.record:
+        parser.error("--capi needs --record")
+    if args.capi and not final_chain():
+        sys.exit("a C ABI recount needs a final spec-major record to supersede")
     generated_out, record = record_for_sources()
     out = args.out or generated_out
     t = record["totals"]
@@ -631,7 +674,7 @@ def main() -> int:
             and out.is_file()
             and out.read_text(encoding="utf-8") != wanted
         ):
-            out, record = next_record_for_sources()
+            out, record = next_record_for_sources(capi=args.capi)
             wanted = text(record)
         if out.is_file() and out.read_text(encoding="utf-8") != wanted:
             sys.exit(f"refusing to overwrite committed record {rel(out)}")
