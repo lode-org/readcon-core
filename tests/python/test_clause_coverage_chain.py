@@ -263,6 +263,9 @@ def test_repo_clause_coverage_resolves_to_terminal_record() -> None:
         cur = ROOT / prior_rel
         chain.append(cur)
     names = [p.name for p in chain]
+    finals = clause_coverage.final_chain()
+    assert newest == finals[-1]
+    assert names[: len(finals)] == [p.name for p in reversed(finals)]
     assert f"clause_coverage-{version}-spec-major.json" in names
     assert f"clause_coverage-{version}.json" in names
     assert previous == chain[1]
