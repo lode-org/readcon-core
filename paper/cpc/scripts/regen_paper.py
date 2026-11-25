@@ -108,6 +108,7 @@ FORMAT = [
     ["scripts/test_run.py", "--tables"],
     ["scripts/sinum.py"],
     ["scripts/gen_figures.py"],
+    ["scripts/fig_ecosystem.py"],
     # One plotter writes each figure name, so the order of these steps does not
     # decide which figure the paper shows.
     ["scripts/plot_restored.py"],
