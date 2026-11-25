@@ -497,7 +497,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--optional",
         action="store_true",
-        help="draw the rgpot and amsel slot; entries without a cited call site stay out",
+        help="draw OPTIONAL (amsel); rgpot is always drawn; no call site, no box",
     )
     args = parser.parse_args()
     main(args.png, args.optional)
