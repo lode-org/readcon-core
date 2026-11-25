@@ -458,7 +458,11 @@ def item_three(rows: list[Row], native: Native, paths) -> None:
                 value = native.numpy_view(tensor).astype(np.float32)
                 if value.dtype != np.float32 or value.shape != (n, 3):
                     raise AssertionError("bad float64 cast result")
-                return value
+                sample = value[0, 0]
+                # Free before return. elapsed() stops the clock before deleting
+                # the return value, so a returned array would be freed outside.
+                del value
+                return sample
             finally:
                 native.lib.rkr_dlpack_delete(tensor)
 
