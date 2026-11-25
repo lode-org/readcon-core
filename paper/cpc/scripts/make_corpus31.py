@@ -1358,14 +1358,13 @@ reject(
     "explicit",
     "Probe D1: units.time m is a length, not a time.",
 )
-reject(
+accept(
     "d02_legacy_velocity_no_time.convel",
     probe({**PROBE_M31, "units": PROBE_UNITS}, extra=PROBE_VEL),
-    "InvalidUnits",
-    14,
-    "CON-section.1, CON-units.11",
+    1,
+    "CON-section.1, CON-units.9",
     "explicit",
-    "Probe D2: a minor-1 legacy velocity block without units.time fails on the blank line that opens it.",
+    "Probe D2: a minor-1 legacy velocity block without units.time. CON-units.9 says a missing units.time must not reject that frame.",
 )
 reject(
     "d03_nbsp_after_id.con",
