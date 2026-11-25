@@ -70,7 +70,7 @@ Status by item:
 - 2: `MEASURED` on CPU for NumPy, PyTorch, and JAX; CuPy rows use the item 1
   probe status
 - 3: `MEASURED`
-- 4: both arms free the TensorBlock inside the timer; published medians are pending a rerun
+- 4: both arms free the TensorBlock inside the timer; published medians are in the table below
 
 ## Summary
 
@@ -82,10 +82,10 @@ Medians are milliseconds. Ratio is the first arm divided by its comparator.
 | 2 | torch DLPack / torch copy | 10,000 | 0.001124 | 0.006592 | 0.1704 |
 | 2 | torch DLPack / torch copy | 100,000 | 0.001732 | 0.027771 | 0.0624 |
 | 2 | torch DLPack / torch copy | 1,000,000 | 0.006492 | 0.204037 | 0.0318 |
-| 2 | JAX DLPack / explicit copy | 1,000 | pending rerun | pending rerun | pending rerun |
-| 2 | JAX DLPack / explicit copy | 10,000 | pending rerun | pending rerun | pending rerun |
-| 2 | JAX DLPack / explicit copy | 100,000 | pending rerun | pending rerun | pending rerun |
-| 2 | JAX DLPack / explicit copy | 1,000,000 | pending rerun | pending rerun | pending rerun |
+| 2 | JAX DLPack / explicit copy | 1,000 | 0.056466 | 0.031340 | 1.8017 |
+| 2 | JAX DLPack / explicit copy | 10,000 | 0.054678 | 0.038123 | 1.4342 |
+| 2 | JAX DLPack / explicit copy | 100,000 | 0.091373 | 0.124921 | 0.7314 |
+| 2 | JAX DLPack / explicit copy | 1,000,000 | 0.101639 | 0.481759 | 0.2110 |
 | 2 | NumPy DLPack / NumPy copy | 1,000 | 0.000372 | 0.000945 | 0.3934 |
 | 2 | NumPy DLPack / NumPy copy | 10,000 | 0.000376 | 0.004918 | 0.0764 |
 | 2 | NumPy DLPack / NumPy copy | 100,000 | 0.001043 | 0.163884 | 0.0064 |
@@ -94,21 +94,20 @@ Medians are milliseconds. Ratio is the first arm divided by its comparator.
 | 3 | float32 export / float64 then cast | 10,000 | 0.096822 | 0.101636 | 0.9526 |
 | 3 | float32 export / float64 then cast | 100,000 | 1.005458 | 1.146253 | 0.8772 |
 | 3 | float32 export / float64 then cast | 1,000,000 | 9.506717 | 11.059092 | 0.8596 |
-| 4 | readcon TensorBlock / ASE TensorBlock | 1,000 | pending rerun | pending rerun | pending rerun |
-| 4 | readcon TensorBlock / ASE TensorBlock | 10,000 | pending rerun | pending rerun | pending rerun |
-| 4 | readcon TensorBlock / ASE TensorBlock | 100,000 | pending rerun | pending rerun | pending rerun |
-| 4 | readcon TensorBlock / ASE TensorBlock | 1,000,000 | pending rerun | pending rerun | pending rerun |
+| 4 | readcon TensorBlock / ASE TensorBlock | 1,000 | 0.136762 | 1.015618 | 0.1347 |
+| 4 | readcon TensorBlock / ASE TensorBlock | 10,000 | 1.412858 | 15.483655 | 0.0912 |
+| 4 | readcon TensorBlock / ASE TensorBlock | 100,000 | 8.405926 | 83.040211 | 0.1012 |
+| 4 | readcon TensorBlock / ASE TensorBlock | 1,000,000 | 122.366317 | 947.800469 | 0.1291 |
 
 The JAX explicit-copy arm previously copied with NumPy and then with JAX.
 That double copy produced the withdrawn speedup (roughly 55x at one
-million atoms). Those figures are pending a rerun. The JAX rows in
-`summary.csv` and `results.csv` are that double-copy run and are not a
-current result. Item 4 samples in those files were recorded when only the
-readcon arm freed inside the timer. `elapsed` stopped the clock before
-`del result`, so the ASE TensorBlock was freed afterwards. Those medians
-are pending a rerun. Other medians, quartiles, IQRs, statuses, and
-comparator ratios are in `summary.csv`. Every individual sample is in
-`results.csv`.
+million atoms). The rows in `summary.csv` and `results.csv` are the
+single-copy rerun, and the table above has its medians. Item 4 samples
+previously freed only the readcon TensorBlock inside the timer.
+`elapsed` stops the clock before `del result`. This rerun frees both
+blocks before returning, and the table above has those medians. Other
+medians, quartiles, IQRs, statuses, and comparator ratios are in
+`summary.csv`. Every individual sample is in `results.csv`.
 
 ## Reproduction
 
