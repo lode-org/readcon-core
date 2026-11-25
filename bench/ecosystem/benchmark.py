@@ -117,9 +117,7 @@ class Native:
             ctypes.POINTER(ctypes.POINTER(DLManagedTensorVersioned)),
         ]
         self.lib.rkr_frame_positions_dlpack_ex.restype = ctypes.c_int
-        self.lib.rkr_dlpack_delete.argtypes = [
-            ctypes.POINTER(DLManagedTensorVersioned)
-        ]
+        self.lib.rkr_dlpack_delete.argtypes = [ctypes.POINTER(DLManagedTensorVersioned)]
         self.lib.rkr_dlpack_delete.restype = None
         self.lib.rkr_frame_metatensor_positions_block.argtypes = [
             ctypes.c_void_p,
@@ -230,7 +228,9 @@ def create_frames(readcon, work: Path) -> dict[tuple[int, str], Path]:
             seed.unlink()
             reparsed = readcon.read_con(str(output))
             if len(reparsed) != 1 or len(reparsed[0]) != n:
-                raise AssertionError(f"readcon output verification failed for {n}/{dtype}")
+                raise AssertionError(
+                    f"readcon output verification failed for {n}/{dtype}"
+                )
             paths[n, dtype] = output
     return paths
 
@@ -290,7 +290,18 @@ def no_cuda_rows(rows: list[Row]) -> None:
     for n in SIZES:
         for arm in arms:
             for repeat in range(REPEATS):
-                rows.append(Row("1_cuda_dlpack", arm, n, "float64", repeat, None, "cuda", "NO_CUDA"))
+                rows.append(
+                    Row(
+                        "1_cuda_dlpack",
+                        arm,
+                        n,
+                        "float64",
+                        repeat,
+                        None,
+                        "cuda",
+                        "NO_CUDA",
+                    )
+                )
 
 
 def pointer_of(value) -> int:
@@ -339,7 +350,9 @@ def item_two(rows: list[Row], readcon, paths) -> dict[str, bool]:
         jax.block_until_ready(jax_view)
         pointer_checks[f"jax_n{n}"] = pointer_of(jax_view) == pointer_of(base)
         if not pointer_checks[f"jax_n{n}"]:
-            raise AssertionError("jax.dlpack.from_dlpack did not alias the readcon array")
+            raise AssertionError(
+                "jax.dlpack.from_dlpack did not alias the readcon array"
+            )
 
         def jax_dlpack():
             value = jax.dlpack.from_dlpack(base, copy=False)
@@ -432,9 +445,7 @@ def make_python_block(metatensor, positions: np.ndarray):
     samples = metatensor.Labels(
         ["atom_id"], np.arange(n, dtype=np.int32).reshape(-1, 1)
     )
-    properties = metatensor.Labels(
-        ["xyz"], np.arange(3, dtype=np.int32).reshape(-1, 1)
-    )
+    properties = metatensor.Labels(["xyz"], np.arange(3, dtype=np.int32).reshape(-1, 1))
     return metatensor.TensorBlock(
         values=np.array(positions, dtype=np.float64, copy=True),
         samples=samples,
@@ -469,7 +480,9 @@ def item_four(rows: list[Row], native: Native, readcon, paths) -> None:
             frame, ctypes.byref(block)
         )
         if status != 0 or not block:
-            raise AssertionError(f"readcon TensorBlock export failed with status {status}")
+            raise AssertionError(
+                f"readcon TensorBlock export failed with status {status}"
+            )
         native_values = native.metatensor_values(block, n)
         native.lib.rkr_mts_block_free(block)
         native.lib.free_rkr_frame(frame)
@@ -518,9 +531,7 @@ def write_summary(path: Path, rows: list[Row]) -> None:
         if row.wall_s is not None:
             grouped[key].append(row.wall_s)
     medians = {
-        key: statistics.median(values)
-        for key, values in grouped.items()
-        if values
+        key: statistics.median(values) for key, values in grouped.items() if values
     }
     baseline = {
         "2_python_zero_copy": {
@@ -592,7 +603,9 @@ def write_summary(path: Path, rows: list[Row]) -> None:
 
 def command_output(command: list[str]) -> str:
     try:
-        return subprocess.check_output(command, text=True, stderr=subprocess.STDOUT).strip()
+        return subprocess.check_output(
+            command, text=True, stderr=subprocess.STDOUT
+        ).strip()
     except (FileNotFoundError, subprocess.CalledProcessError) as error:
         return f"unavailable ({type(error).__name__})"
 
@@ -616,7 +629,9 @@ def write_run_metadata(path: Path, pointer_checks: dict[str, bool]) -> None:
         "packages": packages,
         "pointer_checks": pointer_checks,
     }
-    path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def main() -> int:
