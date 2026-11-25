@@ -359,8 +359,7 @@ def item_two(rows: list[Row], readcon, paths) -> dict[str, bool]:
             return jax.block_until_ready(value)
 
         def jax_copy():
-            copied = np.array(base, copy=True)
-            value = jnp.array(copied, copy=True)
+            value = jnp.array(base, copy=True)
             return jax.block_until_ready(value)
 
         measure_pair(
