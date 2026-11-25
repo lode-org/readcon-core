@@ -256,7 +256,7 @@ _RULES = [
         "0.2.7",
         release("metatensor-core", "0.2.7")["version"],
         RELEASES,
-        "metatensor-core GitHub release metatensor-core-v0.2.7",
+        "metatensor-core GitHub release 0.2.7",
         lines(r"Since version 0\.2\.7, the Python package of metatensor-core", (SUPP,)),
     ),
     *(
