@@ -71,7 +71,50 @@ def final_count() -> int:
     return n
 
 
-FINAL_RECORD = final_record(max(final_count(), 1))
+def final_chain(spec_dir: Path | None = None, version: str | None = None) -> list[Path]:
+    """The final spec-major records of one version, oldest first.
+
+    Final record 1 supersedes the legacy record of the version and record n
+    supersedes record n - 1. No other record of data/spec may supersede a
+    final record, so the newest one is the only tip of the active chain.
+    """
+    spec_dir = spec_dir or RECORD_DIR
+    ver = version or VERSION
+
+    def named(n: int) -> Path:
+        suffix = "" if n == 1 else f"-{n}"
+        return spec_dir / f"clause_coverage-{ver}-spec-major{suffix}.json"
+
+    chain: list[Path] = []
+    while named(len(chain) + 1).is_file():
+        chain.append(named(len(chain) + 1))
+    links = {
+        path.name: Path(prior).name
+        for path in spec_dir.glob(f"clause_coverage-{ver}-*.json")
+        if (prior := json.loads(path.read_text(encoding="utf-8")).get("supersedes"))
+    }
+    parent = f"clause_coverage-{ver}.json"
+    for record in chain:
+        if links.get(record.name) != parent:
+            sys.exit(
+                f"{record.name} supersedes {links.get(record.name)}, not {parent}; "
+                f"the {len(chain)} final clause coverage records of {ver} must "
+                "form one chain"
+            )
+        parent = record.name
+    for record, after in zip(chain, [*chain[1:], None]):
+        children = sorted(name for name, prior in links.items() if prior == record.name)
+        allowed = [after.name] if after else []
+        if children != allowed:
+            sys.exit(
+                f"{len(children)} records of data/spec supersede {record.name} "
+                f"({', '.join(children) or 'none'}); the {len(chain)} final clause "
+                f"coverage records of {ver} must form one chain"
+            )
+    return chain
+
+
+FINAL_RECORD = (final_chain() or [final_record(1)])[-1]
 
 
 def default_paths(
@@ -80,7 +123,11 @@ def default_paths(
     spec: Path | None = None,
     version: str | None = None,
 ) -> tuple[Path, Path]:
-    """Previous and newest blob-named coverage records for one spec.org."""
+    """Previous and newest coverage records for one spec.org.
+
+    A spec.org with a blob-named record follows that chain. Otherwise the
+    final spec-major chain of the version is the active one.
+    """
     root = root or ROOT
     repo_root = (repo or REPO).resolve()
     spec_path = spec or (repo_root / "docs" / "orgmode" / "spec.org")
@@ -125,34 +172,11 @@ def default_paths(
                 )
             previous, newest = newest, after[0]
         return previous, newest
-    sources = spec_dir / f"clause_coverage-{ver}-sources.json"
-    sources_later = {
-        path: json.loads(path.read_text(encoding="utf-8")).get("supersedes")
-        for path in sorted(spec_dir.glob(f"clause_coverage-{ver}-sources-*.json"))
-    }
-    if sources.is_file() or sources_later or not spec_path.is_file():
-        if not sources_later:
-            return base, sources
-        if not sources.is_file():
-            sys.exit(
-                f"{sources.name} is missing while {len(sources_later)} later sources records exist"
-            )
-        previous, newest = base, sources
-        for _ in sources_later:
-            name = (
-                newest.resolve().relative_to(repo_root).as_posix()
-                if newest.resolve().is_relative_to(repo_root)
-                else f"paper/cpc/data/spec/{newest.name}"
-            )
-            after = [path for path, prior in sources_later.items() if prior == name]
-            if len(after) != 1:
-                sys.exit(
-                    f"{len(after)} records of data/spec supersede {newest.name}; "
-                    f"the {len(sources_later) + 1} clause coverage sources records of "
-                    f"{ver} must form one chain"
-                )
-            previous, newest = newest, after[0]
-        return previous, newest
+    finals = final_chain(spec_dir, ver)
+    if finals:
+        return (finals[-2] if len(finals) > 1 else base), finals[-1]
+    if not spec_path.is_file():
+        return spec_dir / "clause_coverage.json", base
     if base.is_file():
         existing = (
             json.loads(base.read_text(encoding="utf-8")).get("spec", {}).get("sha256")

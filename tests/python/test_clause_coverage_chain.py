@@ -241,30 +241,106 @@ def test_default_paths_rejects_fork_and_orphan(tmp_path: Path) -> None:
     assert tail.is_file()
 
 
-def test_repo_clause_coverage_resolves_to_terminal_record(tmp_path: Path) -> None:
+def _walk_back(path: Path) -> list[Path]:
+    chain = [path]
+    while prior := json.loads(chain[-1].read_text(encoding="utf-8")).get("supersedes"):
+        chain.append(ROOT / prior)
+    return chain
+
+
+def _children(spec_dir: Path) -> dict[str, list[str]]:
+    children: dict[str, list[str]] = {}
+    for path in sorted(spec_dir.glob("clause_coverage*.json")):
+        prior = json.loads(path.read_text(encoding="utf-8")).get("supersedes")
+        if prior:
+            children.setdefault(Path(prior).name, []).append(path.name)
+    return children
+
+
+def test_repo_a8f263a2_chain_forks_outside_the_active_chain(tmp_path: Path) -> None:
     clause_coverage = _load(
         "clause_coverage_under_test", SCRIPTS / "clause_coverage.py"
     )
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    spec_dir = ROOT / "paper" / "cpc" / "data" / "spec"
     # The live spec.org is a later blob. The committed chain is the one
-    # named by git blob a8f263a2.
+    # named by git blob a8f263a2. Its r6 record has two stored children,
+    # a8f263a2-r7 and a8f263a2-cxx-wrap-pin, and stored records are never
+    # rewritten, so default_paths still refuses that spec.
     spec = tmp_path / "spec.org"
     spec.write_bytes(
         subprocess.check_output(
             ["git", "-C", str(ROOT), "cat-file", "blob", "a8f263a2"]
         )
     )
-    previous, newest = clause_coverage.default_paths(spec=spec)
-    assert newest.name != f"clause_coverage-{version}-a8f263a2.json"
-    chain = [newest]
-    cur = newest
-    while True:
-        prior_rel = json.loads(cur.read_text(encoding="utf-8")).get("supersedes")
-        if not prior_rel:
-            break
-        cur = ROOT / prior_rel
-        chain.append(cur)
-    names = [p.name for p in chain]
-    assert f"clause_coverage-{version}-a8f263a2-5369dc50.json" in names
-    assert f"clause_coverage-{version}-a8f263a2.json" in names
-    assert previous == chain[1]
+    r6 = f"clause_coverage-{version}-a8f263a2-r6.json"
+    with pytest.raises(SystemExit, match=f"2 records of data/spec supersede {r6}"):
+        clause_coverage.default_paths(spec=spec)
+    leaves = sorted(_children(spec_dir)[r6])
+    assert leaves == [
+        f"clause_coverage-{version}-a8f263a2-cxx-wrap-pin.json",
+        f"clause_coverage-{version}-a8f263a2-r7.json",
+    ]
+    active = {p.name for p in _walk_back(clause_coverage.FINAL_RECORD)}
+    for leaf in leaves:
+        names = [p.name for p in _walk_back(spec_dir / leaf)]
+        assert r6 in names
+        assert f"clause_coverage-{version}-a8f263a2-5369dc50.json" in names
+        assert f"clause_coverage-{version}-a8f263a2.json" in names
+        assert not set(names[: names.index(f"clause_coverage-{version}.json")]) & active
+
+
+def test_repo_final_clause_coverage_chain_is_linear() -> None:
+    clause_coverage = _load(
+        "clause_coverage_under_test", SCRIPTS / "clause_coverage.py"
+    )
+    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    spec_dir = ROOT / "paper" / "cpc" / "data" / "spec"
+    finals = clause_coverage.final_chain()
+    assert finals
+    tip = finals[-1]
+    assert clause_coverage.FINAL_RECORD == tip
+    assert tip.name == f"clause_coverage-{version}-spec-major-{len(finals)}.json"
+    assert clause_coverage.default_paths() == (
+        finals[-2] if len(finals) > 1 else spec_dir / f"clause_coverage-{version}.json",
+        tip,
+    )
+    walked = [p.name for p in _walk_back(tip)]
+    assert walked == [
+        *(p.name for p in reversed(finals)),
+        f"clause_coverage-{version}.json",
+        "clause_coverage.json",
+    ]
+    children = _children(spec_dir)
+    assert tip.name not in children
+    for parent, child in zip(walked[1 : len(finals)], walked[: len(finals) - 1]):
+        assert children[parent] == [child], parent
+
+
+def test_final_chain_rejects_a_second_child_of_a_final_record(tmp_path: Path) -> None:
+    clause_coverage = _load(
+        "clause_coverage_under_test", SCRIPTS / "clause_coverage.py"
+    )
+    spec_dir = tmp_path / "spec"
+    version = "0.99.0"
+    legacy = f"clause_coverage-{version}.json"
+    first = f"clause_coverage-{version}-spec-major.json"
+    second = f"clause_coverage-{version}-spec-major-2.json"
+    _write_json(spec_dir / legacy, {})
+    _write_json(spec_dir / first, {"supersedes": f"paper/cpc/data/spec/{legacy}"})
+    _write_json(spec_dir / second, {"supersedes": f"paper/cpc/data/spec/{first}"})
+    assert [p.name for p in clause_coverage.final_chain(spec_dir, version)] == [
+        first,
+        second,
+    ]
+
+    fork = spec_dir / f"clause_coverage-{version}-a0b1c2d3-r2.json"
+    _write_json(fork, {"supersedes": f"paper/cpc/data/spec/{first}"})
+    with pytest.raises(SystemExit, match=f"2 records of data/spec supersede {first}"):
+        clause_coverage.final_chain(spec_dir, version)
+
+    fork.unlink()
+    after_tip = spec_dir / f"clause_coverage-{version}-after-tip.json"
+    _write_json(after_tip, {"supersedes": f"paper/cpc/data/spec/{second}"})
+    with pytest.raises(SystemExit, match=f"1 records of data/spec supersede {second}"):
+        clause_coverage.final_chain(spec_dir, version)
