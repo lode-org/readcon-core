@@ -306,18 +306,17 @@ accept(
     "rewrite keeps minor 1 and fs.",
     rewrite=True,
 )
-reject(
+accept(
     "v31_convel_no_time.convel",
     con(
         "corpus31 minor-1 convel, no time",
         obj(M31, U30, '"sections":["velocities"]'),
         tail=VEL2,
     ),
-    "InvalidUnits",
-    2,
-    "CON-units.11",
+    1,
+    "CON-units.9",
     "explicit",
-    "Minor 1 frame whose line 2 declares a velocities section and carries no units.time.",
+    "Minor 1 declares a velocities section and omits units.time. CON-units.9 says a missing units.time must not reject any minor of major 3.",
 )
 accept(
     "v31_legacy_velocity_time.convel",
