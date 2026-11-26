@@ -40,3 +40,4 @@ def test_legal_counts_ignore_the_reader_totals() -> None:
     text = module.macros(record)
     assert r"\newcommand{\cthreeoneAccepted}{1}" in text
     assert r"\newcommand{\cthreeoneRejected}{1}" in text
+    assert "data/referee/r1t/corpus31-results.json" in text
