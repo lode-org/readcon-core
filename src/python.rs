@@ -10984,19 +10984,21 @@ mod extension_link_regression {
             pyo3_out.contains("cargo:rustc-link-lib="),
             "pyo3 did not emit a libpython link line"
         );
-        let ours = newest_build_output(profile, "readcon-core-");
-        for needle in [
-            "LIBRARY_PATH",
-            "rustc-link-arg-tests",
-            "rustc-link-arg-benches",
-            "cargo:rustc-link-lib",
-            "cargo:rustc-link-search",
-        ] {
-            assert!(
-                !ours.contains(needle),
-                "readcon build script still emits {needle}"
-            );
-        }
+        // This compilation's build-script stdout. `OUT_DIR` is `.../out`;
+        // Cargo stores the script output beside it for both the
+        // `<crate>-<hash>` and `<crate>/<hash>` layouts.
+        let ours_path = Path::new(env!("OUT_DIR"))
+            .parent()
+            .expect("build script directory")
+            .join("output");
+        let ours = std::fs::read_to_string(&ours_path)
+            .unwrap_or_else(|err| panic!("read {}: {err}", ours_path.display()));
+        let python_links = python_link_directives(&ours);
+        assert!(
+            python_links.is_empty(),
+            "readcon build script emits python link directives:\n{}",
+            python_links.join("\n")
+        );
 
         let extension = dynamic_section(&extension_cdylib());
         let lower = extension.to_ascii_lowercase();
@@ -11021,23 +11023,121 @@ mod extension_link_regression {
         String::from_utf8_lossy(&output.stdout).into_owned()
     }
 
+    /// `libpython` / `python3` link-lib lines, and the search or link-arg
+    /// lines that name those libraries. chemfiles and metatensor
+    /// `cargo:rustc-link-lib` and `cargo:rustc-link-search` lines stay.
+    fn python_link_directives(output: &str) -> Vec<&str> {
+        output
+            .lines()
+            .filter(|line| is_python_link_directive(line))
+            .collect()
+    }
+
+    fn is_python_link_directive(line: &str) -> bool {
+        let Some(body) = line.strip_prefix("cargo:") else {
+            return false;
+        };
+        let Some((key, value)) = body.split_once('=') else {
+            return false;
+        };
+        if key == "rustc-link-lib" {
+            return names_python_library(link_lib_name(value));
+        }
+        if key == "rustc-link-search" || key.starts_with("rustc-link-search-") {
+            return text_names_python(value);
+        }
+        if key == "rustc-link-arg"
+            || key.starts_with("rustc-link-arg-")
+            || key == "rustc-cdylib-link-arg"
+            || key.starts_with("rustc-cdylib-link-arg-")
+        {
+            return value.split_whitespace().any(text_names_python);
+        }
+        false
+    }
+
+    fn link_lib_name(spec: &str) -> &str {
+        let spec = spec.trim();
+        let named = spec.split_once('=').map(|(_, name)| name).unwrap_or(spec);
+        named.split(':').next().unwrap_or(named)
+    }
+
+    fn names_python_library(name: &str) -> bool {
+        let lower = name.to_ascii_lowercase();
+        if lower == "python" || lower.contains("libpython") || lower.contains("python3") {
+            return true;
+        }
+        let rest = lower.strip_prefix("python");
+        rest.is_some_and(|tail| tail.starts_with(|c: char| c.is_ascii_digit()))
+    }
+
+    fn text_names_python(text: &str) -> bool {
+        let lower = text.to_ascii_lowercase();
+        if lower.contains("libpython")
+            || lower.contains("python3")
+            || lower.contains("python.framework")
+        {
+            return true;
+        }
+        lower
+            .split(|c: char| c == '=' || c == ':' || c == ',' || c.is_whitespace())
+            .any(|part| {
+                let part = part.trim_start_matches("-l");
+                names_python_library(part)
+            })
+    }
+
+    #[test]
+    fn chemfiles_and_metatensor_link_lines_are_not_python_directives() {
+        let output = "\
+cargo:rustc-link-search=native=/tmp/metatensor/lib
+cargo:rustc-link-lib=dylib=metatensor
+cargo:rustc-link-lib=static=readcon_chemfiles_atom_view
+cargo:rustc-link-search=native=/tmp/chemfiles/out
+cargo:rustc-link-arg=-Wl,-rpath,/tmp/metatensor/lib
+cargo:rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
+cargo:rustc-link-lib=dylib=python3.12
+cargo:rustc-link-search=native=/usr/lib/python3.12/config-3.12-x86_64-linux-gnu
+cargo:rustc-link-arg-tests=-lpython3.12
+cargo:rustc-link-arg-benches=-L/usr/lib/python3.12
+cargo:rustc-link-lib=python312
+";
+        assert_eq!(
+            python_link_directives(output),
+            vec![
+                "cargo:rustc-link-lib=dylib=python3.12",
+                "cargo:rustc-link-search=native=/usr/lib/python3.12/config-3.12-x86_64-linux-gnu",
+                "cargo:rustc-link-arg-tests=-lpython3.12",
+                "cargo:rustc-link-arg-benches=-L/usr/lib/python3.12",
+                "cargo:rustc-link-lib=python312",
+            ]
+        );
+    }
+
     fn newest_build_output(profile: &Path, prefix: &str) -> String {
         let build = profile.join("build");
         let mut best: Option<(SystemTime, PathBuf)> = None;
         let entries = std::fs::read_dir(&build)
             .unwrap_or_else(|err| panic!("read {}: {err}", build.display()));
+        let crate_name = prefix.trim_end_matches('-');
         for entry in entries {
             let entry = entry.unwrap_or_else(|err| panic!("read {}: {err}", build.display()));
-            if !entry.file_name().to_string_lossy().starts_with(prefix) {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(prefix) {
+                consider_output(&mut best, entry.path().join("output"));
                 continue;
             }
-            let output = entry.path().join("output");
-            let Ok(meta) = output.metadata() else {
-                continue;
-            };
-            let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-            if best.as_ref().is_none_or(|(when, _)| modified >= *when) {
-                best = Some((modified, output));
+            // Cargo 1.100 names the directory `<crate>/<hash>` rather than
+            // `<crate>-<hash>`. `prefix` keeps the historical trailing hyphen.
+            if name == crate_name {
+                let nested = std::fs::read_dir(entry.path())
+                    .unwrap_or_else(|err| panic!("read {}: {err}", entry.path().display()));
+                for child in nested {
+                    let child = child
+                        .unwrap_or_else(|err| panic!("read {}: {err}", entry.path().display()));
+                    consider_output(&mut best, child.path().join("output"));
+                }
             }
         }
         let Some((_, path)) = best else {
@@ -11045,6 +11145,16 @@ mod extension_link_regression {
         };
         std::fs::read_to_string(&path)
             .unwrap_or_else(|err| panic!("read {}: {err}", path.display()))
+    }
+
+    fn consider_output(best: &mut Option<(SystemTime, PathBuf)>, output: PathBuf) {
+        let Ok(meta) = output.metadata() else {
+            return;
+        };
+        let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+        if best.as_ref().is_none_or(|(when, _)| modified >= *when) {
+            *best = Some((modified, output));
+        }
     }
 
     fn extension_cdylib() -> PathBuf {
