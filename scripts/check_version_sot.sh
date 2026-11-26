@@ -380,7 +380,6 @@ for rel in sorted(recorded_results):
         continue
     recorded = versions[0]
     commits = sorted(set(source_commits))
-    commits_ok = True
     if not commits:
         tagged = subprocess.run(
             ["git", "rev-parse", "--verify", f"refs/tags/v{recorded}^{{commit}}"],
@@ -391,17 +390,17 @@ for rel in sorted(recorded_results):
         if tagged.returncode != 0:
             # The row names the build that was measured. A later release
             # must not rewrite that field. An older version than VERSION
-            # is that measurement when the checkout has no matching tag.
+            # does not need a tag. Record-file and source_commit checks
+            # below still run for every row.
             if measured_is_older(recorded, version):
                 print(
                     f"OK: {rel} records measured readcon {recorded}, "
-                    f"older than {version}"
+                    f"older than {version}; tag v{recorded} is not required"
                 )
-                continue
-            die(f"{rel} records readcon {recorded} but has no source_commit or v{recorded} tag")
-            commits_ok = False
-            continue
-        commits = [tagged.stdout.strip()]
+            else:
+                die(f"{rel} records readcon {recorded} but has no source_commit or v{recorded} tag")
+        else:
+            commits = [tagged.stdout.strip()]
     for commit in commits:
         shown = subprocess.run(
             ["git", "show", f"{commit}:VERSION"],
@@ -412,17 +411,15 @@ for rel in sorted(recorded_results):
         source_version = shown.stdout.strip()
         if shown.returncode != 0:
             die(f"{rel} source_commit {commit} has no readable VERSION")
-            commits_ok = False
         elif source_version != recorded:
             die(
                 f"{rel} records readcon {recorded}, but source_commit {commit} "
                 f"records VERSION {source_version!r}"
             )
-            commits_ok = False
         else:
             print(f"OK: {rel} records measured readcon {recorded} from {commit}")
     named = payload.get("record")
-    if commits_ok and isinstance(named, str):
+    if isinstance(named, str):
         named_path = root / named
         if not named_path.is_file():
             die(f"{rel} names {named}, which is absent")
