@@ -151,3 +151,29 @@ def test_spec_macros_names_an_unreleased_tree_by_its_origin_commit(
     monkeypatch.setattr(module, "_origin_commit_holding", lambda _blob: None)
     with pytest.raises(SystemExit, match="no release tag"):
         module.spec_macros("- CON-test.1 :: MUST :: test\n")
+
+
+def test_spec_macros_rejects_a_commit_that_does_not_hold_the_blob(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load()
+    current = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    commit = "7be34016b7185c65e133b795da3a1ab4c1449c5a"
+    record = tmp_path / "measurement.json"
+    record.write_text(
+        '{"tags": [], "tree": {"release": '
+        f'"{current}", "tagged": false, "spec_blob": "current-blob", '
+        f'"commit": "{commit}"}}}}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    monkeypatch.setattr(module, "SPEC", tmp_path / "spec.org")
+    monkeypatch.setattr(module, "VERSIONS", record)
+    monkeypatch.setattr(
+        module, "git", lambda *args, **kwargs: SimpleNamespace(stdout="current-blob\n")
+    )
+    monkeypatch.setattr(module.provenance, "origin_reachable", lambda _value: True)
+    monkeypatch.setattr(module, "_blob_at", lambda _commit, _blob: False)
+    monkeypatch.setattr(module, "_origin_commit_holding", lambda _blob: None)
+    with pytest.raises(SystemExit, match="no release tag"):
+        module.spec_macros("- CON-test.1 :: MUST :: test\n")
