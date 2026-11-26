@@ -223,8 +223,38 @@ fn unix_ldlibrary_from_python3() -> String {
 
 /// Windows CPython has no useful `LDLIBRARY` stem. `py_version_nodot`
 /// stays `313` on a free-threaded build; the import lib is `python313t.lib`.
+///
+/// The interpreter is `PYO3_PYTHON`, then `python3`, then `python`.
+/// Linux and macOS stay on `python3`.
 #[cfg(feature = "python")]
 fn windows_python_sysconfig() -> python_link::PythonSysconfig {
+    println!("cargo:rerun-if-env-changed=PYO3_PYTHON");
+    let configured = env::var("PYO3_PYTHON").ok();
+    let mut parsed = None;
+    let mut errors = Vec::new();
+    let chosen = python_link::select_windows_interpreter(configured.as_deref(), |program| {
+        match run_windows_sysconfig_script(program) {
+            Ok(cfg) => {
+                parsed = Some(cfg);
+                true
+            }
+            Err(err) => {
+                errors.push(format!("{program}: {err}"));
+                false
+            }
+        }
+    });
+    if chosen.is_none() {
+        panic!(
+            "could not read the windows sysconfig: {}",
+            errors.join("; ")
+        );
+    }
+    parsed.expect("a usable windows interpreter returns sysconfig")
+}
+
+#[cfg(feature = "python")]
+fn run_windows_sysconfig_script(program: &str) -> Result<python_link::PythonSysconfig, String> {
     const SCRIPT: &str = r#"
 import sys, sysconfig
 def g(key):
@@ -245,20 +275,18 @@ sys.stdout.write(f"PY_VERSION_NODOT_PLAT\t{g('py_version_nodot_plat')}\n")
 sys.stdout.write(f"ABIFLAGS\t{abiflags}\n")
 sys.stdout.write(f"PY_GIL_DISABLED\t{g('Py_GIL_DISABLED')}\n")
 "#;
-    let output = std::process::Command::new("python3")
+    let output = std::process::Command::new(program)
         .env("PYTHONIOENCODING", "utf-8")
         .env("PYTHONUTF8", "1")
         .args(["-c", SCRIPT])
         .output()
-        .expect("python3 is required to name libpython for the test binary");
+        .map_err(|err| err.to_string())?;
     if !output.status.success() {
-        panic!(
-            "python3 could not read the windows sysconfig: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(stderr.trim().to_string());
     }
-    let text = String::from_utf8(output.stdout).expect("windows sysconfig is utf-8");
-    python_link::parse_sysconfig_lines(&text)
+    let text = String::from_utf8(output.stdout).map_err(|err| err.to_string())?;
+    Ok(python_link::parse_sysconfig_lines(&text))
 }
 
 #[cfg(feature = "chemfiles")]

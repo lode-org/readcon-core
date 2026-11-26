@@ -202,6 +202,35 @@ fn gil_disabled(value: &str) -> bool {
     value.trim() == "1"
 }
 
+/// Windows interpreters, in the order they are tried.
+///
+/// `PYO3_PYTHON` when it names a program, then `python3`, then `python`.
+/// An empty `PYO3_PYTHON` is ignored. `python3` is often missing on
+/// Windows, or it is the Microsoft Store alias. Linux and macOS are not
+/// this list: they still call `python3`.
+pub fn windows_interpreter_candidates(pyo3_python: Option<&str>) -> Vec<String> {
+    let mut candidates = Vec::new();
+    if let Some(program) = pyo3_python
+        .map(str::trim)
+        .filter(|program| !program.is_empty())
+    {
+        candidates.push(program.to_string());
+    }
+    candidates.push("python3".to_string());
+    candidates.push("python".to_string());
+    candidates
+}
+
+/// First Windows interpreter for which `usable` returns true.
+pub fn select_windows_interpreter(
+    pyo3_python: Option<&str>,
+    mut usable: impl FnMut(&str) -> bool,
+) -> Option<String> {
+    windows_interpreter_candidates(pyo3_python)
+        .into_iter()
+        .find(|candidate| usable(candidate))
+}
+
 fn win_join(dir: &str, child: &str) -> String {
     let dir = dir.trim_end_matches(['\\', '/']);
     format!("{dir}\\{child}")
@@ -217,7 +246,8 @@ fn win_parent(path: &str) -> String {
 mod tests {
     use super::{
         ProbeError, PythonLink, PythonSysconfig, link_file, msvc_libpath_arg,
-        parse_sysconfig_lines, probe_python_link,
+        parse_sysconfig_lines, probe_python_link, select_windows_interpreter,
+        windows_interpreter_candidates,
     };
 
     #[test]
@@ -614,5 +644,47 @@ PY_GIL_DISABLED\t1\n",
             assert_eq!(seen, vec![file], "{body}");
             assert_named(&link, stem, r"D:\ft\libs");
         }
+    }
+
+    #[test]
+    fn windows_interpreter_order_is_pyo3_python_then_python3_then_python() {
+        assert_eq!(
+            windows_interpreter_candidates(Some(r"C:\py313t\python.exe")),
+            vec![
+                r"C:\py313t\python.exe".to_string(),
+                "python3".to_string(),
+                "python".to_string(),
+            ]
+        );
+        assert_eq!(
+            windows_interpreter_candidates(Some(" \t")),
+            vec!["python3".to_string(), "python".to_string()]
+        );
+        assert_eq!(
+            windows_interpreter_candidates(None),
+            vec!["python3".to_string(), "python".to_string()]
+        );
+
+        let mut seen = Vec::new();
+        let chosen = select_windows_interpreter(None, |program| {
+            seen.push(program.to_string());
+            program == "python"
+        });
+        assert_eq!(chosen.as_deref(), Some("python"));
+        assert_eq!(seen, vec!["python3".to_string(), "python".to_string()]);
+
+        let mut seen_first = Vec::new();
+        let chosen = select_windows_interpreter(Some(r"D:\py\python.exe"), |program| {
+            seen_first.push(program.to_string());
+            true
+        });
+        assert_eq!(chosen.as_deref(), Some(r"D:\py\python.exe"));
+        assert_eq!(seen_first, vec![r"D:\py\python.exe".to_string()]);
+
+        let chosen = select_windows_interpreter(Some(r"D:\missing\python.exe"), |program| {
+            program == "python"
+        });
+        assert_eq!(chosen.as_deref(), Some("python"));
+        assert_eq!(select_windows_interpreter(None, |_| false), None);
     }
 }
