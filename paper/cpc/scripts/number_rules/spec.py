@@ -9,6 +9,7 @@ from __future__ import annotations
 from numbers_lib import Rule, jget
 
 CROSSCHECK = "data/corpus_crosscheck.json"
+RECORDED = "data/referee/r1h/corpus_crosscheck.json"
 TYPES = "/src/types.rs"
 
 MAIN = "rg_main.tex"
@@ -18,10 +19,10 @@ CROSSCHECK_TABLE = "figures/generated/corpus_crosscheck.tex"
 
 RULES: list[Rule] = [
     Rule(
-        "125",
-        jget(CROSSCHECK, "spec.clauses"),
-        CROSSCHECK,
-        "spec.clauses: the clauses of the released specification text",
+        "127",
+        jget(RECORDED, "spec.clauses"),
+        RECORDED,
+        "spec.clauses: the clauses of the recorded CON 3.1 specification",
         where=(f"{CROSSCHECK_TABLE}~clauses\\)",),
     ),
     *[

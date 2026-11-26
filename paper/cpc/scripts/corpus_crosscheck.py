@@ -53,13 +53,14 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 import indep_reader  # noqa: E402
+import provenance  # noqa: E402
 from error_class import classify, normal  # noqa: E402
 
 ROOT = SCRIPTS.parents[2]
 SPEC = ROOT / "docs" / "orgmode" / "spec.org"
 CONF = ROOT / "resources" / "conformance"
 C31 = ROOT / "paper" / "cpc" / "data" / "corpus31"
-DATA = ROOT / "paper" / "cpc" / "data"
+DATA = ROOT / "paper" / "cpc" / "data" / "referee" / "r1h"
 GENERATED = ROOT / "paper" / "cpc" / "src" / "figures" / "generated"
 GROUPS = (
     "conformance valid",
@@ -637,10 +638,22 @@ def zstd_sentence(record: dict, name: str) -> list[str]:
     ]
 
 
+def build_under_test(record: dict) -> str:
+    """Name the recorded build by an origin commit, or by its library digest."""
+    build = record["provenance"]["build"]
+    commit = build.get("source_commit") or build.get("commit")
+    if isinstance(commit, str) and provenance.origin_reachable(commit):
+        return rf"readcon-core commit \texttt{{{commit[:12]}}}"
+    digest = build.get("library_digest") or build.get("library_digest_of_source")
+    if isinstance(digest, str) and digest:
+        return rf"readcon-core library \texttt{{{digest[:12]}}}"
+    raise SystemExit("cross-check build has no origin-reachable commit")
+
+
 def tex(record: dict) -> str:
     spec = record["spec"]
     name = f"CON {spec['version']}"
-    version = record["provenance"]["build"]["readcon_version"]
+    build = build_under_test(record)
     label = {
         "conformance valid": "Conformance, valid",
         "conformance invalid": "Conformance, invalid",
@@ -674,7 +687,7 @@ def tex(record: dict) -> str:
         r"one.",
         r"A reader that differs from an explicit entry disagrees with the specification, and one that differs "
         r"from any other entry departs from the reading that entry records.",
-        rf"readcon-core {version} puts no line number in its Python exceptions, so its lines are not compared; it "
+        rf"The build under test, {build}, puts no line number in its Python exceptions, so its lines are not compared; it "
         r"warns of a declared time unit that it does not apply only when it converts a frame to ASE "
         r"(\texttt{ConFrame.to\_ase}), and the check converts every frame that has velocities.",
         *zstd_sentence(record, name),
@@ -686,7 +699,7 @@ def tex(record: dict) -> str:
         r"symbols, masses, version, minor, declared and applied time unit and periodicity.",
     ]
     lines = [
-        "% Written by paper/cpc/scripts/corpus_crosscheck.py from paper/cpc/data/corpus_crosscheck.json.",
+        "% Written by paper/cpc/scripts/corpus_crosscheck.py from paper/cpc/data/referee/r1h/corpus_crosscheck.json.",
         r"\begin{table}[tbp]",
         r"\centering",
         r"\small",
@@ -726,6 +739,14 @@ def tex(record: dict) -> str:
     return "\n".join(lines)
 
 
+def differing_count(record: dict) -> int:
+    """The stored count, or the length of a live differing list."""
+    stored = record.get("differing_stored")
+    if isinstance(stored, int):
+        return stored
+    return len(record["differing"])
+
+
 def macros(record: dict) -> str:
     g = record["groups"]
     a, c31 = g["all"], g["corpus31"]
@@ -758,7 +779,7 @@ def macros(record: dict) -> str:
         "corpusExpectedReject": a["expected_reject"],
         "corpusRewriteFiles": a["rewrite_files"],
         "corpusRewriteKept": a["rewrite_kept"],
-        "corpusDiffering": len(record["differing"]),
+        "corpusDiffering": differing_count(record),
         "corpusSpecClauses": record["spec"]["clauses"],
         "corpusIndepLines": record["indep_reader_lines"],
         "corpusVelocityFiles": record["corpus31_features"]["velocity_block"],
@@ -767,7 +788,7 @@ def macros(record: dict) -> str:
         "corpusNoZstd": len(record.get("readcon_no_zstd", {}).get("readcon", ())),
     }
     lines = [
-        "% Written by paper/cpc/scripts/corpus_crosscheck.py from paper/cpc/data/corpus_crosscheck.json."
+        "% Written by paper/cpc/scripts/corpus_crosscheck.py from paper/cpc/data/referee/r1h/corpus_crosscheck.json."
     ]
     lines += [rf"\newcommand{{\{k}}}{{{v}}}" for k, v in values.items()]
     return "\n".join(lines) + "\n"
