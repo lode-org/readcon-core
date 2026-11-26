@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,3 +33,11 @@ def test_the_measured_format_commit_is_not_release_v0_23_3() -> None:
         ["git", "-C", str(ROOT), "rev-parse", "v0.23.2^{}"], text=True
     ).strip()
     assert release != COMMIT
+    sys.path.insert(0, str(ROOT / "paper" / "cpc" / "scripts"))
+    import provenance
+
+    digest = provenance.library_digest_at(COMMIT)
+    assert digest == record["library_digest"]
+    assert record["conbin_api"] == "readcon.read_conbin_columns()"
+    source = (ROOT / "paper" / "cpc" / "scripts" / "format_h2h_tables.py").read_text()
+    assert f'CONBIN_API = "{record["conbin_api"]}"' in source
