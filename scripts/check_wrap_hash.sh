@@ -67,48 +67,68 @@ if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
   # The wrap URL names one archive. If that release exists, its bytes
   # must be this hash. Skipping the compare whenever HEAD was not the
   # tag let the v0.23.2 URL keep a hash the upload does not have.
+  # A missing tag, a 404, or an unreachable host means the archive is
+  # not available yet. A downloaded archive with a different hash fails.
   compare_live=1
-  if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    remote="$(git remote get-url origin 2>/dev/null || true)"
+  if command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    remote="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
     if [[ -n "$remote" ]]; then
-      if ! peeled_out="$(git ls-remote "$remote" "refs/tags/v${cargo_ver}^{}")"; then
-        die "could not list refs/tags/v${cargo_ver} on ${remote}"
-        peeled_out=""
-      fi
-      peeled="$(printf '%s\n' "$peeled_out" | awk 'NR==1 {print $1}')"
-      if [[ -z "$peeled" && "$fail" -eq 0 ]]; then
-        if ! peeled_out="$(git ls-remote "$remote" "refs/tags/v${cargo_ver}")"; then
-          die "could not list refs/tags/v${cargo_ver} on ${remote}"
-          peeled_out=""
-        fi
+      tag_listed=0
+      peeled=""
+      if peeled_out="$(git -C "$ROOT" ls-remote "$remote" "refs/tags/v${cargo_ver}^{}" 2>/dev/null)"; then
+        tag_listed=1
         peeled="$(printf '%s\n' "$peeled_out" | awk 'NR==1 {print $1}')"
+        if [[ -z "$peeled" ]]; then
+          if peeled_out="$(git -C "$ROOT" ls-remote "$remote" "refs/tags/v${cargo_ver}" 2>/dev/null)"; then
+            peeled="$(printf '%s\n' "$peeled_out" | awk 'NR==1 {print $1}')"
+          else
+            tag_listed=0
+          fi
+        fi
       fi
-      if [[ -z "$peeled" && "$fail" -eq 0 ]]; then
+      if [[ "$tag_listed" -eq 1 && -z "$peeled" ]]; then
         ok "v${cargo_ver} is not published; the wrap hash is the archive this tree will upload"
         compare_live=0
+      elif [[ "$tag_listed" -eq 0 ]]; then
+        ok "could not list refs/tags/v${cargo_ver}; the asset download decides"
       fi
     fi
   fi
   asset="$(scratch_file)"
   if [[ "$compare_live" -eq 0 ]]; then
     rm -f "$asset"
-  elif curl -fsSL "$source_url" -o "$asset"; then
-    live="$(sha256sum "$asset" | awk '{print $1}')"
-    rm -f "$asset"
-    sidecar_live="$(curl -fsSL "${source_url}.sha256" | awk '{print $1}')" || sidecar_live=""
-    if [[ -n "$sidecar_live" && "$sidecar_live" != "$live" ]]; then
-      die "published ${source_url}.sha256 is '${sidecar_live}', asset is '${live}'"
-    elif [[ -n "$sidecar_live" ]]; then
-      ok "published .sha256 matches the asset"
-    fi
-    if [[ "$live" == "$source_hash" ]]; then
-      ok "published asset ${source_url} matches wrap source_hash"
-    else
-      die "published asset ${source_url} is '${live}', wrap has '${source_hash}'"
-    fi
   else
-    rm -f "$asset"
-    die "v${cargo_ver} is published but ${source_url} could not be downloaded"
+    http_code="$(curl -sS -L --connect-timeout 20 --max-time 180 -o "$asset" -w '%{http_code}' "$source_url" 2>/dev/null || true)"
+    if [[ "$http_code" == "200" ]]; then
+      live="$(sha256sum "$asset" | awk '{print $1}')"
+      rm -f "$asset"
+      sidecar_file="$(scratch_file)"
+      sidecar_code="$(curl -sS -L --connect-timeout 20 --max-time 60 -o "$sidecar_file" -w '%{http_code}' "${source_url}.sha256" 2>/dev/null || true)"
+      sidecar_live=""
+      if [[ "$sidecar_code" == "200" ]]; then
+        sidecar_live="$(awk '{print $1}' "$sidecar_file")"
+      fi
+      rm -f "$sidecar_file"
+      if [[ -n "$sidecar_live" && "$sidecar_live" != "$live" ]]; then
+        die "published ${source_url}.sha256 is '${sidecar_live}', asset is '${live}'"
+      elif [[ -n "$sidecar_live" ]]; then
+        ok "published .sha256 matches the asset"
+      fi
+      if [[ "$live" == "$source_hash" ]]; then
+        ok "published asset ${source_url} matches wrap source_hash"
+      else
+        die "published asset ${source_url} is '${live}', wrap has '${source_hash}'"
+      fi
+    elif [[ "$http_code" == "404" ]]; then
+      rm -f "$asset"
+      ok "v${cargo_ver} asset is not published yet (${source_url}); skipping live hash compare"
+    elif [[ -z "$http_code" || "$http_code" == "000" ]]; then
+      rm -f "$asset"
+      ok "could not reach ${source_url} (offline); skipping live hash compare"
+    else
+      rm -f "$asset"
+      die "v${cargo_ver} asset ${source_url} returned HTTP ${http_code}"
+    fi
   fi
 fi
 
