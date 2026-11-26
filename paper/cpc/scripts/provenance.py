@@ -50,6 +50,14 @@ def _git(*args: str) -> str | None:
     return out.stdout.strip()
 
 
+def record_build_name(build: dict) -> str:
+    """Name a measured build by its commit, its base, and the commits between."""
+    commit = str(build["commit"])[:12]
+    base = str(build["base"])[:12]
+    after = build["commits_after_base"]
+    return rf"commit \texttt{{{commit}}} ({after} after \texttt{{{base}}})"
+
+
 def library_files(root: Path = REPO) -> list[str]:
     """The files the Python module and the C library are built from, relative to ``root``."""
     files: list[str] = []

@@ -67,9 +67,10 @@ def test_platform_label_omits_the_kernel_release_and_the_hostname():
 
 
 def test_python_and_rust_cpu_model_agree():
+    cargo = Path(sys.executable).parent / "cargo"
     proc = subprocess.run(
         [
-            "cargo",
+            str(cargo) if cargo.is_file() else "cargo",
             "test",
             "--offline",
             "--lib",
