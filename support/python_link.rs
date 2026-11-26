@@ -11,7 +11,7 @@ use pyo3_build_config::InterpreterConfig;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PythonLinkPlan {
     pub args: Vec<String>,
-    /// Non-link `cargo:` lines from a suppressed config. Printed unchanged.
+    /// Non-link cargo directives from a suppressed config. Printed unchanged.
     pub passthrough: Vec<String>,
 }
 
@@ -160,73 +160,244 @@ pub fn require_single_line(what: &str, value: &str) {
     }
 }
 
+/// True when `line` is a cargo directive that changes how a target is linked.
+pub fn affects_linking(line: &str) -> bool {
+    let Some(body) = cargo_body(line) else {
+        return false;
+    };
+    let key = body.split_once('=').map(|(key, _)| key).unwrap_or(body);
+    link_affecting(key)
+}
+
 fn suppressed_plan(lines: &[String], os: &str, env_name: &str) -> PythonLinkPlan {
     let mut args = Vec::new();
     let mut passthrough = Vec::new();
     for line in lines {
-        if let Some(flag) = line.strip_prefix("cargo:rustc-link-arg-tests=") {
-            args.push(flag.to_string());
+        let Some(body) = cargo_body(line) else {
             continue;
-        }
-        if let Some(flag) = line.strip_prefix("cargo:rustc-link-arg-benches=") {
-            args.push(flag.to_string());
-            continue;
-        }
-        if let Some(flag) = line.strip_prefix("cargo:rustc-link-arg=") {
-            args.push(flag.to_string());
-            continue;
-        }
-        if let Some(spec) = line.strip_prefix("cargo:rustc-link-lib=") {
-            args.extend(flags_from_link_lib(spec, os, env_name));
-            continue;
-        }
-        if let Some(spec) = line.strip_prefix("cargo:rustc-link-search=") {
-            if let Some(flag) = flag_from_link_search(spec, os, env_name) {
-                args.push(flag);
+        };
+        let Some((key, value)) = body.split_once('=') else {
+            if link_affecting(body) {
+                reject_unscoped(line);
             }
+            passthrough.push(line.clone());
+            continue;
+        };
+        if !link_affecting(key) {
+            passthrough.push(line.clone());
             continue;
         }
-        if line.starts_with("cargo:rustc-link")
-            || line.starts_with("cargo:rustc-cdylib-link-arg=")
-            || line.starts_with("cargo:rustc-link-arg-")
-        {
-            panic!("refusing to apply a pyo3 link directive outside tests and benches: {line}");
-        }
-        if line.starts_with("cargo:") {
-            passthrough.push(line.clone());
+        match scope_link_directive(key, value, os, env_name) {
+            Ok(flags) => args.extend(flags),
+            Err(()) => reject_unscoped(line),
         }
     }
     PythonLinkPlan { args, passthrough }
 }
 
-fn flags_from_link_lib(spec: &str, os: &str, env_name: &str) -> Vec<String> {
-    let (kind, name) = spec.split_once('=').unwrap_or(("", spec));
-    let name = name.rsplit_once(':').map(|(_, real)| real).unwrap_or(name);
-    if name.is_empty() {
-        return Vec::new();
-    }
-    if kind == "framework" {
-        return vec!["-framework".to_string(), name.to_string()];
-    }
-    if is_msvc(os, env_name) {
-        return vec![format!("{name}.lib")];
-    }
-    if kind == "static" {
-        return static_unix_flags(name);
-    }
-    vec![format!("-l{name}")]
+fn reject_unscoped(line: &str) -> ! {
+    panic!(
+        "refusing to apply a pyo3 link directive that cannot be scoped to tests and benches: {line}"
+    );
 }
 
-fn flag_from_link_search(spec: &str, os: &str, env_name: &str) -> Option<String> {
-    let (kind, path) = spec.split_once('=').unwrap_or(("native", spec));
-    let path = nonempty(Some(path))?;
+fn cargo_body(line: &str) -> Option<&str> {
+    if let Some(rest) = line.strip_prefix("cargo::") {
+        return Some(rest);
+    }
+    line.strip_prefix("cargo:")
+}
+
+fn link_affecting(key: &str) -> bool {
+    key == "rustc-flags"
+        || key == "rustc-cdylib-link-arg"
+        || key.starts_with("rustc-link-")
+        || key.starts_with("rustc-cdylib-link-")
+}
+
+fn scope_link_directive(
+    key: &str,
+    value: &str,
+    os: &str,
+    env_name: &str,
+) -> Result<Vec<String>, ()> {
+    if value.is_empty() {
+        return Err(());
+    }
+    match key {
+        "rustc-link-arg"
+        | "rustc-link-arg-tests"
+        | "rustc-link-arg-benches"
+        | "rustc-link-arg-bins"
+        | "rustc-link-arg-examples"
+        | "rustc-link-arg-cdylib"
+        | "rustc-link-arg-staticlib"
+        | "rustc-cdylib-link-arg" => Ok(vec![value.to_string()]),
+        "rustc-link-arg-bin" => {
+            let (bin, flag) = value.split_once('=').ok_or(())?;
+            if bin.is_empty() || flag.is_empty() {
+                return Err(());
+            }
+            Ok(vec![flag.to_string()])
+        }
+        "rustc-link-lib" => flags_from_link_lib(value, os, env_name),
+        "rustc-link-search" => Ok(vec![flag_from_link_search(value, os, env_name)?]),
+        "rustc-flags" => flags_from_rustc_flags(value, os, env_name),
+        _ => Err(()),
+    }
+}
+
+struct ParsedLib<'a> {
+    kind: &'a str,
+    name: &'a str,
+    verbatim: bool,
+    whole_archive: bool,
+}
+
+fn parse_link_lib(spec: &str) -> Result<ParsedLib<'_>, ()> {
+    let (kind_part, name_part) = match spec.split_once('=') {
+        Some((kind, name)) => (kind, name),
+        None => ("", spec),
+    };
+    let (kind, modifiers) = match kind_part.split_once(':') {
+        Some((kind, mods)) => (kind, mods),
+        None => (kind_part, ""),
+    };
+    let name = match name_part.split_once(':') {
+        Some((name, rename)) if !name.is_empty() && !rename.is_empty() => name,
+        _ => name_part,
+    };
+    if name.is_empty() || !matches!(kind, "" | "dylib" | "static" | "framework") {
+        return Err(());
+    }
+    let mut verbatim = false;
+    let mut whole_archive = false;
+    if !modifiers.is_empty() {
+        for modifier in modifiers.split(',') {
+            if modifier.len() < 2 {
+                return Err(());
+            }
+            let (sign, body) = modifier.split_at(1);
+            let enable = match sign {
+                "+" => true,
+                "-" => false,
+                _ => return Err(()),
+            };
+            match body {
+                "verbatim" => verbatim = enable,
+                "whole-archive" => whole_archive = enable,
+                "bundle" | "as-needed" => {}
+                _ => return Err(()),
+            }
+        }
+    }
+    if kind == "framework" && whole_archive {
+        return Err(());
+    }
+    Ok(ParsedLib {
+        kind,
+        name,
+        verbatim,
+        whole_archive,
+    })
+}
+
+fn flags_from_link_lib(spec: &str, os: &str, env_name: &str) -> Result<Vec<String>, ()> {
+    let parsed = parse_link_lib(spec)?;
+    if parsed.kind == "framework" {
+        return Ok(vec!["-framework".to_string(), parsed.name.to_string()]);
+    }
     if is_msvc(os, env_name) {
-        return Some(format!("/LIBPATH:{path}"));
+        let filename = if parsed.verbatim {
+            parsed.name.to_string()
+        } else {
+            format!("{}.lib", parsed.name)
+        };
+        if parsed.whole_archive {
+            return Ok(vec![format!("/WHOLEARCHIVE:{filename}")]);
+        }
+        return Ok(vec![filename]);
+    }
+    let lib = if parsed.verbatim {
+        format!("-l:{}", parsed.name)
+    } else {
+        format!("-l{}", parsed.name)
+    };
+    if parsed.kind == "static" {
+        let mut flags = vec!["-Wl,-Bstatic".to_string()];
+        if parsed.whole_archive {
+            flags.push("-Wl,--whole-archive".to_string());
+        }
+        flags.push(lib);
+        if parsed.whole_archive {
+            flags.push("-Wl,--no-whole-archive".to_string());
+        }
+        flags.push("-Wl,-Bdynamic".to_string());
+        return Ok(flags);
+    }
+    if parsed.whole_archive {
+        return Ok(vec![
+            "-Wl,--whole-archive".to_string(),
+            lib,
+            "-Wl,--no-whole-archive".to_string(),
+        ]);
+    }
+    Ok(vec![lib])
+}
+
+fn flag_from_link_search(spec: &str, os: &str, env_name: &str) -> Result<String, ()> {
+    let (kind, path) = spec.split_once('=').unwrap_or(("native", spec));
+    if !matches!(
+        kind,
+        "" | "native" | "dependency" | "crate" | "all" | "framework"
+    ) {
+        return Err(());
+    }
+    let Some(path) = nonempty(Some(path)) else {
+        return Err(());
+    };
+    if is_msvc(os, env_name) {
+        if kind == "framework" {
+            return Err(());
+        }
+        return Ok(format!("/LIBPATH:{path}"));
     }
     if kind == "framework" {
-        return Some(format!("-F{path}"));
+        Ok(format!("-F{path}"))
+    } else {
+        Ok(format!("-L{path}"))
     }
-    Some(format!("-L{path}"))
+}
+
+fn flags_from_rustc_flags(value: &str, os: &str, env_name: &str) -> Result<Vec<String>, ()> {
+    let mut tokens = value.split_whitespace();
+    let mut flags = Vec::new();
+    while let Some(token) = tokens.next() {
+        let (kind, spec) = if let Some(spec) = token.strip_prefix("-l") {
+            ("lib", spec)
+        } else if let Some(spec) = token.strip_prefix("-L") {
+            ("search", spec)
+        } else {
+            return Err(());
+        };
+        let spec = if spec.is_empty() {
+            let Some(next) = tokens.next() else {
+                return Err(());
+            };
+            if next.starts_with('-') {
+                return Err(());
+            }
+            next
+        } else {
+            spec
+        };
+        if kind == "lib" {
+            flags.extend(flags_from_link_lib(spec, os, env_name)?);
+        } else {
+            flags.push(flag_from_link_search(spec, os, env_name)?);
+        }
+    }
+    if flags.is_empty() { Err(()) } else { Ok(flags) }
 }
 
 fn lib_flags(name: &str, shared: bool, os: &str, env_name: &str) -> Vec<String> {
