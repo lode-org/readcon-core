@@ -92,13 +92,6 @@ def version_of(row: dict[str, str]) -> str:
     return row["revision"].split()[0]
 
 
-def short_commit(row: dict[str, str]) -> str:
-    token = row["revision"].split()[0]
-    if re.fullmatch(r"[0-9a-f]{7,40}", token):
-        return token[:8]
-    raise SystemExit(f"{row['arm']} revision is not a commit: {row['revision']}")
-
-
 def inputs_of(rows: list[dict[str, str]], work: str, threads: str) -> list[str]:
     present = [
         row["input"]
@@ -123,7 +116,7 @@ def full_columns(rows: list[dict[str, str]]) -> list[tuple[str, str, str]]:
         columns.append(("readcon_release", "Release", "ratio"))
     former = python_arm(rows)
     if former is not None:
-        columns.append((former, "Former", "ratio"))
+        columns.append((former, "eon.fileio", "ratio"))
     if any(row["arm"] == SVN_ARM and row["work"] == "full-frame" for row in rows):
         columns.append((SVN_ARM, "SVN", "ratio"))
     if any(row["arm"] == "ase" and row["work"] == "full-frame" for row in rows):
@@ -167,15 +160,12 @@ def full_table(rows: list[dict[str, str]]) -> str:
         body.append(" & ".join(cells) + r" \\")
     caption = (
         "Full-frame reads on one thread. "
-        "The tip column is the median time. "
-        "Each other column is that arm's median divided by the tip. "
+        "The first column is the median time. "
+        "Each other column is its median divided by the first. "
     )
-    if any(heading == "Former" for _arm, heading, _kind in columns):
-        caption += (
-            "Former is the last Python reader of eOn, the eon.fileio module, "
-            "on a full frame, "
-            "before eOn adopted readcon. "
-        )
+    if any(heading == "eon.fileio" for _arm, heading, _kind in columns):
+        caption += "The eon.fileio column is that module timed on a full frame. "
+
     if any(heading == "SVN" for _arm, heading, _kind in columns):
         caption += "SVN is the original SVN-era eOn C++ CON reader. "
     return "\n".join(
@@ -337,17 +327,19 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
         if former_name is not None
         else None
     )
-    versions = f"The tip is readcon-core {version_of(tip)}"
+    readers = [f"readcon-core {version_of(tip)}"]
     if release is not None:
-        versions += f" and the release readcon-core {version_of(release)}"
-    extras = []
+        readers.append(f"readcon-core {version_of(release)}")
     if ase is not None:
-        extras.append(f"ASE is {version_of(ase)}")
-    if former is not None:
-        extras.append(
-            f"the former reader is eOn commit \\texttt{{{short_commit(former)}}}"
+        readers.append(f"ASE {version_of(ase)}")
+    if len(readers) == 1:
+        lines.append(f"The reader is {readers[0]}.")
+    elif len(readers) == 2:
+        lines.append(f"The readers are {readers[0]} and {readers[1]}.")
+    else:
+        lines.append(
+            "The readers are " + ", ".join(readers[:-1]) + f" and {readers[-1]}."
         )
-    lines.append(versions + ("; " + ", and ".join(extras) if extras else "") + ".")
     if primary == "al_eam_md":
         temp = temperature_k()
         temp_text = f" at {temp}~K" if temp else ""
@@ -363,9 +355,9 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
         on_primary.append(f"readcon is {cell_value(ase, 'ratio')} times as fast as ASE")
     if former is not None and primary == "al_eam_md" and former.get("ratio_over_tip"):
         on_primary.append(
-            "the former eOn reader takes "
+            "the eon.fileio reader takes "
             f"{cell_value(former, 'ratio')} times "
-            "as long as the tip"
+            "as long as readcon-core"
         )
     if on_primary:
         lines.append("On that trajectory " + ", and ".join(on_primary) + ".")
@@ -383,13 +375,15 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
     if release is not None:
         tip_s = Decimal(tip["median_s"])
         release_s = Decimal(release["median_s"])
+        tip_name = f"readcon-core {version_of(tip)}"
+        release_name = f"readcon-core {version_of(release)}"
         if tip_s == release_s:
-            lines.append("The tip and the release have the same median.")
+            lines.append(f"{tip_name} and {release_name} have the same median.")
         else:
             faster, slower = (
-                ("the release", "the tip")
+                (release_name, tip_name)
                 if release_s < tip_s
-                else ("the tip", "the release")
+                else (tip_name, release_name)
             )
             gap = (abs(tip_s - release_s) / max(tip_s, release_s) * 100).quantize(
                 Decimal("0.1"), rounding=ROUND_HALF_EVEN
@@ -417,8 +411,11 @@ def prose(rows: list[dict[str, str]]) -> list[str]:
     )
     if many is not None:
         lines.append(
-            f"On {many['threads']} threads the small \\texttt{{cuh2\\_band}} file "
-            "is slower than its one-thread coordinate read."
+            f"On {many['threads']} threads the coordinate read of "
+            f"\\texttt{{{tex_name('cuh2_band')}}} "
+            f"({one['n_frames']} frames of {one['n_atoms']} atoms) takes "
+            f"{show_time(many['median_s'])}, against {show_time(one['median_s'])} "
+            "on one thread."
         )
     return lines
 

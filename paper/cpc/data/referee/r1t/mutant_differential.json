@@ -1,0 +1,229 @@
+{
+  "script": "paper/cpc/scripts/mutant_differential.py",
+  "kind": "edited_input_differential",
+  "spec": {
+    "path": "docs/orgmode/spec.org",
+    "version": "3.1",
+    "sha256": "ff86b93bfcbdf97e4ddf216a67891c3903ec9272dfe980b7f9978e4dbea6bcbd"
+  },
+  "corpus": "paper/cpc/data/corpus31",
+  "seed_files": 132,
+  "max_bytes": 4000,
+  "alphabet": [
+    " ",
+    "\t",
+    "\n",
+    "\r\n",
+    "0",
+    "1",
+    "7",
+    "8",
+    "-",
+    ".",
+    "e",
+    "{",
+    "}",
+    "[",
+    "]",
+    "\"",
+    ",",
+    ":",
+    "Velocities of Component 1",
+    "Coordinates of Component 1",
+    "\"sections\":[\"velocities\"]",
+    "\"con_spec_minor\":2",
+    "\"section_arity\":{\"stress\":2}",
+    "180",
+    "0.0",
+    "H",
+    "Pt",
+    "\"validate\":true",
+    "\"time\":\"fs\",",
+    "\nPt\nVelocities of Component 1\n0 0 0 0 0\n"
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "cases_per_seed": 3000,
+  "compared": "verdict, and the frame count of an accept or the class of a rejection",
+  "per_seed": [
+    {
+      "seed": 1,
+      "same": 2989,
+      "differ": 11
+    },
+    {
+      "seed": 2,
+      "same": 2989,
+      "differ": 11
+    },
+    {
+      "seed": 3,
+      "same": 2983,
+      "differ": 17
+    },
+    {
+      "seed": 4,
+      "same": 2990,
+      "differ": 10
+    },
+    {
+      "seed": 5,
+      "same": 2982,
+      "differ": 18
+    },
+    {
+      "seed": 6,
+      "same": 2987,
+      "differ": 13
+    },
+    {
+      "seed": 7,
+      "same": 2981,
+      "differ": 19
+    }
+  ],
+  "totals": {
+    "cases": 21000,
+    "same": 20901,
+    "differ": 99,
+    "unexplained": 0
+  },
+  "groups": [
+    {
+      "group": "legacy velocity block lookahead",
+      "count": 93,
+      "pairs": {
+        "reject InvalidNumberFormat / reject IncompleteSection": 53,
+        "reject InvalidNumberFormat / reject InvalidUnits": 23,
+        "reject InvalidNumberFormat / reject InvalidVectorLength": 14,
+        "reject InvalidNumberFormat / reject InvalidFixedFlag": 3
+      },
+      "example": {
+        "seed": 1,
+        "case": 19,
+        "file": "v31_label_velocities_01.convel",
+        "input": "corpus31 secetion label Velocities of Component 01\n{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\",\"mass\":\"amu\",\"time\":\"fs\"},\"secons\":[\"velocities\"]}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0 0\n1\n2\n195.084\nPt\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n2.5 2.5 0.0 0 1\n\nPt\nVelocities of Component 01\n0.01 0.0 0.0 0 0\n0.0 -0.02 0.0 0\"section_arity\":{\"stress\":2} 1\n",
+        "indep_reader": {
+          "verdict": "reject",
+          "class": "InvalidNumberFormat",
+          "line": 16,
+          "clause": "CON-num.8",
+          "message": "cell length 'Velocities'"
+        },
+        "readcon": {
+          "verdict": "reject",
+          "class": "IncompleteSection",
+          "line": null,
+          "message": "file ended unexpectedly while reading velocities section"
+        }
+      },
+      "rule": "CON-frame.5 allows an optional legacy velocity section after coordinates when 'sections' is absent, and CON-section.4 gives each component block a symbol line, a label and one row per atom, while CON-frame.7 opens the next frame if no section follows. Neither clause specifies how far a reader must probe past the blank line before committing to a velocity section: readcon probes only two lines ahead (a non-blank symbol line not starting with '{' followed by a line containing the consecutive words 'of' and 'component', src/parser.rs::section_follows) and commits to parsing a velocity block, whereas the independent reader checks all component headers and five-field velocity rows before committing (indep_reader.py::legacy_block).",
+      "variant": "the independent reader using readcon's two-line probe before committing to a legacy velocity block",
+      "cases_stored": false,
+      "cases": 93
+    },
+    {
+      "group": "zero-sine tolerance in CON-cell.6",
+      "count": 3,
+      "pairs": {
+        "reject IncompleteSection / reject ValidationError": 2,
+        "reject InvalidCount / reject ValidationError": 1
+      },
+      "example": {
+        "seed": 3,
+        "case": 13,
+        "file": "v2_pbc_absent.con",
+        "input": "corpus31 version 2 without pbc\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 900.0\n0 0\n0 0 0\n1\"validate\":true\n2\n195.084\nPt\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n2.5 2.5 0.0 0 1\n",
+        "indep_reader": {
+          "verdict": "reject",
+          "class": "InvalidCount",
+          "line": 7,
+          "clause": "CON-error.3",
+          "message": "count '1\"validate\":true'"
+        },
+        "readcon": {
+          "verdict": "reject",
+          "class": "ValidationError",
+          "line": null,
+          "message": "CON validation failed: cell angles do not determine a real c vector"
+        }
+      },
+      "rule": "CON-cell.6 derives the c lattice vector from (alpha, beta, gamma) by dividing by sin(gamma) and requires real lattice vectors without prescribing a binary64 zero tolerance on sin(gamma). For angles such as gamma = 900.0 degrees, sin(5*pi) is ~6.12e-16 in binary64 rather than exact 0.0: readcon rejects |sin(gamma)| < 1e-15 as an invalid cell (src/parser.rs::validate_cell_consistency), while the independent reader checks only sin(gamma) == 0.0 (indep_reader.py::cell_matrix).",
+      "variant": "the independent reader rejecting |sin(gamma)| < 1e-15 in CON-cell.6",
+      "cases_stored": false,
+      "cases": 3
+    },
+    {
+      "group": "negative con_spec_version",
+      "count": 3,
+      "pairs": {
+        "reject UnsupportedVersion / reject InvalidMetadataJson": 3
+      },
+      "example": {
+        "seed": 5,
+        "case": 2028,
+        "file": "v31_units_string.con",
+        "input": "corpus31 units string\n{\"con_spec_version\":-3,\"con_spec_minor\":1,\"units\":\"angstrom\",\"sections\":[]}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0 0\n1\n2\n195.084\nPt\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n2.5 2.5 0.0 0 1\n",
+        "indep_reader": {
+          "verdict": "reject",
+          "class": "UnsupportedVersion",
+          "line": 2,
+          "clause": "CON-line2.6",
+          "message": "con_spec_version -3 is no known major"
+        },
+        "readcon": {
+          "verdict": "reject",
+          "class": "InvalidMetadataJson",
+          "line": null,
+          "message": "invalid JSON metadata on line 2: con_spec_version must be a JSON integer, the major version"
+        }
+      },
+      "rule": "CON-line2.4 requires con_spec_version to be an integer major version, and CON-line2.5 / CON-line2.6 classify unsupported version majors as UnsupportedVersion; neither clause states whether a negative integer such as -3 is a malformed version field or an unsupported major. readcon parses the major as an unsigned integer and rejects negative integers as InvalidMetadataJson, whereas the independent reader parses any signed integer and rejects negatives as UnsupportedVersion.",
+      "variant": "the independent reader rejecting negative con_spec_version integers as InvalidMetadataJson",
+      "cases_stored": false,
+      "cases": 3
+    }
+  ],
+  "provenance": {
+    "build": {
+      "readcon_version": "0.24.0",
+      "readcon_module": "paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
+      "readcon_module_sha256": "08c3e715af621bf6e9936b2ee0f048e43413785bb2b15c2826da68de104dd634",
+      "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+      "newer_sources": [],
+      "library_digest": "7ea0ca4523de8e767ea5bce435d1f4613acd32bc7de4db6e58a06a81c0923807",
+      "source_files": 54,
+      "source_tag": null,
+      "source_commit": "d1de6693250610350e7925bdc422662116e5fac9"
+    },
+    "host": {
+      "kernel": "6.12.113+",
+      "uname_m": "x86_64",
+      "nproc": 8,
+      "family": "6",
+      "model": "207",
+      "cpu_model": "Intel Xeon Processor",
+      "mhz": 2400.0,
+      "mem_kb": 49342816
+    },
+    "peers": {
+      "ase": "3.29.0",
+      "chemfiles": "0.10.4",
+      "MDAnalysis": "2.11.0",
+      "h5py": "3.16.0",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "ovito": "3.17.2",
+      "openbabel": "3.2.1",
+      "python": "3.12.16"
+    }
+  },
+  "regenerate": "paper/cpc/scripts/mutant_differential.py"
+}

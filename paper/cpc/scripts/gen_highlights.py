@@ -19,6 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = ROOT / "src" / "rg_main.tex"
 OUT = ROOT / "highlights.txt"
+LIMIT = 85
 
 
 def items(main: str) -> list[str]:
@@ -36,23 +37,48 @@ def render() -> str:
     return "\n".join(items(MAIN.read_text())) + "\n"
 
 
+def problems(main: str, stored: str) -> list[str]:
+    """``stored`` is not the highlights of ``main``, or a line exceeds the CPC limit."""
+    lines = items(main)
+    got = [line.strip() for line in stored.splitlines() if line.strip()]
+    bad = []
+    if got != lines:
+        bad.append(
+            f"{OUT.name} differs from the highlights of {MAIN.name}; run gen_highlights.py"
+        )
+    bad += [
+        f"highlight of {len(line)} characters ({LIMIT} allowed): {line!r}"
+        for line in lines
+        if len(line) > LIMIT
+    ]
+    return bad
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "--check", action="store_true", help="fail when highlights.txt differs"
+        "--check",
+        action="store_true",
+        help="fail when highlights.txt differs or a line exceeds 85 characters",
     )
     args = parser.parse_args()
-    text = render()
     if args.check:
-        if OUT.read_text() != text:
-            print(
-                f"{OUT.name} differs from the highlights of {MAIN.name}; run gen_highlights.py",
-                file=sys.stderr,
-            )
+        bad = problems(MAIN.read_text(), OUT.read_text())
+        if bad:
+            print("\n".join(bad), file=sys.stderr)
             return 1
         print(f"{OUT.name} matches the highlights of {MAIN.name}")
         return 0
-    OUT.write_text(text)
+    lines = items(MAIN.read_text())
+    bad = [
+        f"highlight of {len(line)} characters ({LIMIT} allowed): {line!r}"
+        for line in lines
+        if len(line) > LIMIT
+    ]
+    if bad:
+        print("\n".join(bad), file=sys.stderr)
+        return 1
+    OUT.write_text("\n".join(lines) + "\n")
     print(f"wrote {OUT.relative_to(ROOT.parents[1])}")
     return 0
 

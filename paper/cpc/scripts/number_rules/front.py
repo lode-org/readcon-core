@@ -10,7 +10,7 @@ from pathlib import Path
 
 import scipy.constants
 from scipy.constants import _codata
-from numbers_lib import Rule, grep, jget, text
+from numbers_lib import Rule, grep, jget, rows, text
 
 DOC = "rg_main.tex"
 SUPP = "rg_supp.tex"
@@ -90,6 +90,45 @@ def spec_version(version: str) -> float:
     return float(
         grep(SPEC, rf"^\|\s*({re.escape(version)})\s*\|\s*\d{{4}}-\d{{2}}-\d{{2}}\s*\|")
     )
+
+
+def safety_version(label: str) -> float:
+    """``major.minor`` of one case in ``scripts/version_safety.py``."""
+    minor = re.search(
+        rf'"{re.escape(label)}".{{0,500}}?"con_spec_minor": (\d+)',
+        text("scripts/version_safety.py"),
+        re.S,
+    )
+    if minor is None:
+        raise SystemExit(f"scripts/version_safety.py has no case {label}")
+    major = label.split(".", 1)[0]
+    return float(f"{major}.{minor.group(1)}")
+
+
+def ecosystem_summary() -> str:
+    """The newest paper copy of the bench exchange summary."""
+    from gen_ecosystem_exchange_macros import paper_summary_rel
+
+    return paper_summary_rel()
+
+
+def ecosystem_powers() -> list[tuple[int, int]]:
+    """Atom counts of the exchange summary that the prose prints as ``10^k``."""
+    counts: list[int] = []
+    for record in rows(ecosystem_summary()):
+        count = int(record["n_atoms"])
+        if count not in counts:
+            counts.append(count)
+    powers = []
+    for count in counts:
+        exponent = 0
+        value = count
+        while value % 10 == 0 and value > 1:
+            value //= 10
+            exponent += 1
+        if value == 1:
+            powers.append((exponent, count))
+    return powers
 
 
 def variance_contours() -> list[float]:
@@ -238,11 +277,42 @@ RULES: list[Rule] = [
         (f"{DOC}~2\\^\\{{64\\}}-1", f"{SUPP}~2\\^\\{{64\\}}-1"),
     ),
     Rule(
+        "-1",
+        -1,
+        "/src/correspondence.rs",
+        "exponent of the cell-matrix inverse in the minimum-image displacement",
+        (f"{DOC}~H\\^{{-1}}",),
+    ),
+    Rule(
+        "47",
+        int(grep("/bench/ecosystem/README.md", r"Memory: (\d+) GiB")),
+        "/bench/ecosystem/README.md",
+        "memory of the ecosystem exchange host",
+        (f"{DOC}~47~GiB",),
+    ),
+    Rule(
         "3.1",
         spec_version("3.1"),
         SPEC,
         "version column of the spec version-history table",
-        (DOC,),
+        (f"{SUPP}~keeps the 3\\.1 and 3\\.3 frames",),
+    ),
+    Rule(
+        "3.3",
+        safety_version("3.3, unknown key"),
+        "scripts/version_safety.py",
+        "major 3 minor 3 case of the version-safety table",
+        (f"{SUPP}~keeps the 3\\.1 and 3\\.3 frames",),
+    ),
+    *(
+        Rule(
+            f"10^{exponent}",
+            count,
+            ecosystem_summary(),
+            f"n_atoms {count} of the ecosystem exchange",
+            (f"{DOC}~10\\^{exponent}",),
+        )
+        for exponent, count in ecosystem_powers()
     ),
     Rule(
         "0.002",

@@ -69,6 +69,7 @@ NO_BUILD = {
     ),
     "data/spec/versions.json",
     "data/spec/clause_coverage.json",
+    "data/fortran/standard-referee-r1.json",
     f"data/spec/clause_coverage-{VERSION}.json",
     *(
         f"data/spec/{p.name}"
@@ -92,6 +93,10 @@ NO_BUILD = {
     # Release metadata of eOn and of peer libraries, read from their upstream pages.
     "data/eon/readcon_pins.json",
     "data/peers/releases.json",
+    # Host timing of the ecosystem exchange. The summary carries ratios and
+    # atom counts, and it names no readcon-core build. summary-<n>.csv is a
+    # later copy of the same kind of file.
+    "data/ecosystem/summary.csv",
 }
 
 
@@ -101,6 +106,7 @@ def no_build(rel: str) -> bool:
             f"data/spec/clause_coverage-{VERSION}-",
             f"data/spec/spec-measurement-{VERSION}-",
             "data/referee_probes",
+            "data/ecosystem/summary-",
         )
     )
 
@@ -123,6 +129,20 @@ RECORD_NAMES = (
     (r"data/corpus_crosscheck\.json", "Corpus cross-check"),
     (r"data/corpus_paths\.json", "Corpus read paths"),
     (r"data/corpus31-results\.json", "CON 3.1 corpus results"),
+    (r"data/referee/r1h/corpus_crosscheck\.json", "Corpus cross-check, r1h"),
+    (r"data/referee/r1t/corpus31-results\.json", "CON 3.1 corpus results, r1t"),
+    (
+        r"data/referee/r1t/mutant_differential\.json",
+        "Mutant differential, r1t",
+    ),
+    (
+        r"data/referee/r1j/drift/drift_(?:con|extxyz)\.(?:csv|json)",
+        "OVITO drift, r1j",
+    ),
+    (
+        r"data/h2h/format_h2h_record\.json",
+        "Cross-format campaign, measured commit",
+    ),
     (r"data/every_path\.json", "Every-path count"),
     (r"data/failure/bands/", "Failure campaign, band arrays of each format"),
     (r"data/failure/con_openers\.json", "Failure campaign, CON openers"),
@@ -131,7 +151,7 @@ RECORD_NAMES = (
         "Failure campaign, extended XYZ drift",
     ),
     (
-        r"data/failure/matrix(?:-\d+\.\d+\.\d+)?\.(?:csv|json)",
+        r"data/failure/matrix(?:-\d+\.\d+\.\d+(?:-\d+)?)?\.(?:csv|json)",
         "Failure campaign, failure matrix",
     ),
     (r"data/failure/restart_bands\.json", "Failure campaign, restart bands"),
@@ -144,7 +164,7 @@ RECORD_NAMES = (
         "Failure campaign, restart formats on the {kernel} kernel set",
     ),
     (
-        r"data/failure/version_safety(?:-\d+\.\d+\.\d+)?\.(?:csv|json)",
+        r"data/failure/version_safety(?:-\d+\.\d+\.\d+(?:-\d+)?)?\.(?:csv|json)",
         "Failure campaign, version safety",
     ),
     (r"data/restart_walls/restart_walls\.(?:csv|json)", "Restart wall times"),
@@ -159,9 +179,9 @@ RECORD_NAMES = (
     ),
     (r"data/spec/spec-measurement-[^/]+\.json", "Specification measurement"),
     (r"data/spec/version_drift\.json", "Specification campaign, version drift"),
-    (r"data/survey_frame(?:-\d+\.\d+\.\d+)?\.json", "Survey frame"),
+    (r"data/survey_frame(?:-\d+\.\d+\.\d+(?:-\d+)?)?\.json", "Survey frame"),
     (r"src/figures/generated/survey_frame\.con", "Survey frame, CON text"),
-    (r"data/test_run(?:-\d+\.\d+\.\d+)?\.json", "Test run"),
+    (r"data/test_run(?:-\d+\.\d+\.\d+(?:-\d+)?)?\.json", "Test run"),
     (r"data/worked_example\.json", "Worked example"),
     (r"evidence/results/e1_restart\.json", "Evidence E1, restart"),
     (r"evidence/results/e1_restart_lbfgs_control\.json", "Evidence E1, L-BFGS control"),

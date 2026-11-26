@@ -28,6 +28,7 @@ src/figures/generated/*
 !src/figures/generated/survey_frame.con
 !src/figures/generated/restart.pdf
 !src/figures/generated/dlpack_macros.tex
+!src/figures/generated/ecosystem_exchange_macros.tex
 !src/figures/generated/version_map.tex
 !src/figures/generated/library_macros.tex
 !src/figures/generated/clauses_macros.tex
@@ -48,3 +49,4 @@ cache/
 # Records under data/ are inputs of scripts/regen_paper.py.
 # regen_paper.py and the format steps rewrite the ledgers under data/trace.
 data/trace/
+data/referee/r1h/corpus_crosscheck.csv

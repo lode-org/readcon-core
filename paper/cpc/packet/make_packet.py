@@ -141,7 +141,7 @@ def plain(tex: str, values: dict[str, str], labels: dict[str, str]) -> str:
         lambda m: "×10" + m.group(1).translate(SUPERSCRIPT),
         text,
     )
-    text = re.sub(r"\\\((.*?)\\\)", r"\1", text, flags=re.S)
+    text = re.sub(r"\\\((.*?)\\\)", r"\1", text, flags=re.DOTALL)
     text = re.sub(
         r"\{\\'([A-Za-z])\}|\\'\{?([A-Za-z])\}?",
         lambda m: unicodedata.normalize("NFC", (m.group(1) or m.group(2)) + "\u0301"),
@@ -173,13 +173,88 @@ def plain(tex: str, values: dict[str, str], labels: dict[str, str]) -> str:
     return text
 
 
+def manuscript_front(main: str) -> dict[str, str | int]:
+    """Title, abstract and keywords as the form prints them, from ``rg_main.tex``.
+
+    Word and character counts are ``check_manuscript.words`` and the length of the
+    expanded abstract.  This does not read the pdfTeX logs or the aux file.
+    """
+    values = cm.macros()
+    labels: dict[str, str] = {}
+    title_m = re.search(r"\\title\{(.*?)\}", main, re.DOTALL)
+    abstract_m = re.search(
+        r"\\begin\{abstract\}(.*?)\\end\{abstract\}", main, re.DOTALL
+    )
+    keyword_m = re.search(r"\\begin\{keyword\}(.*?)\\end\{keyword\}", main, re.DOTALL)
+    if not title_m or not abstract_m or not keyword_m:
+        refuse(["rg_main.tex is missing a title, abstract or keyword environment"])
+    abstract_tex = abstract_m.group(1)
+    abstract = plain(abstract_tex, values, labels)
+    keywords = [
+        plain(part, values, labels)
+        for part in keyword_m.group(1).split(r"\sep")
+        if part.strip()
+    ]
+    used = sorted(set(re.findall(r"\\(\w+)", abstract_tex)) & set(values))
+    return {
+        "title": plain(title_m.group(1), values, labels),
+        "abstract": abstract,
+        "keywords": "; ".join(keywords),
+        "keyword_count": len(keywords),
+        "words": cm.words(abstract_tex, values),
+        "chars": len(abstract),
+        "macro_list": ", ".join(
+            f"`\\{name}` = {plain(values[name], values, labels)}" for name in used
+        ),
+    }
+
+
+def front_problems(packet: str, main: str | None = None) -> list[str]:
+    """Where CPC-FORM.md's title, abstract or keywords differ from ``rg_main.tex``."""
+    got = manuscript_front(main if main is not None else cm.MAIN.read_text())
+    problems: list[str] = []
+    title = re.search(r"^\*\*Title:\*\* (.+)$", packet, re.MULTILINE)
+    if not title or title.group(1) != got["title"]:
+        problems.append("CPC-FORM.md title differs from rg_main.tex")
+    keywords = re.search(r"^\*\*Keywords:\*\* (.+)$", packet, re.MULTILINE)
+    if not keywords or keywords.group(1) != got["keywords"]:
+        problems.append("CPC-FORM.md keywords differ from rg_main.tex")
+    fenced = re.search(r"```\n(.*)\n```", packet, re.DOTALL)
+    if not fenced or fenced.group(1) != got["abstract"]:
+        problems.append("CPC-FORM.md abstract differs from rg_main.tex")
+    header = re.search(
+        r"\*\*Abstract:\*\* plain text, (\d+) characters, (\d+) words"
+        r".*?counts\s+(\d+) in the TeX source",
+        packet,
+        re.DOTALL,
+    )
+    if (
+        not header
+        or int(header.group(1)) != got["chars"]
+        or int(header.group(2)) != got["words"]
+        or int(header.group(3)) != got["words"]
+    ):
+        shown = header.groups() if header else ()
+        problems.append(
+            "CPC-FORM.md abstract counts differ from check_manuscript.py: "
+            f"form={shown}, manuscript=({got['chars']}, {got['words']})"
+        )
+    row = re.search(r"^\| Keywords \|.*\| (\d+): (.+)\. \|$", packet, re.MULTILINE)
+    if not row or (int(row.group(1)), row.group(2)) != (
+        got["keyword_count"],
+        got["keywords"],
+    ):
+        problems.append("CPC-FORM.md keyword row differs from rg_main.tex")
+    return problems
+
+
 def section(main: str, heading: str) -> str:
     found = re.search(
         r"\\section\*\{"
         + re.escape(heading)
         + r"\}(.*?)(?=\\section|\\FloatBarrier|\\end\{document\})",
         main,
-        re.S,
+        re.DOTALL,
     )
     if not found:
         refuse([f"rg_main.tex has no section {heading!r}"])
@@ -332,7 +407,7 @@ def pdftex_producer(info: str) -> bool:
     Tectonic 0.17.0 paginates ``rg_supp.pdf`` to 99 pages. TeX Live pdfTeX
     paginates it to 98. CPC-FORM.md records the pdfTeX counts and digests.
     """
-    producer = re.search(r"^Producer:\s*(.*)$", info, re.M)
+    producer = re.search(r"^Producer:\s*(.*)$", info, re.MULTILINE)
     return producer is not None and "pdfTeX" in producer.group(1)
 
 
@@ -365,7 +440,7 @@ def pdf_fields(name: str, pdf: Path) -> tuple[int, str, bool]:
     not checked against anything, and the third value is False.
     """
     info = pdf_info(pdf)
-    pages = int(re.search(r"^Pages:\s+(\d+)$", info, re.M).group(1))
+    pages = int(re.search(r"^Pages:\s+(\d+)$", info, re.MULTILINE).group(1))
     digest = cm.sha256(pdf)
     if pdftex_producer(info):
         return pages, digest, True
@@ -425,7 +500,7 @@ def check_release(version: str, concept: str) -> list[str]:
     Cargo.toml are checked by the paper revision test.
     """
     cargo = re.search(
-        r'^version = "([^"]+)"', (REPO / "Cargo.toml").read_text(), re.M
+        r'^version = "([^"]+)"', (REPO / "Cargo.toml").read_text(), re.MULTILINE
     ).group(1)
     bad = []
     if re.fullmatch(r"\d+\.\d+\.\d+", version) is None:
@@ -433,7 +508,7 @@ def check_release(version: str, concept: str) -> list[str]:
     zenodo = json.loads((REPO / ".zenodo.json").read_text())
     codemeta = json.loads((REPO / "codemeta.json").read_text())
     citation = (REPO / "CITATION.cff").read_text()
-    cff_version = re.search(r"^version:\s*(\S+)", citation, re.M)
+    cff_version = re.search(r"^version:\s*(\S+)", citation, re.MULTILINE)
     bad.extend(
         f"{name} is version {found}; Cargo.toml is {cargo}"
         for name, found in (
@@ -498,7 +573,7 @@ def render(draft: bool = False) -> tuple[dict[str, str], str]:
         refuse([f"vertical rule in {item}" for item in tables])
 
     abstract_tex = re.search(
-        r"\\begin\{abstract\}(.*?)\\end\{abstract\}", main_tex, re.S
+        r"\\begin\{abstract\}(.*?)\\end\{abstract\}", main_tex, re.DOTALL
     ).group(1)
     abstract = plain(abstract_tex, values, labels)
     if len(abstract) > ARXIV_CHARACTERS:
@@ -515,7 +590,9 @@ def render(draft: bool = False) -> tuple[dict[str, str], str]:
     ]
     keywords = [
         plain(k, values, labels)
-        for k in re.search(r"\\begin\{keyword\}(.*?)\\end\{keyword\}", main_tex, re.S)
+        for k in re.search(
+            r"\\begin\{keyword\}(.*?)\\end\{keyword\}", main_tex, re.DOTALL
+        )
         .group(1)
         .split(r"\sep")
     ]
@@ -553,7 +630,11 @@ def render(draft: bool = False) -> tuple[dict[str, str], str]:
         "title": title,
         "version": version,
         "commit": named["readconcommit"],
-        "commit_role": named["readconcommitrole"],
+        "commit_role": (
+            named["readconcommitrole"]
+            if named["readconcommitrole"] == "release commit"
+            else "commit that is not a release tag"
+        ),
         "tag_state": named["readcontagstate"],
         "digest": named["readcondigest"],
         "base": named["readconbase"],

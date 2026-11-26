@@ -3,7 +3,7 @@
 """Fail unless every figure the manuscript includes is a PDF on disk.
 
 regen_paper.py writes them. A clean clone runs this after ``cpc-regen``.
-There are 29 included figures.
+There are 30 included figures.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ TEXTS = (SRC / "rg_main.tex", SRC / "rg_supp.tex")
 GRAPHIC = re.compile(
     r"\\includegraphics(?:\[[^\]]*\])?\{figures/generated/([^}]+)\.pdf\}"
 )
-EXPECTED = 29
+EXPECTED = 30
 
 
 def included() -> list[str]:

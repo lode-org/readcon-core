@@ -56,6 +56,7 @@ FIGURES: dict[str, tuple[str, tuple[str, ...]]] = {
     "db_query_latency": ("plot_restored", (SUMMARY,)),
     "dedup_graph": ("plot_restored", ("data/novel/dedup_graph.json",)),
     "dlpack": ("plot_restored", ("data/dlpack_cost.txt",)),
+    "ecosystem": ("fig_ecosystem", ()),
     "error_classes": ("plot_restored", ("data/novel/errors.json",)),
     "format_pareto": ("plot_format_pareto", ()),
     "fairness_ratios": ("plot_restored", (READS,)),
@@ -101,7 +102,6 @@ OTHER_FIGURES: dict[str, tuple[str, tuple[str, ...]]] = {
     "velocity_quiver": ("plot_supp", ("bench/results/velocity_case.json",)),
     "threads": ("plot_union_extra", ("bench/results/threads_summary.csv",)),
     "matrix": ("plot_union_extra", ("data/failure/matrix.csv",)),
-    "ecosystem": ("fig_ecosystem", ()),
 }
 
 # Drawn only when its band is in the tree. No figure of the paper uses it.

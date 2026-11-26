@@ -1,0 +1,11 @@
+variant,rule,python,python_class,python_line,python_time_unit,python_override_warning,python_rewrite,python_rewrite_time_unit,python_kept_unknown_key,c_abi
+"3.1, natural unit declared","accept, natural unit",accept,-,-,natural,no,3.1,(amu*angstrom^2/eV)^0.5,-,accept
+"3.1, no time unit","accept, natural unit",accept,-,-,natural,no,3.1,(amu*angstrom^2/eV)^0.5,-,accept
+"3.0, labelled fs","accept, natural unit, rewrite 4.0.5",accept,-,-,natural,no,4.0.5,(u*Å^2/eV)^0.5,-,accept
+"3.3, unknown key","accept, keep key",accept,-,-,natural,no,3.3,(amu*angstrom^2/eV)^0.5,yes,accept
+4.0,"accept, authoritative unit",accept,-,-,natural,no,4.0.5,(u*Å^2/eV)^0.5,-,accept
+"4.0, no time unit",reject InvalidUnits,reject,InvalidUnits,-,-,-,-,-,-,reject
+"4.0, labelled fs","accept, authoritative unit",accept,-,-,fs,no,4.0.5,fs,-,accept
+5.0,reject UnsupportedVersion,reject,UnsupportedVersion,-,-,-,-,-,-,reject
+missing version,reject MissingSpecVersion,reject,MissingSpecVersion,-,-,-,-,-,-,reject
+"3.1, mask 9",reject InvalidFixedFlag,reject,InvalidFixedFlag,-,-,-,-,-,-,reject

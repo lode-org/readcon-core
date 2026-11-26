@@ -101,20 +101,20 @@ belowskip=0.4em
 \AtBeginDocument{\renewcommand{\thelstlisting}{S\arabic{lstlisting}}}
 \hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!50!black}
 \date{\today}
-\title{Supplementary material: CON 3.1 and readcon-core}
+\title{Supplementary material: CON 4 and readcon-core}
 \hypersetup{
  pdfauthor={Rohit Goswami},
- pdftitle={Supplementary material: CON 3.1 and readcon-core},
+ pdftitle={Supplementary material: CON 4 and readcon-core},
  pdfkeywords={geometry checkpoint, file format specification, saddle search, conformance corpus},
  pdfsubject={},
  pdflang={English}}
 \begin{document}
 % snapper:on
 
-\begin{frontmatter} \input{authors.tex} \begin{abstract} This supplement gives the normative specification of CON 3.1.
-CON is a geometry format used in eOn, ASE and other codes, and CON 3.1 formalizes and extends it.
+\begin{frontmatter} \input{authors.tex} \begin{abstract} This supplement gives the normative specification of CON, typeset from the specification source of readcon-core.
+CON is a geometry format used in eOn, ASE and other codes, and CON 4 formalizes and extends it.
 The supplement gives the reader rules, the test run of the release with the source lines of each step of its reader, the CON 3.1 corpus with the cross-check and the header variants, and the survey and drift files with the mechanism given to each library.
-It also gives the records beside a checkpoint with what the specification of each format states, the restart protocol, the velocity unit and the identifiers, the timing method and tables, the measured versions, and the commands that rebuild the paper.
+It also gives the records beside a checkpoint with what the specification of each format states, the restart protocol, the velocity unit and the identifiers, the timing method and tables, the device exports, the companion packages, the measured versions, and the commands that rebuild the paper.
 \end{abstract} \end{frontmatter}
 
 The source of each generated table names the script that writes it, and Table~\ref{tab:versionmap} names the record behind each result.
@@ -126,13 +126,12 @@ We draw each restored figure from a stored record.
 We build the library from the commit named in Data availability of the manuscript, and we name no version deposit before its record exists.
 The machine line of a record gives only the architecture, the processor count and the processor string.
 
-\section{Normative specification}\label{sec:spec-normative} The typeset normative specification is \texttt{docs/orgmode/spec.org} of commit \texttt{e8abd818}, git blob \texttt{\specTextBlob}, with its version line, its date and its \specClauses{} numbered clauses.
-A script of the paper typesets that file, and its check mode fails unless the typeset text matches the file.
-The version line names readcon-core~\specTextRelease{}, and that version is not a release tag.
-The \readconcommitrole{} \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}) has specification source git blob \texttt{\rcMeasuredSpecBlob}, and that blob is not the typeset text.
-Two informative sentences of its units section round the value the parser gives the natural time unit and its difference from the value of eOn, and the supplement omits them.
+\section{Normative specification}\label{sec:spec-normative} The typeset normative specification is \texttt{docs/orgmode/spec.org}, with its version line, its date and its \specClauses{} numbered clauses.
+The typeset clauses match that source file.
+The version line names readcon-core~\specTextRelease{}.
+Commit \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}) has specification source git blob \texttt{\rcMeasuredSpecBlob}, and that blob is not the typeset text.
 The parser reads \texttt{(amu*angstrom\^{}2/eV)\^{}0.5} as the binary64 number \(\velNaturalFsBinary\,\mathrm{fs}\), eOn hard-codes \(\velEonFs\,\mathrm{fs}\), and their difference relative to the parsed value, computed in binary64, is \(\velEonRelDiff\) (Section~\ref{sec:supp-velocity}).
-readcon-core~\readconCargoVersion{} is the program this paper describes, and the reader it ships follows blob \texttt{\rcMeasuredSpecBlob}, not the typeset text.
+readcon-core~\readconCargoVersion{} is the program this paper describes, and it implements specification 4.0.5, the version that Section~\ref{sec:format} of the main text follows.
 Each clause keeps its identifier, so a clause that the corpus manifest or an error message cites has the same text in the supplement.
 The manuscript measures the clauses against the reader on the conformance corpus (Section~\ref{sec:conformance}).
 The specification also points to an informative parsing expression grammar (PEG) that the library ships, which is not reproduced.
@@ -165,7 +164,8 @@ CON-mask.4 & From version 2 the mask is an integer from 0 to 7, read by Eq.~\eqr
 CON-mask.5 & A float spelling, a sign or a value outside the set of the version is an illegal flag in every mode. \\
 \begin{tabular}[t]{@{}l@{}}CON-id.1\\CON-id.3\\CON-id.4\end{tabular} & The identifier is an integer from 0 through \(2^{64}-1\) that is never read through binary64, a writer emits identifiers unique within a frame, and a reader accepts repeated ones. \\
 \begin{tabular}[t]{@{}l@{}}CON-num.1\\CON-num.5\end{tabular} & A decimal rounds to the nearest binary64 value, and a field that spells \texttt{nan}, \texttt{inf} or \texttt{infinity} with any sign and in any case, or a decimal that rounds to an infinity, is rejected as a non-finite value in every mode. \\
-\begin{tabular}[t]{@{}l@{}}CON-units.8 to\\CON-units.10\end{tabular} & Versions 1, 2 and 3.0 are read in \texttt{units.length} per natural time unit whatever \texttt{units.time} names, and from version 3.1 \texttt{units.time} sets the unit of the velocities. \\
+\begin{tabular}[t]{@{}l@{}}CON-units.8 to\\CON-units.11\end{tabular} & Versions 1 and 2 and every minor of major 3 are read in \texttt{units.length} per natural time unit whatever \texttt{units.time} names, and an absent \texttt{units.time} does not reject them; from major 4, \texttt{units.time} sets the unit of the velocities, and a velocity section without it is rejected. \\
+\begin{tabular}[t]{@{}l@{}}CON-id.11\\CON-id.12\end{tabular} & With \texttt{ids\_persistent} true, every frame carries the same set of identifiers, each once, and an identifier names the same atom in every frame; without it, a reader does not match identifiers across frames. \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -206,12 +206,12 @@ Atom row without column 5 & Identifier is the row's zero-based position in the f
 Repeated identifier & Accepted; file order is kept. \\
 Unique identifiers & Ascending identifier is the order before grouping by type. \\
 Line 2 starts with \texttt{\{} & JSON header; otherwise version 1. \\
-\texttt{con\_spec\_version} not an integer, such as \texttt{3.5} or \texttt{"3"} & Invalid metadata. \\
+\texttt{con\_spec\_version} not a non-negative integer, such as \texttt{-3}, \texttt{3.5} or \texttt{"3"} & Invalid metadata. \\
 JSON object without \texttt{con\_spec\_version} & Rejected. \\
-JSON major other than 2 or 3, a negative one included & Unsupported version. \\
-Later minor of a known major, of any size & Accepted. \\
+JSON major 0, 1 or above 4 & Unsupported version. \\
+Later minor or patch of a known major, of any size & Accepted. \\
 \texttt{con\_spec\_minor} not a non-negative JSON integer, or repeated in the header & Invalid metadata. \\
-Major 3 without \texttt{units.length} or \texttt{units.energy} & Rejected. \\
+Major 3 or later without \texttt{units.length} or \texttt{units.energy} & Rejected. \\
 Unknown metadata key & Kept on rewrite, each number with the digits the file gave it. \\
 Unknown section at the reader's minor or earlier & Rejected. \\
 Unknown section at a later minor, width \(w\) in \texttt{section\_arity} & Skipped; each row has \(w+1\) or \(w+2\) tokens, counted and not parsed. \\
@@ -231,10 +231,12 @@ Section blocks & Read in the order \texttt{sections} lists. \\
 \toprule
 Input & Rule \\
 \midrule
-Velocity block at major 3, minor 1 or later, without \texttt{units.time} & Rejected. \\
+Velocity block at major 4 without \texttt{units.time} & Rejected as invalid units. \\
+Velocity block at major 3, any minor, without \texttt{units.time} & Accepted; natural unit. \\
 Velocity block at major 2, any minor, without \texttt{units.time} & Accepted. \\
-Velocity block of version 1, 2 or 3.0 & Natural unit, whatever time \texttt{units.time} names; the label is kept and not applied. \\
-\texttt{units.time} that is no time, such as \texttt{banana} & Invalid units, in every version. \\
+Velocity block of version 1 or 2, or of any minor of major 3 & Natural unit, whatever time \texttt{units.time} names; the label is kept and not applied. \\
+Velocity block at major 4 & In \texttt{units.time}, which is authoritative. \\
+\texttt{units.time} that is no time, such as \texttt{banana} & Invalid units at major 3 and later; not checked at major 2. \\
 No \texttt{sections} key, blank line before a complete velocity block & Velocity section. \\
 No \texttt{sections} key, any other blank line after the coordinates & Line 1 of the next frame. \\
 Cell length not positive, or angle outside the open interval to \(180^\circ\) & Rejected with \texttt{validate} true; not checked otherwise. \\
@@ -262,7 +264,7 @@ Cut that leaves a legal file, such as a last row without its identifier & Read a
 Empty first header line & User line, kept. \\
 Empty second header line & Version 1. \\
 Byte-order mark at the start of the file & Rejected. \\
-Byte-order mark at the start of a later frame & Text of line 1 of that frame. \\
+Byte-order mark at the start of a later frame & Rejected. \\
 Byte that is not UTF-8 & Rejected at the line that contains it, on every read path. \\
 Errors on more than one line & The lowest line is reported. \\
 Line of Unicode white space only, such as a form feed, a vertical tab, a no-break space or U+2003 & Blank line. \\
@@ -275,7 +277,7 @@ zstd input to a build without the \texttt{zstd} feature & Refused as unsupported
 \end{tabular}
 \end{table}
 
-\FloatBarrier \section{Test run and source lines}\label{sec:supp-testrun} Listing~\ref{lst:testrun} runs the \texttt{rust\_usage} example of the release on the file of Listing~\ref{lst:frame} in a clone of the bundle.
+\FloatBarrier \section{Test run and source lines}\label{sec:supp-testrun} Listing~\ref{lst:testrun} runs the \texttt{rust\_usage} example of readcon-core~\readconversion{} on the survey frame as that release wrote it, in a clone of the bundle.
 The program prints the cell, the counts and the first five atoms with their fixed flags, identifiers and velocities.
 A script of the paper then runs the same program on that file with line~4 replaced by the two variants of Section~\ref{sec:worked}, angles of \wkFlatAlpha, \wkFlatBeta{} and \wkFlatGamma{} degrees and of \wkNoneAlpha, \wkNoneAlpha{} and \wkNoneGamma{} degrees, each as written and with \texttt{"validate": true} in line~2.
 In both modes the program reads the flat cell and prints its angles.
@@ -347,10 +349,12 @@ No file, probe or test names CON-file.6, CON-header.1, CON-count.5, CON-count.6,
 
 \input{figures/generated/corpus_crosscheck}
 
-Table~\ref{tab:versionsafety} applies the version rule of Eq.~\eqref{eq:version} and the velocity rule of Section~\ref{sec:format} to seven headers of one velocity frame.
+Table~\ref{tab:versionsafety} applies the version rule of Eq.~\eqref{eq:version} and the velocity rule of Section~\ref{sec:format} to ten headers of one velocity frame, read by readcon-core~\readconCargoVersion{}.
 The Python module and the C library follow the rule on each row.
-They reject a velocity block of version 3.1 without a time unit, an unknown major, a header without \texttt{con\_spec\_version} and a mask of 9, keep an unknown key of a later minor, and read a CON 3.0 block labeled fs in the natural unit.
-The Python rewrite of that block stays at version 3.0 and keeps its fs label, so the next reader again applies the natural unit.
+They read a velocity block of major 3 in the natural unit, whether its header declares that unit, declares no time unit or labels it fs, and keep an unknown key of a later minor of major 3.
+They read a block of major 4 in its declared unit, the natural unit and fs alike.
+They reject a block of major 4 without a time unit, major 5, a header without \texttt{con\_spec\_version} and a mask of 9.
+The Python rewrite keeps the 3.1 and 3.3 frames at their versions and writes the 3.0 block labeled fs as a 4.0.5 frame whose time unit is the natural unit in its symbol spelling, so the fs label no longer reaches the next reader.
 
 \input{figures/generated/versionsafety_table}
 
@@ -506,8 +510,8 @@ The bar is the type 7 median.
 The repeats ran on the host of Section~\ref{sec:host}, with readcon-core at the commit named in Data availability.}
 \label{fig:timing} \end{figure*}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{Time of the main-branch full-frame read and of ASE, each divided by the time of release readcon-core, six repeats.
-The release and main-branch reads parse on all 8 cores, and ASE builds a full frame on one thread.
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{Time of the full-frame read at commit \texttt{ac4f4379} and of ASE, each divided by the time of release readcon-core, six repeats.
+The release read and the read at commit \texttt{ac4f4379} parse on all 8 cores, and ASE builds a full frame on one thread.
 The horizontal line is 1.
 A point above the line means that the release read is that many times as fast.
 eOn is not in this figure, and the coordinate read is not in it either.}
@@ -518,7 +522,7 @@ eOn is not in this figure, and the coordinate read is not in it either.}
 
 The measured commit calls \texttt{read\_positions} with no thread count, which returns only a coordinate array, and Rayon uses all 8 cores of this host, for a median of \rcTipMedian~s.
 Release \rcReleaseVersion{} calls \texttt{read\_con} with no thread count, which builds full frames and, at that release, parses a file of this size on the global Rayon pool, here all 8 cores, in \rcReleaseMedian~s.
-The main-branch build does the same in \rcBaseMedian~s.
+The build at commit \texttt{ac4f4379} does the same in \rcBaseMedian~s.
 ASE \texttt{ase.io} builds an Atoms object per frame on one thread, in \rcAseMedian~s.
 eOn 3.6.0 \texttt{loadcons} builds a frame per frame on one thread, in \rcEonMedian~s.
 The readcon rows therefore run on 8 cores and the ASE and eOn rows on one, so these medians are the host log and not the like-for-like comparison of Section~\ref{sec:like}.
@@ -571,6 +575,27 @@ Table~\ref{tab:format-h2h} gives every reader and format of the cross-format cam
 
 \input{figures/generated/format_h2h}
 
+\FloatBarrier \section{Device export}\label{sec:supp-device} Table~\ref{tab:device} lists the DLPack exports of readcon-core~\readconCargoVersion{} by caller and device.
+The borrowed builder views are CPU tensors in every build.
+The \texttt{cuda} feature allocates device memory through the CUDA driver and copies the host storage to it once, and the C exports need the \texttt{capi} and \texttt{cuda} features together.
+The atom identifiers have no CUDA export, and the Python module returns CPU NumPy views only, so a CuPy array costs one copy from the host.
+
+\begin{table}[tbp] \centering \small \caption{DLPack exports by caller, with the Cargo features that give each device.}
+\label{tab:device}
+\begin{tabular}{@{}lp{0.38\linewidth}ll@{}}
+\toprule
+Caller & Arrays & CPU & CUDA \\
+\midrule
+Rust builder, borrowed & positions, velocities, forces, per-atom energies, masses, identifiers & default & none \\
+Rust frame & positions, velocities, forces, per-atom energies & default & \texttt{cuda} \\
+C builder, managed & positions, velocities, forces, displacements, spreads, per-atom energies, masses & \texttt{capi} & \texttt{capi}, \texttt{cuda} \\
+C frame, managed & positions, velocities, forces, displacements, spreads, per-atom energies & \texttt{capi} & \texttt{capi}, \texttt{cuda} \\
+C identifiers & atom identifiers, uint64 & \texttt{capi} & none \\
+Python & NumPy views of the parsed columns & default & none \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \FloatBarrier \section{Python bindings and thread safety}\label{sec:supp-threads}
 The PyO3 module declares that it does not need the global interpreter lock (\texttt{gil\_used = false}).
 Continuous integration runs the tests on free-threaded Python \texttt{3.13t} and \texttt{3.14t}, and on the standard builds.
@@ -602,6 +627,7 @@ No Rust slice is ever formed over numeric memory that Python owns and can change
 
 \FloatBarrier \section{readcon-db and the distributed read}\label{sec:supp-readcon-db}
 readcon-db is the companion campaign store (\url{https://github.com/lode-org/readcon-db}), and this paper reports its reviewed records, whose commit pins and fidelity test Section~\ref{sec:supp-repro} names.
+readcon-db decodes each frame through readcon-core~0.21.0, which reads CON majors 1 to 3.
 The fair store comparison ingests the same 40 frames of 8 copper atoms into readcon-db and into the ASE database on one thread, twelve samples each, each insert one transaction and one commit, and each sample the mean of a 2~s span.
 readcon-db takes a median of \num{\rdbIngestMedian}~s and the ASE database takes \num{\rdbAseIngestMedian}~s.
 Type, positions, the cell lengths, angles and matrix on a triclinic cell, periodic boundary conditions, masses, fixed flags, velocities, the frame index and the unset energy (zero, with \texttt{energy\_set} false) are bit-exact in both stores, while atom ids, units and the \texttt{velocities\_set} and \texttt{pbc\_set} flags are kept only by readcon-db.
@@ -642,6 +668,23 @@ The marker is the type 7 median and the whisker is the type 7 interquartile rang
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf} \caption{A single 1-8 read-only ladder at 6 repetitions on one VM. Touch is drawn with open-only. Ranks is one read\_block on each rank, then a barrier. Dashed lines are public main ac4f4379 and solid lines are tip a2499ab6. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
 \label{fig:mpi-weak} \end{figure}
+
+\FloatBarrier \section{Companion packages}\label{sec:supp-companions} Table~\ref{tab:companions} lists the companion packages of Section~\ref{sec:ecosystem} of the main text with their languages and entry points.
+readcon-db and readcon-ops take a readcon frame, and minimage and linkcell take a cell matrix with periodic flags, which a CON frame gives through \texttt{lattice\_vectors} or through lines 3 and 4.
+
+\begin{table}[tbp] \centering \small \caption{Companion packages of readcon-core.}
+\label{tab:companions}
+\begin{tabular}{@{}lp{0.2\linewidth}p{0.22\linewidth}p{0.34\linewidth}@{}}
+\toprule
+Package & Languages & Role & Entry points \\
+\midrule
+readcon-db & Rust, C, C++, Python, Fortran & corpus store & \texttt{ConCorpus}, \texttt{select}, \texttt{frame\_hash}, \texttt{export\_h5md}, \texttt{bcast\_packed\_frames} \\
+readcon-ops & Python & frame comparison and rigid alignment & \texttt{identical}, \texttt{internal\_motion}, \texttt{spacegroup}, \texttt{rotational\_match}, \texttt{wulff\_vertices} \\
+minimage & Rust, C, C++, Python & minimum-image wrap & \texttt{Cell}, \texttt{PartialCell}, \texttt{reduce\_tilts}, \texttt{to\_restricted} \\
+linkcell & Rust, C, C++, Python & neighbor lists & \texttt{pairs\_within}, \texttt{knearest}, \texttt{pairs\_within\_csr} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored} Figures~\ref{fig:fairness} to~\ref{fig:supp-neb} are drawn from the stored records of the paper, which Data availability of the main text names, and not from the timed repeats of Section~\ref{sec:host}.
 
@@ -730,12 +773,12 @@ Nor does it list the clause-coverage record, which is read from the specificatio
 \input{figures/generated/version_map}
 
 The generated table rows the records whose printed numbers the tracer ties to a build.
-Two commits of the main branch carry parts of the measured reader: \texttt{\readconpbccommit} gives the Python binding one periodic flag per cell vector, and \texttt{\readconrcidxcommit} (pull request~\readconrcidxpr) adds the frame index.
+Two commits carry parts of the measured reader: \texttt{\readconpbccommit} gives the Python binding one periodic flag per cell vector, and \texttt{\readconrcidxcommit} (pull request~\readconrcidxpr) adds the frame index.
 The library of a commit is its Rust sources, its C headers, its Cargo build script, its Cargo manifest and lock file and its Python package manifest.
 Its digest is the SHA-256 over their \texttt{sha256sum} lines in byte order of their paths, and a record names the library it ran by that digest: \rcRecordDigestCount{} of the \rcDigestRecordCount{} records that name a library name readcon-core~\rcRecordDigestVersion{}, whose digest begins \texttt{\rcRecordDigest}, and Table~\ref*{tab:versionmap} names the library of each record it rows.
 The eOn build record names eOn commit \texttt{579738a}.
-The readcon-db records are copied verbatim from two commits on the fix/ingest-species-count branch of \url{https://github.com/lode-org/readcon-db}: the reviewed commit \texttt{ff1210e3} with the measured code at \texttt{a584a288}, and the fair-store run at readcon-db commit \texttt{227e45cf} with the measured code at \texttt{d8bf1cb5}.
-The fidelity test is the two-store fidelity test of lode-org/readcon-db at commit \texttt{0afbaa0b}, and its field table is copied with the fair-store records.
+The readcon-db records are the reviewed commit \texttt{ff1210e3} with the measured code at \texttt{a584a288}, and the fair-store run at readcon-db commit \texttt{227e45cf} with the measured code at \texttt{d8bf1cb5}, both from \url{https://github.com/lode-org/readcon-db}.
+The fidelity test is the two-store fidelity test of lode-org/readcon-db at commit \texttt{0afbaa0b}, and its field table is the table in the fair-store records.
 The equal store comparison is the fair-db32 campaign; the legacy copper-dimer bench of the reviewed records is an unequal-workload stand-in and is not that comparison.
 The five shuffled-cache campaigns of Section~\ref*{sec:supp-readcon-db} are db24, db25, db26, db28 and db29 in the order given there, and the third compares the raw read of readcon-db commit \texttt{a584a288} with an earlier commit.
 Five printed results come from records that table does not row.
@@ -743,7 +786,7 @@ The like-for-like tables are written from \path{bench-like-for-like/results/summ
 The host-log medians are written from \path{logs/reader-exchange.log}.
 The DLPack exchange is written from \path{paper/cpc/data/dlpack_cost.txt}.
 The MPI host table and its figure are written from \path{logs/mpi.log}.
-The cross-format table is written from the campaign directory named in Section~\ref{sec:h2h}.
+The cross-format table is written from the records of Section~\ref{sec:h2h}.
 
 The git bundle readcon-core.bundle of the supplementary material carries commit \texttt{\readconcommitshort} with its whole history, and the archive paper-cpc.tar.gz contains the paper directory with the scripts, the records and the TeX sources of both documents.
 That commit has no paper directory.
@@ -769,7 +812,7 @@ The scripts of those tasks hold the command lines that they run for each cell, f
 The timing scripts run their cells in interleaved rounds, one untimed round and then the timed rounds, each round a new shuffle of the cells from a fixed seed and each run of a cell a new process, and each timing record keeps its seed and its number of rounds.
 The comparison of the earlier releases of CON 3.1 reads each of the four published wheels of Section~\ref{sec:supp-versions} in its own process and rewrites its record.
 
-\begin{lstlisting}[caption={Rebuild of the paper in a checkout of the \readconcommitrole.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=false,escapeinside={(*}{*)}]
+\begin{lstlisting}[caption={Rebuild of the paper from the deposited bundle.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=false,escapeinside={(*}{*)}]
 git clone readcon-core.bundle readcon-core
 cd readcon-core
 git checkout (*\readconcommit*)

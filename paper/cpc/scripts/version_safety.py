@@ -13,9 +13,10 @@ unit is natural when the ASE velocities match the file and fs when they
 are the file velocities times the natural-to-fs factor.
 
 Writes data/failure/version_safety-<readcon version>.csv and its JSON sidecar
-with the build, host and the C library that was loaded. The unversioned
-version_safety.csv of an earlier readcon stays where it is. --out DIR writes
-the versioned files into DIR.
+with the build, host and the C library that was loaded. A later run adds
+version_safety-<version>-n and leaves the stored file byte-identical. The
+unversioned version_safety.csv of an earlier readcon stays where it is.
+--out DIR writes the versioned files into DIR.
 """
 
 from __future__ import annotations
@@ -56,9 +57,9 @@ NAT_FS = 10.180505710759414
 U = {"energy": "eV", "length": "angstrom", "mass": "amu"}
 UNKNOWN = "band_optimizer_state"
 
-# Rules follow docs/orgmode/spec.org at 4.0.4: CON-status.1, CON-line2.7,
+# Rules follow docs/orgmode/spec.org at 4.0.5: CON-status.1, CON-line2.7,
 # CON-units.8 through CON-units.11. Major 3 accepts every minor, reads
-# velocities in the natural unit, and does not reject a missing units.time.
+# velocities in the natural unit, and does not reject an absent units.time.
 # Major 4 is accepted and units.time is authoritative, so velocities without
 # it are InvalidUnits. Major 5 is UnsupportedVersion. A binding rewrite of a
 # 3.0 velocities frame labelled fs is major 4 with the symbol spelling.
@@ -87,7 +88,7 @@ VARIANTS = {
             "sections": ["velocities"],
             "units": dict(U, time="fs"),
         },
-        "accept, natural unit, rewrite 4.0.4",
+        "accept, natural unit, rewrite 4.0.5",
     ),
     "3.3, unknown key": (
         {
@@ -245,8 +246,9 @@ def assert_rule(name, header, rule, row):
         raise AssertionError(f"{name}: units.time {label} but applied {measured}")
     if "keep key" in rule and row["python_kept_unknown_key"] != "yes":
         raise AssertionError(f"{name}: dropped {UNKNOWN}")
-    if "rewrite 4.0.4" in rule:
-        if row["python_rewrite"] != "4.0.4":
+    if "rewrite " in rule:
+        expected = rule.rsplit(" ", 1)[-1]
+        if row["python_rewrite"] != expected:
             raise AssertionError(f"{name}: rewrite {row['python_rewrite']}")
         if row["python_rewrite_time_unit"] != SYMBOL:
             raise AssertionError(
@@ -333,22 +335,24 @@ def main(out_dir):
 
     rows = measure_rows()
     out_dir.mkdir(parents=True, exist_ok=True)
-    csv_name, json_name = record_names(readcon.__version__)
-    with open(out_dir / csv_name, "w", newline="") as fh:
+    _, json_name = record_names(readcon.__version__)
+    import record_chain
+
+    out_json, link = record_chain.allocate(out_dir / json_name, ROOT)
+    out_csv = out_json.with_suffix(".csv")
+    with out_csv.open("x", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]), lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
-    (out_dir / json_name).write_text(
-        json.dumps(
-            dict(
-                provenance=provenance.record(),
-                c_abi=provenance.binary_build(lib_path()),
-                source=str(SRC.relative_to(REPO)),
-            ),
-            indent=1,
-        )
-        + "\n"
+    body = dict(
+        provenance=provenance.record(),
+        c_abi=provenance.binary_build(lib_path()),
+        source=str(SRC.relative_to(REPO)),
     )
+    if link is not None:
+        body = {"supersedes": link, **body}
+    with out_json.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(body, indent=1) + "\n")
     for r in rows:
         print(r)
 

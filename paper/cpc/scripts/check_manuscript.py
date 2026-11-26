@@ -194,6 +194,65 @@ def words(text: str, values: dict[str, str]) -> int:
     return len([w for w in text.split() if re.search(r"[A-Za-z0-9]", w)])
 
 
+def packet_count_problems(main: str, packet: str) -> list[str]:
+    """The packet repeats the manuscript's abstract and summary word counts."""
+    abstract = re.search(r"\\begin\{abstract\}(.*?)\\end\{abstract\}", main, re.S)
+    actual_words = words(abstract.group(1), macros()) if abstract else -1
+    packet_abstract_counts = {
+        int(n)
+        for pattern in (
+            r"^\| Abstract \|[^\n]*\|[^\n]*\|\s*(\d+) words by",
+            r"\*\*Abstract:\*\*.*?(\d+) words",
+        )
+        for n in re.findall(pattern, packet, re.I | re.M | re.S)
+    }
+    summary = re.search(
+        r"Word counts:\s*Nature of problem\s+(\d+),\s*Solution method\s+(\d+),"
+        r"\s*Additional comments\s+(\d+)",
+        packet,
+    )
+    heading = SUMMARY_HEADING.search(main)
+    end = SUMMARY_END.search(main, heading.end()) if heading else None
+    body = main[heading.end() : end.start()] if heading and end else ""
+    parts = re.split(FIELD + r"([^}:]+):\}", body)
+    bodies = {name.strip(): text for name, text in zip(parts[1::2], parts[2::2])}
+    actual_summary = tuple(
+        words(bodies.get(field, ""), macros()) for field in LONG_FIELDS
+    )
+    packet_summary = tuple(map(int, summary.groups())) if summary else ()
+    problems: list[str] = []
+    if packet_abstract_counts != {actual_words} or packet_summary != actual_summary:
+        problems.append(
+            "CPC-FORM.md counts "
+            f"abstract={sorted(packet_abstract_counts)}, summary={packet_summary}; "
+            f"the manuscript gives abstract={actual_words}, summary={actual_summary}"
+        )
+    problems.extend(_packet_front(main, packet))
+    return problems
+
+
+def _packet_front(main: str, packet: str) -> list[str]:
+    """Title, abstract and keywords of CPC-FORM.md against ``rg_main.tex``."""
+    packet_dir = ROOT / "packet"
+    if str(packet_dir) not in sys.path:
+        sys.path.insert(0, str(packet_dir))
+    import make_packet as packet_mod
+
+    try:
+        return packet_mod.front_problems(packet, main)
+    except packet_mod.Refused as exc:
+        return [str(exc)]
+
+
+def check_packet_counts() -> str:
+    problems = packet_count_problems(
+        MAIN.read_text(), (ROOT / "packet" / "CPC-FORM.md").read_text()
+    )
+    if problems:
+        fail(listed("packet counts", problems))
+    return "packet word counts match the manuscript"
+
+
 def check_front(main: str) -> str:
     bad = []
     abstract = re.search(r"\\begin\{abstract\}(.*?)\\end\{abstract\}", main, re.S)
@@ -1135,17 +1194,61 @@ def check_names() -> str:
     return f"{len(files)} files and PDFs name no credit or affiliation"
 
 
+def velocity_row_problems(row: str) -> list[str]:
+    """A velocity row names its convention and that the file declares none.
+
+    ``no unit convention`` names the absence of a convention, so it is not one.
+    """
+    states_convention = bool(re.search(r"natural unit", row, re.I)) or (
+        bool(re.search(r"\bconvention\b", row, re.I))
+        and not re.search(r"no unit convention", row, re.I)
+    )
+    lacks_declaration = re.search(r"(?:not declared|no in-file)", row, re.I)
+    if states_convention and lacks_declaration:
+        return []
+    return [
+        "the velocity row does not state both its convention and lack of an in-file declaration"
+    ]
+
+
+def crosscheck_print_problems(record: dict, values: dict[str, str]) -> list[str]:
+    """Printed cross-check counts must be the record's counts.
+
+    A disagreement is a count to print. It is not, by itself, a failure.
+    """
+    group = record["groups"]["all"]
+    readers = group["readers"]
+    expected = {
+        "corpusFiles": str(group["files"]),
+        "corpusReadconAgree": str(readers["readcon"]["matches"]),
+        "corpusReadconDisagree": str(readers["readcon"]["disagreements"]),
+        "corpusReadconNotFollowed": str(readers["readcon"]["not_followed"]),
+        "corpusIterAgree": str(readers["readcon_iter"]["matches"]),
+        "corpusIterDisagree": str(readers["readcon_iter"]["disagreements"]),
+        "corpusIterNotFollowed": str(readers["readcon_iter"]["not_followed"]),
+        "corpusIndepAgree": str(readers["indep"]["matches"]),
+        "corpusBoth": str(group["accepted_by_both"]),
+        "corpusFieldIdentical": str(group["field_identical"]),
+    }
+    return [
+        f"\\{name} is {values.get(name)}; the cross-check record gives {want}"
+        for name, want in expected.items()
+        if values.get(name) != want
+    ]
+
+
 def check_conformance() -> str:
-    """The corpus31, cross-check, corpus-path and probe records name no disagreement, their counts are the macros
+    """The corpus31, corpus-path and probe records name no disagreement, the printed cross-check counts match its record, their counts are the macros
     the paper prints, reruns of the Rust reader and of the reads of corpus_paths.py give the corpus31 and corpus-path
     records, and the corpus31, corpus-path and cross-check fragments are what their records give. The clause
     record is what the specification, the corpora, the probes and the tests give, and a rerun of the mutant
     differential gives its record, with no case left unexplained."""
     bad = []
-    c31 = json.loads((ROOT / "data" / "corpus31-results.json").read_text())["summary"]
+    corpus31_record = "data/referee/r1t/corpus31-results.json"
+    c31 = json.loads((ROOT / corpus31_record).read_text())["summary"]
     for key in ("disagreements", "manifest_not_followed", "threads_disagree"):
         if c31[key]:
-            bad.append(f"corpus31-results.json {key}: {', '.join(c31[key][:5])}")
+            bad.append(f"{corpus31_record} {key}: {', '.join(c31[key][:5])}")
     paths = json.loads((ROOT / "data" / "corpus_paths.json").read_text())["results"][
         "totals"
     ]
@@ -1165,23 +1268,20 @@ def check_conformance() -> str:
     else:
         coverage_record = "live clause regeneration"
         clauses = live_clause_coverage()["totals"]
-    mutants = json.loads(
-        (ROOT / "data" / "spec" / "mutant_differential.json").read_text()
-    )["totals"]
+    mutant_record = "data/referee/r1t/mutant_differential.json"
+    mutants = json.loads((ROOT / mutant_record).read_text())["totals"]
     if mutants["unexplained"]:
-        bad.append(
-            f"mutant_differential.json: {mutants['unexplained']} cases no group explains"
-        )
+        bad.append(f"{mutant_record}: {mutants['unexplained']} cases no group explains")
     values = macros()
     macro_checks = [
-        ("cthreeoneFiles", c31["files"], "corpus31-results.json"),
-        ("cthreeoneMatch", c31["match"], "corpus31-results.json"),
+        ("cthreeoneFiles", c31["files"], corpus31_record),
+        ("cthreeoneMatch", c31["match"], corpus31_record),
         ("cpathsFiles", paths["files"], "corpus_paths.json"),
         ("cpathsReads", f"{paths['reads']:,}", "corpus_paths.json"),
         ("cpathsMatch", f"{paths['match']:,}", "corpus_paths.json"),
         ("everyPathInputs", f"{every['inputs']:,}", "every_path.json"),
-        ("mutantCases", f"{mutants['cases']:,}", "mutant_differential.json"),
-        ("mutantSame", f"{mutants['same']:,}", "mutant_differential.json"),
+        ("mutantCases", f"{mutants['cases']:,}", mutant_record),
+        ("mutantSame", f"{mutants['same']:,}", mutant_record),
     ]
     if clauses is not None:
         macro_checks[6:6] = [
@@ -1191,14 +1291,10 @@ def check_conformance() -> str:
     for macro, value, record in macro_checks:
         if values.get(macro) != str(value):
             bad.append(f"\\{macro} is {values.get(macro)}; {record} gives {value}")
-    cross = json.loads((ROOT / "data" / "corpus_crosscheck.json").read_text())
-    for reader, counts in cross["groups"]["all"]["readers"].items():
-        if (
-            counts.get("disagreements")
-            or counts.get("not_followed")
-            or counts.get("crashes")
-        ):
-            bad.append(f"corpus_crosscheck.json {reader}: {counts}")
+    cross = json.loads(
+        (ROOT / "data" / "referee" / "r1h" / "corpus_crosscheck.json").read_text()
+    )
+    bad.extend(crosscheck_print_problems(cross, values))
     probes = json.loads((ROOT / "data" / "referee_probes.json").read_text())["summary"]
     if probes["failed_probes"]:
         bad.append(
@@ -1457,6 +1553,7 @@ def main() -> int:
     checks = [("rebuild", check_rebuild)] if args.rebuild else []
     checks += [
         ("front matter", lambda: check_front(MAIN.read_text())),
+        ("packet counts", check_packet_counts),
         (
             "generated files",
             lambda: check_generated(MAIN.read_text(), SUPP.read_text()),

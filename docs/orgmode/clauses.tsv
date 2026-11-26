@@ -57,7 +57,7 @@ CON-line2.24	MUST	This schema MUST be informative. These clauses decide acceptan
 CON-line2.25	MUST	=CON-line2.18= is the resource limit on line 2. A reader MUST accept a frame the conformance corpus accepts. A reader MUST NOT reject a frame these clauses accept because of the byte length of the file.
 CON-cell.1	MUST	When =lattice_vectors= is present, readers MUST prefer it over lines 3-4.
 CON-cell.2	MUST	A writer that emits =lattice_vectors= MUST write lines 3-4 consistent with that matrix at the precision the writer is using.
-CON-cell.3	MUST	A missing =pbc= key MUST be read as periodic in all three directions.
+CON-cell.3	MUST	An absent =pbc= key MUST be read as periodic in all three directions.
 CON-cell.4	MUST	=pbc=, when present, MUST be a length-3 array of booleans.
 CON-cell.5	MUST	=lattice_vectors=, when present, MUST be three length-3 arrays of finite numbers.
 CON-cell.6	MUST	When =lattice_vectors= is absent, a reader MUST build the cell from lines 3 and 4. The angles are converted from degrees to radians, ~a=(|a|, 0, 0)~, ~b=(|b| cos gamma, |b| sin gamma, 0)~, and ~c=(|c| cos beta, |c| (cos alpha - cos beta cos gamma) / sin gamma, |c| sqrt(1 - cos^2 beta - ((cos alpha - cos beta cos gamma) / sin gamma)^2))~. The square root is the z component of =c=. A construction that is not a real cell MUST be rejected on the angles line, as =CON-cell.7= requires.
@@ -65,7 +65,7 @@ CON-cell.7	MUST	When =lattice_vectors= is absent and each angle is in (0, 180) d
 CON-count.1	MUST	A type count of 0 MUST be a frame with zero atoms: lines 8 and 9 contain only spaces and tabs, no coordinate block and no section block follow, =sections= is absent or empty, and the legacy velocity fallback does not apply. Any other character on line 8 or 9, including other Unicode White_Space, MUST be =InvalidCount=.
 CON-count.2	MUST	A zero-atom frame of that form MUST be accepted in every mode, including =validate= true. =CON-validate.3= independently requires the =sections= key when =validate= is true.
 CON-count.3	MUST	When the type count is 1 or more, each per-type count MUST be an integer >= 1, and any other count token MUST be =InvalidCount=.
-CON-count.4	MUST	At end of file, when line 7 is 0, missing lines 8 and 9 MUST be read as empty, and =CON-frame.3= MUST NOT report that frame as =IncompleteHeader=.
+CON-count.4	MUST	At end of file, when line 7 is 0, omitted lines 8 and 9 MUST be read as empty, and =CON-frame.3= MUST NOT report that frame as =IncompleteHeader=.
 CON-count.5	SHOULD NOT	Writers SHOULD NOT write a zero-atom frame for a consumer that predates v3.1.
 CON-count.6	MUST	The coordinate blocks MUST follow header order.
 CON-count.7	MUST	The total atom count MUST equal the sum of line 8.
@@ -136,7 +136,7 @@ CON-units.5	MUST	The natural unit on a frame of major 4 or later MUST be written
 CON-units.6	MUST NOT	Version 1 MUST NOT carry a =units= object.
 CON-units.7	MAY	Version 2 MAY carry =units=.
 CON-units.8	MUST	In versions 1 and 2, and in every minor of major 3, velocities MUST be read as =units.length= per the natural time unit, and length is angstrom when =units.length= is absent.
-CON-units.9	MUST NOT	Any =units.time= on versions 1 and 2, and on every minor of major 3, MUST NOT be trusted, and a missing =units.time= MUST NOT reject the frame.
+CON-units.9	MUST NOT	Any =units.time= on versions 1 and 2, and on every minor of major 3, MUST NOT be trusted, and an absent =units.time= MUST NOT reject the frame.
 CON-units.10	MUST	In major 4 and later, =units.time= MUST be authoritative for velocities.
 CON-units.11	MUST	A frame of major 4 or later with a velocities section and no =units.time= MUST be rejected with =InvalidUnits=.
 CON-units.12	MUST	A writer of major 4 or later asked to write velocities with no time unit MUST fail with =InvalidUnits=.

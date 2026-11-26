@@ -208,7 +208,7 @@ def dump(obj: dict) -> str:
 def written(line2: str, *, stamp_minor: bool, natural_time: bool) -> str:
     obj = json.loads(line2)
     obj["con_spec_version"] = 4
-    obj["con_spec_patch"] = 4
+    obj["con_spec_patch"] = 5
     obj["sections"] = ["velocities"]
     if stamp_minor:
         obj["con_spec_minor"] = 0

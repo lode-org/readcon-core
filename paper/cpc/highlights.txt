@@ -1,5 +1,5 @@
-CON 3.1 is a versioned text grammar for saddle-search checkpoint files.
+CON 4 is a versioned geometry grammar with cell, periodicity, units and identifiers.
 Each coordinate row carries a per-component mask and an atom identifier.
-One Rust core serves C, C++, Python, Julia and Fortran, with DLPack views.
+One Rust core serves C, C++, Python, Julia and Fortran, with DLPack and metatensor.
+readcon-db, readcon-ops, minimage and linkcell share one cell convention.
 Two corpora of legal and illegal files test any reader against the specification.
-Read times are measured against ASE, chemfiles, h5py and native trajectory readers.

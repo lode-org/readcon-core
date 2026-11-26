@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://lode-org.github.io/readcon-core/schema/con-metadata.schema.json",
-  "$comment": "Informative. Specification identity 4.0.4. The numbered clauses decide acceptance. A repeated object name is rejected.",
+  "$comment": "Informative. Specification identity 4.0.5. The numbered clauses decide acceptance. A repeated object name is rejected.",
   "title": "CON frame metadata (line 2)",
-  "description": "Informative schema for the JSON object on line 2, versioned with specification 4.0.4. The numbered clauses decide acceptance. Unrecognized keys are permitted and MUST be preserved.",
+  "description": "Informative schema for the JSON object on line 2, versioned with specification 4.0.5. The numbered clauses decide acceptance. Unrecognized keys are permitted and MUST be preserved.",
   "type": "object",
   "required": ["con_spec_version"],
   "properties": {

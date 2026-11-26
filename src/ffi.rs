@@ -7336,7 +7336,7 @@ Coordinates of Component 1
             .to_string();
         assert!(text.contains(r#""con_spec_version":4"#), "{text}");
         assert!(text.contains(r#""con_spec_minor":0"#), "{text}");
-        assert!(text.contains(r#""con_spec_patch":4"#), "{text}");
+        assert!(text.contains(r#""con_spec_patch":5"#), "{text}");
         unsafe {
             rkr_free_string(json);
             free_rkr_frame(frame);

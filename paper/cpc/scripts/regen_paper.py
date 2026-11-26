@@ -132,8 +132,11 @@ FORMAT = [
 
 # Fragments written from a committed record. They run before FORMAT and outside the ledger, so the
 # version map names no step for them and sinum.py finds them. The DLPack macros are a tracked file;
-# bench_dlpack.py times a new run instead.
-RECORD_FRAGMENTS = [["scripts/gen_dlpack_macros.py"]]
+# bench_dlpack.py times a new run instead. The ecosystem-exchange macros are the same kind of file.
+RECORD_FRAGMENTS = [
+    ["scripts/gen_dlpack_macros.py"],
+    ["scripts/gen_ecosystem_exchange_macros.py"],
+]
 
 VERSION_MAP = ["scripts/gen_version_map.py"]
 

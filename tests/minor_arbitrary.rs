@@ -612,7 +612,7 @@ fn differential_base_oracle_from_committed_9aff911e_snapshot() {
     );
 
     // 1. Tracked corpus files match BASE 9aff911e. The survey frame is the
-    //    example the writer emits at the implemented spec, so it is 4.0.4
+    //    example the writer emits at the implemented spec, so it is 4.0.5
     //    with the natural-unit symbol rather than the 9aff911e bytes.
     let tracked = oracle["tracked_corpus"].as_object().unwrap();
     assert_eq!(tracked.len(), 70);

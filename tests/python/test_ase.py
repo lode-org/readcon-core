@@ -379,7 +379,7 @@ class TestLegacyVelocityLabel:
         header = out.read_text().splitlines()[1]
         assert '"con_spec_version":4' in header
         assert '"con_spec_minor":0' in header
-        assert '"con_spec_patch":4' in header
+        assert '"con_spec_patch":5' in header
         assert '"time":"fs"' not in header
         assert '"(u*Å^2/eV)^0.5"' in header
         again = readcon.read_con(str(out))[0]

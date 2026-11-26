@@ -10,8 +10,8 @@ Every value is read from a committed record:
   largest energy difference over the images the restart prose prints),
 * ``data/restart_walls/restart_walls.json`` (the runtime of the walls task and its host),
 * ``evidence/results/e1_restart.json`` and ``e1_restart_lbfgs_control.json`` (eOn Morse band),
-* the newest ``data/failure/matrix-<version>.json`` (survey, with the row counts by pairing), ``data/failure/drift_extxyz.json`` and
-  ``drift_extxyz.csv`` (drift, with the binary64 steps of each coordinate).
+* the newest ``data/failure/matrix-<version>.json`` (survey, with the row counts by pairing), and the
+  ``data/referee/r1j/drift`` records (drift, with the binary64 steps of each coordinate).
 
     python3 paper/cpc/scripts/gen_case_macros.py
 """
@@ -76,15 +76,18 @@ def restart_rows(rel: str) -> dict[str, dict[str, str]]:
 
 def matrix_json() -> Path:
     """The newest versioned matrix. The unversioned file stays put."""
+    import record_chain
+
     folder = ROOT / "data" / "failure"
     found = []
     for path in folder.glob("matrix-*.json"):
-        parts = path.stem.removeprefix("matrix-").split(".")
+        stem = path.name.removeprefix("matrix-").removesuffix(".json")
+        parts = stem.split(".")
         if len(parts) == 3 and all(part.isdigit() for part in parts):
             found.append((tuple(int(part) for part in parts), path))
     if not found:
         return folder / "matrix.json"
-    return max(found)[1]
+    return record_chain.tip(max(found)[1], ROOT)
 
 
 def main() -> None:
@@ -305,7 +308,8 @@ def main() -> None:
     m["surveyMdaShift"] = sci(rows[("H5MD", "MDAnalysis", "MDAnalysis")]["dpos"], 2)
     m["surveyCifShift"] = sci(rows[("CIF", "Open Babel", "Open Babel")]["dpos"], 2)
 
-    drift_record = json.loads((ROOT / "data/failure/drift_extxyz.json").read_text())
+    drift_root = ROOT / "data/referee/r1j/drift"
+    drift_record = json.loads((drift_root / "drift_extxyz.json").read_text())
     drift = drift_record["reference_frame"]
     for key, word in (("all", "All"), ("extended_xyz", "Xyz")):
         m[f"drift{word}Paths"] = str(drift[key]["reader_paths"])
@@ -325,7 +329,7 @@ def main() -> None:
     assert len(x_one) == 1, (
         "chemfiles returns the x coordinate of atom 1 correctly rounded"
     )
-    with (ROOT / "data/failure/drift_extxyz.csv").open(newline="") as handle:
+    with (drift_root / "drift_extxyz.csv").open(newline="") as handle:
         chem_row = next(
             r
             for r in csv.DictReader(handle)
@@ -359,7 +363,11 @@ def main() -> None:
             ),
             ("band", BANDS),
             ("survey", "data/failure/matrix.json"),
-            ("drift", "data/failure/drift_extxyz.json, data/failure/drift_extxyz.csv"),
+            (
+                "drift",
+                "data/referee/r1j/drift/drift_extxyz.json, "
+                "data/referee/r1j/drift/drift_extxyz.csv",
+            ),
         ):
             if name.startswith(prefix):
                 return records

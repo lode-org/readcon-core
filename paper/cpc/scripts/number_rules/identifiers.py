@@ -8,7 +8,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from numbers_lib import Rule, const, grep, jget, row, rows, text
+from numbers_lib import Rule, const, grep, jget, path, row, rows, text
 
 MAIN = "rg_main.tex"
 SUPP = "rg_supp.tex"
@@ -18,6 +18,8 @@ OPENERS = "data/failure/con_openers.json"
 DRIFT_X = "data/failure/drift_extxyz.json"
 H2H = "bench/results/r0174/h2h/python_coords.json"
 CROSSCHECK = "data/corpus_crosscheck.json"
+# The generated cross-check table and its macros are written from this record.
+REFEREE_CROSSCHECK = "data/referee/r1h/corpus_crosscheck.json"
 RELEASES = "data/peers/releases.json"
 FORMATS = "/bench/h2h/formats/v0.23.3/extra"
 FORMATS_1M = "/bench/h2h/formats/v0.23.3/1m/cross-format.json"
@@ -42,6 +44,16 @@ NOT_DRIFT = r"(?!.*extxyz\}? 0\.4\.6)(?!.*protein data bank row)"
 
 def lines(pattern: str, docs: tuple[str, ...] = BOTH) -> tuple[str, ...]:
     return tuple(f"{doc}~{pattern}" for doc in docs)
+
+
+def when_printed(rule: Rule) -> list[Rule]:
+    """Keep an identifier rule only while one of its scoped lines prints it."""
+    for location in rule.where:
+        document, separator, pattern = location.partition("~")
+        rel = f"src/{document}"
+        if separator and path(rel).is_file() and re.search(pattern, text(rel), re.M):
+            return [rule]
+    return []
 
 
 def peer_rules(record: str, prefix: str, guard: str, why: str) -> list[Rule]:
@@ -158,6 +170,15 @@ def ase_writer_decimals() -> str:
     raise SystemExit("ASE extxyz writer does not name a decimal width")
 
 
+def spec_release(version: str) -> str:
+    """The printed form of one tag in the specification measurement."""
+    tags = jget("data/spec/spec-measurement-0.24.0.json", "tags")
+    found = [item["tag"] for item in tags if item["tag"] == f"v{version}"]
+    if len(found) != 1:
+        raise SystemExit(f"specification measurement has no single tag v{version}")
+    return version
+
+
 def tectonic_version() -> str:
     """The Tectonic version named by the paper's typeset task."""
     found = re.search(r"Tectonic (\d+\.\d+\.\d+)", text("pixi.toml"))
@@ -181,6 +202,29 @@ _RULES = [
         grep(SPEC, r"^\|\s+(3\.0) \| \d{4}-\d{2}-\d{2} \|"),
         SPEC,
         "row of the version history of the specification",
+    ),
+    Rule(
+        "4.0.5",
+        grep(SPEC, r"^- Version :: (4\.0\.5) "),
+        SPEC,
+        "version line of the specification",
+        lines(r"4\.0\.5"),
+    ),
+    *when_printed(
+        Rule(
+            "4.0.4",
+            grep(SPEC, r"^\|\s+(4\.0\.4) \| \d{4}-\d{2}-\d{2} \|"),
+            SPEC,
+            "the CON 4.0.4 row of the specification history",
+            lines(r"4\.0\.4"),
+        )
+    ),
+    Rule(
+        "0.21.0",
+        spec_release("0.21.0"),
+        "data/spec/spec-measurement-0.24.0.json",
+        "tag v0.21.0 of the specification measurement",
+        (f"{SUPP}~readcon-core~0\\.21\\.0",),
     ),
     *peer_rules(
         OPENERS,
@@ -213,12 +257,16 @@ _RULES = [
         )
         for v in ("0.17.0", "0.17.1", "0.17.2")
     ),
-    Rule(
-        crosscheck_version,
-        crosscheck_version,
-        CROSSCHECK,
-        "readcon-core version of the cross-check",
-        (f"{GEN}corpus_crosscheck.tex~readcon-core {re.escape(crosscheck_version)}",),
+    *when_printed(
+        Rule(
+            crosscheck_version,
+            crosscheck_version,
+            CROSSCHECK,
+            "readcon-core version of the cross-check",
+            (
+                f"{GEN}corpus_crosscheck.tex~readcon-core {re.escape(crosscheck_version)}",
+            ),
+        )
     ),
     Rule(
         f"v{formats_version}",

@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "reason": "The specification 4.0.5 writer stamp changes the generated one-million-atom fixture.",
+  "supersedes": {
+    "bytes": 85299767,
+    "sha256": "055a8d233dbed4d5005aa5b52582c5914cd1d58a06611a9169c3d19166fddd30"
+  },
+  "con": {
+    "bytes": 85299767,
+    "sha256": "c7f2eb7feb109465af56165d3903598f8ee57bfc9d52c673454da6f524fc11bd"
+  }
+}

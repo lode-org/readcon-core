@@ -16,6 +16,10 @@ extern crate metatensor_sys;
 #[path = "support/metatensor_install.rs"]
 mod metatensor_paths;
 
+#[cfg(feature = "python")]
+#[path = "support/python_link.rs"]
+mod python_link;
+
 fn check_package_version_file() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let version_path = manifest_dir.join("VERSION");
@@ -154,6 +158,135 @@ fn main() {
         // cdylib dynamic export table.
         println!("cargo:rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL");
     }
+
+    #[cfg(feature = "python")]
+    write_python_test_link();
+}
+
+#[cfg(feature = "python")]
+fn write_python_test_link() {
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let path = out_dir.join("python_test_link.rs");
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    let msvc = target_os == "windows" && target_env == "msvc";
+    let cfg = if msvc {
+        windows_python_sysconfig()
+    } else {
+        python_link::PythonSysconfig {
+            ldlibrary: unix_ldlibrary_from_python3(),
+            ..python_link::PythonSysconfig::default()
+        }
+    };
+    let link = match python_link::probe_python_link(&target_os, &target_env, &cfg, |candidate| {
+        Path::new(candidate).is_file()
+    }) {
+        Ok(link) => link,
+        Err(python_link::ProbeError::EmptyLdlibrary) => {
+            panic!("python3 reported an empty LDLIBRARY");
+        }
+    };
+    if msvc {
+        if let python_link::PythonLink::Named {
+            search_dir: Some(dir),
+            ..
+        } = &link
+        {
+            if !dir.is_empty() {
+                let flag = python_link::msvc_libpath_arg(dir);
+                println!("cargo:rustc-link-arg-tests={flag}");
+            }
+        }
+    }
+    let text = python_link::link_file(&link);
+    fs::write(&path, text).unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
+}
+
+/// Linux and macOS: the historical `LDLIBRARY` print. Panic text stays put.
+#[cfg(feature = "python")]
+fn unix_ldlibrary_from_python3() -> String {
+    let output = std::process::Command::new("python3")
+        .args([
+            "-c",
+            "import sysconfig; print(sysconfig.get_config_var('LDLIBRARY') or '')",
+        ])
+        .output()
+        .expect("python3 is required to name libpython for the test binary");
+    if !output.status.success() {
+        panic!(
+            "python3 could not name LDLIBRARY: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    String::from_utf8(output.stdout).expect("LDLIBRARY is utf-8")
+}
+
+/// Windows CPython has no useful `LDLIBRARY` stem. `py_version_nodot`
+/// stays `313` on a free-threaded build; the import lib is `python313t.lib`.
+///
+/// The interpreter is `PYO3_PYTHON`, then `python3`, then `python`.
+/// Linux and macOS stay on `python3`.
+#[cfg(feature = "python")]
+fn windows_python_sysconfig() -> python_link::PythonSysconfig {
+    println!("cargo:rerun-if-env-changed=PYO3_PYTHON");
+    let configured = env::var("PYO3_PYTHON").ok();
+    let mut parsed = None;
+    let mut errors = Vec::new();
+    let chosen = python_link::select_windows_interpreter(configured.as_deref(), |program| {
+        match run_windows_sysconfig_script(program) {
+            Ok(cfg) => {
+                parsed = Some(cfg);
+                true
+            }
+            Err(err) => {
+                errors.push(format!("{program}: {err}"));
+                false
+            }
+        }
+    });
+    if chosen.is_none() {
+        panic!(
+            "could not read the windows sysconfig: {}",
+            errors.join("; ")
+        );
+    }
+    parsed.expect("a usable windows interpreter returns sysconfig")
+}
+
+#[cfg(feature = "python")]
+fn run_windows_sysconfig_script(program: &str) -> Result<python_link::PythonSysconfig, String> {
+    const SCRIPT: &str = r#"
+import sys, sysconfig
+def g(key):
+    v = sysconfig.get_config_var(key)
+    return "" if v is None else str(v)
+nodot = g("py_version_nodot")
+if not nodot:
+    nodot = f"{sys.version_info[0]}{sys.version_info[1]}"
+abiflags = g("ABIFLAGS")
+if not abiflags:
+    abiflags = g("abiflags")
+base = sys.base_prefix or ""
+sys.stdout.write(f"LDLIBRARY\t{g('LDLIBRARY')}\n")
+sys.stdout.write(f"LIBDIR\t{g('LIBDIR')}\n")
+sys.stdout.write(f"BASE_PREFIX\t{base}\n")
+sys.stdout.write(f"PY_VERSION_NODOT\t{nodot}\n")
+sys.stdout.write(f"PY_VERSION_NODOT_PLAT\t{g('py_version_nodot_plat')}\n")
+sys.stdout.write(f"ABIFLAGS\t{abiflags}\n")
+sys.stdout.write(f"PY_GIL_DISABLED\t{g('Py_GIL_DISABLED')}\n")
+"#;
+    let output = std::process::Command::new(program)
+        .env("PYTHONIOENCODING", "utf-8")
+        .env("PYTHONUTF8", "1")
+        .args(["-c", SCRIPT])
+        .output()
+        .map_err(|err| err.to_string())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(stderr.trim().to_string());
+    }
+    let text = String::from_utf8(output.stdout).map_err(|err| err.to_string())?;
+    Ok(python_link::parse_sysconfig_lines(&text))
 }
 
 #[cfg(feature = "chemfiles")]

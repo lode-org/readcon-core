@@ -8,7 +8,9 @@ The frame is ``failure_matrix.fixture()`` and the writer is
   listing prints byte for byte;
 * ``src/figures/generated/survey_listing.tex``, the listing with its caption;
 * ``data/survey_frame-<version>.json``, the readcon version, byte count, SHA-256 and
-  provenance. ``data/survey_frame.json`` is the earlier record and is left in place.
+  provenance. A later run adds ``survey_frame-<version>-n.json`` and leaves the
+  stored file byte-identical. ``data/survey_frame.json`` is the earlier record
+  and is left in place.
 
 The script reads the file back and stops unless the identifiers, masks and
 binary64 coordinates survive. ``--tables`` writes the listing from the
@@ -42,11 +44,21 @@ def library_version() -> str:
 
 
 def survey_record_path() -> Path:
-    """Provenance of the frame this checkout's writer emits. The earlier file stays."""
+    """The base record for this readcon version. A later file may supersede it."""
     return ROOT / "data" / f"survey_frame-{library_version()}.json"
 
 
-RECORD = survey_record_path()
+def active_record() -> Path:
+    """The tip of the survey chain. The stored base stays where it is."""
+    import record_chain
+
+    base = survey_record_path()
+    if not base.is_file():
+        return base
+    return record_chain.tip(base, ROOT)
+
+
+RECORD = active_record()
 
 
 def write_listing(record: dict) -> None:
@@ -83,6 +95,9 @@ def measure() -> dict:
     spec = f"{header.get('con_spec_version')}.{header.get('con_spec_minor', 0)}"
     if "con_spec_patch" in header:
         spec = f"{spec}.{header.get('con_spec_patch')}"
+    import record_chain
+
+    out, link = record_chain.allocate(survey_record_path(), ROOT)
     record = {
         "readcon": readcon.__version__,
         "spec": spec,
@@ -93,7 +108,10 @@ def measure() -> dict:
         "source": "scripts/failure_matrix.py fixture() written by w_readcon",
         "provenance": provenance.record(),
     }
-    RECORD.write_text(json.dumps(record, indent=2) + "\n")
+    if link is not None:
+        record = {"supersedes": link, **record}
+    with out.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, indent=2) + "\n")
     return record
 
 
@@ -108,7 +126,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     if args.tables:
-        record = json.loads(RECORD.read_text())
+        record = json.loads(active_record().read_text())
         if hashlib.sha256(FRAME.read_bytes()).hexdigest() != record["sha256"]:
             raise SystemExit(
                 f"{FRAME.name} differs from the SHA-256 in {RECORD.name}; rerun survey_listing.py"
