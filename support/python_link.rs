@@ -331,6 +331,16 @@ fn flags_from_link_lib(spec: &str, os: &str, env_name: &str) -> Result<Vec<Strin
     } else {
         format!("-l{}", parsed.name)
     };
+    if is_apple(os) {
+        // ld64 has no -Bstatic and no --whole-archive. Static is a plain -l.
+        // -force_load needs the archive path, which this directive does not carry.
+        if parsed.whole_archive {
+            panic!(
+                "ld64 has no --whole-archive; +whole-archive needs the archive path for -Wl,-force_load"
+            );
+        }
+        return Ok(vec![lib]);
+    }
     if parsed.kind == "static" {
         let mut flags = vec!["-Wl,-Bstatic".to_string()];
         if parsed.whole_archive {
@@ -415,10 +425,13 @@ fn lib_flags(name: &str, shared: bool, os: &str, env_name: &str) -> Vec<String> 
     if shared {
         return vec![format!("-l{name}")];
     }
-    static_unix_flags(name)
+    static_unix_flags(name, os)
 }
 
-fn static_unix_flags(name: &str) -> Vec<String> {
+fn static_unix_flags(name: &str, os: &str) -> Vec<String> {
+    if is_apple(os) {
+        return vec![format!("-l{name}")];
+    }
     vec![
         "-Wl,-Bstatic".to_string(),
         format!("-l{name}"),
