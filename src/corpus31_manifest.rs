@@ -188,8 +188,8 @@ mod harness {
                 }
                 let compressed =
                     zstd::stream::encode_all(payload.as_slice(), 3).expect("zstd compress");
-                let clen = u32::try_from(compressed.len()).expect("frame length");
-                if stream.write_all(&clen.to_le_bytes()).is_err()
+                let frame_len = u32::try_from(compressed.len()).expect("frame length");
+                if stream.write_all(&frame_len.to_le_bytes()).is_err()
                     || stream.write_all(&compressed).is_err()
                 {
                     continue;
