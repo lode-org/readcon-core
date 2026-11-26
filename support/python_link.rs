@@ -312,10 +312,10 @@ fn parse_link_lib(spec: &str) -> Result<ParsedLib<'_>, ()> {
 
 fn flags_from_link_lib(spec: &str, os: &str, env_name: &str) -> Result<Vec<String>, ()> {
     let parsed = parse_link_lib(spec)?;
-    if parsed.kind == "framework" {
-        return Ok(vec!["-framework".to_string(), parsed.name.to_string()]);
-    }
     if is_msvc(os, env_name) {
+        if parsed.kind == "framework" {
+            return Err(());
+        }
         let filename = if parsed.verbatim {
             parsed.name.to_string()
         } else {
@@ -325,6 +325,9 @@ fn flags_from_link_lib(spec: &str, os: &str, env_name: &str) -> Result<Vec<Strin
             return Ok(vec![format!("/WHOLEARCHIVE:{filename}")]);
         }
         return Ok(vec![filename]);
+    }
+    if parsed.kind == "framework" {
+        return Ok(vec!["-framework".to_string(), parsed.name.to_string()]);
     }
     let lib = if parsed.verbatim {
         format!("-l:{}", parsed.name)
