@@ -4,6 +4,35 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(target_os = "linux")]
+fn assert_production_cdylib_omits_libpython(dynamic: &str) {
+    let needed: Vec<&str> = dynamic
+        .lines()
+        .filter_map(|line| {
+            let (_, rest) = line.split_once("Shared library: [")?;
+            Some(rest.trim_end_matches(']').trim())
+        })
+        .collect();
+    let linked: Vec<&str> = needed
+        .into_iter()
+        .filter(|name| {
+            let lower = name.to_ascii_lowercase();
+            lower.contains("libpython")
+                || lower.contains("python.framework")
+                || lower.starts_with("python3")
+                || lower == "python"
+        })
+        .collect();
+    assert!(
+        linked.is_empty(),
+        "production cdylib NEEDED libpython or a Python framework: {linked:?}\n{dynamic}"
+    );
+    assert!(
+        !dynamic.to_ascii_lowercase().contains("python.framework"),
+        "production cdylib records a Python framework link:\n{dynamic}"
+    );
+}
+
 fn work_dir() -> PathBuf {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let base = std::env::var_os("CARGO_TARGET_DIR")
@@ -67,10 +96,12 @@ fn python_module_and_rlib_consumer_load_together() {
         .output()
         .expect("readelf wheel dynamic section");
     assert!(wheel_dynamic.status.success());
+    let dynamic = String::from_utf8_lossy(&wheel_dynamic.stdout);
     assert!(
-        !String::from_utf8_lossy(&wheel_dynamic.stdout).contains("STATIC_TLS"),
+        !dynamic.contains("STATIC_TLS"),
         "Python module sets DF_STATIC_TLS"
     );
+    assert_production_cdylib_omits_libpython(&dynamic);
     let wheel_relocs = Command::new("readelf")
         .args(["-r", wheel.to_str().unwrap()])
         .output()
