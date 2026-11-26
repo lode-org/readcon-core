@@ -17,7 +17,7 @@ rgpot sits above the left column. amsel has a slot of its own that
 not drawn.
 
     python paper/cpc/scripts/fig_ecosystem.py
-    python paper/cpc/scripts/fig_ecosystem.py --png /tmp/preview --optional
+    python paper/cpc/scripts/fig_ecosystem.py --png preview --optional
 """
 
 from __future__ import annotations
