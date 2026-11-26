@@ -105,10 +105,17 @@ def safety_version(label: str) -> float:
     return float(f"{major}.{minor.group(1)}")
 
 
+def ecosystem_summary() -> str:
+    """The newest paper copy of the bench exchange summary."""
+    from gen_ecosystem_exchange_macros import paper_summary_rel
+
+    return paper_summary_rel()
+
+
 def ecosystem_powers() -> list[tuple[int, int]]:
     """Atom counts of the exchange summary that the prose prints as ``10^k``."""
     counts: list[int] = []
-    for record in rows("data/ecosystem/summary.csv"):
+    for record in rows(ecosystem_summary()):
         count = int(record["n_atoms"])
         if count not in counts:
             counts.append(count)
@@ -301,7 +308,7 @@ RULES: list[Rule] = [
         Rule(
             f"10^{exponent}",
             count,
-            "data/ecosystem/summary.csv",
+            ecosystem_summary(),
             f"n_atoms {count} of the ecosystem exchange",
             (f"{DOC}~10\\^{exponent}",),
         )

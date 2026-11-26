@@ -94,7 +94,8 @@ NO_BUILD = {
     "data/eon/readcon_pins.json",
     "data/peers/releases.json",
     # Host timing of the ecosystem exchange. The summary carries ratios and
-    # atom counts, and it names no readcon-core build.
+    # atom counts, and it names no readcon-core build. summary-<n>.csv is a
+    # later copy of the same kind of file.
     "data/ecosystem/summary.csv",
 }
 
@@ -105,6 +106,7 @@ def no_build(rel: str) -> bool:
             f"data/spec/clause_coverage-{VERSION}-",
             f"data/spec/spec-measurement-{VERSION}-",
             "data/referee_probes",
+            "data/ecosystem/summary-",
         )
     )
 
