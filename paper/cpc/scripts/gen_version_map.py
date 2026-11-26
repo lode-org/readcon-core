@@ -69,6 +69,7 @@ NO_BUILD = {
     ),
     "data/spec/versions.json",
     "data/spec/clause_coverage.json",
+    "data/fortran/standard-referee-r1.json",
     f"data/spec/clause_coverage-{VERSION}.json",
     *(
         f"data/spec/{p.name}"
