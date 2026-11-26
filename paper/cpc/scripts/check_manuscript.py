@@ -1252,12 +1252,11 @@ def check_conformance() -> str:
     else:
         coverage_record = "live clause regeneration"
         clauses = live_clause_coverage()["totals"]
-    mutants = json.loads(
-        (ROOT / "data" / "spec" / "mutant_differential.json").read_text()
-    )["totals"]
+    mutant_record = "data/referee/r1t/mutant_differential.json"
+    mutants = json.loads((ROOT / mutant_record).read_text())["totals"]
     if mutants["unexplained"]:
         bad.append(
-            f"mutant_differential.json: {mutants['unexplained']} cases no group explains"
+            f"{mutant_record}: {mutants['unexplained']} cases no group explains"
         )
     values = macros()
     macro_checks = [
@@ -1267,8 +1266,8 @@ def check_conformance() -> str:
         ("cpathsReads", f"{paths['reads']:,}", "corpus_paths.json"),
         ("cpathsMatch", f"{paths['match']:,}", "corpus_paths.json"),
         ("everyPathInputs", f"{every['inputs']:,}", "every_path.json"),
-        ("mutantCases", f"{mutants['cases']:,}", "mutant_differential.json"),
-        ("mutantSame", f"{mutants['same']:,}", "mutant_differential.json"),
+        ("mutantCases", f"{mutants['cases']:,}", mutant_record),
+        ("mutantSame", f"{mutants['same']:,}", mutant_record),
     ]
     if clauses is not None:
         macro_checks[6:6] = [
