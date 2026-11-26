@@ -9,6 +9,9 @@ time and lower ratios are better.
 
 ## Hardware and software
 
+The hardware and version lines are reported by the run. They are not
+backed by a committed metadata file.
+
 - CPU: Intel Xeon Processor, 8 physical cores, one socket
 - Memory: 47 GiB, no swap
 - GPU: none exposed; `nvidia-smi` was not installed and no NVIDIA driver was
@@ -51,10 +54,11 @@ probe status as item 1.
 For item 3, a file requesting `storage_dtypes.positions=float32` is read
 through the C API. Direct float32 DLPack export is compared with float64
 DLPack export followed by `astype(float32)`. The checked-in item 3
-timings were measured at
-`039dc7bcd4ad146039631ad21bf4e772f29d6f05` with the float32 cast freed
-inside the timer. `elapsed` stops the clock before it deletes the return
-value, and that arm deletes the float32 array before returning.
+timings were recorded in
+`6cd199b89d78cb0f70f275c2cbe790597c14d78d`. The benchmark code that was
+measured is `3075f1c7a18bf5512d3dfe3de54128bb56ee9073`, with the float32
+cast freed inside the timer. `elapsed` stops the clock before it deletes
+the return value, and that arm deletes the float32 array before returning.
 For item 4, both arms read the same file, build one TensorBlock, and free
 that block before returning.
 `elapsed` stops the clock before it deletes the return value. The readcon
@@ -83,8 +87,10 @@ Status by item:
 - 2: `MEASURED` on CPU for NumPy, PyTorch, and JAX; those rows were
   replaced in `90d61514051418b5a80cc7c4597121577b78cf36`. CuPy rows keep
   the item 1 status from `00aeb664a2e87c6bb1cca1799a9ba535f41b2dee`
-- 3: `MEASURED` at `039dc7bcd4ad146039631ad21bf4e772f29d6f05`, with the
-  float32 cast freed inside the timer
+- 3: `MEASURED`; the rows were recorded in
+  `6cd199b89d78cb0f70f275c2cbe790597c14d78d`. The measured benchmark
+  code is `3075f1c7a18bf5512d3dfe3de54128bb56ee9073`, with the float32
+  cast freed inside the timer
 - 4: both arms free the TensorBlock inside the timer; rows were replaced
   in `90d61514051418b5a80cc7c4597121577b78cf36`. Published medians are in
   the table below
@@ -92,11 +98,17 @@ Status by item:
 ## Summary
 
 Medians are milliseconds. Ratio is the first arm divided by its comparator.
+Median and ratio cells use one rule. Each value is the `summary.csv`
+text parsed with `decimal.Decimal`. Medians are multiplied by 1000.
+`ROUND_HALF_UP` quantizes medians to six decimal places and ratios to
+four.
+
 This table is items 2, 3, and 4 from `summary.csv`. Item 2 and item 4
 rows were replaced in `90d61514051418b5a80cc7c4597121577b78cf36`. Item 3
-rows come from the rerun at
-`039dc7bcd4ad146039631ad21bf4e772f29d6f05`, with the float32 cast freed
-inside the timer. The data file was added in
+rows were recorded in
+`6cd199b89d78cb0f70f275c2cbe790597c14d78d`. The measured benchmark code
+is `3075f1c7a18bf5512d3dfe3de54128bb56ee9073`, with the float32 cast
+freed inside the timer. The data file was added in
 `00aeb664a2e87c6bb1cca1799a9ba535f41b2dee`. Its item 1 and CuPy rows are
 still that commit's rows, and they are not in this table.
 
@@ -132,9 +144,10 @@ previously freed only the readcon TensorBlock inside the timer.
 blocks before returning, and the table above has those medians. Item 3
 samples were measured with the float32 cast freed inside the timer.
 `elapsed` stops the clock before it deletes the return value, and that
-arm deletes the float32 array before returning. Those rows come from the
-rerun at `039dc7bcd4ad146039631ad21bf4e772f29d6f05`, and the table above
-has those medians. Other medians, quartiles, IQRs,
+arm deletes the float32 array before returning. Those rows were recorded
+in `6cd199b89d78cb0f70f275c2cbe790597c14d78d`. The benchmark code is
+`3075f1c7a18bf5512d3dfe3de54128bb56ee9073`. The table above has those
+medians. Other medians, quartiles, IQRs,
 statuses, and comparator ratios are in `summary.csv`. Every individual
 sample is in `results.csv`.
 
