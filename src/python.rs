@@ -10949,3 +10949,128 @@ mod push_vec3_tests {
         assert_eq!(out, expected);
     }
 }
+
+/// Cargo test must link libpython through pyo3. The wheel must not.
+///
+/// maturin >= 1.9.4 sets `PYO3_BUILD_EXTENSION_MODULE` for the wheel.
+/// That variable is what keeps libpython out of the extension.
+#[cfg(all(test, target_os = "linux"))]
+mod extension_link_regression {
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use std::time::SystemTime;
+
+    use pyo3::Python;
+
+    #[test]
+    fn cargo_test_links_libpython_and_extension_module_does_not() {
+        Python::initialize();
+        Python::attach(|py| {
+            assert!(py.version().starts_with('3'));
+        });
+        let exe = std::env::current_exe().expect("current exe");
+        let harness = dynamic_section(&exe);
+        assert!(
+            harness.contains("libpython"),
+            "cargo test binary does not need libpython:\n{harness}"
+        );
+
+        let profile = exe
+            .parent()
+            .and_then(Path::parent)
+            .expect("target profile dir");
+        let pyo3_out = newest_build_output(profile, "pyo3-ffi-");
+        assert!(
+            pyo3_out.contains("cargo:rustc-link-lib="),
+            "pyo3 did not emit a libpython link line"
+        );
+        let ours = newest_build_output(profile, "readcon-core-");
+        for needle in [
+            "LIBRARY_PATH",
+            "rustc-link-arg-tests",
+            "rustc-link-arg-benches",
+            "cargo:rustc-link-lib",
+            "cargo:rustc-link-search",
+        ] {
+            assert!(
+                !ours.contains(needle),
+                "readcon build script still emits {needle}"
+            );
+        }
+
+        let extension = dynamic_section(&extension_cdylib());
+        let lower = extension.to_ascii_lowercase();
+        assert!(
+            !lower.contains("libpython") && !lower.contains("python.framework"),
+            "extension module links libpython:\n{extension}"
+        );
+    }
+
+    fn dynamic_section(path: &Path) -> String {
+        let output = Command::new("readelf")
+            .args(["-d"])
+            .arg(path)
+            .output()
+            .unwrap_or_else(|err| panic!("readelf {}: {err}", path.display()));
+        assert!(
+            output.status.success(),
+            "readelf -d {} failed\n{}",
+            path.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    }
+
+    fn newest_build_output(profile: &Path, prefix: &str) -> String {
+        let build = profile.join("build");
+        let mut best: Option<(SystemTime, PathBuf)> = None;
+        let entries = std::fs::read_dir(&build)
+            .unwrap_or_else(|err| panic!("read {}: {err}", build.display()));
+        for entry in entries {
+            let entry = entry.unwrap_or_else(|err| panic!("read {}: {err}", build.display()));
+            if !entry.file_name().to_string_lossy().starts_with(prefix) {
+                continue;
+            }
+            let output = entry.path().join("output");
+            let Ok(meta) = output.metadata() else {
+                continue;
+            };
+            let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+            if best.as_ref().is_none_or(|(when, _)| modified >= *when) {
+                best = Some((modified, output));
+            }
+        }
+        let Some((_, path)) = best else {
+            panic!("no {prefix} build output under {}", build.display());
+        };
+        std::fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("read {}: {err}", path.display()))
+    }
+
+    fn extension_cdylib() -> PathBuf {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let target = root.join("target/python-extension-link");
+        let status = Command::new("cargo")
+            .args([
+                "rustc",
+                "--locked",
+                "--offline",
+                "--lib",
+                "--crate-type",
+                "cdylib",
+                "--features",
+                "python",
+                "--target-dir",
+            ])
+            .arg(&target)
+            .arg("--manifest-path")
+            .arg(root.join("Cargo.toml"))
+            .env("PYO3_BUILD_EXTENSION_MODULE", "1")
+            .status()
+            .expect("cargo rustc extension module");
+        assert!(status.success(), "extension module build failed");
+        let lib = target.join("debug/libreadcon_core.so");
+        assert!(lib.is_file(), "missing {}", lib.display());
+        lib
+    }
+}
