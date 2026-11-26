@@ -209,6 +209,11 @@ fn link_libpython_for_tests_and_benches() {
         println!("{line}");
     }
     for line in &plan.passthrough {
+        if python_link::affects_linking(line) {
+            panic!(
+                "refusing to apply a pyo3 link directive that cannot be scoped to tests and benches: {line}"
+            );
+        }
         python_link::require_single_line("extra_build_script_line", line);
         println!("{line}");
     }

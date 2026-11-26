@@ -53,6 +53,13 @@ fn assert_args(plan: &PythonLinkPlan, args: &[&str]) {
             .all(|line| !line.contains("rustc-link-search") && !line.contains("rustc-link-lib")),
         "{lines:?}"
     );
+    assert!(
+        plan.passthrough
+            .iter()
+            .all(|line| !python_link::affects_linking(line)),
+        "{:?}",
+        plan.passthrough
+    );
 }
 
 #[test]
@@ -377,5 +384,178 @@ fn cross_config_uses_only_the_configured_lib_dir() {
     assert_eq!(
         plan.args.iter().filter(|arg| arg.starts_with("-L")).count(),
         1
+    );
+}
+
+#[test]
+fn scoped_link_cargo_colon_directives() {
+    let plan = python_link_plan(
+        &config(
+            Some("python3.12"),
+            Some("/usr/lib"),
+            true,
+            true,
+            None,
+            None,
+            &[
+                "cargo::rustc-link-search=native=/opt/py/lib",
+                "cargo::rustc-link-search=framework=/Library/Frameworks",
+                "cargo::rustc-link-lib=python3.12",
+                "cargo::rustc-link-lib=framework=Python",
+                "cargo::rustc-link-arg=-Wl,-rpath,/opt/py/lib",
+                "cargo::rustc-cdylib-link-arg=-lpython3.12",
+                "cargo::rustc-link-arg-cdylib=-Wl,--no-as-needed",
+                "cargo::rustc-link-arg-bins=-ldl",
+                "cargo::rustc-link-arg-examples=-lm",
+                "cargo::rustc-link-arg-staticlib=-lutil",
+                "cargo::rustc-link-arg-tests=-pthread",
+                "cargo::rustc-link-arg-benches=-lrt",
+                "cargo::rustc-link-arg-bin=readcon=-lc",
+                "cargo::rustc-flags=-L/opt/flags -lstatic=python3.12",
+                "cargo::rustc-cfg=Py_DEBUG",
+            ],
+        ),
+        "linux",
+        "gnu",
+        false,
+    );
+    assert_args(
+        &plan,
+        &[
+            "-L/opt/py/lib",
+            "-F/Library/Frameworks",
+            "-lpython3.12",
+            "-framework",
+            "Python",
+            "-Wl,-rpath,/opt/py/lib",
+            "-lpython3.12",
+            "-Wl,--no-as-needed",
+            "-ldl",
+            "-lm",
+            "-lutil",
+            "-pthread",
+            "-lrt",
+            "-lc",
+            "-L/opt/flags",
+            "-Wl,-Bstatic",
+            "-lpython3.12",
+            "-Wl,-Bdynamic",
+        ],
+    );
+    assert_eq!(
+        plan.passthrough,
+        vec!["cargo::rustc-cfg=Py_DEBUG".to_string()]
+    );
+}
+
+#[test]
+fn scoped_link_kind_modifiers() {
+    let plan = python_link_plan(
+        &config(
+            Some("python3.12"),
+            None,
+            true,
+            true,
+            None,
+            None,
+            &[
+                "cargo::rustc-link-lib=static:-bundle=python3.12:py",
+                "cargo::rustc-link-lib=dylib:+verbatim=libpython3.12.so",
+                "cargo:rustc-link-lib=static:+whole-archive,-bundle=util",
+            ],
+        ),
+        "linux",
+        "gnu",
+        false,
+    );
+    assert_args(
+        &plan,
+        &[
+            "-Wl,-Bstatic",
+            "-lpython3.12",
+            "-Wl,-Bdynamic",
+            "-l:libpython3.12.so",
+            "-Wl,-Bstatic",
+            "-Wl,--whole-archive",
+            "-lutil",
+            "-Wl,--no-whole-archive",
+            "-Wl,-Bdynamic",
+        ],
+    );
+    assert!(plan.passthrough.is_empty());
+
+    let windows = python_link_plan(
+        &config(
+            Some("python312"),
+            None,
+            true,
+            true,
+            None,
+            None,
+            &[
+                "cargo::rustc-link-lib=static:-bundle=python312",
+                "cargo::rustc-link-lib=dylib:+verbatim=python312.dll",
+            ],
+        ),
+        "windows",
+        "msvc",
+        false,
+    );
+    assert_args(&windows, &["python312.lib", "python312.dll"]);
+}
+
+#[test]
+fn scoped_link_lib_dir_none() {
+    let suppressed = python_link_plan(
+        &config(
+            Some("python3.12"),
+            None,
+            true,
+            true,
+            None,
+            None,
+            &["cargo::rustc-link-lib=python3.12"],
+        ),
+        "linux",
+        "gnu",
+        false,
+    );
+    assert_args(&suppressed, &["-lpython3.12"]);
+    assert!(suppressed.passthrough.is_empty());
+
+    let plain = python_link_plan(
+        &config(
+            Some("python3.12"),
+            None,
+            true,
+            false,
+            None,
+            Some("/usr/bin/python3"),
+            &[],
+        ),
+        "linux",
+        "gnu",
+        false,
+    );
+    assert_args(&plain, &["-lpython3.12"]);
+    assert!(plain.args.iter().all(|arg| !arg.starts_with("-L")));
+}
+
+#[test]
+#[should_panic(expected = "cannot be scoped to tests and benches")]
+fn scoped_link_unknown_directive_rejected() {
+    python_link_plan(
+        &config(
+            Some("python3.12"),
+            Some("/usr/lib"),
+            true,
+            true,
+            None,
+            None,
+            &["cargo::rustc-link-foo=bar"],
+        ),
+        "linux",
+        "gnu",
+        false,
     );
 }
