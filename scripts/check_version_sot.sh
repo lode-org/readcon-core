@@ -376,6 +376,18 @@ else:
 
 required = sorted(allow_exact - {"VERSION", "CHANGELOG.md", "Cargo.lock"})
 measured = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.]+)?$")
+
+
+def measured_is_older(recorded: str, current: str) -> bool:
+    def key(text: str) -> tuple[tuple[int, ...], int]:
+        core, dash, _rest = text.partition("-")
+        core = core.split("+", 1)[0]
+        numbers = tuple(int(part) for part in core.split("."))
+        return (numbers, 0 if dash else 1)
+
+    return key(recorded) < key(current)
+
+
 for rel in sorted(recorded_results):
     payload = json.loads((root / rel).read_text(encoding="utf-8"))
     found = []
@@ -412,6 +424,15 @@ for rel in sorted(recorded_results):
             text=True,
         )
         if tagged.returncode != 0:
+            # The row names the build that was measured. A later release
+            # must not rewrite that field. An older version than VERSION
+            # is that measurement when the checkout has no matching tag.
+            if measured_is_older(recorded, version):
+                print(
+                    f"OK: {rel} records measured readcon {recorded}, "
+                    f"older than {version}"
+                )
+                continue
             die(f"{rel} records readcon {recorded} but has no source_commit or v{recorded} tag")
             commits_ok = False
             continue
