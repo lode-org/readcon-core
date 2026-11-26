@@ -1759,7 +1759,6 @@ dependencies = [
  "pest_derive",
  "proptest",
  "pyo3",
- "pyo3-build-config",
  "rayon",
  "rustc-hash",
  "ryu",

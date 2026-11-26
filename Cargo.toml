@@ -16,8 +16,7 @@ license = "MIT"
 # wrap archive is built from it, so a file outside this list cannot move the
 # archive digest. Each path is anchored at the package root. Besides the
 # library sources, the build needs VERSION (build.rs), grammar/readcon.pest
-# (pest_derive), support/metatensor_install.rs (build.rs),
-# support/python_link.rs (build.rs, python feature), and
+# (pest_derive), support/metatensor_install.rs (build.rs), and
 # schema/ReadCon.capnp (build.rs, rpc feature). The examples and the .con
 # inputs are the ones examples/meson.build builds and reads.
 # frame_builder_consume.c is the extra example that meson.build builds.
@@ -32,7 +31,6 @@ include = [
   "/VERSION",
   "/grammar/readcon.pest",
   "/support/metatensor_install.rs",
-  "/support/python_link.rs",
   "/schema/ReadCon.capnp",
   "/CMakeLists.txt",
   "/cmake/**",
@@ -115,7 +113,6 @@ borrow-path-counts = []
 race-hooks = ["python"]
 python = [
   "dep:pyo3",
-  "dep:pyo3-build-config",
   "dep:numpy",
   "parallel",
   "mimalloc-allocator",
@@ -226,7 +223,6 @@ jsonschema = { version = "0.46.9", default-features = false }
 proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 tempfile = "3"
 loom = "0.7.3"
-pyo3-build-config = "0.28"
 
 [target.'cfg(unix)'.dev-dependencies]
 libc = "0.2"
@@ -355,9 +351,6 @@ sha2 = "0.10"
 cc = { version = "1", optional = true }
 capnpc = { version = "0.20", optional = true }
 metatensor-sys = { version = "0.2.0-rc4", optional = true }
-pyo3-build-config = { version = "0.28", optional = true, features = [
-  "resolve-config",
-] }
 
 # metatensor-sys's CMake probe runs `cargo rustc` while this cargo still
 # holds the target-directory lock. The path crate points that probe at
