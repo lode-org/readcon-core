@@ -210,12 +210,14 @@ _RULES = [
         "version line of the specification",
         lines(r"4\.0\.5"),
     ),
-    Rule(
-        "4.0.4",
-        grep(SPEC, r"^\|\s+(4\.0\.4) \| \d{4}-\d{2}-\d{2} \|"),
-        SPEC,
-        "the CON 4.0.4 row of the specification history",
-        lines(r"4\.0\.4"),
+    *when_printed(
+        Rule(
+            "4.0.4",
+            grep(SPEC, r"^\|\s+(4\.0\.4) \| \d{4}-\d{2}-\d{2} \|"),
+            SPEC,
+            "the CON 4.0.4 row of the specification history",
+            lines(r"4\.0\.4"),
+        )
     ),
     Rule(
         "0.21.0",
