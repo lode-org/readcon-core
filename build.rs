@@ -221,7 +221,8 @@ fn unix_ldlibrary_from_python3() -> String {
     String::from_utf8(output.stdout).expect("LDLIBRARY is utf-8")
 }
 
-/// Windows CPython has no `LDLIBRARY`. `py_version_nodot` still is.
+/// Windows CPython has no useful `LDLIBRARY` stem. `py_version_nodot`
+/// stays `313` on a free-threaded build; the import lib is `python313t.lib`.
 #[cfg(feature = "python")]
 fn windows_python_sysconfig() -> python_link::PythonSysconfig {
     const SCRIPT: &str = r#"
@@ -232,11 +233,17 @@ def g(key):
 nodot = g("py_version_nodot")
 if not nodot:
     nodot = f"{sys.version_info[0]}{sys.version_info[1]}"
+abiflags = g("ABIFLAGS")
+if not abiflags:
+    abiflags = g("abiflags")
 base = sys.base_prefix or ""
 sys.stdout.write(f"LDLIBRARY\t{g('LDLIBRARY')}\n")
 sys.stdout.write(f"LIBDIR\t{g('LIBDIR')}\n")
 sys.stdout.write(f"BASE_PREFIX\t{base}\n")
 sys.stdout.write(f"PY_VERSION_NODOT\t{nodot}\n")
+sys.stdout.write(f"PY_VERSION_NODOT_PLAT\t{g('py_version_nodot_plat')}\n")
+sys.stdout.write(f"ABIFLAGS\t{abiflags}\n")
+sys.stdout.write(f"PY_GIL_DISABLED\t{g('Py_GIL_DISABLED')}\n")
 "#;
     let output = std::process::Command::new("python3")
         .env("PYTHONIOENCODING", "utf-8")
