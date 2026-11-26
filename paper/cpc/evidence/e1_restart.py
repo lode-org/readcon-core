@@ -1006,7 +1006,8 @@ def velocity_factor(atoms, masks) -> dict:
     """
     rng = np.random.default_rng(20261011)
     masses = atoms.get_masses()
-    kB = 8.617333262145e-5  # eV/K
+    unit = velocity_case.natural_fs()
+    kB = unit["kB_eV_per_K"]
     sigma = np.sqrt(kB * 300.0 / masses)
     vel_nat = rng.normal(scale=sigma[:, None], size=(len(atoms), 3)) * NATURAL_TO_FS
     path = WORK / "velocity" / "natural.con"
@@ -1018,7 +1019,6 @@ def velocity_factor(atoms, masks) -> dict:
         positions_of(path)[0], atoms.get_positions()
     ):
         raise SystemExit(f"{path} is not the seeded draw on the unminimised slab")
-    unit = velocity_case.natural_fs()
     shared = velocity_case.slab_28(path, unit["readcon_fs"], unit["kB_eV_per_K"])
     return {
         "n_atoms": shared["n_atoms"],
