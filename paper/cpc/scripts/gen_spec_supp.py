@@ -826,8 +826,26 @@ def spec_macros(org: str) -> str:
     )
 
 
+ORG_LINK = re.compile(r"\[\[([^\]]+)\](?:\[([^\]]+)\])?\]")
+MACRO = re.compile(r"\\newcommand\{\\(\w+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
+
+
 def org_inline(text: str) -> str:
-    """Org table text as LaTeX, a =verbatim= span as texttt and a power such as 2^64-1 as math."""
+    """Org table text as LaTeX: a [[target][label]] link as href, a =verbatim= span as texttt and a
+    power such as 2^64-1 as math."""
+    out, at = [], 0
+    for link in ORG_LINK.finditer(text):
+        target, label = link.group(1), link.group(2) or link.group(1)
+        out.append(_org_words(text[at : link.start()]))
+        out.append(
+            "\\href{%s}{%s}" % (re.sub(r"([%#])", r"\\\1", target), _org_words(label))
+        )
+        at = link.end()
+    out.append(_org_words(text[at:]))
+    return "".join(out)
+
+
+def _org_words(text: str) -> str:
     parts = re.split(r"=([^=\s][^=]*?)=", text)
     return "".join(
         f"\\texttt{{{''.join(TT_ESCAPES.get(ch, ch) for ch in part)}}}"
@@ -1376,9 +1394,7 @@ def main() -> None:
             raise SystemExit(
                 f"{', '.join(stale)} differ from {SPEC.relative_to(ROOT)}; run gen_spec_supp.py --as-is"
             )
-        macros = dict(
-            re.findall(r"\\newcommand\{\\(\w+)\}\{([^}]*)\}", outputs[MACROS_OUT])
-        )
+        macros = dict(MACRO.findall(outputs[MACROS_OUT]))
         print(
             f"spec_normative.tex, versions_table.tex and spec_macros.tex are byte for byte the "
             f"{macros['specClauses']}-clause {SPEC.relative_to(ROOT)}, the text of release "
