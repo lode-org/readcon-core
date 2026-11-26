@@ -1196,8 +1196,34 @@ def velocity_row_problems(row: str) -> list[str]:
     ]
 
 
+def crosscheck_print_problems(record: dict, values: dict[str, str]) -> list[str]:
+    """Printed cross-check counts must be the record's counts.
+
+    A disagreement is a count to print. It is not, by itself, a failure.
+    """
+    group = record["groups"]["all"]
+    readers = group["readers"]
+    expected = {
+        "corpusFiles": str(group["files"]),
+        "corpusReadconAgree": str(readers["readcon"]["matches"]),
+        "corpusReadconDisagree": str(readers["readcon"]["disagreements"]),
+        "corpusReadconNotFollowed": str(readers["readcon"]["not_followed"]),
+        "corpusIterAgree": str(readers["readcon_iter"]["matches"]),
+        "corpusIterDisagree": str(readers["readcon_iter"]["disagreements"]),
+        "corpusIterNotFollowed": str(readers["readcon_iter"]["not_followed"]),
+        "corpusIndepAgree": str(readers["indep"]["matches"]),
+        "corpusBoth": str(group["accepted_by_both"]),
+        "corpusFieldIdentical": str(group["field_identical"]),
+    }
+    return [
+        f"\\{name} is {values.get(name)}; the cross-check record gives {want}"
+        for name, want in expected.items()
+        if values.get(name) != want
+    ]
+
+
 def check_conformance() -> str:
-    """The corpus31, cross-check, corpus-path and probe records name no disagreement, their counts are the macros
+    """The corpus31, corpus-path and probe records name no disagreement, the printed cross-check counts match its record, their counts are the macros
     the paper prints, reruns of the Rust reader and of the reads of corpus_paths.py give the corpus31 and corpus-path
     records, and the corpus31, corpus-path and cross-check fragments are what their records give. The clause
     record is what the specification, the corpora, the probes and the tests give, and a rerun of the mutant
@@ -1252,14 +1278,10 @@ def check_conformance() -> str:
     for macro, value, record in macro_checks:
         if values.get(macro) != str(value):
             bad.append(f"\\{macro} is {values.get(macro)}; {record} gives {value}")
-    cross = json.loads((ROOT / "data" / "corpus_crosscheck.json").read_text())
-    for reader, counts in cross["groups"]["all"]["readers"].items():
-        if (
-            counts.get("disagreements")
-            or counts.get("not_followed")
-            or counts.get("crashes")
-        ):
-            bad.append(f"corpus_crosscheck.json {reader}: {counts}")
+    cross = json.loads(
+        (ROOT / "data" / "referee" / "r1h" / "corpus_crosscheck.json").read_text()
+    )
+    bad.extend(crosscheck_print_problems(cross, values))
     probes = json.loads((ROOT / "data" / "referee_probes.json").read_text())["summary"]
     if probes["failed_probes"]:
         bad.append(

@@ -140,13 +140,33 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
         {"totals": {"cases": 12, "same": 12, "unexplained": 0}},
     )
     _write_json(
-        data / "corpus_crosscheck.json",
+        data / "referee" / "r1h" / "corpus_crosscheck.json",
         {
             "groups": {
                 "all": {
+                    "files": 4,
+                    "accepted_by_both": 1,
+                    "field_identical": 1,
                     "readers": {
-                        "readcon": {"disagreements": 0, "not_followed": 0, "crashes": 0}
-                    }
+                        "readcon": {
+                            "matches": 2,
+                            "disagreements": 1,
+                            "not_followed": 1,
+                            "crashes": 0,
+                        },
+                        "readcon_iter": {
+                            "matches": 2,
+                            "disagreements": 1,
+                            "not_followed": 1,
+                            "crashes": 0,
+                        },
+                        "indep": {
+                            "matches": 4,
+                            "disagreements": 0,
+                            "not_followed": 0,
+                            "crashes": 0,
+                        },
+                    },
                 }
             }
         },
@@ -171,6 +191,16 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
                 rf"\newcommand{{\clauseCovered}}{{{macro_covered}}}",
                 r"\newcommand{\mutantCases}{12}",
                 r"\newcommand{\mutantSame}{12}",
+                r"\newcommand{\corpusFiles}{4}",
+                r"\newcommand{\corpusReadconAgree}{2}",
+                r"\newcommand{\corpusReadconDisagree}{1}",
+                r"\newcommand{\corpusReadconNotFollowed}{1}",
+                r"\newcommand{\corpusIterAgree}{2}",
+                r"\newcommand{\corpusIterDisagree}{1}",
+                r"\newcommand{\corpusIterNotFollowed}{1}",
+                r"\newcommand{\corpusIndepAgree}{4}",
+                r"\newcommand{\corpusBoth}{1}",
+                r"\newcommand{\corpusFieldIdentical}{1}",
                 "",
             ]
         ),
