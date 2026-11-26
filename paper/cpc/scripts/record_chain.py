@@ -27,18 +27,27 @@ def chain(base: Path, root: Path) -> list[Path]:
     # JSON beside it, and the paper's read ledger would name those files
     # as inputs of the table.
     later = sorted(base.parent.glob(f"{base.stem}-*.json"))
+    # One parse per file. The walk below used to reread every remaining
+    # file at each hop, so a long chain reparsed the same records.
+    bodies: dict[Path, dict] = {}
+    for candidate in later:
+        key = rel(candidate, root)
+        if key in seen:
+            continue
+        try:
+            body = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(body, dict):
+            bodies[candidate] = body
     while True:
         link = rel(found[-1], root)
         nxt = []
-        for candidate in later:
+        for candidate, body in bodies.items():
             key = rel(candidate, root)
             if key in seen:
                 continue
-            try:
-                body = json.loads(candidate.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            if isinstance(body, dict) and body.get("supersedes") == link:
+            if body.get("supersedes") == link:
                 nxt.append(candidate)
         if not nxt:
             return found
