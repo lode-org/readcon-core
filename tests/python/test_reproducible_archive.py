@@ -518,7 +518,6 @@ LIBRARY_FILES = {
     "LICENSE",
     "grammar/readcon.pest",
     "support/metatensor_install.rs",
-    "support/python_link.rs",
     "schema/ReadCon.capnp",
     "CMakeLists.txt",
     "meson.build",
