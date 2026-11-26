@@ -18,10 +18,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from ase import Atoms
-from chemparseplot.parse.neb_utils import compute_synthetic_gradients
-from chemparseplot.parse.projection import compute_projection_basis, project_to_sd
-from chemparseplot.parse.trajectory.neb import compute_tangent_force
 import plot_figures as pf
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +25,8 @@ BANDS = ROOT / "data" / "failure" / "bands"
 
 
 def load(slug):
+    from ase import Atoms
+
     z = np.load(BANDS / f"{slug}.npz")
     imgs = []
     for p, f in zip(z["pos"], z["forces"]):
@@ -45,6 +43,9 @@ def rmsd(a, b):
 
 
 def band(slug, ref, prod):
+    from chemparseplot.parse.neb_utils import compute_synthetic_gradients
+    from chemparseplot.parse.trajectory.neb import compute_tangent_force
+
     imgs, e = load(slug)
     for a, ei in zip(imgs, e):
         a.info["energy"] = float(ei)
@@ -55,6 +56,8 @@ def band(slug, ref, prod):
 
 
 def main():
+    from chemparseplot.parse.projection import compute_projection_basis, project_to_sd
+
     theme, _ = pf.house_style()
     ref_imgs, _ = load("uninterrupted")
     ref, prod = ref_imgs[0].positions, ref_imgs[-1].positions
