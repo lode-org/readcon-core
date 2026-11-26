@@ -67,10 +67,13 @@ import subprocess
 from pathlib import Path
 
 
+_here = Path(__file__).resolve().parent
 _repo = next(
     _p for _p in Path(__file__).resolve().parents if (_p / "readcon_bench.py").is_file()
 )
-__import__("sys").path.insert(0, str(_repo))
+__import__("sys").path[:0] = [str(_here), str(_repo)]
+import provenance  # noqa: E402
+
 _BENCH = __import__("readcon_bench")
 bench_scratch = _BENCH.bench_scratch
 bench_file = _BENCH.bench_file
@@ -658,11 +661,14 @@ def measurement_record() -> dict:
         and f"v{release}" not in tagged_releases
     )
     if VERSIONS == MEASUREMENT and live_untagged:
+        stored_commit = tree.get("commit")
         record["tree"] = {
             "release": release,
             "tagged": False,
             "spec_blob": spec_blob,
         }
+        if isinstance(stored_commit, str):
+            record["tree"]["commit"] = stored_commit
         record["unreleased_history"] = _unreleased_history()
     elif live_untagged and tree.get("spec_blob") == spec_blob:
         record["unreleased_history"] = _unreleased_history()
@@ -752,23 +758,51 @@ def release_rows(org: str) -> list[dict]:
     return rows
 
 
-def spec_macros(org: str) -> str:
-    """The clause count and the first release that ships this specification.
+def _blob_at(commit: str, blob: str) -> bool:
+    """Whether ``commit`` stores ``blob`` as the specification text."""
+    spec = SPEC.relative_to(ROOT).as_posix()
+    shown = git(
+        "rev-parse", "--verify", "-q", f"{commit}:{spec}", check=False
+    ).stdout.strip()
+    return shown == blob
 
-    A release-preparation tree may name the upcoming release before its tag
-    exists. Any other spec.org that no release tag holds stops the build.
+
+def _origin_commit_holding(blob: str) -> str | None:
+    """The newest origin/develop commit whose specification text is ``blob``."""
+    spec = SPEC.relative_to(ROOT).as_posix()
+    listed = git(
+        "rev-list", "--max-count=20", "origin/develop", "--", spec, check=False
+    )
+    for commit in listed.stdout.split():
+        if provenance.origin_reachable(commit) and _blob_at(commit, blob):
+            return commit
+    return None
+
+
+def spec_macros(org: str) -> str:
+    """The clause count and the release tag that ships this specification.
+
+    When no tag holds the blob, the name is the origin-reachable commit the
+    specification record stores for it, or the origin commit that holds the
+    blob. A local measurement names measured_at.commit.
     """
     record = measurement_record()
     blob = git("hash-object", str(SPEC)).stdout.strip()
     same = next((t["tag"][1:] for t in record["tags"] if t["spec_blob"] == blob), None)
     tree = record["tree"]
-    if (
-        same is None
-        and not tree["tagged"]
-        and tree.get("spec_blob") == blob
-        and tree["release"] == package_version()
-    ):
-        same = tree["release"]
+    if same is None and not tree["tagged"] and tree.get("spec_blob") == blob:
+        commit = tree.get("commit")
+        if not (isinstance(commit, str) and provenance.origin_reachable(commit)):
+            commit = _origin_commit_holding(blob)
+        if not commit:
+            measured = record.get("measured_at")
+            measured_commit = (
+                measured.get("commit") if isinstance(measured, dict) else None
+            )
+            if isinstance(measured_commit, str) and _blob_at(measured_commit, blob):
+                commit = measured_commit
+        if commit:
+            same = rf"commit \texttt{{{commit[:12]}}}"
     if same is None:
         raise SystemExit(
             f"no release tag in {VERSIONS.relative_to(ROOT)} ships {SPEC.relative_to(ROOT)} "

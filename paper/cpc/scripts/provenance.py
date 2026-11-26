@@ -58,6 +58,31 @@ def record_build_name(build: dict) -> str:
     return rf"commit \texttt{{{commit}}} ({after} after \texttt{{{base}}})"
 
 
+def origin_reachable(commit: str) -> bool:
+    """Whether a remote-tracking origin branch contains ``commit``.
+
+    Local tags are not origin refs. A tag that exists only in this clone does
+    not make its commit reachable.
+    """
+    if not commit or not re.fullmatch(r"[0-9a-f]{7,40}", commit):
+        return False
+    found = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(REPO),
+            "for-each-ref",
+            "--format=%(refname)",
+            f"--contains={commit}",
+            "refs/remotes/origin",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return found.returncode == 0 and bool(found.stdout.strip())
+
+
 def library_files(root: Path = REPO) -> list[str]:
     """The files the Python module and the C library are built from, relative to ``root``."""
     files: list[str] = []
