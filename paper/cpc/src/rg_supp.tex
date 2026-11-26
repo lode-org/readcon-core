@@ -126,11 +126,10 @@ We draw each restored figure from a stored record.
 We build the library from the commit named in Data availability of the manuscript, and we name no version deposit before its record exists.
 The machine line of a record gives only the architecture, the processor count and the processor string.
 
-\section{Normative specification}\label{sec:spec-normative} The typeset normative specification is \texttt{docs/orgmode/spec.org} of commit \texttt{e8abd818}, git blob \texttt{\specTextBlob}, with its version line, its date and its \specClauses{} numbered clauses.
-A script of the paper typesets that file, and its check mode fails unless the typeset text matches the file.
-The version line names readcon-core~\specTextRelease{}, and that version is not a release tag.
-The \readconcommitrole{} \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}) has specification source git blob \texttt{\rcMeasuredSpecBlob}, and that blob is not the typeset text.
-Two informative sentences of its units section round the value the parser gives the natural time unit and its difference from the value of eOn, and the supplement omits them.
+\section{Normative specification}\label{sec:spec-normative} The typeset normative specification is \texttt{docs/orgmode/spec.org}, with its version line, its date and its \specClauses{} numbered clauses.
+The typeset clauses match that source file.
+The version line names readcon-core~\specTextRelease{}.
+Commit \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}) has specification source git blob \texttt{\rcMeasuredSpecBlob}, and that blob is not the typeset text.
 The parser reads \texttt{(amu*angstrom\^{}2/eV)\^{}0.5} as the binary64 number \(\velNaturalFsBinary\,\mathrm{fs}\), eOn hard-codes \(\velEonFs\,\mathrm{fs}\), and their difference relative to the parsed value, computed in binary64, is \(\velEonRelDiff\) (Section~\ref{sec:supp-velocity}).
 readcon-core~\readconCargoVersion{} is the program this paper describes, and it implements specification 4.0.4, the version that Section~\ref{sec:format} of the main text follows.
 Each clause keeps its identifier, so a clause that the corpus manifest or an error message cites has the same text in the supplement.
@@ -511,8 +510,8 @@ The bar is the type 7 median.
 The repeats ran on the host of Section~\ref{sec:host}, with readcon-core at the commit named in Data availability.}
 \label{fig:timing} \end{figure*}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{Time of the main-branch full-frame read and of ASE, each divided by the time of release readcon-core, six repeats.
-The release and main-branch reads parse on all 8 cores, and ASE builds a full frame on one thread.
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{Time of the full-frame read at commit \texttt{ac4f4379} and of ASE, each divided by the time of release readcon-core, six repeats.
+The release read and the read at commit \texttt{ac4f4379} parse on all 8 cores, and ASE builds a full frame on one thread.
 The horizontal line is 1.
 A point above the line means that the release read is that many times as fast.
 eOn is not in this figure, and the coordinate read is not in it either.}
@@ -523,7 +522,7 @@ eOn is not in this figure, and the coordinate read is not in it either.}
 
 The measured commit calls \texttt{read\_positions} with no thread count, which returns only a coordinate array, and Rayon uses all 8 cores of this host, for a median of \rcTipMedian~s.
 Release \rcReleaseVersion{} calls \texttt{read\_con} with no thread count, which builds full frames and, at that release, parses a file of this size on the global Rayon pool, here all 8 cores, in \rcReleaseMedian~s.
-The main-branch build does the same in \rcBaseMedian~s.
+The build at commit \texttt{ac4f4379} does the same in \rcBaseMedian~s.
 ASE \texttt{ase.io} builds an Atoms object per frame on one thread, in \rcAseMedian~s.
 eOn 3.6.0 \texttt{loadcons} builds a frame per frame on one thread, in \rcEonMedian~s.
 The readcon rows therefore run on 8 cores and the ASE and eOn rows on one, so these medians are the host log and not the like-for-like comparison of Section~\ref{sec:like}.
@@ -774,12 +773,12 @@ Nor does it list the clause-coverage record, which is read from the specificatio
 \input{figures/generated/version_map}
 
 The generated table rows the records whose printed numbers the tracer ties to a build.
-Two commits of the main branch carry parts of the measured reader: \texttt{\readconpbccommit} gives the Python binding one periodic flag per cell vector, and \texttt{\readconrcidxcommit} (pull request~\readconrcidxpr) adds the frame index.
+Two commits carry parts of the measured reader: \texttt{\readconpbccommit} gives the Python binding one periodic flag per cell vector, and \texttt{\readconrcidxcommit} (pull request~\readconrcidxpr) adds the frame index.
 The library of a commit is its Rust sources, its C headers, its Cargo build script, its Cargo manifest and lock file and its Python package manifest.
 Its digest is the SHA-256 over their \texttt{sha256sum} lines in byte order of their paths, and a record names the library it ran by that digest: \rcRecordDigestCount{} of the \rcDigestRecordCount{} records that name a library name readcon-core~\rcRecordDigestVersion{}, whose digest begins \texttt{\rcRecordDigest}, and Table~\ref*{tab:versionmap} names the library of each record it rows.
 The eOn build record names eOn commit \texttt{579738a}.
-The readcon-db records are copied verbatim from two commits on the fix/ingest-species-count branch of \url{https://github.com/lode-org/readcon-db}: the reviewed commit \texttt{ff1210e3} with the measured code at \texttt{a584a288}, and the fair-store run at readcon-db commit \texttt{227e45cf} with the measured code at \texttt{d8bf1cb5}.
-The fidelity test is the two-store fidelity test of lode-org/readcon-db at commit \texttt{0afbaa0b}, and its field table is copied with the fair-store records.
+The readcon-db records are the reviewed commit \texttt{ff1210e3} with the measured code at \texttt{a584a288}, and the fair-store run at readcon-db commit \texttt{227e45cf} with the measured code at \texttt{d8bf1cb5}, both from \url{https://github.com/lode-org/readcon-db}.
+The fidelity test is the two-store fidelity test of lode-org/readcon-db at commit \texttt{0afbaa0b}, and its field table is the table in the fair-store records.
 The equal store comparison is the fair-db32 campaign; the legacy copper-dimer bench of the reviewed records is an unequal-workload stand-in and is not that comparison.
 The five shuffled-cache campaigns of Section~\ref*{sec:supp-readcon-db} are db24, db25, db26, db28 and db29 in the order given there, and the third compares the raw read of readcon-db commit \texttt{a584a288} with an earlier commit.
 Five printed results come from records that table does not row.
@@ -787,7 +786,7 @@ The like-for-like tables are written from \path{bench-like-for-like/results/summ
 The host-log medians are written from \path{logs/reader-exchange.log}.
 The DLPack exchange is written from \path{paper/cpc/data/dlpack_cost.txt}.
 The MPI host table and its figure are written from \path{logs/mpi.log}.
-The cross-format table is written from the campaign directory named in Section~\ref{sec:h2h}.
+The cross-format table is written from the records of Section~\ref{sec:h2h}.
 
 The git bundle readcon-core.bundle of the supplementary material carries commit \texttt{\readconcommitshort} with its whole history, and the archive paper-cpc.tar.gz contains the paper directory with the scripts, the records and the TeX sources of both documents.
 That commit has no paper directory.
@@ -813,7 +812,7 @@ The scripts of those tasks hold the command lines that they run for each cell, f
 The timing scripts run their cells in interleaved rounds, one untimed round and then the timed rounds, each round a new shuffle of the cells from a fixed seed and each run of a cell a new process, and each timing record keeps its seed and its number of rounds.
 The comparison of the earlier releases of CON 3.1 reads each of the four published wheels of Section~\ref{sec:supp-versions} in its own process and rewrites its record.
 
-\begin{lstlisting}[caption={Rebuild of the paper in a checkout of the \readconcommitrole.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=false,escapeinside={(*}{*)}]
+\begin{lstlisting}[caption={Rebuild of the paper from the deposited bundle.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=false,escapeinside={(*}{*)}]
 git clone readcon-core.bundle readcon-core
 cd readcon-core
 git checkout (*\readconcommit*)
