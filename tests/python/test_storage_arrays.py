@@ -740,6 +740,26 @@ def test_atom_sequence_pop_semantics() -> None:
         frame.atoms.pop()
 
 
+def _race_hooks_built() -> bool:
+    import readcon
+
+    return all(
+        hasattr(readcon, name)
+        for name in (
+            "_append_foreign_atom",
+            "_hold_frame_borrow",
+            "_atom_list_race",
+        )
+    )
+
+
+_NEEDS_RACE_HOOKS = pytest.mark.skipif(
+    not _race_hooks_built(),
+    reason="needs readcon built with the race-hooks feature",
+)
+
+
+@_NEEDS_RACE_HOOKS
 def test_snapshot_reports_a_foreign_atom_list_entry() -> None:
     """A non-atom in the list is an error, not a silent store rebuild."""
     import readcon
@@ -753,6 +773,7 @@ def test_snapshot_reports_a_foreign_atom_list_entry() -> None:
         _ = frame == frame
 
 
+@_NEEDS_RACE_HOOKS
 def test_atom_list_race_returns_a_borrow_error() -> None:
     """A borrowed frame makes the race return an error, not a panic."""
     import readcon
@@ -796,6 +817,7 @@ def test_atom_list_race_returns_a_borrow_error() -> None:
     live.__exit__(None, None, None)
 
 
+@_NEEDS_RACE_HOOKS
 def test_atom_list_race_keeps_frame_consistent_and_writable() -> None:
     import readcon
 
@@ -899,6 +921,7 @@ def _run_race_script(body: str) -> str:
     return done.stdout
 
 
+@_NEEDS_RACE_HOOKS
 def test_atom_list_race_writer_does_not_stall_the_interpreter() -> None:
     """Caller code a writer runs must not hold the writer lock: another
     writer blocked on it would starve the GIL handoff or a free-threaded
@@ -937,6 +960,7 @@ print("ok")
     assert out.strip() == "ok"
 
 
+@_NEEDS_RACE_HOOKS
 def test_atom_list_race_refuses_writes_after_exit() -> None:
     """A write still consuming its iterable when the context closes must be
     refused, and closing must not wait on that iterable."""
