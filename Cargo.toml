@@ -111,12 +111,7 @@ borrow-path-counts = []
 # so pytest can import readcon._atom_list_race. cfg(test) does not:
 # those tests load the maturin extension, which is not built as a test.
 race-hooks = ["python"]
-python = [
-  "dep:pyo3",
-  "dep:numpy",
-  "parallel",
-  "mimalloc-allocator",
-]
+python = ["dep:pyo3", "dep:numpy", "parallel", "mimalloc-allocator"]
 zstd = ["dep:zstd"]
 # Distributed I/O over a caller-supplied communicator (rsmpi). Needs an
 # MPI implementation and libclang at build time. See src/distrib.rs.
