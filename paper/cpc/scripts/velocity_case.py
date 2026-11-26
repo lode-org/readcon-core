@@ -32,14 +32,14 @@ sys.path.insert(0, str(SCRIPTS))
 import provenance  # noqa: E402
 
 CODATA = "2018"
-# CODATA 2018 atomic mass constant and its standard uncertainty in kg. The
+# CODATA 2018 atomic mass constant standard uncertainty in kg. The value
+# itself is read from ASE. The
 # elementary charge and the angstrom are exact in the 2019 SI, so the natural
 # time unit (m_u A^2 / eV)^(1/2) carries half the relative uncertainty of m_u.
-AMU_KG = 1.66053906660e-27
 AMU_UNCERTAINTY_KG = 0.00000000050e-27
 NATURAL = "(amu*angstrom^2/eV)^0.5"
-# The natural time unit eOn hard-codes, include/eon/ParametersOptions.h:26.
-EON_FS = 10.1805055
+# eOn's rounded natural unit follows the CODATA 2010 constants.
+EON_CODATA = "2010"
 TEMPERATURE_K = 300.0
 VELOCITY_SEED = 20261011
 DT_FS = 1.0
@@ -57,11 +57,11 @@ def natural_fs() -> dict:
     )
     readcon_units = json.loads(proc.stdout)
     units = ase.units.create_units(CODATA)
+    amu_kg = float(units["_amu"])
+    eon_fs = round(1.0 / ase.units.create_units(EON_CODATA)["fs"], 7)
     ase_fs = 1.0 / units["fs"]
     si_fs = float(np.sqrt(units["_amu"] * 1e-20 / units["_e"]) / 1e-15)
     factor = float(readcon_units["unit_conversion_factor_fs"])
-    if units["_amu"] != AMU_KG:
-        raise SystemExit(f"ASE CODATA {CODATA} m_u is {units['_amu']}, not {AMU_KG}")
     if factor != ase_fs or abs(si_fs - factor) > 4 * np.spacing(factor):
         raise SystemExit(
             f"natural unit disagrees: readcon {factor} ASE {ase_fs} SI {si_fs}"
@@ -71,10 +71,10 @@ def natural_fs() -> dict:
         "spelling": readcon_units["spelling"],
         "canonical": readcon_units["canonical"],
         "readcon_fs": factor,
-        "readcon_fs_standard_uncertainty": factor * AMU_UNCERTAINTY_KG / AMU_KG / 2,
+        "readcon_fs_standard_uncertainty": factor * AMU_UNCERTAINTY_KG / amu_kg / 2,
         "readcon_fs_squared": float(readcon_units["unit_conversion_factor_fs_squared"]),
-        "eon_fs": EON_FS,
-        "readcon_minus_eon_relative": (factor - EON_FS) / factor,
+        "eon_fs": eon_fs,
+        "readcon_minus_eon_relative": (factor - eon_fs) / factor,
         "ase_create_units_fs": ase_fs,
         "si_constants_fs": si_fs,
         "kB_eV_per_K": float(units["kB"]),
