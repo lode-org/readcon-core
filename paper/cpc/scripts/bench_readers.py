@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import random
 import subprocess
 import sys
 import time
@@ -55,6 +56,17 @@ EON_BIN = PAPER / "bench" / "work" / "eon_allframes"
 EON_COMMIT = "579738a9387e8d0ea55496f45dd057812cfab892"
 EON_VERSION = "3.6.0"
 REPEATS = 6
+
+
+def schedule(names: list[str], repeats: int = REPEATS, seed: int = 1) -> list[list[str]]:
+    """A seeded shuffle of ``names`` for each repeat, so no arm owns a slot."""
+    rng = random.Random(seed)
+    orders = []
+    for _ in range(repeats):
+        order = list(names)
+        rng.shuffle(order)
+        orders.append(order)
+    return orders
 THREADS = 1
 N_FRAMES = int(os.environ.get("LARGE_FRAMES", "100000"))
 N_ATOMS = 32
@@ -423,8 +435,7 @@ def main() -> int:
     samples: dict[str, list[dict]] = {name: [] for name, _ in arms}
     names = [name for name, _ in arms]
     paths = dict(arms)
-    for rep in range(REPEATS):
-        order = names if rep % 2 == 0 else list(reversed(names))
+    for rep, order in enumerate(schedule(names)):
         for name in order:
             doc = one(name, paths[name])
             samples[name].append(doc)
