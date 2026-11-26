@@ -290,6 +290,23 @@ fn usable(path: &Path, python_extension: bool) -> bool {
         && (python_extension || exports_symbol(path, "rkr_library_version"))
 }
 
+fn extension_without_libpython(path: &Path) -> bool {
+    usable(path, true) && !cdylib_links_libpython(path)
+}
+
+/// A cdylib built without `PYO3_BUILD_EXTENSION_MODULE` needs libpython.
+/// `readelf` failure counts as a mismatch so the caller rebuilds.
+fn cdylib_links_libpython(path: &Path) -> bool {
+    let Ok(out) = Command::new("readelf").args(["-d"]).arg(path).output() else {
+        return true;
+    };
+    if !out.status.success() {
+        return true;
+    }
+    let dynamic = String::from_utf8_lossy(&out.stdout).to_ascii_lowercase();
+    dynamic.contains("libpython") || dynamic.contains("python.framework")
+}
+
 fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(repo_root())
@@ -330,9 +347,12 @@ fn binding_libraries() -> (PathBuf, PathBuf) {
     } else {
         cargo_lib(&plain_dir, &["capi"])
     };
-    let python = if usable(&debug, true) {
+    // `target/debug` may be a `cargo build --features python` cdylib that
+    // was not built with `PYO3_BUILD_EXTENSION_MODULE`. That file exports
+    // `PyInit_readcon` and also links libpython. Rebuild instead of reusing it.
+    let python = if extension_without_libpython(&debug) {
         debug
-    } else if usable(&py_side, true) {
+    } else if extension_without_libpython(&py_side) {
         py_side
     } else {
         cargo_lib(&py_dir, &["python"])
