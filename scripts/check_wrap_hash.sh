@@ -67,9 +67,13 @@ if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
   # The wrap URL names one archive. If that release exists, its bytes
   # must be this hash. Skipping the compare whenever HEAD was not the
   # tag let the v0.23.2 URL keep a hash the upload does not have.
-  # A missing tag, a 404, or an unreachable host means the archive is
-  # not available yet. A downloaded archive with a different hash fails.
+  # A missing tag or an unreachable host means the archive is not
+  # available yet. A 404 after refs/tags/vX was listed is a failed
+  # download. A downloaded archive with a different hash fails.
   compare_live=1
+  tag_listed=0
+  tag_published=0
+  peeled=""
   if command -v git >/dev/null 2>&1 && git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     remote="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
     if [[ -n "$remote" ]]; then
@@ -86,7 +90,9 @@ if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
           fi
         fi
       fi
-      if [[ "$tag_listed" -eq 1 && -z "$peeled" ]]; then
+      if [[ "$tag_listed" -eq 1 && -n "$peeled" ]]; then
+        tag_published=1
+      elif [[ "$tag_listed" -eq 1 && -z "$peeled" ]]; then
         ok "v${cargo_ver} is not published; the wrap hash is the archive this tree will upload"
         compare_live=0
       elif [[ "$tag_listed" -eq 0 ]]; then
@@ -121,7 +127,11 @@ if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
       fi
     elif [[ "$http_code" == "404" ]]; then
       rm -f "$asset"
-      ok "v${cargo_ver} asset is not published yet (${source_url}); skipping live hash compare"
+      if [[ "$tag_listed" -eq 1 && "$tag_published" -eq 1 ]]; then
+        die "v${cargo_ver} is published but ${source_url} could not be downloaded"
+      else
+        ok "v${cargo_ver} asset returned HTTP 404; skipping live hash compare"
+      fi
     elif [[ -z "$http_code" || "$http_code" == "000" ]]; then
       rm -f "$asset"
       ok "could not reach ${source_url} (offline); skipping live hash compare"
