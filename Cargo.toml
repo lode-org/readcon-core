@@ -186,7 +186,10 @@ tokio = { version = "1", features = [
 ], optional = true }
 tokio-util = { version = "0.7", features = ["compat"], optional = true }
 futures = { version = "0.3", optional = true }
-pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
+# `extension-module` stays off. It disables the libpython link for every
+# Cargo target, including tests. maturin >= 1.9.4 sets
+# `PYO3_BUILD_EXTENSION_MODULE` for the wheel, which keeps libpython out.
+pyo3 = { version = "0.28", optional = true }
 numpy = { version = "0.28", optional = true }
 metatensor = { version = "0.3.0-rc2", optional = true }
 zstd = { version = "0.13", optional = true }
