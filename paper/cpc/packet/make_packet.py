@@ -553,7 +553,11 @@ def render(draft: bool = False) -> tuple[dict[str, str], str]:
         "title": title,
         "version": version,
         "commit": named["readconcommit"],
-        "commit_role": named["readconcommitrole"],
+        "commit_role": (
+            named["readconcommitrole"]
+            if named["readconcommitrole"] == "release commit"
+            else "commit that is not a release tag"
+        ),
         "tag_state": named["readcontagstate"],
         "digest": named["readcondigest"],
         "base": named["readconbase"],

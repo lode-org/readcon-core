@@ -194,6 +194,50 @@ def words(text: str, values: dict[str, str]) -> int:
     return len([w for w in text.split() if re.search(r"[A-Za-z0-9]", w)])
 
 
+def packet_count_problems(main: str, packet: str) -> list[str]:
+    """The packet repeats the manuscript's abstract and summary word counts."""
+    abstract = re.search(r"\\begin\{abstract\}(.*?)\\end\{abstract\}", main, re.S)
+    actual_words = words(abstract.group(1), macros()) if abstract else -1
+    packet_abstract_counts = {
+        int(n)
+        for pattern in (
+            r"^\| Abstract \|[^\n]*\|[^\n]*\|\s*(\d+) words by",
+            r"\*\*Abstract:\*\*.*?(\d+) words",
+        )
+        for n in re.findall(pattern, packet, re.I | re.M | re.S)
+    }
+    summary = re.search(
+        r"Word counts:\s*Nature of problem\s+(\d+),\s*Solution method\s+(\d+),"
+        r"\s*Additional comments\s+(\d+)",
+        packet,
+    )
+    heading = SUMMARY_HEADING.search(main)
+    end = SUMMARY_END.search(main, heading.end()) if heading else None
+    body = main[heading.end() : end.start()] if heading and end else ""
+    parts = re.split(FIELD + r"([^}:]+):\}", body)
+    bodies = {name.strip(): text for name, text in zip(parts[1::2], parts[2::2])}
+    actual_summary = tuple(
+        words(bodies.get(field, ""), macros()) for field in LONG_FIELDS
+    )
+    packet_summary = tuple(map(int, summary.groups())) if summary else ()
+    if packet_abstract_counts == {actual_words} and packet_summary == actual_summary:
+        return []
+    return [
+        "CPC-FORM.md counts "
+        f"abstract={sorted(packet_abstract_counts)}, summary={packet_summary}; "
+        f"the manuscript gives abstract={actual_words}, summary={actual_summary}"
+    ]
+
+
+def check_packet_counts() -> str:
+    problems = packet_count_problems(
+        MAIN.read_text(), (ROOT / "packet" / "CPC-FORM.md").read_text()
+    )
+    if problems:
+        fail(listed("packet counts", problems))
+    return "packet word counts match the manuscript"
+
+
 def check_front(main: str) -> str:
     bad = []
     abstract = re.search(r"\\begin\{abstract\}(.*?)\\end\{abstract\}", main, re.S)
@@ -1457,6 +1501,7 @@ def main() -> int:
     checks = [("rebuild", check_rebuild)] if args.rebuild else []
     checks += [
         ("front matter", lambda: check_front(MAIN.read_text())),
+        ("packet counts", check_packet_counts),
         (
             "generated files",
             lambda: check_generated(MAIN.read_text(), SUPP.read_text()),
