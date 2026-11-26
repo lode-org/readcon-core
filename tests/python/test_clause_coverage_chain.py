@@ -389,7 +389,10 @@ def test_repo_final_clause_coverage_chain_is_linear() -> None:
     assert names.index(f"clause_coverage-{version}-spec-major-11.json") == (
         names.index(f"clause_coverage-{version}-referee-r1.json") + 1
     )
-    assert names[-1] == f"clause_coverage-{version}-spec-major-11.json"
+    assert names.index(f"clause_coverage-{version}-spec-major-12.json") == (
+        names.index(f"clause_coverage-{version}-spec-major-11.json") + 1
+    )
+    assert names[-1] == f"clause_coverage-{version}-spec-major-12.json"
     # The older -r2 recount supersedes the legacy record beside spec-major and
     # has no series name, so it is a side record and never final.
     assert (spec_dir / f"clause_coverage-{version}-r2.json").is_file()
