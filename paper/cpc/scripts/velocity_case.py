@@ -32,11 +32,22 @@ sys.path.insert(0, str(SCRIPTS))
 import provenance  # noqa: E402
 
 CODATA = "2018"
-# CODATA 2018 atomic mass constant standard uncertainty in kg. The value
-# itself is read from ASE. The
-# elementary charge and the angstrom are exact in the 2019 SI, so the natural
-# time unit (m_u A^2 / eV)^(1/2) carries half the relative uncertainty of m_u.
-AMU_UNCERTAINTY_KG = 0.00000000050e-27
+
+
+def amu_uncertainty_kg() -> float:
+    """CODATA 2018 standard uncertainty of the atomic mass constant, in kg.
+
+    ASE supplies the value of ``m_u``. SciPy keeps the 2018 CODATA table, whose
+    uncertainty is not the 2022 value ``scipy.constants`` publishes by default.
+    """
+    from scipy.constants._codata import _physical_constants_2018
+
+    _value, unit, uncertainty = _physical_constants_2018["atomic mass constant"]
+    if unit != "kg":
+        raise SystemExit(f"atomic mass constant unit is {unit}, not kg")
+    return float(uncertainty)
+
+
 NATURAL = "(amu*angstrom^2/eV)^0.5"
 # eOn's rounded natural unit follows the CODATA 2010 constants.
 EON_CODATA = "2010"
@@ -71,7 +82,7 @@ def natural_fs() -> dict:
         "spelling": readcon_units["spelling"],
         "canonical": readcon_units["canonical"],
         "readcon_fs": factor,
-        "readcon_fs_standard_uncertainty": factor * AMU_UNCERTAINTY_KG / amu_kg / 2,
+        "readcon_fs_standard_uncertainty": factor * amu_uncertainty_kg() / amu_kg / 2,
         "readcon_fs_squared": float(readcon_units["unit_conversion_factor_fs_squared"]),
         "eon_fs": eon_fs,
         "readcon_minus_eon_relative": (factor - eon_fs) / factor,
