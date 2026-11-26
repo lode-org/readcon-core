@@ -113,6 +113,12 @@ if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
       sidecar_live=""
       if [[ "$sidecar_code" == "200" ]]; then
         sidecar_live="$(awk '{print $1}' "$sidecar_file")"
+      elif [[ "$sidecar_code" == "404" ]]; then
+        ok "skipped ${source_url}.sha256 (HTTP 404); sidecar compare skipped"
+      elif [[ -z "$sidecar_code" || "$sidecar_code" == "000" ]]; then
+        ok "skipped ${source_url}.sha256 (unreachable); sidecar compare skipped"
+      else
+        ok "skipped ${source_url}.sha256 (HTTP ${sidecar_code}); sidecar compare skipped"
       fi
       rm -f "$sidecar_file"
       if [[ -n "$sidecar_live" && "$sidecar_live" != "$live" ]]; then
