@@ -27,6 +27,7 @@ ALLOWLIST = (
     "/VERSION",
     "/grammar/readcon.pest",
     "/support/metatensor_install.rs",
+    "/support/python_link.rs",
     "/schema/ReadCon.capnp",
     "/CMakeLists.txt",
     "/cmake/**",
