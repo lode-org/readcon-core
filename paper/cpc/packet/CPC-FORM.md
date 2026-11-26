@@ -33,7 +33,7 @@ build of the paper, for readcon-core 0.17.3, commit that is not a release tag `5
 | EM LaTeX build | No subfolders. `.tex`, `.bbl` and support files as item type Manuscript, images as Figure. Order: `.tex`, bibliography, styles, figures. | EMTEX | `make_em_flat.py` writes the flat set (Packet files below). |
 | Abstract | At most 250 words, stands alone, define uncommon abbreviations at first use | GFA | 241 words by `check_manuscript.py`'s count. |
 | Keywords | 1 to 7 | GFA | 7: geometry interchange; file format specification; minimum image; DLPack; conformance corpus; saddle search; nudged elastic band. |
-| Highlights | 3 to 5 bullets, each at most 85 characters with spaces, separate editable file with "highlights" in the name | GFA | 5 bullets of 71, 72, 74, 81, 83 characters in `paper/cpc/highlights.txt`, the same text as the highlights of `rg_main.tex`. |
+| Highlights | 3 to 5 bullets, each at most 85 characters with spaces, separate editable file with "highlights" in the name | GFA | 5 bullets of 84, 72, 83, 73, 81 characters in `paper/cpc/highlights.txt`, the same text as the highlights of `rg_main.tex`. |
 | Graphical abstract | Not mentioned in the CPC guide | GFA | `rg_main.tex` has a graphical abstract; upload it in the graphical abstract slot. |
 | Title page | Full postal address of each affiliation with country; corresponding author email on the title page | GFA | TurtleTech ehf., Fornhaga 24, 107 Reykjavík, Iceland; rgoswami@ieee.org. |
 | Corresponding author | Full contact details incl. postal address and phone in EM | GFA checklist | The author enters them in EM. |
