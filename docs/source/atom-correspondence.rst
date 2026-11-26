@@ -42,8 +42,12 @@ checks and allows a mass or mask difference.
 The displacement uses the reference frame's cell. ``FrameHeader::cell_matrix``
 supplies the lattice (a stored ``lattice_vectors`` matrix, otherwise the
 matrix built from lines 3–4) and ``pbc_effective`` supplies the periodic
-axes. A missing ``pbc`` key is fully periodic. The helper inverts that
-matrix.
+axes. A missing ``pbc`` key is fully periodic. With every axis periodic the
+helper inverts that matrix. An open axis is not wrapped through the full
+inverse: only the periodic lattice vectors are searched, and the component
+normal to them is left unchanged. On two periodic axes that search
+Gauss-reduces the pair and can differ from the per-axis fractional wrap
+that three periodic axes still use.
 
 Rust
 ----

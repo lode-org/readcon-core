@@ -7,7 +7,9 @@
 //! matched pairs.
 //!
 //! The cell is [`FrameHeader::cell_matrix`] and [`FrameHeader::pbc_effective`].
-//! The matrix is inverted here; lengths and angles are not rebuilt.
+//! Lengths and angles are not rebuilt. Every periodic axis is wrapped in
+//! the span of those lattice vectors. An open axis is left out of that
+//! span, so a flat slab is not inverted through its short `c` vector.
 //!
 //! ```
 //! use readcon_core::types::ConFrameBuilder;
@@ -238,7 +240,7 @@ impl std::fmt::Display for CorrespondenceError {
             ),
             Self::SingularCell { determinant } => write!(
                 f,
-                "minimum-image displacement: reference cell matrix is singular (determinant {determinant})"
+                "minimum-image displacement: the periodic cell is singular (cell-matrix or Gram determinant {determinant})"
             ),
             Self::NonFiniteDelta => {
                 write!(
@@ -717,9 +719,16 @@ fn finite3(v: [f64; 3]) -> bool {
 /// Wrap one cartesian delta into the reference cell.
 ///
 /// `cell` is a [`FrameHeader::cell_matrix`]: each row is a lattice vector.
-/// Fractional coordinates are `delta * cell^{-1}` (row vector on the left).
-/// A periodic axis subtracts the nearest integer. `f64::round` breaks a
-/// half-integer toward ±infinity, away from zero.
+/// With every axis periodic, fractional coordinates are `delta * cell^{-1}`
+/// (row vector on the left) and each axis subtracts the nearest integer.
+/// `f64::round` breaks a half-integer toward ±infinity, away from zero.
+///
+/// An open axis is not wrapped through that full inverse. One periodic
+/// vector is a rounding along it. Two periodic vectors are Gauss-reduced
+/// and the nine neighbours of the rounded image are searched. That result
+/// can differ from the per-axis fractional wrap three periodic axes still
+/// use, and it can be shorter. The component normal to the periodic
+/// vectors is left as it is.
 pub fn minimum_image_delta(
     cell: [[f64; 3]; 3],
     pbc: [bool; 3],
@@ -728,16 +737,142 @@ pub fn minimum_image_delta(
     if !finite3(delta) {
         return Err(CorrespondenceError::NonFiniteDelta);
     }
+    let mut rows = [[0.0; 3]; 2];
+    let mut n = 0usize;
+    for axis in 0..3 {
+        if pbc[axis] {
+            if n < 2 {
+                rows[n] = cell[axis];
+            }
+            n += 1;
+        }
+    }
+    match n {
+        0 => Ok(delta),
+        1 => wrap_wire(delta, rows[0]),
+        2 => wrap_slab(delta, rows[0], rows[1]),
+        _ => wrap_full(cell, delta),
+    }
+}
+
+fn wrap_full(cell: [[f64; 3]; 3], delta: [f64; 3]) -> Result<[f64; 3], CorrespondenceError> {
     let (inv, _) = invert_cell(cell).ok_or(CorrespondenceError::SingularCell {
         determinant: det3(cell),
     })?;
     let mut frac = mul_row(delta, inv);
-    for axis in 0..3 {
-        if pbc[axis] {
-            frac[axis] -= frac[axis].round();
-        }
+    for component in &mut frac {
+        *component -= component.round();
     }
     Ok(mul_row(frac, cell))
+}
+
+fn wrap_wire(delta: [f64; 3], axis: [f64; 3]) -> Result<[f64; 3], CorrespondenceError> {
+    let length2 = dot(axis, axis);
+    if !length2.is_finite() || length2 <= 0.0 {
+        return Err(CorrespondenceError::SingularCell {
+            determinant: length2,
+        });
+    }
+    let steps = (dot(delta, axis) / length2).round();
+    Ok(axpy(delta, -steps, axis))
+}
+
+fn wrap_slab(delta: [f64; 3], u: [f64; 3], v: [f64; 3]) -> Result<[f64; 3], CorrespondenceError> {
+    if plane_duals(u, v).is_none() {
+        return Err(CorrespondenceError::SingularCell {
+            determinant: gram_det(u, v),
+        });
+    }
+    let reduced = lagrange_reduce(u, v);
+    let Some((dual, _)) = plane_duals(reduced[0], reduced[1]) else {
+        return Err(CorrespondenceError::SingularCell {
+            determinant: gram_det(reduced[0], reduced[1]),
+        });
+    };
+    let along_u = dot(delta, dual[0]).round();
+    let along_v = dot(delta, dual[1]).round();
+    let mut best = axpy(axpy(delta, -along_u, reduced[0]), -along_v, reduced[1]);
+    let mut best_n2 = dot(best, best);
+    for i in -1i32..=1 {
+        for j in -1i32..=1 {
+            let cand = axpy(
+                axpy(delta, -(along_u + f64::from(i)), reduced[0]),
+                -(along_v + f64::from(j)),
+                reduced[1],
+            );
+            let cand_n2 = dot(cand, cand);
+            // A tie, or a difference below this floor, keeps the rounded
+            // image. A shorter neighbour replaces it.
+            if cand_n2 + 1e-12 * (1.0 + best_n2) < best_n2 {
+                best = cand;
+                best_n2 = cand_n2;
+            }
+        }
+    }
+    Ok(best)
+}
+
+fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn axpy(y: [f64; 3], alpha: f64, x: [f64; 3]) -> [f64; 3] {
+    [
+        y[0] + alpha * x[0],
+        y[1] + alpha * x[1],
+        y[2] + alpha * x[2],
+    ]
+}
+
+fn gram_det(u: [f64; 3], v: [f64; 3]) -> f64 {
+    let uu = dot(u, u);
+    let vv = dot(v, v);
+    let uv = dot(u, v);
+    uu * vv - uv * uv
+}
+
+/// In-plane duals. `dual[i] · basis[j]` is the Kronecker delta, and each
+/// dual lies in the plane of the basis. `None` when the pair is
+/// collinear or non-finite.
+fn plane_duals(u: [f64; 3], v: [f64; 3]) -> Option<([[f64; 3]; 2], f64)> {
+    let uu = dot(u, u);
+    let vv = dot(v, v);
+    let uv = dot(u, v);
+    let det = gram_det(u, v);
+    let bound = 1e-24 * uu * vv;
+    if !det.is_finite() || !bound.is_finite() || det <= bound {
+        return None;
+    }
+    let inv = 1.0 / det;
+    let dual_u = axpy(
+        [vv * inv * u[0], vv * inv * u[1], vv * inv * u[2]],
+        -uv * inv,
+        v,
+    );
+    let dual_v = axpy(
+        [uu * inv * v[0], uu * inv * v[1], uu * inv * v[2]],
+        -uv * inv,
+        u,
+    );
+    Some(([dual_u, dual_v], det))
+}
+
+/// Gauss reduction of a two-dimensional lattice basis.
+fn lagrange_reduce(mut u: [f64; 3], mut v: [f64; 3]) -> [[f64; 3]; 2] {
+    if dot(u, u) > dot(v, v) {
+        std::mem::swap(&mut u, &mut v);
+    }
+    for _ in 0..128 {
+        let mu = (dot(u, v) / dot(u, u)).round();
+        if mu != 0.0 {
+            v = axpy(v, -mu, u);
+        }
+        if dot(v, v) >= dot(u, u) {
+            break;
+        }
+        std::mem::swap(&mut u, &mut v);
+    }
+    [u, v]
 }
 
 fn det3(m: [[f64; 3]; 3]) -> f64 {
@@ -817,5 +952,44 @@ mod tests {
         let err = minimum_image_delta([[0.0; 3]; 3], [true; 3], [1.0, 0.0, 0.0]).unwrap_err();
         assert!(matches!(err, CorrespondenceError::SingularCell { .. }));
         assert!(err.to_string().contains("singular"));
+    }
+
+    #[test]
+    fn a_collapsed_slab_is_rejected() {
+        let cell = [[1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
+        let err = minimum_image_delta(cell, [true, true, false], [0.1, 0.2, 0.3]).unwrap_err();
+        assert!(matches!(err, CorrespondenceError::SingularCell { .. }));
+        assert!(err.to_string().contains("singular"));
+    }
+
+    #[test]
+    fn an_open_cell_keeps_the_cartesian_delta() {
+        let delta = [1.5, -2.0, 0.25];
+        let kept = minimum_image_delta([[0.0; 3]; 3], [false; 3], delta).unwrap();
+        close(kept, delta);
+    }
+
+    #[test]
+    fn a_wire_wraps_only_along_its_axis() {
+        let cell = cell_vectors([10.0, 12.0, 14.0], [90.0, 90.0, 90.0]);
+        let wrapped = minimum_image_delta(cell, [false, false, true], [1.0, 2.0, 9.0]).unwrap();
+        close(wrapped, [1.0, 2.0, -5.0]);
+    }
+
+    #[test]
+    fn a_near_flat_slab_keeps_a_small_out_of_plane_step() {
+        let cell = cell_vectors([5.0, 5.0, 3.0], [86.892, 16.892, 70.0]);
+        assert!(
+            cell[2][2].abs() < 1e-6,
+            "c_z {} should be near 1e-8",
+            cell[2][2]
+        );
+        let delta = [0.02, -0.01, 0.275];
+        let wrapped = minimum_image_delta(cell, [true, true, false], delta).unwrap();
+        close(wrapped, delta);
+        assert!(
+            wrapped.iter().all(|component| component.abs() < 1.0),
+            "{wrapped:?}"
+        );
     }
 }

@@ -1391,6 +1391,32 @@ impl PyConFrame {
         Ok(shared(slf)?.angles)
     }
 
+    /// Lattice matrix, shape `(3, 3)`. Each row is a lattice vector, in
+    /// angstroms, matching [`crate::types::FrameHeader::cell_matrix`].
+    ///
+    /// A stored ``lattice_vectors`` matrix wins. Otherwise the matrix is
+    /// built from ``cell`` and ``angles``.
+    #[getter]
+    fn cell_matrix<'py>(
+        slf: &Bound<'_, Self>,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        let header = shared(slf)?.cell_header(py)?;
+        let rows = header.cell_matrix();
+        let data: Vec<f64> = rows.into_iter().flatten().collect();
+        let array = Array2::from_shape_vec((3, 3), data)
+            .map_err(|err| PyValueError::new_err(format!("cell matrix shape error: {err}")))?;
+        Ok(array.into_pyarray(py))
+    }
+
+    /// Periodic axes, matching [`crate::types::FrameHeader::pbc_effective`].
+    ///
+    /// A missing ``pbc`` key is fully periodic.
+    #[getter]
+    fn pbc_effective(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<[bool; 3]> {
+        Ok(shared(slf)?.cell_header(py)?.pbc_effective())
+    }
+
     #[getter]
     fn prebox_header(slf: &Bound<'_, Self>) -> PyResult<[String; 2]> {
         Ok(shared(slf)?.prebox_header.clone())
@@ -3033,6 +3059,27 @@ impl PyConFrame {
             None => Ok(PyDict::new(py).unbind()),
         })?;
         Ok(dict.bind(py))
+    }
+
+    /// Header whose cell matrix and effective periodic axes follow this frame.
+    ///
+    /// Lengths and angles are the Python fields. A metadata dict that has
+    /// already been built supplies `lattice_vectors` and `pbc`; otherwise
+    /// the parsed header does.
+    fn cell_header(&self, py: Python<'_>) -> PyResult<crate::types::FrameHeader> {
+        let inner = self
+            .inner
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("frame has no cell"))?;
+        let mut header = inner.header.clone();
+        header.boxl = self.cell;
+        header.angles = self.angles;
+        if self.metadata.get(py).is_some() {
+            let (meta, minor_raw) = py_metadata_to_json_map_with_minor(self.meta(py)?.as_any())?;
+            header.metadata =
+                crate::types::FrameMeta::from_map_with_minor_raw(meta, minor_raw.as_deref());
+        }
+        Ok(header)
     }
 
     fn metadata_map(&self, py: Python<'_>) -> PyResult<BTreeMap<String, Value>> {
@@ -8283,7 +8330,8 @@ fn frame_for_compute<'a>(
 /// Minimum-image displacement of each reference atom toward the atom in
 /// `other` with the same `atom_id`. Shape `(N, 3)`, reference order.
 ///
-/// The cell and the periodic flags are the reference frame's.
+/// The cell and the periodic flags are the reference frame's. An open
+/// axis is not wrapped through the full inverse of that cell.
 #[pyfunction]
 #[pyo3(signature = (reference, other, *, strict=true))]
 fn minimum_image_displacements<'py>(
