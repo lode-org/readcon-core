@@ -141,11 +141,14 @@ def results(binary: Path, threads: tuple[str, ...]) -> dict:
 
 def macros(record: dict) -> str:
     s = record["summary"]
+    # Legal and illegal are what the manifest says. Summary accepted and
+    # rejected count what the reader did.
+    legal = sum(f["expected"]["outcome"] == "accept" for f in record["files"])
     values = {
         "cthreeoneFiles": s["files"],
         "cthreeoneMatch": s["match"],
-        "cthreeoneAccepted": s["accepted"],
-        "cthreeoneRejected": s["rejected"],
+        "cthreeoneAccepted": legal,
+        "cthreeoneRejected": len(record["files"]) - legal,
         "cthreeoneExplicit": s["by_basis"].get("explicit", {}).get("files", 0),
         "cthreeoneNotExplicit": s["files"]
         - s["by_basis"].get("explicit", {}).get("files", 0),
