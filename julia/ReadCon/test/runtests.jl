@@ -780,7 +780,7 @@ end
         historical_units = "\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"time\":\"$natural\"}"
         symbol_units = "\"units\":{\"energy\":\"eV\",\"length\":\"angstrom\",\"time\":\"(u*Å^2/eV)^0.5\"}"
         v3 = "\"con_spec_version\":3,\"sections\":[\"velocities\"],"
-        v4 = "\"con_spec_patch\":4,\"con_spec_version\":4,\"sections\":[\"velocities\"],"
+        v4 = "\"con_spec_patch\":5,\"con_spec_version\":4,\"sections\":[\"velocities\"],"
         # An escaped minor is the top-level minor, as in Rust, C, Python, and RPC.
         # An fs label moves major 3 to major 4. Without one the frame stays
         # major 3 with the historical natural spelling.

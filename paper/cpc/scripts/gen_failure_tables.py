@@ -79,16 +79,28 @@ def version_cell(v):
     return tex(v)
 
 
+def _versioned_tip(prefix: str, suffix: str) -> str | None:
+    """The newest file of ``prefix-<version>``, following its supersedes chain."""
+    import record_chain
+
+    bases = []
+    for path in D.glob(f"{prefix}-*.json"):
+        stem = path.name.removeprefix(f"{prefix}-").removesuffix(".json")
+        parts = stem.split(".")
+        if len(parts) == 3 and all(part.isdigit() for part in parts):
+            bases.append((tuple(int(part) for part in parts), path))
+    if not bases:
+        return None
+    chosen = record_chain.tip(max(bases)[1], ROOT)
+    if suffix != "json":
+        chosen = chosen.with_suffix(f".{suffix}")
+    return chosen.name
+
+
 def matrix_csv():
     """The newest versioned matrix. The unversioned file stays put."""
-    found = []
-    for path in D.glob("matrix-*.csv"):
-        parts = path.stem.removeprefix("matrix-").split(".")
-        if len(parts) == 3 and all(part.isdigit() for part in parts):
-            found.append((tuple(int(part) for part in parts), path.name))
-    if not found:
-        return "matrix.csv"
-    return max(found)[1]
+    found = _versioned_tip("matrix", "csv")
+    return found if found is not None else "matrix.csv"
 
 
 def survey():
@@ -311,14 +323,10 @@ File & """
 
 def version_safety_csv():
     """The newest versioned remeasurement. The unversioned file stays put."""
-    found = []
-    for path in D.glob("version_safety-*.csv"):
-        parts = path.stem.removeprefix("version_safety-").split(".")
-        if len(parts) == 3 and all(part.isdigit() for part in parts):
-            found.append((tuple(int(part) for part in parts), path.name))
-    if not found:
+    found = _versioned_tip("version_safety", "csv")
+    if found is None:
         raise SystemExit(f"{D}: no version_safety-<version>.csv")
-    return max(found)[1]
+    return found
 
 
 def rewrite_unit(unit):
@@ -343,12 +351,15 @@ def versions():
             py += f", {rewrite_unit(r['python_rewrite_time_unit'])}"
         if "rewrite" in r["rule"]:
             py += f", {tex(r['python_rewrite'])}"
-        rule = {
-            "accept, natural unit": "accept (natural)",
-            "accept, natural unit, rewrite 4.0.4": "accept (natural), rewrite 4.0.4",
-            "accept, keep key": "accept, keep",
-            "accept, authoritative unit": "accept (authoritative)",
-        }.get(r["rule"], r["rule"])
+        prefix = "accept, natural unit, rewrite "
+        if r["rule"].startswith(prefix):
+            rule = f"accept (natural), rewrite {r['rule'][len(prefix) :]}"
+        else:
+            rule = {
+                "accept, natural unit": "accept (natural)",
+                "accept, keep key": "accept, keep",
+                "accept, authoritative unit": "accept (authoritative)",
+            }.get(r["rule"], r["rule"])
         variant = tex(r["variant"])
         body.append(" & ".join([variant, tex(rule), py, r["c_abi"]]) + r" \\")
     t = (

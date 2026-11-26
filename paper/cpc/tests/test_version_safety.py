@@ -1,4 +1,4 @@
-"""Spec 4.0.4 version rules, checked against the readcon that is installed."""
+"""Spec 4.0.5 version rules, checked against the readcon that is installed."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def test_every_rule_matches_the_live_readers():
         vs.assert_rule(row["variant"], header, rule, row)
 
 
-def test_the_survey_writer_emits_spec_4_0_4(tmp_path):
+def test_the_survey_writer_emits_spec_4_0_5(tmp_path):
     readcon = pytest.importorskip("readcon")
     import failure_matrix as fm
 
@@ -35,11 +35,11 @@ def test_the_survey_writer_emits_spec_4_0_4(tmp_path):
     header = json.loads(path.read_text().splitlines()[1])
     assert header["con_spec_version"] == readcon.CON_SPEC_VERSION == 4
     assert header["con_spec_minor"] == 0
-    assert header["con_spec_patch"] == 4
+    assert header["con_spec_patch"] == readcon.CON_SPEC_PATCH == 5
     assert header["units"]["time"] == vs.SYMBOL
     tracked = CPC / "src" / "figures" / "generated" / "survey_frame.con"
     tracked_header = json.loads(tracked.read_text().splitlines()[1])
     assert tracked_header["con_spec_version"] == 4
     assert tracked_header["con_spec_minor"] == 0
-    assert tracked_header["con_spec_patch"] == 4
+    assert tracked_header["con_spec_patch"] == 5
     assert tracked_header["units"]["time"] == vs.SYMBOL

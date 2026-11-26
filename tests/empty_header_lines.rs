@@ -138,7 +138,7 @@ fn binding_rewrite_of_empty_header_matches_the_builder() {
     assert_eq!(rewrite, built_text);
     assert!(binding.contains(r#""con_spec_version":4"#), "{binding}");
     assert!(binding.contains(r#""con_spec_minor":0"#), "{binding}");
-    assert!(binding.contains(r#""con_spec_patch":4"#), "{binding}");
+    assert!(binding.contains(r#""con_spec_patch":5"#), "{binding}");
     assert!(binding.contains("\"units\":{"), "{binding}");
     assert!(binding.contains("0.0 0.0 0.0 7 0"), "{binding}");
 }

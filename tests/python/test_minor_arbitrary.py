@@ -605,7 +605,7 @@ def test_differential_against_committed_base_oracle_in_python():
             frame = frames[0]
             assert frame.spec_version == readcon.CON_SPEC_VERSION == 4, rel
             assert frame.metadata["con_spec_minor"] == 0, rel
-            assert frame.metadata["con_spec_patch"] == 4, rel
+            assert frame.metadata["con_spec_patch"] == readcon.CON_SPEC_PATCH == 5, rel
             assert frame.metadata["units"]["time"] == "(u*Å^2/eV)^0.5", rel
             written = readcon.write_con_string(frames, canonical=True)
             current = (REPO_ROOT / rel).read_text(encoding="utf-8")

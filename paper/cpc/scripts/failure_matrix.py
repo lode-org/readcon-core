@@ -30,6 +30,7 @@ H5MD does not define (h5md_layout); any other outcome exits before an output is
 written.
 
 Writes data/failure/matrix-<readcon version>.csv and its JSON sidecar.
+A later run adds matrix-<version>-n and leaves the stored file byte-identical.
 data/failure/matrix.csv is the earlier matrix and is left in place.
 """
 
@@ -958,24 +959,32 @@ def main():
         "error",
         "error_at",
     ]
-    stem = f"matrix-{readcon.__version__}"
-    with open(OUT / f"{stem}.csv", "w", newline="") as fh:
+    import record_chain
+
+    base = OUT / f"matrix-{readcon.__version__}.json"
+    out_json, link = record_chain.allocate(base, ROOT)
+    out_csv = out_json.with_suffix(".csv")
+    with out_csv.open("x", newline="") as fh:
         wtr = csv.DictWriter(fh, fieldnames=fields, restval="", lineterminator="\n")
         wtr.writeheader()
         wtr.writerows(rows)
-    (OUT / f"{stem}.json").write_text(
-        json.dumps(
-            dict(
-                meta=meta,
-                spec=SPEC,
-                provenance=record,
-                summary=summary(rows),
-                rows=rows,
-            ),
-            indent=1,
-            default=lambda o: sorted(o) if isinstance(o, set) else str(o),
-        )
+    body = dict(
+        meta=meta,
+        spec=SPEC,
+        provenance=record,
+        summary=summary(rows),
+        rows=rows,
     )
+    if link is not None:
+        body = {"supersedes": link, **body}
+    with out_json.open("x", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                body,
+                indent=1,
+                default=lambda o: sorted(o) if isinstance(o, set) else str(o),
+            )
+        )
     for r in rows:
         print(
             f"{r['format']:26s} {r['writer']:18s} -> {r['reader']:15s} | {r['R1']:12s} | {r['R2']:10s} | {r['R3']:30s} | "

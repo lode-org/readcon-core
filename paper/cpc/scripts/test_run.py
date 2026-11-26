@@ -16,9 +16,11 @@ in it, the layout of the supplementary material.  The run stops unless the check
 and its ``Cargo.toml`` carries the version of ``src/release.tex``.  ``--tables`` writes the listing
 from ``data/test_run.json``. That file is the 0.17.3 run and is not rewritten. Its commit must be
 the release commit. The frame hash is the one in the newest record that supersedes it, which names
-the frame now on disk.
+the frame now on disk. ``--frame`` records that hash in the next file of the chain and does not
+rewrite a stored record.
 
     python3 paper/cpc/scripts/test_run.py --checkout DIR --toolchain 1.88.0
+    python3 paper/cpc/scripts/test_run.py --frame
     python3 paper/cpc/scripts/test_run.py --tables
 """
 
@@ -242,6 +244,33 @@ def test_run_chain() -> list[tuple[Path, dict]]:
         chain.append(nxt[0])
 
 
+def record_frame() -> Path:
+    """The next test-run record, naming the survey frame now on disk."""
+    import provenance
+    import record_chain
+
+    found = test_run_chain()
+    tip_path = found[-1][0]
+    if tip_path == RECORD:
+        cargo = re.search(
+            r'^version = "([^"]+)"',
+            (ROOT.parents[1] / "Cargo.toml").read_text(),
+            re.MULTILINE,
+        ).group(1)
+        out = ROOT / "data" / f"test_run-{cargo}.json"
+    else:
+        out = record_chain.successor(tip_path)
+    body = {
+        "supersedes": tip_path.relative_to(ROOT).as_posix(),
+        "input": FRAME.relative_to(ROOT).as_posix(),
+        "input_sha256": frame_sha(),
+        "provenance": provenance.record(),
+    }
+    with out.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(body, indent=1) + "\n")
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument(
@@ -257,7 +286,14 @@ def main() -> None:
         action="store_true",
         help="write the listing from the committed record",
     )
+    ap.add_argument(
+        "--frame",
+        action="store_true",
+        help="record the survey frame hash in the next file of the chain",
+    )
     args = ap.parse_args()
+    if args.tables and args.frame:
+        raise SystemExit("--tables and --frame are separate runs")
     if args.tables:
         chain = test_run_chain()
         legacy_path, legacy = chain[0]
@@ -269,6 +305,10 @@ def main() -> None:
         if latest["input_sha256"] != frame_sha():
             raise SystemExit(f"{latest_path.name} names another frame")
         record = legacy
+    elif args.frame:
+        written = record_frame()
+        print(f"wrote {written.relative_to(ROOT).as_posix()}")
+        return
     else:
         if args.checkout is None:
             raise SystemExit("--checkout is required to run the example")

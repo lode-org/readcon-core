@@ -55,7 +55,12 @@ FRAME = GENERATED / "survey_frame.con"
 def _survey_record() -> Path:
     cargo = (REPO / "Cargo.toml").read_text()
     version = re.search(r'^version = "([^"]+)"', cargo, re.MULTILINE).group(1)
-    return ROOT / "data" / f"survey_frame-{version}.json"
+    base = ROOT / "data" / f"survey_frame-{version}.json"
+    import record_chain
+
+    if not base.is_file():
+        return base
+    return record_chain.tip(base, ROOT)
 
 
 SURVEY = _survey_record()

@@ -1,4 +1,4 @@
-// Build a CON 4.0.4 frame with velocities, set the natural time unit, write
+// Build a CON 4.0.5 frame with velocities, set the natural time unit, write
 // it with ConFrameWriter::round_trip, and read the minor and the unit
 // bytes back.
 #include "readcon-core.hpp"
@@ -52,8 +52,8 @@ int main(int argc, char *argv[]) {
         const std::string historical = "(amu*angstrom^2/eV)^0.5";
         check(json.find("\"con_spec_minor\":0") != std::string::npos,
               "con_spec_minor 0 in " + json);
-        check(json.find("\"con_spec_patch\":4") != std::string::npos,
-              "con_spec_patch 4 in " + json);
+        check(json.find("\"con_spec_patch\":5") != std::string::npos,
+              "con_spec_patch 5 in " + json);
         check(json.find(pinned) != std::string::npos,
               "pinned unit in " + json);
         check(json.find(historical) == std::string::npos,
@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     if (failures != 0) {
-        std::cerr << failures << " CON 4.0.4 unit check(s) failed\n";
+        std::cerr << failures << " CON 4.0.5 unit check(s) failed\n";
         return 1;
     }
     return 0;

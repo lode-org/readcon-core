@@ -76,15 +76,18 @@ def restart_rows(rel: str) -> dict[str, dict[str, str]]:
 
 def matrix_json() -> Path:
     """The newest versioned matrix. The unversioned file stays put."""
+    import record_chain
+
     folder = ROOT / "data" / "failure"
     found = []
     for path in folder.glob("matrix-*.json"):
-        parts = path.stem.removeprefix("matrix-").split(".")
+        stem = path.name.removeprefix("matrix-").removesuffix(".json")
+        parts = stem.split(".")
         if len(parts) == 3 and all(part.isdigit() for part in parts):
             found.append((tuple(int(part) for part in parts), path))
     if not found:
         return folder / "matrix.json"
-    return max(found)[1]
+    return record_chain.tip(max(found)[1], ROOT)
 
 
 def main() -> None:

@@ -8799,6 +8799,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
         option_env!("READCON_SOURCE_DIGEST").unwrap_or(""),
     )?;
     m.add("CON_SPEC_VERSION", crate::CON_SPEC_VERSION)?;
+    m.add("CON_SPEC_MINOR", crate::CON_SPEC_MINOR)?;
+    m.add("CON_SPEC_PATCH", crate::CON_SPEC_PATCH)?;
     m.add_class::<PyAtomDatum>()?;
     m.add_class::<PyAtomView>()?;
     m.add_class::<PyAtomIter>()?;
