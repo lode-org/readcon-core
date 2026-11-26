@@ -34,7 +34,9 @@ def test_packet_counts_match_the_manuscript() -> None:
         cm.MAIN.read_text(), (CPC / "packet" / "CPC-FORM.md").read_text()
     )
     assert problems == []
-    changed = (CPC / "packet" / "CPC-FORM.md").read_text().replace(
-        "Additional comments 121", "Additional comments 122", 1
+    changed = (
+        (CPC / "packet" / "CPC-FORM.md")
+        .read_text()
+        .replace("Additional comments 121", "Additional comments 122", 1)
     )
     assert cm.packet_count_problems(cm.MAIN.read_text(), changed)
