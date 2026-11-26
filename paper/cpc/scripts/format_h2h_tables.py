@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Write the cross-format head-to-head table and macros from the v0.23.3 records.
+"""Write the cross-format head-to-head table and macros from the campaign records.
 
 Every cell is read from a ``cross-format.json`` under
-``bench/h2h/formats/v0.23.3``; nothing is hand-typed.  The records are the
-cross-format campaign measured on one commit and one host:
+``bench/h2h/formats/v0.23.3``; nothing is hand-typed.  That directory is
+named for the VERSION file of commit e17abe9d. There is no release tag
+v0.23.3, and tag v0.23.2 is a different commit. The records are the
+cross-format campaign measured on that one commit and one host:
 
 * ``1k``, ``100k``, ``1m``, ``traj`` -- the per-structure read matrix;
 * ``1m-mmcif``                       -- the MDAnalysis mmCIF read at one million atoms;
@@ -358,8 +360,9 @@ def table() -> str:
         r"\begin{scriptsize}",
         r"\setlength{\tabcolsep}{2pt}",
         r"\begin{longtable}{@{}llrrrrp{2.7cm}@{}}",
-        r"\caption{Fair per-format read of the v0.23.3 cross-format campaign, "
-        r"one commit and one host (\hhfHost). "
+        r"\caption{Fair per-format read of the cross-format campaign at "
+        r"commit e17abe9d (v0.23.3, not a release tag), "
+        r"one host (\hhfHost). "
         r"readcon reads plain CON, binary CON and CON.zst; each other tool "
         r"reads its supported formats. A time is the type-7 median of "
         r"\hhfSamplesSubOneM\ samples below one million atoms and "
