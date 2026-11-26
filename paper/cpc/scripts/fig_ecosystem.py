@@ -23,6 +23,7 @@ not drawn.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -37,6 +38,16 @@ from matplotlib.patches import FancyBboxPatch, Polygon
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "figures" / "generated"
+SPEC_ORG = ROOT.parents[1] / "docs" / "orgmode" / "spec.org"
+
+
+def spec_version() -> str:
+    """The identity on the version line of spec.org."""
+    found = re.search(r"^- Version :: (\d+\.\d+\.\d+) ", SPEC_ORG.read_text(), re.M)
+    if found is None:
+        raise SystemExit(f"{SPEC_ORG} has no version line")
+    return found.group(1)
+
 
 TEAL = RUHI_COLORS["teal"]
 SKY = RUHI_COLORS["sky"]
@@ -277,7 +288,16 @@ def centre(ax) -> None:
     )
 
     sx0, sy0, sx1, sy1 = SPEC
-    box(ax, sx0, sy0, sx1, sy1, "CON 4.0.4 spec\n+ two corpora", face=SUN, edge=BLACK)
+    box(
+        ax,
+        sx0,
+        sy0,
+        sx1,
+        sy1,
+        f"CON {spec_version()} spec\n+ two corpora",
+        face=SUN,
+        edge=BLACK,
+    )
     vx = 9.55
     route(
         ax, [(sx1, (sy0 + sy1) / 2), (vx, (sy0 + sy1) / 2), (vx, CORE_Y1)], dashed=True

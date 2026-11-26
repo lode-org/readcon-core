@@ -14,10 +14,10 @@ Specification
 -------------
 
 Version
-    4.0.4 (major 4, minor 0, patch 4)
+    4.0.5 (major 4, minor 0, patch 5)
 
 Date
-    2026-11-19
+    2026-11-26
 
 Status
     Stable
@@ -290,7 +290,7 @@ CON-cell.2 \:\: MUST
     A writer that emits ``lattice_vectors`` MUST write lines 3-4 consistent with that matrix at the precision the writer is using.
 
 CON-cell.3 \:\: MUST
-    A missing ``pbc`` key MUST be read as periodic in all three directions.
+    An absent ``pbc`` key MUST be read as periodic in all three directions.
 
 CON-cell.4 \:\: MUST
     ``pbc``, when present, MUST be a length-3 array of booleans.
@@ -325,7 +325,7 @@ CON-count.3 \:\: MUST
     When the type count is 1 or more, each per-type count MUST be an integer >= 1, and any other count token MUST be ``InvalidCount``.
 
 CON-count.4 \:\: MUST
-    At end of file, when line 7 is 0, missing lines 8 and 9 MUST be read as empty, and ``CON-frame.3`` MUST NOT report that frame as ``IncompleteHeader``.
+    At end of file, when line 7 is 0, omitted lines 8 and 9 MUST be read as empty, and ``CON-frame.3`` MUST NOT report that frame as ``IncompleteHeader``.
 
 CON-count.5 \:\: SHOULD NOT
     Writers SHOULD NOT write a zero-atom frame for a consumer that predates v3.1.
@@ -657,7 +657,7 @@ CON-units.8 \:\: MUST
     In versions 1 and 2, and in every minor of major 3, velocities MUST be read as ``units.length`` per the natural time unit, and length is angstrom when ``units.length`` is absent.
 
 CON-units.9 \:\: MUST NOT
-    Any ``units.time`` on versions 1 and 2, and on every minor of major 3, MUST NOT be trusted, and a missing ``units.time`` MUST NOT reject the frame.
+    Any ``units.time`` on versions 1 and 2, and on every minor of major 3, MUST NOT be trusted, and an absent ``units.time`` MUST NOT reject the frame.
 
 CON-units.10 \:\: MUST
     In major 4 and later, ``units.time`` MUST be authoritative for velocities.
@@ -864,6 +864,8 @@ Version chronology
     +---------+------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
     |   4.0.4 | 2026-11-19 | Case-sensitive unit symbols, the symbol spelling of the natural unit, and no consumer override of the velocity time. Column 5 may be omitted. ``units.velocity`` does not replace the assigned time. |
     +---------+------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    |   4.0.5 | 2026-11-26 | Normative sentences say absent or omitted where 4.0.4 said missing (``CON-cell.3``, ``CON-count.4``, ``CON-units.9``).                                                                               |
+    +---------+------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 The major version moved from 3 to 4 because the meaning of ``units.time`` changed.
 
@@ -871,9 +873,9 @@ Version 3.0 defined the old meaning in ``CON-units.8`` and ``CON-units.9`` of th
 
 Version 3.1 defined the new meaning in ``CON-units.10`` of that text: from minor 1 onward, ``units.time`` MUST be authoritative for velocities.
 
-That change altered the meaning of an existing key inside one major, so it is not a minor revision (``CON-status.5``). Major 4 carries the version 3.1 meaning: ``units.time`` is authoritative for velocities. Every minor of major 3 carries the version 3.0 meaning: velocities are ``units.length`` per the natural time unit, and ``units.time`` MUST NOT be trusted. A reader of major 3 MUST NOT apply ``units.time`` and MUST NOT reject a velocities section for a missing ``units.time``.
+That change altered the meaning of an existing key inside one major, so it is not a minor revision (``CON-status.5``). Major 4 carries the version 3.1 meaning: ``units.time`` is authoritative for velocities. Every minor of major 3 carries the version 3.0 meaning: velocities are ``units.length`` per the natural time unit, and ``units.time`` MUST NOT be trusted. A reader of major 3 MUST NOT apply ``units.time`` and MUST NOT reject a velocities section for an absent ``units.time``.
 
-The specification identity is major.minor.patch (``CON-status.3``). Any change to normative text increases at least the patch (``CON-status.4``). This text is 4.0.4.
+The specification identity is major.minor.patch (``CON-status.3``). Any change to normative text increases at least the patch (``CON-status.4``). This text is 4.0.5.
 
 Version 3.1, dated 2026-10-11, is the last stable text before major 4. Every normative change since that text is one of the following, and each is carried by the version named with it.
 
@@ -895,7 +897,7 @@ Changes in 4.0.1:
 
 Changes in 4.0.2:
 
-- The lexical grammar is the ABNF appendix (``CON-lex.1``). Line 9 is the mass line. A coordinate row and lines 3, 4, and 8 may begin with spaces or tabs. A missing ending is legal only on the last line. A trailing form feed is a tail line. A bare CR that is not the last byte stays in its line.
+- The lexical grammar is the ABNF appendix (``CON-lex.1``). Line 9 is the mass line. A coordinate row and lines 3, 4, and 8 may begin with spaces or tabs. An omitted line ending is legal only on the last line. A trailing form feed is a tail line. A bare CR that is not the last byte stays in its line.
 
 - A JSON object must not repeat a name (``CON-line2.23``).
 
@@ -915,7 +917,7 @@ Changes in 4.0.3:
 
 - The natural time unit converts with the CODATA 2018 constants, and equals 10.180505710759414 fs. The eOn literal 10.1805055 fs is not a constant of CON 4 (``CON-units.18``).
 
-- A missing minor means 0 and a missing patch means 0. A builder's stamp is not part of that reading (``CON-line2.10``, ``CON-line2.16``).
+- An absent minor means 0 and an absent patch means 0. A builder's stamp is not part of that reading (``CON-line2.10``, ``CON-line2.16``).
 
 Changes in 4.0.4:
 
@@ -932,6 +934,12 @@ Changes in 4.0.4:
 - A writer may omit column 5. When the column is present the ids are unique within the frame. When it is omitted the reader uses the 0-based position (``CON-id.3``, ``CON-id.9``).
 
 - ``units.velocity``, when present, equals length divided by the time the version assigns. It does not replace ``units.time``, and a major-3 label does not decide the quotient (``CON-units.21``).
+
+Changes in 4.0.5:
+
+- The normative sentences of ``CON-cell.3``, ``CON-count.4`` and ``CON-units.9`` say absent or omitted where 4.0.4 said missing. A reader still treats an absent ``pbc`` key as periodic, omitted zero-atom lines 8 and 9 as empty, and an absent ``units.time`` on major 3 as not a reason to reject the frame.
+
+- The major-3 narrative, the notes of 4.0.2 and 4.0.3, decision ``D12`` and the ABNF note use those words.
 
 Normative changes on 2026-10-11, by decision:
 
@@ -957,7 +965,7 @@ Normative changes on 2026-10-11, by decision:
 
 - Invalid units fail the writer (``D11``).
 
-- Lines 3-4 and ``lattice_vectors`` follow the cell convention. Missing ``pbc`` is fully periodic (``D12``).
+- Lines 3-4 and ``lattice_vectors`` follow the cell convention. An absent ``pbc`` key is fully periodic (``D12``).
 
 - Default float text round-trips binary64. Fixed decimals are opt-in (``D13``).
 
@@ -1163,7 +1171,7 @@ CON-lex.1 \:\: MUST
     unit-expr      = unit-term *( ( "*" / "/" ) unit-term )
 
 ``line-end`` is LF, CR LF, or a CR that is the last byte of the input.
-The end of the input is also a ``line-end``, and only the last line may use it, so a missing ending does not join two lines.
+The end of the input is also a ``line-end``, and only the last line may use it, so an omitted ending does not join two lines.
 A CR that is not a ``line-end`` is a character of its line, including a title and line 5.
 Line 9 is ``mass-line``, the float masses of CON-header.3, and it may be empty.
 Lines 3 and 4, line 8, the masses and a coordinate row may begin with spaces or tabs.

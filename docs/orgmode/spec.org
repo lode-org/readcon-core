@@ -6,8 +6,8 @@
 
 * Specification
 
-- Version :: 4.0.4 (major 4, minor 0, patch 4)
-- Date :: 2026-11-19
+- Version :: 4.0.5 (major 4, minor 0, patch 5)
+- Date :: 2026-11-26
 - Status :: Stable
 - Reference implementation :: [[https://github.com/lode-org/readcon-core][readcon-core]]
 - Lexical grammar :: the normative ABNF appendix
@@ -447,6 +447,7 @@ Passing is the conformance corpus: the verdict, the class, and the line the mani
 |   4.0.2 | 2026-11-18 | Lexical grammar, repeated object names, unit spellings, the numeric contract, and conformance classes. |
 |   4.0.3 | 2026-11-18 | Reasoned verdicts for a count line, an unreserved overflow, a final CR, and cross-frame identifiers. The natural time unit is the CODATA 2018 value. Builder names are not normative. |
 |   4.0.4 | 2026-11-19 | Case-sensitive unit symbols, the symbol spelling of the natural unit, and no consumer override of the velocity time. Column 5 may be omitted. =units.velocity= does not replace the assigned time. |
+|   4.0.5 | 2026-11-26 | Normative sentences say absent or omitted where 4.0.4 said missing (=CON-cell.3=, =CON-count.4=, =CON-units.9=). |
 
 The major version moved from 3 to 4 because the meaning of =units.time= changed.
 
@@ -456,7 +457,7 @@ Version 3.1 defined the new meaning in =CON-units.10= of that text: from minor 1
 
 That change altered the meaning of an existing key inside one major, so it is not a minor revision (=CON-status.5=). Major 4 carries the version 3.1 meaning: =units.time= is authoritative for velocities. Every minor of major 3 carries the version 3.0 meaning: velocities are =units.length= per the natural time unit, and =units.time= MUST NOT be trusted. A reader of major 3 MUST NOT apply =units.time= and MUST NOT reject a velocities section for an absent =units.time=.
 
-The specification identity is major.minor.patch (=CON-status.3=). Any change to normative text increases at least the patch (=CON-status.4=). This text is 4.0.4.
+The specification identity is major.minor.patch (=CON-status.3=). Any change to normative text increases at least the patch (=CON-status.4=). This text is 4.0.5.
 
 Version 3.1, dated 2026-10-11, is the last stable text before major 4. Every normative change since that text is one of the following, and each is carried by the version named with it.
 
@@ -497,6 +498,11 @@ Changes in 4.0.4:
 - A consumer must not replace the time unit the version rules assign, and a different unit must not turn a rejected frame into an accepted one (=CON-units.15=).
 - A writer may omit column 5. When the column is present the ids are unique within the frame. When it is omitted the reader uses the 0-based position (=CON-id.3=, =CON-id.9=).
 - =units.velocity=, when present, equals length divided by the time the version assigns. It does not replace =units.time=, and a major-3 label does not decide the quotient (=CON-units.21=).
+
+Changes in 4.0.5:
+
+- The normative sentences of =CON-cell.3=, =CON-count.4= and =CON-units.9= say absent or omitted where 4.0.4 said missing. A reader still treats an absent =pbc= key as periodic, omitted zero-atom lines 8 and 9 as empty, and an absent =units.time= on major 3 as not a reason to reject the frame.
+- The major-3 narrative, the notes of 4.0.2 and 4.0.3, decision =D12= and the ABNF note use those words.
 
 Normative changes on 2026-10-11, by decision:
 

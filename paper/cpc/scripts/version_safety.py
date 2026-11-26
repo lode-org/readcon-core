@@ -56,9 +56,9 @@ NAT_FS = 10.180505710759414
 U = {"energy": "eV", "length": "angstrom", "mass": "amu"}
 UNKNOWN = "band_optimizer_state"
 
-# Rules follow docs/orgmode/spec.org at 4.0.4: CON-status.1, CON-line2.7,
+# Rules follow docs/orgmode/spec.org at 4.0.5: CON-status.1, CON-line2.7,
 # CON-units.8 through CON-units.11. Major 3 accepts every minor, reads
-# velocities in the natural unit, and does not reject a missing units.time.
+# velocities in the natural unit, and does not reject an absent units.time.
 # Major 4 is accepted and units.time is authoritative, so velocities without
 # it are InvalidUnits. Major 5 is UnsupportedVersion. A binding rewrite of a
 # 3.0 velocities frame labelled fs is major 4 with the symbol spelling.
