@@ -58,7 +58,9 @@ EON_VERSION = "3.6.0"
 REPEATS = 6
 
 
-def schedule(names: list[str], repeats: int = REPEATS, seed: int = 1) -> list[list[str]]:
+def schedule(
+    names: list[str], repeats: int = REPEATS, seed: int = 1
+) -> list[list[str]]:
     """A seeded shuffle of ``names`` for each repeat, so no arm owns a slot."""
     rng = random.Random(seed)
     orders = []
@@ -67,6 +69,8 @@ def schedule(names: list[str], repeats: int = REPEATS, seed: int = 1) -> list[li
         rng.shuffle(order)
         orders.append(order)
     return orders
+
+
 THREADS = 1
 N_FRAMES = int(os.environ.get("LARGE_FRAMES", "100000"))
 N_ATOMS = 32

@@ -28,9 +28,7 @@ NAMED = (
 
 def test_the_six_clauses_are_named_and_not_uncovered() -> None:
     record = json.loads(RECORD.read_text(encoding="utf-8"))
-    assert record["supersedes"].endswith(
-        f"clause_coverage-{VERSION}-capi-r4.json"
-    )
+    assert record["supersedes"].endswith(f"clause_coverage-{VERSION}-capi-r4.json")
     text = DUTIES.read_text(encoding="utf-8")
     uncovered = set(record["uncovered"])
     for clause in NAMED:

@@ -1256,9 +1256,7 @@ def check_conformance() -> str:
     mutant_record = "data/referee/r1t/mutant_differential.json"
     mutants = json.loads((ROOT / mutant_record).read_text())["totals"]
     if mutants["unexplained"]:
-        bad.append(
-            f"{mutant_record}: {mutants['unexplained']} cases no group explains"
-        )
+        bad.append(f"{mutant_record}: {mutants['unexplained']} cases no group explains")
     values = macros()
     macro_checks = [
         ("cthreeoneFiles", c31["files"], corpus31_record),
