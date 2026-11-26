@@ -78,22 +78,22 @@ Medians are milliseconds. Ratio is the first arm divided by its comparator.
 
 | Item | Arm / comparator | Atoms | Median A (ms) | Median B (ms) | Ratio |
 |---|---|---:|---:|---:|---:|
-| 2 | torch DLPack / torch copy | 1,000 | 0.001288 | 0.002500 | 0.5152 |
-| 2 | torch DLPack / torch copy | 10,000 | 0.001124 | 0.006592 | 0.1704 |
-| 2 | torch DLPack / torch copy | 100,000 | 0.001732 | 0.027771 | 0.0624 |
-| 2 | torch DLPack / torch copy | 1,000,000 | 0.006492 | 0.204037 | 0.0318 |
+| 2 | torch DLPack / torch copy | 1,000 | 0.001785 | 0.003479 | 0.5129 |
+| 2 | torch DLPack / torch copy | 10,000 | 0.001856 | 0.007525 | 0.2466 |
+| 2 | torch DLPack / torch copy | 100,000 | 0.001884 | 0.020309 | 0.0928 |
+| 2 | torch DLPack / torch copy | 1,000,000 | 0.010170 | 0.228943 | 0.0444 |
 | 2 | JAX DLPack / explicit copy | 1,000 | 0.056466 | 0.031340 | 1.8017 |
 | 2 | JAX DLPack / explicit copy | 10,000 | 0.054678 | 0.038123 | 1.4342 |
 | 2 | JAX DLPack / explicit copy | 100,000 | 0.091373 | 0.124921 | 0.7314 |
 | 2 | JAX DLPack / explicit copy | 1,000,000 | 0.101639 | 0.481759 | 0.2110 |
-| 2 | NumPy DLPack / NumPy copy | 1,000 | 0.000372 | 0.000945 | 0.3934 |
-| 2 | NumPy DLPack / NumPy copy | 10,000 | 0.000376 | 0.004918 | 0.0764 |
-| 2 | NumPy DLPack / NumPy copy | 100,000 | 0.001043 | 0.163884 | 0.0064 |
-| 2 | NumPy DLPack / NumPy copy | 1,000,000 | 0.002376 | 1.387827 | 0.0017 |
-| 3 | float32 export / float64 then cast | 1,000 | 0.019275 | 0.021406 | 0.9005 |
-| 3 | float32 export / float64 then cast | 10,000 | 0.096822 | 0.101636 | 0.9526 |
-| 3 | float32 export / float64 then cast | 100,000 | 1.005458 | 1.146253 | 0.8772 |
-| 3 | float32 export / float64 then cast | 1,000,000 | 9.506717 | 11.059092 | 0.8596 |
+| 2 | NumPy DLPack / NumPy copy | 1,000 | 0.000448 | 0.001124 | 0.3988 |
+| 2 | NumPy DLPack / NumPy copy | 10,000 | 0.000466 | 0.004891 | 0.0954 |
+| 2 | NumPy DLPack / NumPy copy | 100,000 | 0.002268 | 0.148133 | 0.0153 |
+| 2 | NumPy DLPack / NumPy copy | 1,000,000 | 0.002628 | 1.428977 | 0.0018 |
+| 3 | float32 export / float64 then cast | 1,000 | 0.019713 | 0.021064 | 0.9359 |
+| 3 | float32 export / float64 then cast | 10,000 | 0.098427 | 0.103367 | 0.9522 |
+| 3 | float32 export / float64 then cast | 100,000 | 1.008279 | 1.169183 | 0.8624 |
+| 3 | float32 export / float64 then cast | 1,000,000 | 9.579188 | 11.738770 | 0.8160 |
 | 4 | readcon TensorBlock / ASE TensorBlock | 1,000 | 0.136762 | 1.015618 | 0.1347 |
 | 4 | readcon TensorBlock / ASE TensorBlock | 10,000 | 1.412858 | 15.483655 | 0.0912 |
 | 4 | readcon TensorBlock / ASE TensorBlock | 100,000 | 8.405926 | 83.040211 | 0.1012 |
