@@ -11159,7 +11159,17 @@ cargo:rustc-link-lib=python312
 
     fn extension_cdylib() -> PathBuf {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let target = root.join("target/python-extension-link");
+        let base = std::env::var_os("CARGO_TARGET_DIR")
+            .map(PathBuf::from)
+            .map(|path| {
+                if path.is_absolute() {
+                    path
+                } else {
+                    root.join(path)
+                }
+            })
+            .unwrap_or_else(|| root.join("target"));
+        let target = base.join("python-extension-link");
         let status = Command::new("cargo")
             .args([
                 "rustc",
