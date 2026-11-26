@@ -50,8 +50,6 @@ def test_the_macros_render_the_r1t_counts() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     text = module.macros(record)
-    assert text.splitlines()[0].endswith(
-        "data/referee/r1t/mutant_differential.json."
-    )
+    assert text.splitlines()[0].endswith("data/referee/r1t/mutant_differential.json.")
     assert f"\\newcommand{{\\mutantGroups}}{{{rendered}}}" in text
     assert "\\newcommand{\\mutantDiffer}{99}" in text

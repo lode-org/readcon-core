@@ -189,7 +189,10 @@ def self_check() -> int:
         raise SystemExit(f"thread count {counted}")
     if comparators(pinned):
         raise SystemExit("emitted a ratio require_same rejects")
-    if arm_threads(pinned.replace("threads_per_arm 1\n", ""))["readcon_tip"] != "unrecorded":
+    if (
+        arm_threads(pinned.replace("threads_per_arm 1\n", ""))["readcon_tip"]
+        != "unrecorded"
+    ):
         raise SystemExit("a log with no thread setting reported a count")
     return 0
 
