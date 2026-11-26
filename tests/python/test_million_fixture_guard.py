@@ -21,8 +21,11 @@ sys.path.insert(0, str(ROOT / "bench" / "h2h"))
 import cross_format
 
 
-def _load_format_h2h_tables():
-    script = ROOT / "paper" / "cpc" / "scripts" / "format_h2h_tables.py"
+def _load_format_h2h_tables(monkeypatch: pytest.MonkeyPatch):
+    """The table builder imports its siblings, so the paper scripts are on the path for this test only."""
+    scripts = ROOT / "paper" / "cpc" / "scripts"
+    monkeypatch.syspath_prepend(str(scripts))
+    script = scripts / "format_h2h_tables.py"
     spec = importlib.util.spec_from_file_location("format_h2h_tables", script)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -244,7 +247,7 @@ def test_format_h2h_tables_refuses_stale_one_million_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The table builder pins the exact historical 1M campaign and fixture."""
-    tables = _load_format_h2h_tables()
+    tables = _load_format_h2h_tables(monkeypatch)
     assert r"\label{tab:format-h2h}" in tables.table()
     assert r"\hhfReadconConBytesOneM" in tables.macros()
 

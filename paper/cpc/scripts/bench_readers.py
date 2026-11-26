@@ -55,6 +55,7 @@ EON_BIN = PAPER / "bench" / "work" / "eon_allframes"
 EON_COMMIT = "579738a9387e8d0ea55496f45dd057812cfab892"
 EON_VERSION = "3.6.0"
 REPEATS = 6
+THREADS = 1
 N_FRAMES = int(os.environ.get("LARGE_FRAMES", "100000"))
 N_ATOMS = 32
 ATOL = 1e-5
@@ -293,6 +294,15 @@ print(json.dumps({"seconds": dt, "hwm_before": before, "hwm_after": after, "matc
 
 def one(arm: str, path: Path) -> dict:
     env = os.environ.copy()
+    for key in (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "RAYON_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+    ):
+        env[key] = str(THREADS)
     env["READCON_BASE"] = str(BASE_DIR)
     env["READCON_V0173"] = str(RELEASE_DIR)
     env.pop("TMPDIR", None)
@@ -366,6 +376,9 @@ def main() -> int:
         f"frames {N_FRAMES}",
         f"atoms {N_ATOMS}",
         f"repeats {REPEATS}",
+        f"threads_per_arm {THREADS}",
+        "thread_environment OMP_NUM_THREADS OPENBLAS_NUM_THREADS MKL_NUM_THREADS "
+        "NUMEXPR_NUM_THREADS RAYON_NUM_THREADS VECLIB_MAXIMUM_THREADS",
         "schedule interleaved",
         "process fresh",
         "memory VmHWM_after_read_minus_VmHWM_after_import_MiB",
@@ -418,7 +431,8 @@ def main() -> int:
             lines.append(
                 f"sample arm={name} rep={rep} seconds={doc.get('seconds')} "
                 f"mib={doc.get('mib')} matched={doc.get('matched')} got={doc.get('got')} "
-                f"requested={doc.get('requested')} exit={doc.get('exit')} error={doc.get('error', '')}"
+                f"requested={doc.get('requested')} threads={THREADS} "
+                f"exit={doc.get('exit')} error={doc.get('error', '')}"
             )
     for name, _path in arms:
         got = [
@@ -446,7 +460,8 @@ def main() -> int:
         lines.append(
             f"summary arm={name} scope={scope} n_rep={len(got)} median_s={med:.9e} iqr_s={iqr:.9e} "
             f"mib_median={mib:.6f} mib_iqr={mib_iqr:.6f} "
-            f"requested={requested} matched={matched} failed={requested - matched} exit=0"
+            f"requested={requested} matched={matched} failed={requested - matched} "
+            f"threads={THREADS} exit=0"
         )
     lines.append("exit_code 0")
     # The campaign log this function writes when LOG has not been redirected.

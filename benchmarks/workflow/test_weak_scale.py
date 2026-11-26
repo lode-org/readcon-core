@@ -311,7 +311,7 @@ class HostAndLaunch(unittest.TestCase):
         self.assertEqual(derived["benchmark_dir"], "benches/weak_asv")
         self.assertEqual(derived["build_command"], pr["build_command"])
 
-    def test_asv_class_uses_the_ladder_and_six_repeats(self) -> None:
+    def test_asv_class_uses_the_ladder_setup_and_six_repeats(self) -> None:
         self.assertEqual(tuple(threads.TimeWeakThreads.params), weak.DEFAULT_LADDER)
         self.assertEqual(threads.TimeWeakThreads.repeat, 6)
         # asv 0.6 calls setup and teardown. It does not call the cache hooks.
