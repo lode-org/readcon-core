@@ -5,5 +5,7 @@
   "cross_format_tree": "fcf411b82a544a4a5692f752e7f52cf209d09b1a",
   "readcon_version": "0.23.3",
   "release_tag": null,
-  "tagged": false
+  "tagged": false,
+  "library_digest": "4b88c49c124986959dd67706e4ca944a8baa2171c0f608fab8d42f53ab1abb1b",
+  "conbin_api": "readcon.read_conbin_columns()"
 }
