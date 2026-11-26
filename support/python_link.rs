@@ -263,9 +263,17 @@ fn parse_link_lib(spec: &str) -> Result<ParsedLib<'_>, ()> {
         Some((kind, mods)) => (kind, mods),
         None => (kind_part, ""),
     };
+    // `-l [KIND[:MODIFIERS]=]NAME[:RENAME]` passes RENAME to the linker.
+    // `rustc -l dylib=orig:new --print=link-args` emits `-lnew`. An empty
+    // side (`:py` or `python3.12:`) is not a name.
     let name = match name_part.split_once(':') {
-        Some((name, rename)) if !name.is_empty() && !rename.is_empty() => name,
-        _ => name_part,
+        Some((name, rename)) => {
+            if name.is_empty() || rename.is_empty() {
+                return Err(());
+            }
+            rename
+        }
+        None => name_part,
     };
     if name.is_empty() || !matches!(kind, "" | "dylib" | "static" | "framework") {
         return Err(());

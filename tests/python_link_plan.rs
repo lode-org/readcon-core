@@ -472,7 +472,7 @@ fn scoped_link_kind_modifiers() {
         &plan,
         &[
             "-Wl,-Bstatic",
-            "-lpython3.12",
+            "-lpy",
             "-Wl,-Bdynamic",
             "-l:libpython3.12.so",
             "-Wl,-Bstatic",
@@ -502,6 +502,66 @@ fn scoped_link_kind_modifiers() {
         false,
     );
     assert_args(&windows, &["python312.lib", "python312.dll"]);
+}
+
+#[test]
+fn scoped_link_lib_rename_is_the_linker_name() {
+    let plan = python_link_plan(
+        &config(
+            Some("python3.12"),
+            None,
+            true,
+            true,
+            None,
+            None,
+            &[
+                "cargo::rustc-link-lib=dylib=orig:new",
+                "cargo::rustc-link-lib=static=python3.12:py",
+            ],
+        ),
+        "linux",
+        "gnu",
+        false,
+    );
+    assert_args(&plan, &["-lnew", "-Wl,-Bstatic", "-lpy", "-Wl,-Bdynamic"]);
+}
+
+#[test]
+#[should_panic(expected = "cannot be scoped to tests and benches")]
+fn scoped_link_lib_empty_rename_is_rejected() {
+    python_link_plan(
+        &config(
+            Some("python3.12"),
+            None,
+            true,
+            true,
+            None,
+            None,
+            &["cargo::rustc-link-lib=python3.12:"],
+        ),
+        "linux",
+        "gnu",
+        false,
+    );
+}
+
+#[test]
+#[should_panic(expected = "cannot be scoped to tests and benches")]
+fn scoped_link_lib_empty_name_is_rejected() {
+    python_link_plan(
+        &config(
+            Some("python3.12"),
+            None,
+            true,
+            true,
+            None,
+            None,
+            &["cargo::rustc-link-lib=:py"],
+        ),
+        "linux",
+        "gnu",
+        false,
+    );
 }
 
 #[test]
