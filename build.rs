@@ -6,7 +6,6 @@
 
 use sha2::{Digest, Sha256};
 use std::env;
-use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -16,10 +15,6 @@ extern crate metatensor_sys;
 #[cfg(feature = "metatensor")]
 #[path = "support/metatensor_install.rs"]
 mod metatensor_paths;
-
-#[cfg(feature = "python")]
-#[path = "support/python_link.rs"]
-mod python_link;
 
 fn check_package_version_file() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -161,148 +156,275 @@ fn main() {
     }
 
     #[cfg(feature = "python")]
-    write_python_test_link();
+    link_libpython_for_tests_and_benches();
 }
 
-/// Asks the host interpreter for libpython config and writes the test link.
+/// Link libpython into test and bench binaries only.
 ///
-/// The program runs on the host: `PYO3_PYTHON` if set, otherwise `python`
-/// on Windows and `python3` elsewhere. The link name follows the target OS.
+/// `pyo3` is built as an extension module, so it does not link libpython.
+/// The byte-cursor test starts an interpreter and needs that library.
+/// `pyo3_build_config::get` already applies `PYO3_PYTHON`, `PYO3_CROSS_*`,
+/// abi3, free-threading, Windows debug suffixes, `LIBDIR`, and macOS
+/// framework prefixes. Those flags stay off the cdylib and the plain lib.
 #[cfg(feature = "python")]
-fn write_python_test_link() {
-    println!("cargo:rerun-if-changed=support/python_link.rs");
-    let python = python_interpreter();
-    let (ldlibrary, version, abiflags, framework_prefix) = python_config(&python);
+fn link_libpython_for_tests_and_benches() {
+    let config = pyo3_build_config::get();
+    if config.suppress_build_script_link_lines {
+        for line in &config.extra_build_script_lines {
+            retarget_pyo3_link_line(line);
+        }
+        write_test_link_rs("");
+        return;
+    }
+    let Some(lib_name) = config.lib_name.as_deref() else {
+        panic!(
+            "pyo3-build-config reported no lib_name; \
+             the test binary cannot link libpython"
+        );
+    };
+    if !lib_name_ok(lib_name) {
+        panic!("pyo3-build-config reported an unusable lib_name: {lib_name}");
+    }
     let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    let directives = python_link::python_link_directives(
-        &os,
-        &ldlibrary,
-        &version,
-        &abiflags,
-        &framework_prefix,
-    );
-    let mut links = String::new();
-    for directive in &directives {
-        if let Some(line) = directive.cargo_line() {
-            if line.chars().any(|c| c == '\n' || c == '\r') {
-                panic!("refusing a multi-line cargo directive from {line:?}");
-            }
-            println!("{line}");
+    let mut flags = Vec::new();
+    // `rustc-link-arg-tests` does not reach the library harness
+    // (`cargo test --lib`). The `#[link]` below is compiled only into
+    // that harness, and it needs these search paths. A search path alone
+    // does not link libpython into the cdylib.
+    for dir in libpython_search_dirs(config, lib_name) {
+        require_single_line("lib_dir", &dir);
+        println!("cargo:rustc-link-search=native={dir}");
+        flags.push(linker_search_flag(&dir));
+    }
+    flags.extend(linker_lib_flags(lib_name, config.shared));
+    if os != "windows" {
+        if let Some(dir) = config.lib_dir.as_deref() {
+            flags.push(format!("-Wl,-rpath,{dir}"));
         }
-        if let python_link::LinkDirective::TestLink { name } = directive {
-            if !libpython_link_name_ok(name) {
-                panic!(
-                    "{} reported an unusable libpython link name: {name}",
-                    python.to_string_lossy()
-                );
+        if matches!(os.as_str(), "macos" | "ios") {
+            if let Some(prefix) = config.python_framework_prefix.as_deref() {
+                if framework_prefix_ok(prefix) {
+                    require_single_line("python_framework_prefix", prefix);
+                    flags.push(format!("-Wl,-rpath,{prefix}"));
+                }
             }
-            links.push_str(&format!(
-                "#[link(name = \"{name}\")]\nunsafe extern \"C\" {{}}\n"
-            ));
         }
     }
-    if links.is_empty() {
-        links.push('\n');
+    // Integration tests and benches link the library without `cfg(test)`,
+    // so they do not see the harness `#[link]`.
+    emit_test_and_bench_link_args(&flags);
+    let kind = if config.shared {
+        String::new()
+    } else {
+        ", kind = \"static\"".to_string()
+    };
+    write_test_link_rs(&format!(
+        "#[link(name = \"{lib_name}\"{kind})]\nunsafe extern \"C\" {{}}\n"
+    ));
+}
+
+/// Directories the linker should search for `lib_name`.
+///
+/// PyO3's `lib_dir` is sysconfig `LIBDIR`. On Debian that directory holds
+/// `libpython3.12.so.1` and the unversioned `libpython3.12.so` lives in
+/// sysconfig `LIBPL`. The host `LIBPL` is ignored while cross-compiling so
+/// a target build keeps `PYO3_CROSS_LIB_DIR`.
+#[cfg(feature = "python")]
+fn libpython_search_dirs(
+    config: &pyo3_build_config::InterpreterConfig,
+    lib_name: &str,
+) -> Vec<String> {
+    let mut dirs = Vec::new();
+    if let Some(dir) = config.lib_dir.clone() {
+        dirs.push(dir);
     }
+    if dirs.iter().any(|dir| libpl_has_link_name(dir, lib_name)) {
+        return dirs;
+    }
+    let host = env::var("HOST").ok() == env::var("TARGET").ok();
+    if host {
+        if let Some(libpl) = libpl_dir(config) {
+            if !dirs.iter().any(|dir| dir == &libpl) && libpl_has_link_name(&libpl, lib_name) {
+                dirs.push(libpl);
+            }
+        }
+    }
+    dirs
+}
+
+#[cfg(feature = "python")]
+fn libpl_dir(config: &pyo3_build_config::InterpreterConfig) -> Option<String> {
+    config.executable.as_ref()?;
+    let text = config
+        .run_python_script(
+            "import sysconfig\nvalue = sysconfig.get_config_var('LIBPL')\nprint(value or '')\n",
+        )
+        .ok()?;
+    let dir = text.lines().next()?.trim();
+    if dir.is_empty() {
+        None
+    } else {
+        Some(dir.to_string())
+    }
+}
+
+#[cfg(feature = "python")]
+fn libpl_has_link_name(dir: &str, lib_name: &str) -> bool {
+    let dir = Path::new(dir);
+    dir.join(format!("lib{lib_name}.so")).is_file()
+        || dir.join(format!("lib{lib_name}.dylib")).is_file()
+        || dir.join(format!("lib{lib_name}.a")).is_file()
+        || dir.join(format!("{lib_name}.lib")).is_file()
+}
+
+#[cfg(feature = "python")]
+fn write_test_link_rs(contents: &str) {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let path = out_dir.join("python_test_link.rs");
-    fs::write(&path, links).unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
-}
-
-/// Host program that prints libpython's config. Every probe goes through here.
-#[cfg(feature = "python")]
-fn python_interpreter() -> OsString {
-    println!("cargo:rerun-if-env-changed=PYO3_PYTHON");
-    if let Some(configured) = env::var_os("PYO3_PYTHON") {
-        if !configured.is_empty() {
-            return configured;
-        }
-    }
-    if cfg!(windows) {
-        OsString::from("python")
-    } else {
-        OsString::from("python3")
-    }
+    fs::write(&path, contents).unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
 }
 
 #[cfg(feature = "python")]
-fn python_config(python: &OsStr) -> (String, String, String, String) {
-    let output = std::process::Command::new(python)
-        .args(["-c", PYTHON_CONFIG_SCRIPT])
-        .output()
-        .unwrap_or_else(|err| {
-            panic!(
-                "{} is required to name libpython for the test binary: {err}",
-                python.to_string_lossy()
-            )
-        });
-    if !output.status.success() {
-        panic!(
-            "{} could not read libpython config: {}",
-            python.to_string_lossy(),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    let text = String::from_utf8(output.stdout).expect("libpython config is utf-8");
-    let lines: Vec<&str> = text.lines().collect();
-    if lines.len() < 4 {
-        panic!(
-            "{} printed {} libpython config lines, expected 4: {text:?}",
-            python.to_string_lossy(),
-            lines.len()
-        );
-    }
-    (
-        lines[0].to_string(),
-        lines[1].to_string(),
-        lines[2].to_string(),
-        lines[3].to_string(),
-    )
-}
-
-#[cfg(feature = "python")]
-fn libpython_link_name_ok(name: &str) -> bool {
+fn lib_name_ok(name: &str) -> bool {
     !name.is_empty()
         && name
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_')
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')
 }
 
-/// Prints `LDLIBRARY`, `VERSION`, resolved ABI flags, and `PYTHONFRAMEWORKPREFIX`.
-///
-/// `sys.abiflags` is Unix-only and raises `AttributeError` on Windows.
-/// `ABIFLAGS` covers that, including Windows 3.14 where it is emulated.
-/// A free-threaded build with neither set still gets the `t` suffix from
-/// `Py_GIL_DISABLED` (or sysconfig `abi_thread`).
 #[cfg(feature = "python")]
-const PYTHON_CONFIG_SCRIPT: &str = r#"
-import sys
-import sysconfig
+fn linker_search_flag(dir: &str) -> String {
+    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let env_name = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    if os == "windows" && env_name == "msvc" {
+        format!("/LIBPATH:{dir}")
+    } else {
+        format!("-L{dir}")
+    }
+}
 
-def text(value):
-    if value is None:
-        return ""
-    return str(value)
+#[cfg(feature = "python")]
+fn linker_lib_flags(lib_name: &str, shared: bool) -> Vec<String> {
+    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let env_name = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    if os == "windows" && env_name == "msvc" {
+        return vec![format!("{lib_name}.lib")];
+    }
+    if shared {
+        return vec![format!("-l{lib_name}")];
+    }
+    vec![
+        "-Wl,-Bstatic".to_string(),
+        format!("-l{lib_name}"),
+        "-Wl,-Bdynamic".to_string(),
+    ]
+}
 
-def abiflags():
-    flags = sysconfig.get_config_var("ABIFLAGS")
-    if isinstance(flags, str) and flags:
-        return flags
-    flags = getattr(sys, "abiflags", "") or ""
-    if flags:
-        return str(flags)
-    gil = sysconfig.get_config_var("Py_GIL_DISABLED")
-    if gil in (1, "1", True):
-        return "t"
-    if sysconfig.get_config_var("abi_thread") == "t":
-        return "t"
-    return ""
+#[cfg(feature = "python")]
+fn retarget_pyo3_link_line(line: &str) {
+    require_single_line("extra_build_script_line", line);
+    if let Some(spec) = line.strip_prefix("cargo:rustc-link-lib=") {
+        emit_test_and_bench_link_args(&linker_flags_from_rustc_link_lib(spec));
+        return;
+    }
+    if let Some(spec) = line.strip_prefix("cargo:rustc-link-search=") {
+        if let Some(flag) = linker_flag_from_rustc_link_search(spec) {
+            emit_test_and_bench_link_args(&[flag]);
+        }
+        return;
+    }
+    if let Some(flag) = line.strip_prefix("cargo:rustc-link-arg=") {
+        emit_test_and_bench_link_args(&[flag.to_string()]);
+        return;
+    }
+    if line.starts_with("cargo:rustc-link-arg-tests=")
+        || line.starts_with("cargo:rustc-link-arg-benches=")
+    {
+        println!("{line}");
+        return;
+    }
+    if line.starts_with("cargo:rustc-link")
+        || line.starts_with("cargo:rustc-cdylib-link-arg=")
+        || line.starts_with("cargo:rustc-link-arg-")
+    {
+        panic!("refusing to apply a pyo3 link directive outside tests and benches: {line}");
+    }
+    if line.starts_with("cargo:") {
+        println!("{line}");
+    }
+}
 
-sys.stdout.write(text(sysconfig.get_config_var("LDLIBRARY")) + "\n")
-sys.stdout.write(text(sysconfig.get_config_var("VERSION")) + "\n")
-sys.stdout.write(abiflags() + "\n")
-sys.stdout.write(text(sysconfig.get_config_var("PYTHONFRAMEWORKPREFIX")) + "\n")
-"#;
+#[cfg(feature = "python")]
+fn emit_test_and_bench_link_args(flags: &[String]) {
+    for flag in flags {
+        require_single_line("link arg", flag);
+        println!("cargo:rustc-link-arg-tests={flag}");
+        println!("cargo:rustc-link-arg-benches={flag}");
+    }
+}
+
+/// `cargo:rustc-link-lib` syntax, turned into a linker argument.
+#[cfg(feature = "python")]
+fn linker_flags_from_rustc_link_lib(spec: &str) -> Vec<String> {
+    let (kind, name) = if let Some((kind, name)) = spec.split_once('=') {
+        (kind, name)
+    } else {
+        ("", spec)
+    };
+    let name = name.rsplit_once(':').map(|(_, real)| real).unwrap_or(name);
+    require_single_line("lib_name", name);
+    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let env_name = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    if kind == "framework" {
+        return vec!["-framework".to_string(), name.to_string()];
+    }
+    if os == "windows" && env_name == "msvc" {
+        return vec![format!("{name}.lib")];
+    }
+    if kind == "static" {
+        return vec![
+            format!("-Wl,-Bstatic"),
+            format!("-l{name}"),
+            format!("-Wl,-Bdynamic"),
+        ];
+    }
+    vec![format!("-l{name}")]
+}
+
+#[cfg(feature = "python")]
+fn linker_flag_from_rustc_link_search(spec: &str) -> Option<String> {
+    let (kind, path) = if let Some((kind, path)) = spec.split_once('=') {
+        (kind, path)
+    } else {
+        ("native", spec)
+    };
+    if path.is_empty() {
+        return None;
+    }
+    require_single_line("lib_dir", path);
+    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let env_name = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    if os == "windows" && env_name == "msvc" {
+        return Some(format!("/LIBPATH:{path}"));
+    }
+    if kind == "framework" {
+        return Some(format!("-F{path}"));
+    }
+    Some(format!("-L{path}"))
+}
+
+#[cfg(feature = "python")]
+fn framework_prefix_ok(prefix: &str) -> bool {
+    let trimmed = prefix.trim();
+    !trimmed.is_empty() && trimmed != "None"
+}
+
+#[cfg(feature = "python")]
+fn require_single_line(what: &str, value: &str) {
+    if value.chars().any(|c| c == '\n' || c == '\r' || c == '\0') {
+        panic!("pyo3-build-config {what} is not a single line");
+    }
+}
 
 #[cfg(feature = "chemfiles")]
 fn compile_chemfiles_atom_view() {
