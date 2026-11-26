@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the readcon-core 0.17.3 performance tables and macros from the timing, memray and Cachegrind records.
+"""Write the readcon-core performance macros from the timing, memray and Cachegrind records.
 
 Inputs (``R0174``, default ``bench/results/r0174``):
 
@@ -18,10 +18,7 @@ and the C++ programs that ran must be those ``cpp/build.json`` hashed.
 
 Outputs (``BENCH_GENERATED``, default ``src/figures/generated``):
 
-* ``r0174_table.tex``       Table ``tab:perf``, time and peak heap of each Python read;
-* ``r0174_cpp.tex``         Table ``tab:cpp``, time of each C++ process;
-* ``r0174_cachegrind.tex``  SI table ``tab:cachegrind``, instruction counts;
-* ``r0174_macros.tex``      every number the prose quotes from these records.
+* ``r0174_macros.tex``  every number the prose quotes from these records.
 
 A time, a peak or a count is the median of the runs of its cell, with the
 interquartile range of the same runs (``statistics.quantiles`` with method
@@ -36,6 +33,8 @@ import os
 import re
 from math import floor, log10
 from pathlib import Path
+
+import provenance
 
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS = Path(os.environ.get("R0174", ROOT / "bench" / "results" / "r0174"))
@@ -114,7 +113,14 @@ CACHEGRIND = [
 HOST_KEYS = ("cpu_model", "family", "model", "nproc", "kernel")
 # The fields of a protocol that every timing record must share with ``reads.json``; the metric, the order of the
 # rounds and the load averages belong to each campaign.
-PROTOCOL_KEYS = ("schedule", "seed", "rounds", "warmup_rounds", "quartiles", "process")
+PROTOCOL_KEYS = (
+    "schedule",
+    "seed",
+    "rounds",
+    "warmup_rounds",
+    "quartiles",
+    "process",
+)
 # The fields of a build that every record of these tables must share with ``provenance.json``.
 BUILD_KEYS = (
     "release",
@@ -167,12 +173,6 @@ def grouped(n: int) -> str:
     return f"{n:,}".replace(",", "{,}")
 
 
-def count(x: float) -> str:
-    """An instruction count, or the interquartile range of counts, which can end in a fraction."""
-    whole = grouped(int(x))
-    return whole if x == int(x) else whole + f"{x % 1:.2f}".rstrip("0")[1:]
-
-
 def mib(n: float) -> str:
     return str(round(n / MIB))
 
@@ -212,6 +212,16 @@ def check(
             raise SystemExit(
                 f"{name} ran on another host than provenance.json names: {other}"
             )
+    seed = reads["protocol"].get("seed")
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise SystemExit("reads.json protocol seed must be an integer, not a boolean")
+    warmup_rounds = reads["protocol"].get("warmup_rounds")
+    if (
+        isinstance(warmup_rounds, bool)
+        or not isinstance(warmup_rounds, int)
+        or warmup_rounds < 1
+    ):
+        raise SystemExit("reads.json protocol must run at least one warm-up round")
     if reads["protocol"]["rounds"] < MIN_ROUNDS:
         raise SystemExit(
             f"reads.json ran {reads['protocol']['rounds']} rounds, fewer than {MIN_ROUNDS}"
@@ -220,6 +230,18 @@ def check(
         raise SystemExit(
             f"reads.json names the hardware line {reads['hardware']}; provenance.json {prov['hardware']}"
         )
+    order = reads["protocol"].get("order")
+    rounds = int(reads["protocol"]["rounds"])
+    if not isinstance(order, list) or len(order) != rounds:
+        raise SystemExit(
+            f"reads.json protocol order has {len(order) if isinstance(order, list) else 'no'} rounds; "
+            f"protocol.rounds is {rounds}"
+        )
+    for index, row in enumerate(order):
+        if not isinstance(row, list) or not row:
+            raise SystemExit(f"reads.json protocol order round {index} is empty")
+        if len(set(row)) != len(row):
+            raise SystemExit(f"reads.json protocol order round {index} repeats an arm")
     same_protocol("memray.json", memray, reads)
     same_protocol("cachegrind_results.json", grind, reads)
     if (
@@ -261,6 +283,14 @@ def check(
         if cell["mismatches"]:
             raise SystemExit(
                 f"{name} disagrees with payloads.json: {cell['mismatches']}"
+            )
+        samples = cell.get("samples_s")
+        if not isinstance(samples, list) or not samples:
+            raise SystemExit(f"{name} has no raw samples_s")
+        expected = cell.get("n")
+        if isinstance(expected, int) and expected != len(samples):
+            raise SystemExit(
+                f"{name} has {len(samples)} raw samples_s; n is {expected}"
             )
     for cell in memray["cells"]:
         if cell["mismatches"]:
@@ -335,9 +365,12 @@ SOURCES = [
     ("rcXyzBytes", "payloads.json", "files.traj.xyz.bytes"),
     ("rcConVersion", "payloads.json", "files.traj.con.con_version"),
     ("rcWarmFrames", "payloads.json", "files.warm.con.frames"),
-    ("rcRelease", "provenance.json", "build.release"),
+    (
+        "rcBuild",
+        "provenance.json",
+        "build.commit, build.base, build.commits_after_base",
+    ),
     ("rcBaseCommit", "provenance.json", "build.base"),
-    ("rcModuleVersion", "provenance.json", "build.readcon_version"),
     ("rcRustc", "provenance.json", "build.rustc"),
     ("rcVer", "provenance.json", "peers"),
     ("rcPython", "provenance.json", "tools.python"),
@@ -456,9 +489,8 @@ def main() -> None:
         ("rcRounds", str(protocol["rounds"])),
         ("rcWarmup", str(protocol["warmup_rounds"])),
         ("rcCells", str(len(reads["cells"]))),
-        ("rcRelease", build["release"]),
+        ("rcBuild", provenance.record_build_name(build)),
         ("rcBaseCommit", build["base"][:8]),
-        ("rcModuleVersion", build["readcon_version"]),
         ("rcRustc", build["rustc"].split()[0]),
         ("rcFrames", grouped(frames)),
         ("rcAtoms", str(atoms)),
@@ -512,96 +544,7 @@ def main() -> None:
         head + "".join(f"\\newcommand{{\\{n}}}{{{v}}}\n" for n, v in macros)
     )
 
-    rows = []
-    for title, _, members in GROUPS:
-        rows.append(f"\\multicolumn{{7}}{{@{{}}l@{{}}}}{{\\textit{{{title}}}}}\\\\")
-        for reader in members:
-            for threads in THREADS:
-                if (reader, threads) not in cells:
-                    continue
-                cell, peak = cells[(reader, threads)], peaks[(reader, threads)]
-                rel = ratio(ratios[reader]) if reader in ratios else "--"
-                _, label, fmt = READERS[reader]
-                rows.append(
-                    f"{label} & {fmt} & {threads} & {sig(cell['median_s'])} & {sig(cell['iqr_s'], 2)} & "
-                    f"{mib(peak['median_bytes'])} & {rel}\\\\"
-                )
-        rows.append("\\addlinespace")
-    rows.pop()
-    (OUT / "r0174_table.tex").write_text(
-        "\n".join(
-            [
-                head.rstrip("\n"),
-                "\\setlength{\\tabcolsep}{3pt}",
-                "\\begin{tabular}{@{}p{0.21\\linewidth}p{0.18\\linewidth}rrrrr@{}}",
-                "\\toprule",
-                "Reader & File & Threads & Median & IQR & Peak heap & readcon/\\\\",
-                " & & & (s) & (s) & (MiB) & reader\\\\",
-                "\\midrule",
-                *rows,
-                "\\bottomrule",
-                "\\end{tabular}",
-                "",
-            ]
-        )
-    )
-
-    crows = []
-    for title, _, members in CPP_GROUPS:
-        crows.append(f"\\multicolumn{{6}}{{@{{}}l@{{}}}}{{\\textit{{{title}}}}}\\\\")
-        for name in members:
-            cell = cpp[name]
-            _, label, fmt = CPP[name]
-            rel = ratio(cpp_ratios[name]) if name in cpp_ratios else "--"
-            crows.append(
-                f"{label} & {fmt} & {cell['threads']} & {sig(cell['median_s'])} & "
-                f"{sig(cell['iqr_s'], 2)} & {rel}\\\\"
-            )
-        crows.append("\\addlinespace")
-    crows.pop()
-    (OUT / "r0174_cpp.tex").write_text(
-        "\n".join(
-            [
-                head.rstrip("\n"),
-                "\\setlength{\\tabcolsep}{3pt}",
-                "\\begin{tabular}{@{}p{0.21\\linewidth}p{0.18\\linewidth}rrrr@{}}",
-                "\\toprule",
-                "Reader & File & Threads & Median & IQR & readcon/\\\\",
-                " & & & (s) & (s) & reader\\\\",
-                "\\midrule",
-                *crows,
-                "\\bottomrule",
-                "\\end{tabular}",
-                "",
-            ]
-        )
-    )
-
-    tex_underscore = "\\_"
-    grows = [
-        f"{label} & \\texttt{{{name.replace('_', tex_underscore)}}} & {count(grind['scenarios'][name])} & "
-        f"{count(grind['cells'][name]['iqr_irefs'])}\\\\"
-        for name, label in CACHEGRIND
-        if name in grind["scenarios"]
-    ]
-    (OUT / "r0174_cachegrind.tex").write_text(
-        "\n".join(
-            [
-                head.rstrip("\n"),
-                "\\begin{tabular}{@{}llrr@{}}",
-                "\\toprule",
-                "Work & Scenario & Instructions & IQR\\\\",
-                "\\midrule",
-                *grows,
-                "\\bottomrule",
-                "\\end{tabular}",
-                "",
-            ]
-        )
-    )
-    print(
-        f"wrote {len(macros)} macros, {len(rows)} table rows, {len(crows)} C++ rows, {len(grows)} Cachegrind rows"
-    )
+    print(f"wrote {len(macros)} macros")
 
 
 if __name__ == "__main__":
