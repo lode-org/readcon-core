@@ -6,6 +6,7 @@
 
 use sha2::{Digest, Sha256};
 use std::env;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -15,6 +16,10 @@ extern crate metatensor_sys;
 #[cfg(feature = "metatensor")]
 #[path = "support/metatensor_install.rs"]
 mod metatensor_paths;
+
+#[cfg(feature = "python")]
+#[path = "support/python_link.rs"]
+mod python_link;
 
 fn check_package_version_file() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -159,89 +164,145 @@ fn main() {
     write_python_test_link();
 }
 
+/// Asks the host interpreter for libpython config and writes the test link.
+///
+/// The program runs on the host: `PYO3_PYTHON` if set, otherwise `python`
+/// on Windows and `python3` elsewhere. The link name follows the target OS.
 #[cfg(feature = "python")]
 fn write_python_test_link() {
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let name = python_test_link_name();
-    let path = out_dir.join("python_test_link.rs");
-    fs::write(
-        &path,
-        format!("#[link(name = \"{name}\")]\nunsafe extern \"C\" {{}}\n"),
-    )
-    .unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
-}
-
-/// Link name of libpython for the Rust test binary.
-///
-/// Unix keeps the `LDLIBRARY` stem (`libpython3.12.so` becomes
-/// `python3.12`). Windows CPython does not define that Makefile variable,
-/// so `sysconfig` reports it empty and the wheel build aborts. The MSVC
-/// import library is `pythonXY.lib`, and rustc's link name is `pythonXY`.
-#[cfg(feature = "python")]
-fn python_test_link_name() -> String {
-    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
-        return windows_python_import_name();
-    }
-    unix_ldlibrary_name()
-}
-
-#[cfg(feature = "python")]
-fn unix_ldlibrary_name() -> String {
-    let output = std::process::Command::new("python3")
-        .args([
-            "-c",
-            "import sysconfig; print(sysconfig.get_config_var('LDLIBRARY') or '')",
-        ])
-        .output()
-        .expect("python3 is required to name libpython for the test binary");
-    if !output.status.success() {
-        panic!(
-            "python3 could not name LDLIBRARY: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    let ldlibrary = String::from_utf8(output.stdout).expect("LDLIBRARY is utf-8");
-    let mut name = ldlibrary.trim();
-    if let Some(rest) = name.strip_prefix("lib") {
-        name = rest;
-    }
-    for ext in [".so", ".a", ".dylib"] {
-        if let Some((stem, _)) = name.split_once(ext) {
-            name = stem;
-            break;
+    println!("cargo:rerun-if-changed=support/python_link.rs");
+    let python = python_interpreter();
+    let (ldlibrary, version, abiflags, framework_prefix) = python_config(&python);
+    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let directives = python_link::python_link_directives(
+        &os,
+        &ldlibrary,
+        &version,
+        &abiflags,
+        &framework_prefix,
+    );
+    let mut links = String::new();
+    for directive in &directives {
+        if let Some(line) = directive.cargo_line() {
+            if line.chars().any(|c| c == '\n' || c == '\r') {
+                panic!("refusing a multi-line cargo directive from {line:?}");
+            }
+            println!("{line}");
+        }
+        if let python_link::LinkDirective::TestLink { name } = directive {
+            if !libpython_link_name_ok(name) {
+                panic!(
+                    "{} reported an unusable libpython link name: {name}",
+                    python.to_string_lossy()
+                );
+            }
+            links.push_str(&format!(
+                "#[link(name = \"{name}\")]\nunsafe extern \"C\" {{}}\n"
+            ));
         }
     }
-    if name.is_empty() {
-        panic!("python3 reported an empty LDLIBRARY");
+    if links.is_empty() {
+        links.push('\n');
     }
-    name.to_string()
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let path = out_dir.join("python_test_link.rs");
+    fs::write(&path, links).unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
+}
+
+/// Host program that prints libpython's config. Every probe goes through here.
+#[cfg(feature = "python")]
+fn python_interpreter() -> OsString {
+    println!("cargo:rerun-if-env-changed=PYO3_PYTHON");
+    if let Some(configured) = env::var_os("PYO3_PYTHON") {
+        if !configured.is_empty() {
+            return configured;
+        }
+    }
+    if cfg!(windows) {
+        OsString::from("python")
+    } else {
+        OsString::from("python3")
+    }
 }
 
 #[cfg(feature = "python")]
-fn windows_python_import_name() -> String {
-    let output = std::process::Command::new("python3")
-        .args([
-            "-c",
-            "import sys; print(f'python{sys.version_info[0]}{sys.version_info[1]}{sys.abiflags}')",
-        ])
+fn python_config(python: &OsStr) -> (String, String, String, String) {
+    let output = std::process::Command::new(python)
+        .args(["-c", PYTHON_CONFIG_SCRIPT])
         .output()
-        .expect("python3 is required to name libpython for the test binary");
+        .unwrap_or_else(|err| {
+            panic!(
+                "{} is required to name libpython for the test binary: {err}",
+                python.to_string_lossy()
+            )
+        });
     if !output.status.success() {
         panic!(
-            "python3 could not name the Windows import library: {}",
+            "{} could not read libpython config: {}",
+            python.to_string_lossy(),
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    let name = String::from_utf8(output.stdout).expect("python link name is utf-8");
-    let name = name.trim();
-    if name.is_empty()
-        || !name.starts_with("python")
-        || !name.chars().all(|c| c.is_ascii_alphanumeric())
-    {
-        panic!("python3 reported an unusable Windows link name: {name}");
+    let text = String::from_utf8(output.stdout).expect("libpython config is utf-8");
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.len() < 4 {
+        panic!(
+            "{} printed {} libpython config lines, expected 4: {text:?}",
+            python.to_string_lossy(),
+            lines.len()
+        );
     }
-    name.to_string()
+    (
+        lines[0].to_string(),
+        lines[1].to_string(),
+        lines[2].to_string(),
+        lines[3].to_string(),
+    )
 }
+
+#[cfg(feature = "python")]
+fn libpython_link_name_ok(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_')
+}
+
+/// Prints `LDLIBRARY`, `VERSION`, resolved ABI flags, and `PYTHONFRAMEWORKPREFIX`.
+///
+/// `sys.abiflags` is Unix-only and raises `AttributeError` on Windows.
+/// `ABIFLAGS` covers that, including Windows 3.14 where it is emulated.
+/// A free-threaded build with neither set still gets the `t` suffix from
+/// `Py_GIL_DISABLED` (or sysconfig `abi_thread`).
+#[cfg(feature = "python")]
+const PYTHON_CONFIG_SCRIPT: &str = r#"
+import sys
+import sysconfig
+
+def text(value):
+    if value is None:
+        return ""
+    return str(value)
+
+def abiflags():
+    flags = sysconfig.get_config_var("ABIFLAGS")
+    if isinstance(flags, str) and flags:
+        return flags
+    flags = getattr(sys, "abiflags", "") or ""
+    if flags:
+        return str(flags)
+    gil = sysconfig.get_config_var("Py_GIL_DISABLED")
+    if gil in (1, "1", True):
+        return "t"
+    if sysconfig.get_config_var("abi_thread") == "t":
+        return "t"
+    return ""
+
+sys.stdout.write(text(sysconfig.get_config_var("LDLIBRARY")) + "\n")
+sys.stdout.write(text(sysconfig.get_config_var("VERSION")) + "\n")
+sys.stdout.write(abiflags() + "\n")
+sys.stdout.write(text(sysconfig.get_config_var("PYTHONFRAMEWORKPREFIX")) + "\n")
+"#;
 
 #[cfg(feature = "chemfiles")]
 fn compile_chemfiles_atom_view() {
