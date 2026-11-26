@@ -308,6 +308,44 @@ fn windows_debug_import_lib_is_target_scoped() {
 }
 
 #[test]
+fn framework_link_lib_is_checked_after_msvc() {
+    let gnu = python_link_plan(
+        &config(
+            Some("python312"),
+            None,
+            true,
+            true,
+            None,
+            None,
+            &["cargo::rustc-link-lib=framework=Python"],
+        ),
+        "windows",
+        "gnu",
+        false,
+    );
+    assert_args(&gnu, &["-framework", "Python"]);
+}
+
+#[test]
+#[should_panic(expected = "cannot be scoped to tests and benches")]
+fn msvc_framework_link_lib_is_rejected() {
+    python_link_plan(
+        &config(
+            Some("python312"),
+            None,
+            true,
+            true,
+            None,
+            None,
+            &["cargo::rustc-link-lib=framework=Python"],
+        ),
+        "windows",
+        "msvc",
+        false,
+    );
+}
+
+#[test]
 fn static_libpython_is_target_scoped() {
     let plan = python_link_plan(
         &config(
