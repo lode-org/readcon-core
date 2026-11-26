@@ -8,7 +8,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from numbers_lib import Rule, const, grep, jget, row, rows, text
+from numbers_lib import Rule, const, grep, jget, path, row, rows, text
 
 MAIN = "rg_main.tex"
 SUPP = "rg_supp.tex"
@@ -18,6 +18,8 @@ OPENERS = "data/failure/con_openers.json"
 DRIFT_X = "data/failure/drift_extxyz.json"
 H2H = "bench/results/r0174/h2h/python_coords.json"
 CROSSCHECK = "data/corpus_crosscheck.json"
+# The generated cross-check table and its macros are written from this record.
+REFEREE_CROSSCHECK = "data/referee/r1h/corpus_crosscheck.json"
 RELEASES = "data/peers/releases.json"
 FORMATS = "/bench/h2h/formats/v0.23.3/extra"
 FORMATS_1M = "/bench/h2h/formats/v0.23.3/1m/cross-format.json"
@@ -42,6 +44,16 @@ NOT_DRIFT = r"(?!.*extxyz\}? 0\.4\.6)(?!.*protein data bank row)"
 
 def lines(pattern: str, docs: tuple[str, ...] = BOTH) -> tuple[str, ...]:
     return tuple(f"{doc}~{pattern}" for doc in docs)
+
+
+def when_printed(rule: Rule) -> list[Rule]:
+    """Keep an identifier rule only while one of its scoped lines prints it."""
+    for location in rule.where:
+        document, separator, pattern = location.partition("~")
+        rel = f"src/{document}"
+        if separator and path(rel).is_file() and re.search(pattern, text(rel), re.M):
+            return [rule]
+    return []
 
 
 def peer_rules(record: str, prefix: str, guard: str, why: str) -> list[Rule]:
@@ -213,12 +225,16 @@ _RULES = [
         )
         for v in ("0.17.0", "0.17.1", "0.17.2")
     ),
-    Rule(
-        crosscheck_version,
-        crosscheck_version,
-        CROSSCHECK,
-        "readcon-core version of the cross-check",
-        (f"{GEN}corpus_crosscheck.tex~readcon-core {re.escape(crosscheck_version)}",),
+    *when_printed(
+        Rule(
+            crosscheck_version,
+            crosscheck_version,
+            CROSSCHECK,
+            "readcon-core version of the cross-check",
+            (
+                f"{GEN}corpus_crosscheck.tex~readcon-core {re.escape(crosscheck_version)}",
+            ),
+        )
     ),
     Rule(
         f"v{formats_version}",
