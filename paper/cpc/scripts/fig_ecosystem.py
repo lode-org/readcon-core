@@ -43,7 +43,9 @@ SPEC_ORG = ROOT.parents[1] / "docs" / "orgmode" / "spec.org"
 
 def spec_version() -> str:
     """The identity on the version line of spec.org."""
-    found = re.search(r"^- Version :: (\d+\.\d+\.\d+) ", SPEC_ORG.read_text(), re.M)
+    found = re.search(
+        r"^- Version :: (\d+\.\d+\.\d+) ", SPEC_ORG.read_text(), re.MULTILINE
+    )
     if found is None:
         raise SystemExit(f"{SPEC_ORG} has no version line")
     return found.group(1)
