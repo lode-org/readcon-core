@@ -319,6 +319,9 @@ skip_dirs = {
 skip_prefixes = (
     "bench/",
     "paper/cpc/bench/results/r0174/million/SUPERSEDED.md",
+    # Referee records name the library that produced them. A later
+    # release must not rewrite that version.
+    "paper/cpc/data/referee/",
     # version_map.tex names the library that wrote it. That is a measurement.
     "paper/cpc/src/figures/generated/version_map.tex",
 )

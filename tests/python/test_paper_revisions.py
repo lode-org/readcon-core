@@ -166,6 +166,7 @@ MEASUREMENT_RECORDS = frozenset(
         "paper/cpc/data/cloud-runs-2/05/host.json",
         "paper/cpc/data/corpus31-results.json",
         "paper/cpc/data/corpus_crosscheck.json",
+        "paper/cpc/data/referee/r1h/corpus_crosscheck.json",
         "paper/cpc/data/corpus_paths.json",
         "paper/cpc/data/every_path.json",
         "paper/cpc/data/failure/con_openers.json",
