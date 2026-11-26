@@ -167,6 +167,8 @@ MEASUREMENT_RECORDS = frozenset(
         "paper/cpc/data/corpus31-results.json",
         "paper/cpc/data/corpus_crosscheck.json",
         "paper/cpc/data/referee/r1h/corpus_crosscheck.json",
+        "paper/cpc/data/referee/r1j/drift/drift_con.json",
+        "paper/cpc/data/referee/r1j/drift/drift_extxyz.json",
         "paper/cpc/data/h2h/format_h2h_record.json",
         "paper/cpc/data/corpus_paths.json",
         "paper/cpc/data/every_path.json",
