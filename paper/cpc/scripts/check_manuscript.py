@@ -1229,10 +1229,11 @@ def check_conformance() -> str:
     record is what the specification, the corpora, the probes and the tests give, and a rerun of the mutant
     differential gives its record, with no case left unexplained."""
     bad = []
-    c31 = json.loads((ROOT / "data" / "corpus31-results.json").read_text())["summary"]
+    corpus31_record = "data/referee/r1t/corpus31-results.json"
+    c31 = json.loads((ROOT / corpus31_record).read_text())["summary"]
     for key in ("disagreements", "manifest_not_followed", "threads_disagree"):
         if c31[key]:
-            bad.append(f"corpus31-results.json {key}: {', '.join(c31[key][:5])}")
+            bad.append(f"{corpus31_record} {key}: {', '.join(c31[key][:5])}")
     paths = json.loads((ROOT / "data" / "corpus_paths.json").read_text())["results"][
         "totals"
     ]
@@ -1260,8 +1261,8 @@ def check_conformance() -> str:
         )
     values = macros()
     macro_checks = [
-        ("cthreeoneFiles", c31["files"], "corpus31-results.json"),
-        ("cthreeoneMatch", c31["match"], "corpus31-results.json"),
+        ("cthreeoneFiles", c31["files"], corpus31_record),
+        ("cthreeoneMatch", c31["match"], corpus31_record),
         ("cpathsFiles", paths["files"], "corpus_paths.json"),
         ("cpathsReads", f"{paths['reads']:,}", "corpus_paths.json"),
         ("cpathsMatch", f"{paths['match']:,}", "corpus_paths.json"),

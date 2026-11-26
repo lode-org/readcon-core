@@ -109,7 +109,7 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
     )
 
     _write_json(
-        data / "corpus31-results.json",
+        data / "referee" / "r1t" / "corpus31-results.json",
         {
             "summary": {
                 "files": 10,
