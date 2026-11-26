@@ -26,7 +26,10 @@ def chain(base: Path, root: Path) -> list[Path]:
     while True:
         link = rel(found[-1], root)
         nxt = []
-        for candidate in sorted(base.parent.glob("*.json")):
+        # Only the later files of this record. A wider glob would open every
+        # JSON beside it, and the paper's read ledger would name those files
+        # as inputs of the table.
+        for candidate in sorted(base.parent.glob(f"{base.stem}-*.json")):
             key = rel(candidate, root)
             if key in seen:
                 continue
