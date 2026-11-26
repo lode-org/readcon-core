@@ -32,7 +32,7 @@ build of the paper, for readcon-core 0.17.3, commit that is not a release tag `5
 | Source format | Editable source, `.tex` for LaTeX. A PDF is not a source file. | GFA | The LaTeX sources of `paper/cpc/src`. |
 | EM LaTeX build | No subfolders. `.tex`, `.bbl` and support files as item type Manuscript, images as Figure. Order: `.tex`, bibliography, styles, figures. | EMTEX | `make_em_flat.py` writes the flat set (Packet files below). |
 | Abstract | At most 250 words, stands alone, define uncommon abbreviations at first use | GFA | 241 words by `check_manuscript.py`'s count. |
-| Keywords | 1 to 7 | GFA | 5: geometry checkpoint; file format specification; saddle search; conformance corpus; nudged elastic band. |
+| Keywords | 1 to 7 | GFA | 7: geometry interchange; file format specification; minimum image; DLPack; conformance corpus; saddle search; nudged elastic band. |
 | Highlights | 3 to 5 bullets, each at most 85 characters with spaces, separate editable file with "highlights" in the name | GFA | 5 bullets of 71, 72, 74, 81, 83 characters in `paper/cpc/highlights.txt`, the same text as the highlights of `rg_main.tex`. |
 | Graphical abstract | Not mentioned in the CPC guide | GFA | `rg_main.tex` has a graphical abstract; upload it in the graphical abstract slot. |
 | Title page | Full postal address of each affiliation with country; corresponding author email on the title page | GFA | TurtleTech ehf., Fornhaga 24, 107 Reykjavík, Iceland; rgoswami@ieee.org. |
@@ -71,19 +71,19 @@ of readcon-core. No release tag names this commit.
 
 **Article type:** Computer Programs in Physics
 
-**Title:** readcon-core: a versioned geometry checkpoint for resumed saddle searches
+**Title:** readcon-core: a versioned geometry format and its library ecosystem for atomistic codes
 
 **Authors:** Rohit Goswami (corresponding), TurtleTech ehf., Fornhaga 24, 107 Reykjavík, Iceland. Email rgoswami@ieee.org. ORCID 0000-0002-2393-8056.
 The author enters the phone number in EM.
 
-**Abstract:** plain text, 1252 characters, 241 words (`check_manuscript.py` counts
+**Abstract:** plain text, 1518 characters, 241 words (`check_manuscript.py` counts
 241 in the TeX source, limit 250). Macros expanded: `\corpusFiles` = 165, `\dlpackAtoms` = 65536, `\dlpackRatio` = 0.461, `\eFivePrefactorRatioFree` = 36.8.
 
 ```
-Saddle-point and rare-event searches are often stopped and resumed, sometimes in a different code from the one that started them. The geometry file used for the restart then has to keep the per-component atomic constraints, the atom identifiers, the time unit of the velocities and the binary64 coordinates. CON is a text geometry format used in eOn, ASE and other codes, and it has had no specification. Here, we describe CON 3.1, a versioned grammar that formalizes and extends CON, and readcon-core, its reference reader and writer. A JSON header on the second line of each frame declares the grammar version and the physical units, each coordinate row stores a three-bit constraint mask and an atom identifier, and a reader of a given major version accepts later minor revisions. Two conformance corpora of 165 legal and illegal files fix what a conforming reader returns, and every Python and C read path in readcon-core returns the verdict of every corpus file. On a platinum slab, a climbing-image band resumed from CON 3.1 reproduces the uninterrupted band exactly, whereas dropping the height constraint of the adatom changes the prefactor by a factor of 37. A borrowed DLPack view of 65536 atomic positions costs 0.461 times an explicit copy.
+Atomistic campaigns pass each geometry between engines, analysis codes, corpus stores and machine-learning models, and each hand-off can change the cell, the periodic flags, the constraints, the identifiers or the velocity units. CON is a text geometry format used in eOn, ASE and other codes, and it has had no specification. CON 4 is a versioned grammar that formalizes and extends CON, and readcon-core is its reference reader and writer, with one Rust core behind C, C++, Python, Julia and Fortran interfaces. A JSON header on line 2 of each frame declares the grammar version, the units, the periodic flags and, when present, the cell matrix. Each coordinate row stores a three-bit constraint mask and an atom identifier, and a reader of a known major accepts every later minor. The core computes minimum-image displacements, matches atoms between frames by identifier, exports frames as DLPack tensors and metatensor blocks, and shares its cell convention with the companion packages readcon-db, readcon-ops, minimage and linkcell. Two conformance corpora of 165 legal and illegal files state what a conforming reader returns, and every Python and C read path in readcon-core returns that verdict on every corpus file. On a platinum slab, a climbing-image band resumed from a CON checkpoint reproduces the uninterrupted band exactly, whereas dropping the height constraint of the adatom changes the prefactor by a factor of 37. A borrowed DLPack view of 65536 atomic positions costs 0.461 times an explicit copy.
 ```
 
-**Keywords:** geometry checkpoint; file format specification; saddle search; conformance corpus; nudged elastic band
+**Keywords:** geometry interchange; file format specification; minimum image; DLPack; conformance corpus; saddle search; nudged elastic band
 
 **Program title:** readcon-core
 **Developer's repository link:** https://github.com/lode-org/readcon-core

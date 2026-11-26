@@ -220,13 +220,28 @@ def packet_count_problems(main: str, packet: str) -> list[str]:
         words(bodies.get(field, ""), macros()) for field in LONG_FIELDS
     )
     packet_summary = tuple(map(int, summary.groups())) if summary else ()
-    if packet_abstract_counts == {actual_words} and packet_summary == actual_summary:
-        return []
-    return [
-        "CPC-FORM.md counts "
-        f"abstract={sorted(packet_abstract_counts)}, summary={packet_summary}; "
-        f"the manuscript gives abstract={actual_words}, summary={actual_summary}"
-    ]
+    problems: list[str] = []
+    if packet_abstract_counts != {actual_words} or packet_summary != actual_summary:
+        problems.append(
+            "CPC-FORM.md counts "
+            f"abstract={sorted(packet_abstract_counts)}, summary={packet_summary}; "
+            f"the manuscript gives abstract={actual_words}, summary={actual_summary}"
+        )
+    problems.extend(_packet_front(main, packet))
+    return problems
+
+
+def _packet_front(main: str, packet: str) -> list[str]:
+    """Title, abstract and keywords of CPC-FORM.md against ``rg_main.tex``."""
+    packet_dir = ROOT / "packet"
+    if str(packet_dir) not in sys.path:
+        sys.path.insert(0, str(packet_dir))
+    import make_packet as packet_mod
+
+    try:
+        return packet_mod.front_problems(packet, main)
+    except packet_mod.Refused as exc:
+        return [str(exc)]
 
 
 def check_packet_counts() -> str:
@@ -1256,9 +1271,7 @@ def check_conformance() -> str:
     mutant_record = "data/referee/r1t/mutant_differential.json"
     mutants = json.loads((ROOT / mutant_record).read_text())["totals"]
     if mutants["unexplained"]:
-        bad.append(
-            f"{mutant_record}: {mutants['unexplained']} cases no group explains"
-        )
+        bad.append(f"{mutant_record}: {mutants['unexplained']} cases no group explains")
     values = macros()
     macro_checks = [
         ("cthreeoneFiles", c31["files"], corpus31_record),

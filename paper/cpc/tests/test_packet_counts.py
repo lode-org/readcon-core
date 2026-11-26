@@ -1,4 +1,4 @@
-"""CPC-FORM.md repeats the manuscript word counts."""
+"""CPC-FORM.md repeats the manuscript word counts, title, abstract and keywords."""
 
 from __future__ import annotations
 
@@ -40,3 +40,12 @@ def test_packet_counts_match_the_manuscript() -> None:
         .replace("Additional comments 134", "Additional comments 135", 1)
     )
     assert cm.packet_count_problems(cm.MAIN.read_text(), changed)
+    retitled = (
+        (CPC / "packet" / "CPC-FORM.md")
+        .read_text()
+        .replace("**Title:** ", "**Title:** stale ", 1)
+    )
+    assert any(
+        "title differs" in item
+        for item in cm.packet_count_problems(cm.MAIN.read_text(), retitled)
+    )

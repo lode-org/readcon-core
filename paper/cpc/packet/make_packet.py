@@ -173,6 +173,79 @@ def plain(tex: str, values: dict[str, str], labels: dict[str, str]) -> str:
     return text
 
 
+def manuscript_front(main: str) -> dict[str, str | int]:
+    """Title, abstract and keywords as the form prints them, from ``rg_main.tex``.
+
+    Word and character counts are ``check_manuscript.words`` and the length of the
+    expanded abstract.  This does not read the pdfTeX logs or the aux file.
+    """
+    values = cm.macros()
+    labels: dict[str, str] = {}
+    title_m = re.search(r"\\title\{(.*?)\}", main, re.S)
+    abstract_m = re.search(r"\\begin\{abstract\}(.*?)\\end\{abstract\}", main, re.S)
+    keyword_m = re.search(r"\\begin\{keyword\}(.*?)\\end\{keyword\}", main, re.S)
+    if not title_m or not abstract_m or not keyword_m:
+        refuse(["rg_main.tex is missing a title, abstract or keyword environment"])
+    abstract_tex = abstract_m.group(1)
+    abstract = plain(abstract_tex, values, labels)
+    keywords = [
+        plain(part, values, labels)
+        for part in keyword_m.group(1).split(r"\sep")
+        if part.strip()
+    ]
+    used = sorted(set(re.findall(r"\\(\w+)", abstract_tex)) & set(values))
+    return {
+        "title": plain(title_m.group(1), values, labels),
+        "abstract": abstract,
+        "keywords": "; ".join(keywords),
+        "keyword_count": len(keywords),
+        "words": cm.words(abstract_tex, values),
+        "chars": len(abstract),
+        "macro_list": ", ".join(
+            f"`\\{name}` = {plain(values[name], values, labels)}" for name in used
+        ),
+    }
+
+
+def front_problems(packet: str, main: str | None = None) -> list[str]:
+    """Where CPC-FORM.md's title, abstract or keywords differ from ``rg_main.tex``."""
+    got = manuscript_front(main if main is not None else cm.MAIN.read_text())
+    problems: list[str] = []
+    title = re.search(r"^\*\*Title:\*\* (.+)$", packet, re.M)
+    if not title or title.group(1) != got["title"]:
+        problems.append("CPC-FORM.md title differs from rg_main.tex")
+    keywords = re.search(r"^\*\*Keywords:\*\* (.+)$", packet, re.M)
+    if not keywords or keywords.group(1) != got["keywords"]:
+        problems.append("CPC-FORM.md keywords differ from rg_main.tex")
+    fenced = re.search(r"```\n(.*)\n```", packet, re.S)
+    if not fenced or fenced.group(1) != got["abstract"]:
+        problems.append("CPC-FORM.md abstract differs from rg_main.tex")
+    header = re.search(
+        r"\*\*Abstract:\*\* plain text, (\d+) characters, (\d+) words"
+        r".*?counts\s+(\d+) in the TeX source",
+        packet,
+        re.S,
+    )
+    if (
+        not header
+        or int(header.group(1)) != got["chars"]
+        or int(header.group(2)) != got["words"]
+        or int(header.group(3)) != got["words"]
+    ):
+        shown = header.groups() if header else ()
+        problems.append(
+            "CPC-FORM.md abstract counts differ from check_manuscript.py: "
+            f"form={shown}, manuscript=({got['chars']}, {got['words']})"
+        )
+    row = re.search(r"^\| Keywords \|.*\| (\d+): (.+)\. \|$", packet, re.M)
+    if not row or (int(row.group(1)), row.group(2)) != (
+        got["keyword_count"],
+        got["keywords"],
+    ):
+        problems.append("CPC-FORM.md keyword row differs from rg_main.tex")
+    return problems
+
+
 def section(main: str, heading: str) -> str:
     found = re.search(
         r"\\section\*\{"
