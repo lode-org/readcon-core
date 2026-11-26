@@ -118,27 +118,36 @@ def test_the_run_says_which_cell_check_ran(monkeypatch: pytest.MonkeyPatch) -> N
     assert check.endswith("on 200 random cells"), check
 
 
-def test_spec_macros_accept_the_matching_unreleased_tree(
+def test_spec_macros_names_an_unreleased_tree_by_its_origin_commit(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     module = _load()
     current = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    commit = "7be34016b7185c65e133b795da3a1ab4c1449c5a"
     record = tmp_path / "measurement.json"
     record.write_text(
         '{"tags": [], "tree": {"release": '
-        f'"{current}", "tagged": false, "spec_blob": "current-blob"}}}}\n',
+        f'"{current}", "tagged": false, "spec_blob": "current-blob", '
+        f'"commit": "{commit}"}}}}\n',
         encoding="utf-8",
     )
     monkeypatch.setattr(module, "ROOT", tmp_path)
     monkeypatch.setattr(module, "SPEC", tmp_path / "spec.org")
     monkeypatch.setattr(module, "VERSIONS", record)
-    monkeypatch.setattr(module, "package_version", lambda: current)
     monkeypatch.setattr(
         module, "git", lambda *args, **kwargs: SimpleNamespace(stdout="current-blob\n")
     )
+    monkeypatch.setattr(
+        module.provenance, "origin_reachable", lambda value: value == commit
+    )
     rendered = module.spec_macros("- CON-test.1 :: MUST :: test\n")
-    assert rf"\newcommand{{\specTextRelease}}{{{current}}}" in rendered
+    assert (
+        rf"\newcommand{{\specTextRelease}}{{commit \texttt{{{commit[:12]}}}}}"
+        in rendered
+    )
+    assert rf"\newcommand{{\specTextRelease}}{{{current}}}" not in rendered
 
-    monkeypatch.setattr(module, "package_version", lambda: "9.9.9")
+    monkeypatch.setattr(module.provenance, "origin_reachable", lambda _value: False)
+    monkeypatch.setattr(module, "_origin_commit_holding", lambda _blob: None)
     with pytest.raises(SystemExit, match="no release tag"):
         module.spec_macros("- CON-test.1 :: MUST :: test\n")
