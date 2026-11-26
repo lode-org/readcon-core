@@ -64,14 +64,14 @@ WANTED = (
         "jax_explicit_copy",
     ),
     (
-        "ecoF32RatioK",
+        "ecoFDirectK",
         "3_storage_dtype",
         "float32_export",
         1_000,
         "float64_export_astype_float32",
     ),
     (
-        "ecoF32RatioM",
+        "ecoFDirectM",
         "3_storage_dtype",
         "float32_export",
         1_000_000,
