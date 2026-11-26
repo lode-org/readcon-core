@@ -8431,8 +8431,8 @@ fn byte_cursor_error(path: &str) -> Option<PyErr> {
     let mut iter = crate::iterators::ConFrameIterator::from_bytes(source.as_slice());
     while let Some(item) = iter.next() {
         let Err(error) = item else { continue };
-        let located =
-            crate::error::LocatedParseError::new(error, iter.lines.line_no(), iter.frame_index());
+        let line = iter.error_line(&error);
+        let located = crate::error::LocatedParseError::new(error, line, iter.frame_index());
         return Some(located_to_py(located));
     }
     None
@@ -8550,6 +8550,7 @@ fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
 #[cfg(test)]
 mod batch_location_tests {
     use super::{CountFail, box_to_count_fail};
+    use pyo3::types::PyAnyMethods;
 
     fn later_frame_path() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempfile::tempdir().unwrap();
@@ -8703,6 +8704,44 @@ mod batch_location_tests {
             Err(err) => err,
             Ok(_) => panic!("expected a parse error"),
         }
+    }
+
+    /// A velocities block that omits units.time is a metadata error. The
+    /// byte cursor reports that line, which is not the line the cursor has
+    /// reached when the block opens.
+    #[test]
+    fn byte_cursor_reports_the_error_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing-time.con");
+        let meta = r#"{"con_spec_version":4,"units":{"length":"angstrom","energy":"eV","mass":"amu"},"sections":["velocities"]}"#;
+        let body = format!(
+            "t\n{meta}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 1\n\nH\nVelocities of Component 1\n0.1 0 0 0 1\n"
+        );
+        std::fs::write(&path, &body).unwrap();
+        let mut iter = crate::iterators::ConFrameIterator::from_bytes(body.as_bytes());
+        let error = loop {
+            match iter.next() {
+                Some(Err(error)) => break error,
+                Some(Ok(_)) => {}
+                None => panic!("the file produced no parse error"),
+            }
+        };
+        let expected = iter.error_line(&error);
+        let cursor = iter.lines.line_no();
+        assert_ne!(
+            expected, cursor,
+            "the error line and the cursor line differ"
+        );
+        pyo3::Python::initialize();
+        let err = super::byte_cursor_error(path.to_str().unwrap()).expect("byte cursor error");
+        let reported = pyo3::Python::attach(|py| {
+            err.value(py)
+                .getattr("line")
+                .unwrap()
+                .extract::<u32>()
+                .unwrap()
+        });
+        assert_eq!(reported, expected);
     }
 }
 
