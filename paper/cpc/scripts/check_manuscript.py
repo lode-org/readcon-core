@@ -1179,6 +1179,23 @@ def check_names() -> str:
     return f"{len(files)} files and PDFs name no credit or affiliation"
 
 
+def velocity_row_problems(row: str) -> list[str]:
+    """A velocity row names its convention and that the file declares none.
+
+    ``no unit convention`` names the absence of a convention, so it is not one.
+    """
+    states_convention = bool(re.search(r"natural unit", row, re.I)) or (
+        bool(re.search(r"\bconvention\b", row, re.I))
+        and not re.search(r"no unit convention", row, re.I)
+    )
+    lacks_declaration = re.search(r"(?:not declared|no in-file)", row, re.I)
+    if states_convention and lacks_declaration:
+        return []
+    return [
+        "the velocity row does not state both its convention and lack of an in-file declaration"
+    ]
+
+
 def check_conformance() -> str:
     """The corpus31, cross-check, corpus-path and probe records name no disagreement, their counts are the macros
     the paper prints, reruns of the Rust reader and of the reads of corpus_paths.py give the corpus31 and corpus-path
