@@ -124,6 +124,20 @@ RECORD_NAMES = (
     (r"data/corpus_crosscheck\.json", "Corpus cross-check"),
     (r"data/corpus_paths\.json", "Corpus read paths"),
     (r"data/corpus31-results\.json", "CON 3.1 corpus results"),
+    (r"data/referee/r1h/corpus_crosscheck\.json", "Corpus cross-check, r1h"),
+    (r"data/referee/r1t/corpus31-results\.json", "CON 3.1 corpus results, r1t"),
+    (
+        r"data/referee/r1t/mutant_differential\.json",
+        "Mutant differential, r1t",
+    ),
+    (
+        r"data/referee/r1j/drift/drift_(?:con|extxyz)\.(?:csv|json)",
+        "OVITO drift, r1j",
+    ),
+    (
+        r"data/h2h/format_h2h_record\.json",
+        "Cross-format campaign, measured commit",
+    ),
     (r"data/every_path\.json", "Every-path count"),
     (r"data/failure/bands/", "Failure campaign, band arrays of each format"),
     (r"data/failure/con_openers\.json", "Failure campaign, CON openers"),
