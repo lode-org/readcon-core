@@ -115,10 +115,10 @@ CuPy rows are still that commit's rows, and they are not in this table.
 | 2 | NumPy DLPack / NumPy copy | 10,000 | 0.000466 | 0.004891 | 0.0954 |
 | 2 | NumPy DLPack / NumPy copy | 100,000 | 0.002268 | 0.148133 | 0.0153 |
 | 2 | NumPy DLPack / NumPy copy | 1,000,000 | 0.002628 | 1.428977 | 0.0018 |
-| 3 | float32 export / float64 then cast | 1,000 | 0.019713 | 0.021064 | 0.9359 |
-| 3 | float32 export / float64 then cast | 10,000 | 0.098427 | 0.103367 | 0.9522 |
-| 3 | float32 export / float64 then cast | 100,000 | 1.008279 | 1.169183 | 0.8624 |
-| 3 | float32 export / float64 then cast | 1,000,000 | 9.579188 | 11.738770 | 0.8160 |
+| 3 | float32 export / float64 then cast | 1,000 | 0.017909 | 0.018982 | 0.9435 |
+| 3 | float32 export / float64 then cast | 10,000 | 0.094392 | 0.099862 | 0.9452 |
+| 3 | float32 export / float64 then cast | 100,000 | 0.973268 | 1.123794 | 0.8661 |
+| 3 | float32 export / float64 then cast | 1,000,000 | 9.452606 | 10.846172 | 0.8715 |
 | 4 | readcon TensorBlock / ASE TensorBlock | 1,000 | 0.136762 | 1.015618 | 0.1347 |
 | 4 | readcon TensorBlock / ASE TensorBlock | 10,000 | 1.412858 | 15.483655 | 0.0912 |
 | 4 | readcon TensorBlock / ASE TensorBlock | 100,000 | 8.405926 | 83.040211 | 0.1012 |
