@@ -162,6 +162,31 @@ fn main() {
 #[cfg(feature = "python")]
 fn write_python_test_link() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let name = python_test_link_name();
+    let path = out_dir.join("python_test_link.rs");
+    fs::write(
+        &path,
+        format!("#[link(name = \"{name}\")]\nunsafe extern \"C\" {{}}\n"),
+    )
+    .unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
+}
+
+/// Link name of libpython for the Rust test binary.
+///
+/// Unix keeps the `LDLIBRARY` stem (`libpython3.12.so` becomes
+/// `python3.12`). Windows CPython does not define that Makefile variable,
+/// so `sysconfig` reports it empty and the wheel build aborts. The MSVC
+/// import library is `pythonXY.lib`, and rustc's link name is `pythonXY`.
+#[cfg(feature = "python")]
+fn python_test_link_name() -> String {
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        return windows_python_import_name();
+    }
+    unix_ldlibrary_name()
+}
+
+#[cfg(feature = "python")]
+fn unix_ldlibrary_name() -> String {
     let output = std::process::Command::new("python3")
         .args([
             "-c",
@@ -189,12 +214,33 @@ fn write_python_test_link() {
     if name.is_empty() {
         panic!("python3 reported an empty LDLIBRARY");
     }
-    let path = out_dir.join("python_test_link.rs");
-    fs::write(
-        &path,
-        format!("#[link(name = \"{name}\")]\nunsafe extern \"C\" {{}}\n"),
-    )
-    .unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
+    name.to_string()
+}
+
+#[cfg(feature = "python")]
+fn windows_python_import_name() -> String {
+    let output = std::process::Command::new("python3")
+        .args([
+            "-c",
+            "import sys; print(f'python{sys.version_info[0]}{sys.version_info[1]}{sys.abiflags}')",
+        ])
+        .output()
+        .expect("python3 is required to name libpython for the test binary");
+    if !output.status.success() {
+        panic!(
+            "python3 could not name the Windows import library: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let name = String::from_utf8(output.stdout).expect("python link name is utf-8");
+    let name = name.trim();
+    if name.is_empty()
+        || !name.starts_with("python")
+        || !name.chars().all(|c| c.is_ascii_alphanumeric())
+    {
+        panic!("python3 reported an unusable Windows link name: {name}");
+    }
+    name.to_string()
 }
 
 #[cfg(feature = "chemfiles")]
