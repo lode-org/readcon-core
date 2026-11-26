@@ -69,7 +69,9 @@ if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
   # tag let the v0.23.2 URL keep a hash the upload does not have.
   # A missing tag or an unreachable host means the archive is not
   # available yet. A 404 after refs/tags/vX was listed is a failed
-  # download. A downloaded archive with a different hash fails.
+  # download. A non-zero curl status after HTTP 200 is a download
+  # failure, not a hash mismatch. A finished archive whose hash
+  # differs still fails.
   compare_live=1
   tag_listed=0
   tag_published=0
@@ -104,19 +106,26 @@ if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
   if [[ "$compare_live" -eq 0 ]]; then
     rm -f "$asset"
   else
-    http_code="$(curl -sS -L --connect-timeout 20 --max-time 180 -o "$asset" -w '%{http_code}' "$source_url" 2>/dev/null || true)"
-    if [[ "$http_code" == "200" ]]; then
+    curl_status=0
+    http_code="$(curl -sS -L --connect-timeout 20 --max-time 180 -o "$asset" -w '%{http_code}' "$source_url" 2>/dev/null)" || curl_status=$?
+    if [[ "$curl_status" -ne 0 && "$http_code" == "200" ]]; then
+      rm -f "$asset"
+      die "v${cargo_ver} asset ${source_url} could not be downloaded (curl exit ${curl_status})"
+    elif [[ "$http_code" == "200" ]]; then
       live="$(sha256sum "$asset" | awk '{print $1}')"
       rm -f "$asset"
       sidecar_file="$(scratch_file)"
-      sidecar_code="$(curl -sS -L --connect-timeout 20 --max-time 60 -o "$sidecar_file" -w '%{http_code}' "${source_url}.sha256" 2>/dev/null || true)"
+      sidecar_status=0
+      sidecar_code="$(curl -sS -L --connect-timeout 20 --max-time 60 -o "$sidecar_file" -w '%{http_code}' "${source_url}.sha256" 2>/dev/null)" || sidecar_status=$?
       sidecar_live=""
-      if [[ "$sidecar_code" == "200" ]]; then
+      if [[ "$sidecar_status" -ne 0 && "$sidecar_code" == "200" ]]; then
+        ok "skipped ${source_url}.sha256 (download failed, curl exit ${sidecar_status}); sidecar compare skipped"
+      elif [[ "$sidecar_code" == "200" ]]; then
         sidecar_live="$(awk '{print $1}' "$sidecar_file")"
       elif [[ "$sidecar_code" == "404" ]]; then
         ok "skipped ${source_url}.sha256 (HTTP 404); sidecar compare skipped"
-      elif [[ -z "$sidecar_code" || "$sidecar_code" == "000" ]]; then
-        ok "skipped ${source_url}.sha256 (unreachable); sidecar compare skipped"
+      elif [[ "$sidecar_status" -ne 0 || -z "$sidecar_code" || "$sidecar_code" == "000" ]]; then
+        ok "skipped ${source_url}.sha256 (unreachable, curl exit ${sidecar_status}); sidecar compare skipped"
       else
         ok "skipped ${source_url}.sha256 (HTTP ${sidecar_code}); sidecar compare skipped"
       fi
@@ -140,7 +149,10 @@ if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
       fi
     elif [[ -z "$http_code" || "$http_code" == "000" ]]; then
       rm -f "$asset"
-      ok "could not reach ${source_url} (offline); skipping live hash compare"
+      ok "could not reach ${source_url} (curl exit ${curl_status}); skipping live hash compare"
+    elif [[ "$curl_status" -ne 0 ]]; then
+      rm -f "$asset"
+      die "v${cargo_ver} asset ${source_url} could not be downloaded (curl exit ${curl_status})"
     else
       rm -f "$asset"
       die "v${cargo_ver} asset ${source_url} returned HTTP ${http_code}"
