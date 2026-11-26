@@ -8551,6 +8551,8 @@ mod batch_location_tests {
     use super::{CountFail, box_to_count_fail};
     use pyo3::types::PyAnyMethods;
 
+    include!(concat!(env!("OUT_DIR"), "/python_test_link.rs"));
+
     fn later_frame_path() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("later.con");
