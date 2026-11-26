@@ -1,8 +1,13 @@
 # Ecosystem exchange benchmarks
 
-These results measure readcon-core commit
-`4eaa5f0d9b0e61f07b277a50815704a8795babd8`. The run completed on
-2026-11-25 UTC. Lower wall time and lower ratios are better.
+`summary.csv` and `results.csv` do not record a git commit. They do not
+name `8bba6f59ced996784ba713250603dbbdd8220a75` or
+`4eaa5f0d9b0e61f07b277a50815704a8795babd8`. `summary.csv` records item,
+arm, n_atoms, dtype, device, status, n_repeat, median_s, q1_s, q3_s,
+iqr_s, ratio_vs_comparator, and comparator. `results.csv` records item,
+arm, n_atoms, dtype, repeat, wall_s, device, and status. The commit that
+added each section's rows is named below. Lower wall time and lower
+ratios are better.
 
 ## Hardware and software
 
@@ -18,7 +23,7 @@ These results measure readcon-core commit
 - CuPy: not installed because no CUDA device was available
 - metatensor-core: 0.2.0
 - ASE: 3.29.0
-- readcon: 0.24.0, built from the commit above
+- readcon: 0.24.0
 
 The `cuda` Cargo feature compiled successfully with:
 
@@ -47,8 +52,14 @@ arm performs one copy (`torch.tensor`, `jnp.array(..., copy=True)`, or
 probe status as item 1.
 For item 3, a file requesting `storage_dtypes.positions=float32` is read
 through the C API. Direct float32 DLPack export is compared with float64
-DLPack export followed by `astype(float32)`. For item 4, both arms read the
-same file, build one TensorBlock, and free that block before returning.
+DLPack export followed by `astype(float32)`. The checked-in item 3
+timings were measured with the float32 cast freed outside the timer
+(the interval before
+`3075f1c7a18bf5512d3dfe3de54128bb56ee9073`). `elapsed` stops the clock
+before it deletes the return value, and that arm returned the float32
+array. A rerun is owed.
+For item 4, both arms read the same file, build one TensorBlock, and free
+that block before returning.
 `elapsed` stops the clock before it deletes the return value. The readcon
 arm calls `rkr_mts_block_free` and `free_rkr_frame` before returning. The
 ASE arm deletes the Python TensorBlock before returning. Both frees are
@@ -60,21 +71,35 @@ and the JAX device list. The status is `NO_CUDA` when at least one of those
 libraries imports and neither reports a CUDA or GPU device. It is
 `NOT_TIMED` when a CUDA or GPU device is visible, because this harness does
 not time a CUDA export. It is `NOT_PROBED` when neither library imports.
-The checked-in item 1 and CuPy rows say `NO_CUDA`. They were written before
-this probe, on a host with no NVIDIA device.
+The checked-in item 1 and CuPy rows say `NO_CUDA`. They were added in
+`00aeb664a2e87c6bb1cca1799a9ba535f41b2dee` and were not rewritten later.
+That commit is before the probe added in
+`4eaa5f0d9b0e61f07b277a50815704a8795babd8`, so these rows predate the
+probe. They were written on a host with no NVIDIA device. The rows
+record status `NO_CUDA` and blank timing fields, not a commit.
 
 Status by item:
 
 - 1: probe via `torch.cuda.is_available()` and `jax.devices()`; checked-in
-  rows predate the probe
-- 2: `MEASURED` on CPU for NumPy, PyTorch, and JAX; CuPy rows use the item 1
-  probe status
-- 3: `MEASURED`
-- 4: both arms free the TensorBlock inside the timer; published medians are in the table below
+  rows were added in `00aeb664a2e87c6bb1cca1799a9ba535f41b2dee` and predate
+  the probe
+- 2: `MEASURED` on CPU for NumPy, PyTorch, and JAX; those rows were
+  replaced in `90d61514051418b5a80cc7c4597121577b78cf36`. CuPy rows keep
+  the item 1 status from `00aeb664a2e87c6bb1cca1799a9ba535f41b2dee`
+- 3: `MEASURED` rows were replaced in
+  `90d61514051418b5a80cc7c4597121577b78cf36`. The checked-in timings freed
+  the float32 cast outside the timer. A rerun is owed
+- 4: both arms free the TensorBlock inside the timer; rows were replaced
+  in `90d61514051418b5a80cc7c4597121577b78cf36`. Published medians are in
+  the table below
 
 ## Summary
 
 Medians are milliseconds. Ratio is the first arm divided by its comparator.
+This table is items 2, 3, and 4 from `summary.csv`. Those measured rows
+were replaced in `90d61514051418b5a80cc7c4597121577b78cf36`. The data file
+was added in `00aeb664a2e87c6bb1cca1799a9ba535f41b2dee`. Its item 1 and
+CuPy rows are still that commit's rows, and they are not in this table.
 
 | Item | Arm / comparator | Atoms | Median A (ms) | Median B (ms) | Ratio |
 |---|---|---:|---:|---:|---:|
@@ -101,13 +126,18 @@ Medians are milliseconds. Ratio is the first arm divided by its comparator.
 
 The JAX explicit-copy arm previously copied with NumPy and then with JAX.
 That double copy produced the withdrawn speedup (roughly 55x at one
-million atoms). The rows in `summary.csv` and `results.csv` are the
-single-copy rerun, and the table above has its medians. Item 4 samples
+million atoms). Those JAX rows in `summary.csv` and `results.csv` are
+the single-copy rerun, and the table above has its medians. Item 4 samples
 previously freed only the readcon TensorBlock inside the timer.
 `elapsed` stops the clock before `del result`. This rerun frees both
-blocks before returning, and the table above has those medians. Other
-medians, quartiles, IQRs, statuses, and comparator ratios are in
-`summary.csv`. Every individual sample is in `results.csv`.
+blocks before returning, and the table above has those medians. Item 3
+samples freed the float32 cast outside the timer. `elapsed` stops the
+clock before it deletes the return value, and the cast arm returned the
+float32 array. That is the interval before
+`3075f1c7a18bf5512d3dfe3de54128bb56ee9073`. A rerun is owed, and the
+table above still has those medians. Other medians, quartiles, IQRs,
+statuses, and comparator ratios are in `summary.csv`. Every individual
+sample is in `results.csv`.
 
 ## Reproduction
 
