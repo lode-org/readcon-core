@@ -34,11 +34,11 @@
     "tests",
     "src"
    ],
-   "files": 243,
+   "files": 244,
    "rust_tests": 1039,
-   "python_tests": 685,
-   "naming": 59,
-   "clause_ids": 106,
+   "python_tests": 694,
+   "naming": 65,
+   "clause_ids": 112,
    "unknown_ids": []
   },
   "indep_reader": {
@@ -49,14 +49,14 @@
  },
  "totals": {
   "clauses": 179,
-  "covered": 128,
+  "covered": 134,
   "corpus": 76,
   "corpus31": 69,
   "conformance": 15,
   "probes": 60,
-  "tests": 106,
+  "tests": 112,
   "indep_reader": 55,
-  "uncovered": 51
+  "uncovered": 45
  },
  "uncovered": [
   "CON-file.6",
@@ -81,8 +81,6 @@
   "CON-coord.1",
   "CON-mask.6",
   "CON-mask.7",
-  "CON-id.2",
-  "CON-id.7",
   "CON-id.13",
   "CON-section.3",
   "CON-section.5",
@@ -92,23 +90,19 @@
   "CON-section.22",
   "CON-section.23",
   "CON-section.24",
-  "CON-validate.2",
   "CON-bonds.1",
-  "CON-bonds.2",
   "CON-units.15",
   "CON-units.17",
   "CON-units.19",
   "CON-num.4",
   "CON-num.10",
   "CON-compress.4",
-  "CON-compress.5",
   "CON-error.5",
   "CON-profile.1",
   "CON-profile.2",
   "CON-profile.3",
   "CON-profile.4",
   "CON-profile.5",
-  "CON-token.1",
   "CON-lex.1"
  ],
  "clauses": [
@@ -1351,9 +1345,10 @@
    "corpus31": [],
    "conformance": [],
    "probes": [],
-   "tests": [],
-   "indep_reader": false,
-   "reason": "A reader must not assume an id starts at 0 or 1. The parser accepts any integer id, and no probe is named with this clause."
+   "tests": [
+    "tests/python/test_clause_reader_duties.py::test_con_id_2_accepts_ids_not_starting_at_zero_or_one"
+   ],
+   "indep_reader": false
   },
   {
    "id": "CON-id.3",
@@ -1430,9 +1425,10 @@
    "corpus31": [],
    "conformance": [],
    "probes": [],
-   "tests": [],
-   "indep_reader": false,
-   "reason": "A consumer that returns atoms in pre-grouping order uses CON-id.5. The library returns file order, so this consumer rule has no call."
+   "tests": [
+    "tests/python/test_clause_reader_duties.py::test_con_id_7_returns_atoms_in_file_order_with_ids"
+   ],
+   "indep_reader": false
   },
   {
    "id": "CON-id.8",
@@ -1879,9 +1875,10 @@
    "corpus31": [],
    "conformance": [],
    "probes": [],
-   "tests": [],
-   "indep_reader": false,
-   "reason": "validate true must not relax a check that already applies. The flag only adds checks."
+   "tests": [
+    "tests/python/test_clause_reader_duties.py::test_con_validate_2_validate_true_does_not_relax_base_rejections"
+   ],
+   "indep_reader": false
   },
   {
    "id": "CON-validate.3",
@@ -1954,9 +1951,10 @@
    "corpus31": [],
    "conformance": [],
    "probes": [],
-   "tests": [],
-   "indep_reader": true,
-   "reason": "scripts/indep_reader.py rejects a malformed bonds entry. The scan reads the corpus, the referee probes and the library tests, not that reader."
+   "tests": [
+    "tests/python/test_clause_reader_duties.py::test_con_bonds_2_rejects_malformed_bonds_when_validate_true"
+   ],
+   "indep_reader": true
   },
   {
    "id": "CON-bonds.3",
@@ -2491,9 +2489,10 @@
    "corpus31": [],
    "conformance": [],
    "probes": [],
-   "tests": [],
-   "indep_reader": false,
-   "reason": "A writer may split one frame across zstd frames with the same RCZ1 index. A one-frame zstd file has no index, and that is the file the corpus reads."
+   "tests": [
+    "tests/python/test_clause_reader_duties.py::test_con_compress_5_one_frame_zstd_without_index_is_readable"
+   ],
+   "indep_reader": false
   },
   {
    "id": "CON-error.1",
@@ -2625,9 +2624,10 @@
    "corpus31": [],
    "conformance": [],
    "probes": [],
-   "tests": [],
-   "indep_reader": false,
-   "reason": "An integer token is ASCII digits with no sign and no decimal point. The finite-number parser rejects the other spellings, and the tests name the function rather than this clause."
+   "tests": [
+    "tests/python/test_clause_reader_duties.py::test_con_token_1_rejects_non_digit_integer_tokens"
+   ],
+   "indep_reader": false
   },
   {
    "id": "CON-token.2",
