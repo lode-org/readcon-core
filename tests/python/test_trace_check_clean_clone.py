@@ -47,6 +47,11 @@ sys.meta_path.insert(0, BlockAse())
 _NEEDS_PANDOC = pytest.mark.skipif(
     shutil.which("pandoc") is None, reason="needs pandoc"
 )
+_NEEDS_CHEMPARSEPLOT = pytest.mark.skipif(
+    importlib.util.find_spec("chemparseplot") is None,
+    reason="needs chemparseplot",
+)
+
 
 def _git(cwd: Path, *args: str) -> str:
     done = subprocess.run(
@@ -176,6 +181,7 @@ def _edit_first_org_number(clone: Path, name: str) -> int:
 
 
 @_NEEDS_PANDOC
+@_NEEDS_CHEMPARSEPLOT
 def test_check_builds_the_ledger_on_a_clean_tree() -> None:
     had_ledger = LEDGER.is_file()
     backup = LEDGER.read_bytes() if had_ledger else None
@@ -197,6 +203,7 @@ def test_check_builds_the_ledger_on_a_clean_tree() -> None:
 
 
 @_NEEDS_PANDOC
+@_NEEDS_CHEMPARSEPLOT
 def test_check_on_a_clean_clone_writes_no_tracked_file(clone: Path) -> None:
     done = _check(clone)
     assert done.returncode == 0, done.stdout + done.stderr
@@ -208,6 +215,7 @@ def test_check_on_a_clean_clone_writes_no_tracked_file(clone: Path) -> None:
 
 
 @_NEEDS_PANDOC
+@_NEEDS_CHEMPARSEPLOT
 def test_check_writes_only_the_missing_fragments(clone: Path) -> None:
     first = _check(clone)
     assert first.returncode == 0, first.stdout + first.stderr
@@ -234,6 +242,7 @@ def test_check_writes_only_the_missing_fragments(clone: Path) -> None:
 
 
 @_NEEDS_PANDOC
+@_NEEDS_CHEMPARSEPLOT
 @pytest.mark.parametrize("name", ["rg_main.org", "rg_main.tex"])
 def test_check_fails_on_a_number_edited_in_one_source(clone: Path, name: str) -> None:
     line = _edit_first_org_number(clone, name)
@@ -243,6 +252,7 @@ def test_check_fails_on_a_number_edited_in_one_source(clone: Path, name: str) ->
 
 
 @_NEEDS_PANDOC
+@_NEEDS_CHEMPARSEPLOT
 def test_check_fails_on_an_org_number_without_emacs(
     clone: Path, tmp_path: Path
 ) -> None:
@@ -259,6 +269,7 @@ def test_check_fails_on_an_org_number_without_emacs(
 
 
 @_NEEDS_PANDOC
+@_NEEDS_CHEMPARSEPLOT
 @pytest.mark.skipif(
     shutil.which("emacs") is None,
     reason="Emacs is required to export rg_main.org",
@@ -274,6 +285,7 @@ def test_check_fails_when_the_tex_is_not_the_org_export(clone: Path) -> None:
 
 
 @_NEEDS_PANDOC
+@_NEEDS_CHEMPARSEPLOT
 def test_check_needs_no_ase(clone: Path, tmp_path: Path) -> None:
     blocker = tmp_path / "blocker"
     blocker.mkdir()
@@ -639,6 +651,7 @@ def test_a_version_map_that_cannot_be_built_is_reported_not_skipped(
 
 
 @_NEEDS_PANDOC
+@_NEEDS_CHEMPARSEPLOT
 def test_a_full_regeneration_writes_the_committed_version_map(clone: Path) -> None:
     done = subprocess.run(
         [sys.executable, str(clone / CPC / "scripts" / "regen_paper.py")],
@@ -665,6 +678,7 @@ def test_a_full_regeneration_writes_the_committed_version_map(clone: Path) -> No
 
 
 @_NEEDS_PANDOC
+@_NEEDS_CHEMPARSEPLOT
 def test_two_regenerations_leave_the_number_trace_clean(clone: Path) -> None:
     for _ in range(2):
         regenerated = subprocess.run(
