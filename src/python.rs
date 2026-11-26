@@ -8554,6 +8554,8 @@ mod batch_location_tests {
 
     // Library unit tests are not `[[test]]` targets, so
     // `cargo:rustc-link-arg-tests` never reaches this harness.
+    // The build script sets `LIBRARY_PATH` and this `#[link]` is how
+    // that one binary finds libpython.
     include!(concat!(env!("OUT_DIR"), "/python_test_link.rs"));
 
     fn later_frame_path() -> (tempfile::TempDir, std::path::PathBuf) {
