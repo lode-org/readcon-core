@@ -298,6 +298,9 @@ fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
     if !features.is_empty() {
         cmd.arg("--features").arg(features.join(","));
     }
+    if features.contains(&"python") {
+        cmd.env("PYO3_BUILD_EXTENSION_MODULE", "1");
+    }
     let status = cmd
         .status()
         .unwrap_or_else(|err| panic!("cargo build --lib failed to start: {err}"));
@@ -309,9 +312,10 @@ fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
 
 /// Plain cdylib for C, Fortran, and Julia, plus the Python extension.
 ///
-/// `cargo test` does not emit the cdylib. A Python-enabled build leaves
-/// libpython unresolved, and Julia refuses to load that file. Side target
-/// directories keep these builds off the lock `cargo test` already holds.
+/// `cargo test` does not emit the cdylib. The Python extension is built
+/// with `PYO3_BUILD_EXTENSION_MODULE` set, so libpython stays unresolved
+/// and Julia refuses to load that file. Side target directories keep
+/// these builds off the lock `cargo test` already holds.
 fn binding_libraries() -> (PathBuf, PathBuf) {
     let root = repo_root();
     let debug = root.join("target/debug/libreadcon_core.so");

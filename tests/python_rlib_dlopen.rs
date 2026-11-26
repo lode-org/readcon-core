@@ -57,6 +57,7 @@ fn python_module_and_rlib_consumer_load_together() {
     std::fs::create_dir_all(work.join("consumer/src")).expect("consumer source");
 
     let wheel_target = work.join("wheel-target");
+    // Same switch maturin >= 1.9.4 exports so the cdylib does not link libpython.
     let wheel_build = Command::new("cargo")
         .args([
             "rustc",
@@ -70,6 +71,7 @@ fn python_module_and_rlib_consumer_load_together() {
             "--target-dir",
         ])
         .arg(&wheel_target)
+        .env("PYO3_BUILD_EXTENSION_MODULE", "1")
         .arg("--manifest-path")
         .arg(root.join("Cargo.toml"))
         .status()

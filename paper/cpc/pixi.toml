@@ -27,7 +27,7 @@ openbabel = "==3.2.1"
 # ira provides the ira_mod module of the NEB figure.
 ira = "==2.2.0"
 rust = "==1.88.0"
-maturin = ">=1.5,<2"
+maturin = ">=1.9.4,<2"
 cxx-compiler = "*"
 pip = "*"
 zstandard = "==0.25.0"
