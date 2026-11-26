@@ -314,7 +314,11 @@ class HostAndLaunch(unittest.TestCase):
     def test_asv_class_uses_the_ladder_and_six_repeats(self) -> None:
         self.assertEqual(tuple(threads.TimeWeakThreads.params), weak.DEFAULT_LADDER)
         self.assertEqual(threads.TimeWeakThreads.repeat, 6)
-        self.assertNotIn("setup", threads.TimeWeakThreads.__dict__)
+        # asv 0.6 calls setup and teardown. It does not call the cache hooks.
+        self.assertIn("setup", threads.TimeWeakThreads.__dict__)
+        self.assertIn("teardown", threads.TimeWeakThreads.__dict__)
+        self.assertNotIn("setup_cache", threads.TimeWeakThreads.__dict__)
+        self.assertNotIn("teardown_cache", threads.TimeWeakThreads.__dict__)
         self.assertNotIn("number", threads.TimeWeakThreads.__dict__)
 
     def test_refusing_the_campaign_writes_a_headed_log(self) -> None:
