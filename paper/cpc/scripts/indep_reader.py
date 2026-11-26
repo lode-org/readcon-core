@@ -891,6 +891,14 @@ def read_block(
         if i >= n:
             raise missing(f"component {t + 1}")
         symbol = lines.text(i).strip(SPACE)
+        if not symbol:
+            raise Rejection(
+                "IncompleteSection",
+                i + 1,
+                "CON-section.4",
+                f"{name} component {t + 1} symbol line is blank",
+                name,
+            )
         if validate and symbol != frame["types"][t]["symbol"]:
             raise Rejection(
                 "ValidationError",
@@ -972,8 +980,10 @@ def legacy_block(lines: Lines, i: int, counts: list[int]) -> bool:
         return False
     j = i + 1
     for t, count in enumerate(counts):
-        if j + 1 + count >= lines.n or not label_ok(
-            lines.raw[j + 1], "velocities", t + 1
+        if (
+            j + 1 + count >= lines.n
+            or not lines.raw[j].strip(SPACE)
+            or not label_ok(lines.raw[j + 1], "velocities", t + 1)
         ):
             return False
         if any(len(fields(lines.raw[j + 2 + r])) != 5 for r in range(count)):
@@ -1148,7 +1158,7 @@ def read_frame(lines: Lines, start: int, force_validate: bool) -> tuple[dict, in
                 f"component {t + 1} label missing",
             )
         label = lines.text(i + 1)
-        if not label_ok(label, "Coordinates", t + 1):
+        if validate and not label_ok(label, "Coordinates", t + 1):
             w = words(label)
             clause = (
                 "CON-count.8"

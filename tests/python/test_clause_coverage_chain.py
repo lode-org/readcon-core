@@ -136,7 +136,7 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
     )
     _write_json(data / "every_path.json", {"results": {"totals": {"inputs": 5}}})
     _write_json(
-        spec_dir / "mutant_differential.json",
+        data / "referee" / "r1t" / "mutant_differential.json",
         {"totals": {"cases": 12, "same": 12, "unexplained": 0}},
     )
     _write_json(
