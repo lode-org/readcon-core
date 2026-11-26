@@ -130,7 +130,10 @@ RECORD_NAMES = (
         r"data/failure/drift_extxyz\.(?:csv|json)",
         "Failure campaign, extended XYZ drift",
     ),
-    (r"data/failure/matrix\.(?:csv|json)", "Failure campaign, failure matrix"),
+    (
+        r"data/failure/matrix(?:-\d+\.\d+\.\d+)?\.(?:csv|json)",
+        "Failure campaign, failure matrix",
+    ),
     (r"data/failure/restart_bands\.json", "Failure campaign, restart bands"),
     (
         r"data/failure/restart_formats\.(?:csv|json)",
@@ -140,7 +143,10 @@ RECORD_NAMES = (
         r"data/failure/restart_kernels/(\w+)\.json",
         "Failure campaign, restart formats on the {kernel} kernel set",
     ),
-    (r"data/failure/version_safety\.csv", "Failure campaign, version safety"),
+    (
+        r"data/failure/version_safety(?:-\d+\.\d+\.\d+)?\.(?:csv|json)",
+        "Failure campaign, version safety",
+    ),
     (r"data/restart_walls/restart_walls\.(?:csv|json)", "Restart wall times"),
     (r"data/sizes\.csv", "File sizes"),
     (
@@ -153,9 +159,9 @@ RECORD_NAMES = (
     ),
     (r"data/spec/spec-measurement-[^/]+\.json", "Specification measurement"),
     (r"data/spec/version_drift\.json", "Specification campaign, version drift"),
-    (r"data/survey_frame\.json", "Survey frame"),
+    (r"data/survey_frame(?:-\d+\.\d+\.\d+)?\.json", "Survey frame"),
     (r"src/figures/generated/survey_frame\.con", "Survey frame, CON text"),
-    (r"data/test_run\.json", "Test run"),
+    (r"data/test_run(?:-\d+\.\d+\.\d+)?\.json", "Test run"),
     (r"data/worked_example\.json", "Worked example"),
     (r"evidence/results/e1_restart\.json", "Evidence E1, restart"),
     (r"evidence/results/e1_restart_lbfgs_control\.json", "Evidence E1, L-BFGS control"),

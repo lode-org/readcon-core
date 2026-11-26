@@ -10,7 +10,7 @@ Every value is read from a committed record:
   largest energy difference over the images the restart prose prints),
 * ``data/restart_walls/restart_walls.json`` (the runtime of the walls task and its host),
 * ``evidence/results/e1_restart.json`` and ``e1_restart_lbfgs_control.json`` (eOn Morse band),
-* ``data/failure/matrix.json`` (survey, with the row counts by pairing), ``data/failure/drift_extxyz.json`` and
+* the newest ``data/failure/matrix-<version>.json`` (survey, with the row counts by pairing), ``data/failure/drift_extxyz.json`` and
   ``drift_extxyz.csv`` (drift, with the binary64 steps of each coordinate).
 
     python3 paper/cpc/scripts/gen_case_macros.py
@@ -72,6 +72,19 @@ def bits(value: str) -> str:
 def restart_rows(rel: str) -> dict[str, dict[str, str]]:
     with (ROOT / rel).open(newline="") as handle:
         return {row["route"]: row for row in csv.DictReader(handle)}
+
+
+def matrix_json() -> Path:
+    """The newest versioned matrix. The unversioned file stays put."""
+    folder = ROOT / "data" / "failure"
+    found = []
+    for path in folder.glob("matrix-*.json"):
+        parts = path.stem.removeprefix("matrix-").split(".")
+        if len(parts) == 3 and all(part.isdigit() for part in parts):
+            found.append((tuple(int(part) for part in parts), path))
+    if not found:
+        return folder / "matrix.json"
+    return max(found)[1]
 
 
 def main() -> None:
@@ -260,7 +273,7 @@ def main() -> None:
         f"v{m['eOneEonReadcon']}.tar.gz"
     )
 
-    matrix = json.loads((ROOT / "data/failure/matrix.json").read_text())
+    matrix = json.loads(matrix_json().read_text())
     summary = matrix["summary"]
     rows = {(r["format"], r["writer"], r["reader"]): r for r in matrix["rows"]}
     assert (

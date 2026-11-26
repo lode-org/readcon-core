@@ -79,8 +79,20 @@ def version_cell(v):
     return tex(v)
 
 
+def matrix_csv():
+    """The newest versioned matrix. The unversioned file stays put."""
+    found = []
+    for path in D.glob("matrix-*.csv"):
+        parts = path.stem.removeprefix("matrix-").split(".")
+        if len(parts) == 3 and all(part.isdigit() for part in parts):
+            found.append((tuple(int(part) for part in parts), path.name))
+    if not found:
+        return "matrix.csv"
+    return max(found)[1]
+
+
 def survey():
-    rows = rd("matrix.csv")
+    rows = rd(matrix_csv())
     body, notes = [], []
     for r in rows:
         writer, reader = tex(r["writer"]), tex(r["reader"])
@@ -297,21 +309,43 @@ File & """
     (OUT / "drift_table.tex").write_text(HEADER + t)
 
 
+def version_safety_csv():
+    """The newest versioned remeasurement. The unversioned file stays put."""
+    found = []
+    for path in D.glob("version_safety-*.csv"):
+        parts = path.stem.removeprefix("version_safety-").split(".")
+        if len(parts) == 3 and all(part.isdigit() for part in parts):
+            found.append((tuple(int(part) for part in parts), path.name))
+    if not found:
+        raise SystemExit(f"{D}: no version_safety-<version>.csv")
+    return max(found)[1]
+
+
+def rewrite_unit(unit):
+    shown = {
+        "(amu*angstrom^2/eV)^0.5": "natural",
+        "(u*\u00c5^2/eV)^0.5": r"\texttt{(u*\AA\^{}2/eV)\^{}0.5}",
+        "-": "--",
+    }.get(unit)
+    return shown if shown is not None else tex(unit)
+
+
 def versions():
-    rows = rd("version_safety.csv")
+    rows = rd(version_safety_csv())
     body = []
     for r in rows:
         py = "accept" if r["python"] == "accept" else "reject"
         if r["python_kept_unknown_key"] == "yes":
             py += ", kept"
-        unit = {"(amu*angstrom^2/eV)^0.5": "natural", "-": "--"}.get(
-            r["python_rewrite_time_unit"], tex(r["python_rewrite_time_unit"])
-        )
         if "unit" in r["rule"]:
-            py += f", {unit}"
+            py += f", {rewrite_unit(r['python_rewrite_time_unit'])}"
+        if "rewrite" in r["rule"]:
+            py += f", {tex(r['python_rewrite'])}"
         rule = {
             "accept, natural unit": "accept (natural)",
+            "accept, natural unit, rewrite 4.0.4": "accept (natural), rewrite 4.0.4",
             "accept, keep key": "accept, keep",
+            "accept, authoritative unit": "accept (authoritative)",
         }.get(r["rule"], r["rule"])
         variant = {
             "missing version": "header without con\\_spec\\_version",

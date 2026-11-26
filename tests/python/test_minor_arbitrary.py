@@ -590,11 +590,42 @@ def test_differential_against_committed_base_oracle_in_python():
         == "9aff911e809390163d2d7b08671145ad99f24496"
     )
 
-    # 1. All 70 tracked corpus files match the committed BASE oracle.
+    # 1. Tracked corpus files match the committed BASE oracle. The survey
+    #    frame is the example the writer emits at the implemented spec.
     tracked = oracle["tracked_corpus"]
     assert len(tracked) == 70
     for rel, expected in tracked.items():
         p = str(REPO_ROOT / rel)
+        if rel == "paper/cpc/src/figures/generated/survey_frame.con":
+            frames = readcon.read_con(p)
+            assert len(frames) == 1, rel
+            frame = frames[0]
+            assert frame.spec_version == readcon.CON_SPEC_VERSION == 4, rel
+            assert frame.metadata["con_spec_minor"] == 0, rel
+            assert frame.metadata["con_spec_patch"] == 4, rel
+            assert frame.metadata["units"]["time"] == "(u*Å^2/eV)^0.5", rel
+            written = readcon.write_con_string(frames, canonical=True)
+            current = (REPO_ROOT / rel).read_text(encoding="utf-8")
+            assert written.splitlines()[1] == current.splitlines()[1], rel
+            # Line 2 is the header this writer stamps. Every other line is
+            # the file body at the oracle's base commit.
+            base = oracle["provenance"]["base_commit"]
+            shown = subprocess.run(
+                ["git", "-C", str(REPO_ROOT), "show", f"{base}:{rel}"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            current_lines = current.splitlines()
+            historical_lines = shown.stdout.splitlines()
+            assert len(current_lines) == len(historical_lines), rel
+            for index, (now, then) in enumerate(
+                zip(current_lines, historical_lines, strict=True)
+            ):
+                if index == 1:
+                    continue
+                assert now == then, (rel, index + 1)
+            continue
         if expected["status"] == "ok":
             frames = readcon.read_con(p)
             exp_frames = expected["frames"]

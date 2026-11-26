@@ -17,6 +17,8 @@ in binary64, which is what a Python float is.  The window is that file's
 commit.  ``--tables``
 writes the macros from the committed record, after it recomputes every number
 from the committed frame and stops unless the record holds the same values.
+The frame's SHA-256 is checked against the survey record for this readcon
+version. ``data/worked_example.json`` keeps the SHA-256 of the earlier frame.
 
     python3 paper/cpc/scripts/worked_example.py
     python3 paper/cpc/scripts/worked_example.py --tables
@@ -48,7 +50,15 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parents[1]
 GENERATED = ROOT / "src" / "figures" / "generated"
 FRAME = GENERATED / "survey_frame.con"
-SURVEY = ROOT / "data" / "survey_frame.json"
+
+
+def _survey_record() -> Path:
+    cargo = (REPO / "Cargo.toml").read_text()
+    version = re.search(r'^version = "([^"]+)"', cargo, re.MULTILINE).group(1)
+    return ROOT / "data" / f"survey_frame-{version}.json"
+
+
+SURVEY = _survey_record()
 VELOCITY = GENERATED / "velocity_case.tex"
 COMMIT = ROOT / "src" / "commit.tex"
 RELEASE = ROOT / "src" / "release.tex"
@@ -368,9 +378,12 @@ def main() -> None:
     if args.tables:
         record = json.loads(RECORD.read_text())
         now = compute(record["window"])
-        kept = {k: v for k, v in record.items() if k in now}
-        if kept != now:
-            differ = sorted(k for k in now if kept.get(k) != now[k])
+        # The earlier record stores that frame's SHA-256. The survey record
+        # checked above stores the SHA-256 of the frame on disk.
+        kept = {k: v for k, v in record.items() if k in now and k != "frame_sha256"}
+        fresh = {k: v for k, v in now.items() if k != "frame_sha256"}
+        if kept != fresh:
+            differ = sorted(k for k in fresh if kept.get(k) != fresh[k])
             raise SystemExit(
                 f"{RECORD.name} differs from the frame in {differ}; rerun worked_example.py"
             )
