@@ -16,6 +16,10 @@ extern crate metatensor_sys;
 #[path = "support/metatensor_install.rs"]
 mod metatensor_paths;
 
+#[cfg(feature = "python")]
+#[path = "support/python_link.rs"]
+mod python_link;
+
 fn check_package_version_file() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let version_path = manifest_dir.join("VERSION");
@@ -162,6 +166,45 @@ fn main() {
 #[cfg(feature = "python")]
 fn write_python_test_link() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let path = out_dir.join("python_test_link.rs");
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    let msvc = target_os == "windows" && target_env == "msvc";
+    let cfg = if msvc {
+        windows_python_sysconfig()
+    } else {
+        python_link::PythonSysconfig {
+            ldlibrary: unix_ldlibrary_from_python3(),
+            ..python_link::PythonSysconfig::default()
+        }
+    };
+    let link = match python_link::probe_python_link(&target_os, &target_env, &cfg, |candidate| {
+        Path::new(candidate).is_file()
+    }) {
+        Ok(link) => link,
+        Err(python_link::ProbeError::EmptyLdlibrary) => {
+            panic!("python3 reported an empty LDLIBRARY");
+        }
+    };
+    if msvc {
+        if let python_link::PythonLink::Named {
+            search_dir: Some(dir),
+            ..
+        } = &link
+        {
+            if !dir.is_empty() {
+                let flag = python_link::msvc_libpath_arg(dir);
+                println!("cargo:rustc-link-arg-tests={flag}");
+            }
+        }
+    }
+    let text = python_link::link_file(&link);
+    fs::write(&path, text).unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
+}
+
+/// Linux and macOS: the historical `LDLIBRARY` print. Panic text stays put.
+#[cfg(feature = "python")]
+fn unix_ldlibrary_from_python3() -> String {
     let output = std::process::Command::new("python3")
         .args([
             "-c",
@@ -175,26 +218,40 @@ fn write_python_test_link() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    let ldlibrary = String::from_utf8(output.stdout).expect("LDLIBRARY is utf-8");
-    let mut name = ldlibrary.trim();
-    if let Some(rest) = name.strip_prefix("lib") {
-        name = rest;
+    String::from_utf8(output.stdout).expect("LDLIBRARY is utf-8")
+}
+
+/// Windows CPython has no `LDLIBRARY`. `py_version_nodot` still is.
+#[cfg(feature = "python")]
+fn windows_python_sysconfig() -> python_link::PythonSysconfig {
+    const SCRIPT: &str = r#"
+import sys, sysconfig
+def g(key):
+    v = sysconfig.get_config_var(key)
+    return "" if v is None else str(v)
+nodot = g("py_version_nodot")
+if not nodot:
+    nodot = f"{sys.version_info[0]}{sys.version_info[1]}"
+base = sys.base_prefix or ""
+sys.stdout.write(f"LDLIBRARY\t{g('LDLIBRARY')}\n")
+sys.stdout.write(f"LIBDIR\t{g('LIBDIR')}\n")
+sys.stdout.write(f"BASE_PREFIX\t{base}\n")
+sys.stdout.write(f"PY_VERSION_NODOT\t{nodot}\n")
+"#;
+    let output = std::process::Command::new("python3")
+        .env("PYTHONIOENCODING", "utf-8")
+        .env("PYTHONUTF8", "1")
+        .args(["-c", SCRIPT])
+        .output()
+        .expect("python3 is required to name libpython for the test binary");
+    if !output.status.success() {
+        panic!(
+            "python3 could not read the windows sysconfig: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
-    for ext in [".so", ".a", ".dylib"] {
-        if let Some((stem, _)) = name.split_once(ext) {
-            name = stem;
-            break;
-        }
-    }
-    if name.is_empty() {
-        panic!("python3 reported an empty LDLIBRARY");
-    }
-    let path = out_dir.join("python_test_link.rs");
-    fs::write(
-        &path,
-        format!("#[link(name = \"{name}\")]\nunsafe extern \"C\" {{}}\n"),
-    )
-    .unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
+    let text = String::from_utf8(output.stdout).expect("windows sysconfig is utf-8");
+    python_link::parse_sysconfig_lines(&text)
 }
 
 #[cfg(feature = "chemfiles")]

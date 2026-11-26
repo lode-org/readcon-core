@@ -175,5 +175,9 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+#[path = "../support/python_link.rs"]
+mod python_link_probe;
+
 #[cfg(all(test, feature = "parallel", feature = "zstd"))]
 mod corpus31_manifest;
