@@ -792,7 +792,11 @@ def spec_macros(org: str) -> str:
     tree = record["tree"]
     if same is None and not tree["tagged"] and tree.get("spec_blob") == blob:
         commit = tree.get("commit")
-        if not (isinstance(commit, str) and provenance.origin_reachable(commit)):
+        if not (
+            isinstance(commit, str)
+            and provenance.origin_reachable(commit)
+            and _blob_at(commit, blob)
+        ):
             commit = _origin_commit_holding(blob)
         if not commit:
             measured = record.get("measured_at")
