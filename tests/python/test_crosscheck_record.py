@@ -30,6 +30,34 @@ def test_the_crosscheck_sentence_names_the_recorded_build() -> None:
     assert "data/referee/r1h/corpus_crosscheck.json" in text
 
 
+def test_printed_crosscheck_counts_may_include_disagreements() -> None:
+    script = ROOT / "paper" / "cpc" / "scripts" / "check_manuscript.py"
+    spec = importlib.util.spec_from_file_location("check_manuscript_cross", script)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    record = json.loads(RECORD.read_text(encoding="utf-8"))
+    group = record["groups"]["all"]
+    readers = group["readers"]
+    values = {
+        "corpusFiles": str(group["files"]),
+        "corpusReadconAgree": str(readers["readcon"]["matches"]),
+        "corpusReadconDisagree": str(readers["readcon"]["disagreements"]),
+        "corpusReadconNotFollowed": str(readers["readcon"]["not_followed"]),
+        "corpusIterAgree": str(readers["readcon_iter"]["matches"]),
+        "corpusIterDisagree": str(readers["readcon_iter"]["disagreements"]),
+        "corpusIterNotFollowed": str(readers["readcon_iter"]["not_followed"]),
+        "corpusIndepAgree": str(readers["indep"]["matches"]),
+        "corpusBoth": str(group["accepted_by_both"]),
+        "corpusFieldIdentical": str(group["field_identical"]),
+    }
+    assert readers["readcon"]["disagreements"] > 0
+    assert module.crosscheck_print_problems(record, values) == []
+    values["corpusReadconDisagree"] = "0"
+    problems = module.crosscheck_print_problems(record, values)
+    assert problems and "corpusReadconDisagree" in problems[0]
+
+
 def test_the_clause_count_rule_reads_the_r1h_record() -> None:
     sys.path.insert(0, str(ROOT / "paper" / "cpc" / "scripts"))
     import number_rules.identifiers  # noqa: F401
