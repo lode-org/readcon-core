@@ -322,9 +322,11 @@ def version_safety_csv():
 
 
 def rewrite_unit(unit):
+    # natural* is the u-and-angstrom spelling. The full texttt is wider than
+    # the preprint measure, so the caption names the two spellings.
     shown = {
         "(amu*angstrom^2/eV)^0.5": "natural",
-        "(u*\u00c5^2/eV)^0.5": r"\texttt{(u*\AA\^{}2/eV)\^{}0.5}",
+        "(u*\u00c5^2/eV)^0.5": "natural*",
         "-": "--",
     }.get(unit)
     return shown if shown is not None else tex(unit)
@@ -347,9 +349,7 @@ def versions():
             "accept, keep key": "accept, keep",
             "accept, authoritative unit": "accept (authoritative)",
         }.get(r["rule"], r["rule"])
-        variant = {
-            "missing version": "header without con\\_spec\\_version",
-        }.get(r["variant"], tex(r["variant"]))
+        variant = tex(r["variant"])
         body.append(" & ".join([variant, tex(rule), py, r["c_abi"]]) + r" \\")
     t = (
         r"""\begin{table}[tbp]
@@ -357,7 +357,8 @@ def versions():
 \small
 \caption{Header variants of one velocity frame.
 Rule is what the specification requires.
-Where the rule names a time unit, the Python cell gives the time unit of the Python rewrite.}
+Where the rule names a time unit, the Python cell gives the time unit of the Python rewrite:
+natural is the spelling with amu and angstrom, and natural* is the spelling with u and \AA.}
 \label{tab:versionsafety}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
