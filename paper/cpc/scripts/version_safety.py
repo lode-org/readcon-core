@@ -335,7 +335,7 @@ def main(out_dir):
 
     rows = measure_rows()
     out_dir.mkdir(parents=True, exist_ok=True)
-    csv_name, json_name = record_names(readcon.__version__)
+    _, json_name = record_names(readcon.__version__)
     import record_chain
 
     out_json, link = record_chain.allocate(out_dir / json_name, ROOT)
