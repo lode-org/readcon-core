@@ -2,8 +2,10 @@
 """Write the CON 3.1 corpus paper/cpc/data/corpus31/ from explicit bytes.
 
 No readcon writer is used: every file is the literal text below, wrapped in
-gzip or zstd here where the name says so. manifest.toml gives per file the
-expected outcome, the frame count of an accepted file or the error class and
+gzip or zstd here where the name says so. zstd uses the zstandard module
+when it is installed, and otherwise the zstd program, libzstd, or the
+READCON_ZSTD_SOCK helper. manifest.toml gives per file the expected
+outcome, the frame count of an accepted file or the error class and
 1-based line of a rejected one, the clauses of docs/orgmode/spec.org that
 decide it, the basis of the expectation and the reason. Every cited clause
 must exist in that document; the script stops otherwise.
@@ -29,8 +31,6 @@ import json
 import re
 import shutil
 from pathlib import Path
-
-import zstandard
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "corpus31"
@@ -211,8 +211,132 @@ def gz(data: bytes) -> bytes:
     return gzip.compress(data, compresslevel=6, mtime=0)
 
 
+def _zstd_module(data: bytes):
+    import importlib
+
+    for mod_name in ("compression.zstd", "zstandard"):
+        try:
+            mod = importlib.import_module(mod_name)
+        except ImportError:
+            continue
+        if not hasattr(mod, "ZstdCompressor"):
+            continue
+        compressor = mod.ZstdCompressor(level=3)
+        # The stdlib compressor returns an unfinished frame unless the call
+        # asks for FLUSH_FRAME. zstandard's compress() already returns one
+        # complete frame and has no such mode.
+        flush_frame = getattr(compressor, "FLUSH_FRAME", None)
+        if flush_frame is None:
+            return compressor.compress(data)
+        return compressor.compress(data, flush_frame)
+    return None
+
+
+def _zstd_cli(data: bytes):
+    import subprocess
+
+    zstd_bin = shutil.which("zstd")
+    if zstd_bin is None:
+        return None
+    proc = subprocess.run(
+        [zstd_bin, "-3", "-c", "-q"],
+        input=data,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    if proc.returncode != 0 or not proc.stdout.startswith(b"\x28\xb5\x2f\xfd"):
+        return None
+    return proc.stdout
+
+
+def _zstd_lib(data: bytes):
+    import ctypes
+    import ctypes.util
+
+    names = []
+    found = ctypes.util.find_library("zstd")
+    if found:
+        names.append(found)
+    names.append("libzstd.so.1")
+    lib = None
+    for name in names:
+        try:
+            lib = ctypes.CDLL(name)
+            break
+        except OSError:
+            lib = None
+    if lib is None:
+        return None
+    lib.ZSTD_compressBound.argtypes = [ctypes.c_size_t]
+    lib.ZSTD_compressBound.restype = ctypes.c_size_t
+    lib.ZSTD_compress.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_int,
+    ]
+    lib.ZSTD_compress.restype = ctypes.c_size_t
+    lib.ZSTD_isError.argtypes = [ctypes.c_size_t]
+    lib.ZSTD_isError.restype = ctypes.c_uint
+    bound = lib.ZSTD_compressBound(len(data))
+    dst = (ctypes.c_ubyte * bound)()
+    written = lib.ZSTD_compress(
+        ctypes.cast(dst, ctypes.c_void_p),
+        bound,
+        data,
+        len(data),
+        3,
+    )
+    if lib.ZSTD_isError(written):
+        return None
+    return bytes(memoryview(dst)[:written])
+
+
+def _zstd_socket(data: bytes):
+    import os
+    import socket
+
+    path = os.environ.get("READCON_ZSTD_SOCK")
+    if not path:
+        return None
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect(path)
+        sock.sendall(len(data).to_bytes(4, "little") + data)
+
+        def recvall(n: int) -> bytes:
+            buf = b""
+            while len(buf) < n:
+                chunk = sock.recv(n - len(buf))
+                if not chunk:
+                    raise SystemExit("READCON_ZSTD_SOCK closed before the frame")
+                buf += chunk
+            return buf
+
+        n = int.from_bytes(recvall(4), "little")
+        return recvall(n)
+    finally:
+        sock.close()
+
+
+def _zstd_compress(data: bytes):
+    for attempt in (_zstd_module, _zstd_cli, _zstd_lib, _zstd_socket):
+        frame = attempt(data)
+        if frame is not None:
+            return frame
+    return None
+
+
 def zst(data: bytes) -> bytes:
-    return zstandard.ZstdCompressor(level=3).compress(data)
+    frame = _zstd_compress(data)
+    if frame is None:
+        raise SystemExit(
+            "No module named 'zstandard' and neither the zstd CLI, "
+            "libzstd, nor READCON_ZSTD_SOCK is available"
+        )
+    return frame
 
 
 CASES: list[dict] = []

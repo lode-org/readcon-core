@@ -130,21 +130,130 @@ fn show(verdict: &Verdict) -> String {
 
 #[cfg(test)]
 mod harness {
+    use std::io::{Read, Write};
     use std::path::{Path, PathBuf};
     use std::process::Command;
+    use std::thread::JoinHandle;
+    use std::time::Duration;
 
     use super::*;
 
+    /// Compresses zstd frames for `make_corpus31.py` when Python has no
+    /// compressor of its own. One connection is one frame: a little-endian
+    /// length, then the bytes. A length of zero stops the thread.
+    #[cfg(unix)]
+    struct ZstdHelper {
+        _dir: tempfile::TempDir,
+        sock: PathBuf,
+        handle: Option<JoinHandle<()>>,
+    }
+
+    #[cfg(unix)]
+    impl ZstdHelper {
+        fn start() -> Self {
+            let dir = tempfile::tempdir().expect("zstd helper dir");
+            let sock = dir.path().join("zstd.sock");
+            let listener = std::os::unix::net::UnixListener::bind(&sock).expect("zstd socket");
+            let handle = std::thread::spawn(move || Self::serve(listener));
+            let helper = Self {
+                _dir: dir,
+                sock,
+                handle: Some(handle),
+            };
+            let frame = helper.compress(b"corpus31\n");
+            let back = zstd::stream::decode_all(frame.as_slice()).expect("zstd frame");
+            assert_eq!(back, b"corpus31\n");
+            helper
+        }
+
+        fn serve(listener: std::os::unix::net::UnixListener) {
+            loop {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    break;
+                };
+                let mut len_buf = [0u8; 4];
+                if stream.read_exact(&mut len_buf).is_err() {
+                    continue;
+                }
+                let n = u32::from_le_bytes(len_buf) as usize;
+                if n == 0 {
+                    break;
+                }
+                if n > 8 * 1024 * 1024 {
+                    break;
+                }
+                let mut payload = vec![0u8; n];
+                if stream.read_exact(&mut payload).is_err() {
+                    continue;
+                }
+                let compressed =
+                    zstd::stream::encode_all(payload.as_slice(), 3).expect("zstd compress");
+                let clen = u32::try_from(compressed.len()).expect("frame length");
+                if stream.write_all(&clen.to_le_bytes()).is_err()
+                    || stream.write_all(&compressed).is_err()
+                {
+                    continue;
+                }
+            }
+        }
+
+        fn compress(&self, data: &[u8]) -> Vec<u8> {
+            let mut stream =
+                std::os::unix::net::UnixStream::connect(&self.sock).expect("zstd helper");
+            stream
+                .set_read_timeout(Some(Duration::from_secs(10)))
+                .expect("timeout");
+            stream
+                .set_write_timeout(Some(Duration::from_secs(10)))
+                .expect("timeout");
+            let n = u32::try_from(data.len()).expect("payload length");
+            stream.write_all(&n.to_le_bytes()).expect("write length");
+            stream.write_all(data).expect("write payload");
+            let mut len_buf = [0u8; 4];
+            stream.read_exact(&mut len_buf).expect("read length");
+            let cn = u32::from_le_bytes(len_buf) as usize;
+            let mut out = vec![0u8; cn];
+            stream.read_exact(&mut out).expect("read frame");
+            out
+        }
+
+        fn stop(&mut self) {
+            let Some(handle) = self.handle.take() else {
+                return;
+            };
+            let mut stream =
+                std::os::unix::net::UnixStream::connect(&self.sock).expect("stop zstd helper");
+            stream
+                .write_all(&0u32.to_le_bytes())
+                .expect("stop zstd helper");
+            handle.join().expect("zstd helper");
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for ZstdHelper {
+        fn drop(&mut self) {
+            self.stop();
+        }
+    }
+
     fn generate_corpus(out: &Path) {
+        #[cfg(unix)]
+        let mut helper = ZstdHelper::start();
         let script =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("paper/cpc/scripts/make_corpus31.py");
-        let status = Command::new("python3")
-            .arg(&script)
-            .arg("--out")
-            .arg(out)
-            .status()
-            .expect("python3");
-        assert!(status.success(), "make_corpus31.py failed");
+        let mut cmd = Command::new("python3");
+        cmd.arg(&script).arg("--out").arg(out);
+        #[cfg(unix)]
+        cmd.env("READCON_ZSTD_SOCK", &helper.sock);
+        let output = cmd.output().expect("python3");
+        #[cfg(unix)]
+        helper.stop();
+        assert!(
+            output.status.success(),
+            "make_corpus31.py failed\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     fn merged_manifest() -> Vec<Entry> {
