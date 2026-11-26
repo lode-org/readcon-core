@@ -1,0 +1,28 @@
+{
+  "source": "fortran/ReadCon/src/readcon.f90",
+  "source_sha256": "8676b6ab2280fb562dd7c51b171a21ddccc75cc26ac672e7c93ba1258069ece3",
+  "compiler": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "flags": [
+    "-std=<standard>",
+    "-pedantic-errors",
+    "-fsyntax-only"
+  ],
+  "results": {
+    "f95": {
+      "accepted": false,
+      "first_error": "Error: Fortran 2003: module nature in USE statement at (1)"
+    },
+    "f2003": {
+      "accepted": false,
+      "first_error": "Error: Fortran 2008: The symbol \u2018int32\u2019, referenced at (1), is not in the selected standard"
+    },
+    "f2008": {
+      "accepted": true
+    },
+    "f2018": {
+      "accepted": true
+    }
+  },
+  "oldest_accepted": "f2008",
+  "standard": "Fortran 2008"
+}
