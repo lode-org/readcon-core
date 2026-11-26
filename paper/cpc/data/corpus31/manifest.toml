@@ -47,12 +47,11 @@ reason = "Minor 1 velocities section with units.time fs, which is authoritative 
 
 [[file]]
 file = "v31_convel_no_time.convel"
-expected = "reject"
-error = "InvalidUnits"
-line = 2
-clause = "CON-units.11"
+expected = "accept"
+frames = 1
+clause = "CON-units.9"
 basis = "explicit"
-reason = "Minor 1 frame whose line 2 declares a velocities section and carries no units.time."
+reason = "Minor 1 declares a velocities section and omits units.time. CON-units.9 says a missing units.time must not reject any minor of major 3."
 
 [[file]]
 file = "v31_legacy_velocity_time.convel"
@@ -64,12 +63,11 @@ reason = "No sections key: the blank line that begins a complete velocity block 
 
 [[file]]
 file = "v31_legacy_velocity_no_time.convel"
-expected = "reject"
-error = "InvalidUnits"
-line = 14
-clause = "CON-section.1, CON-units.11"
+expected = "accept"
+frames = 1
+clause = "CON-section.1, CON-units.9"
 basis = "explicit"
-reason = "No sections key and no units.time at minor 1. The blank line 14 begins a complete velocity block, so the frame has a velocities section from that line and fails CON-units.11 there."
+reason = "No sections key. The blank line opens a legacy velocity block. CON-units.9 says a missing units.time must not reject that minor-1 frame."
 
 [[file]]
 file = "v30_convel_fs.convel"
@@ -145,11 +143,12 @@ reason = "mol is a count, so kcal/mol is an energy."
 
 [[file]]
 file = "v31_units_compound.convel"
-expected = "accept"
-frames = 1
-clause = "CON-units.1, CON-units.2, CON-units.16"
-basis = "open"
-reason = "Products, quotients and parentheses of the matching dimensions (Units). The energy is written kJ / mol; the text does not say whether white space may stand inside an expression, and the reader removes it."
+expected = "reject"
+error = "InvalidUnits"
+line = 2
+clause = "CON-units.21"
+basis = "explicit"
+reason = "units.velocity is nm/ps. In major 3 the time of that quotient is the natural unit, not units.time ps, so the scale differs and CON-units.21 requires InvalidUnits."
 
 [[file]]
 file = "v31_length_area.con"
@@ -758,12 +757,11 @@ reason = "JSON con_spec_version 0 or 1 is UnsupportedVersion; version 1 exists o
 
 [[file]]
 file = "json_version_4.con"
-expected = "reject"
-error = "UnsupportedVersion"
-line = 2
-clause = "CON-line2.6"
+expected = "accept"
+frames = 1
+clause = "CON-line2.6, CON-status.1"
 basis = "explicit"
-reason = "Unknown major 4 is UnsupportedVersion."
+reason = "Major 4 is the current major. CON-line2.6 rejects an unknown major, and CON-status.1 requires every minor of major 4 to be accepted."
 
 [[file]]
 file = "v31_version_float.con"
@@ -880,12 +878,11 @@ reason = "Probe D1: units.time m is a length, not a time."
 
 [[file]]
 file = "d02_legacy_velocity_no_time.convel"
-expected = "reject"
-error = "InvalidUnits"
-line = 14
-clause = "CON-section.1, CON-units.11"
+expected = "accept"
+frames = 1
+clause = "CON-section.1, CON-units.9"
 basis = "explicit"
-reason = "Probe D2: a minor-1 legacy velocity block without units.time fails on the blank line that opens it."
+reason = "Probe D2: a minor-1 legacy velocity block without units.time. CON-units.9 says a missing units.time must not reject that frame."
 
 [[file]]
 file = "d03_nbsp_after_id.con"
@@ -1079,11 +1076,12 @@ reason = "Begins with the UTF-8 byte-order mark EF BB BF; the clause names no cl
 
 [[file]]
 file = "v31_bom_later_frame.con"
-expected = "accept"
-frames = 2
-clause = "CON-file.2, CON-header.2"
+expected = "reject"
+error = "ValidationError"
+line = 14
+clause = "CON-file.2"
 basis = "explicit"
-reason = "A U+FEFF begins line 1 of the second frame, which is text of that line."
+reason = "U+FEFF begins the second frame. CON-file.2 rejects a byte-order mark at the start of any frame as ValidationError."
 
 [[file]]
 file = "v31_utf8_line1.con"

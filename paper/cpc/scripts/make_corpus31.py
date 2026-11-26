@@ -2,8 +2,10 @@
 """Write the CON 3.1 corpus paper/cpc/data/corpus31/ from explicit bytes.
 
 No readcon writer is used: every file is the literal text below, wrapped in
-gzip or zstd here where the name says so. manifest.toml gives per file the
-expected outcome, the frame count of an accepted file or the error class and
+gzip or zstd here where the name says so. zstd uses the zstandard module
+when it is installed, and otherwise the zstd program, libzstd, or the
+READCON_ZSTD_SOCK helper. manifest.toml gives per file the expected
+outcome, the frame count of an accepted file or the error class and
 1-based line of a rejected one, the clauses of docs/orgmode/spec.org that
 decide it, the basis of the expectation and the reason. Every cited clause
 must exist in that document; the script stops otherwise.
@@ -29,8 +31,6 @@ import json
 import re
 import shutil
 from pathlib import Path
-
-import zstandard
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "corpus31"
@@ -211,8 +211,132 @@ def gz(data: bytes) -> bytes:
     return gzip.compress(data, compresslevel=6, mtime=0)
 
 
+def _zstd_module(data: bytes):
+    import importlib
+
+    for mod_name in ("compression.zstd", "zstandard"):
+        try:
+            mod = importlib.import_module(mod_name)
+        except ImportError:
+            continue
+        if not hasattr(mod, "ZstdCompressor"):
+            continue
+        compressor = mod.ZstdCompressor(level=3)
+        # The stdlib compressor returns an unfinished frame unless the call
+        # asks for FLUSH_FRAME. zstandard's compress() already returns one
+        # complete frame and has no such mode.
+        flush_frame = getattr(compressor, "FLUSH_FRAME", None)
+        if flush_frame is None:
+            return compressor.compress(data)
+        return compressor.compress(data, flush_frame)
+    return None
+
+
+def _zstd_cli(data: bytes):
+    import subprocess
+
+    zstd_bin = shutil.which("zstd")
+    if zstd_bin is None:
+        return None
+    proc = subprocess.run(
+        [zstd_bin, "-3", "-c", "-q"],
+        input=data,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    if proc.returncode != 0 or not proc.stdout.startswith(b"\x28\xb5\x2f\xfd"):
+        return None
+    return proc.stdout
+
+
+def _zstd_lib(data: bytes):
+    import ctypes
+    import ctypes.util
+
+    names = []
+    found = ctypes.util.find_library("zstd")
+    if found:
+        names.append(found)
+    names.append("libzstd.so.1")
+    lib = None
+    for name in names:
+        try:
+            lib = ctypes.CDLL(name)
+            break
+        except OSError:
+            lib = None
+    if lib is None:
+        return None
+    lib.ZSTD_compressBound.argtypes = [ctypes.c_size_t]
+    lib.ZSTD_compressBound.restype = ctypes.c_size_t
+    lib.ZSTD_compress.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_int,
+    ]
+    lib.ZSTD_compress.restype = ctypes.c_size_t
+    lib.ZSTD_isError.argtypes = [ctypes.c_size_t]
+    lib.ZSTD_isError.restype = ctypes.c_uint
+    bound = lib.ZSTD_compressBound(len(data))
+    dst = (ctypes.c_ubyte * bound)()
+    written = lib.ZSTD_compress(
+        ctypes.cast(dst, ctypes.c_void_p),
+        bound,
+        data,
+        len(data),
+        3,
+    )
+    if lib.ZSTD_isError(written):
+        return None
+    return bytes(memoryview(dst)[:written])
+
+
+def _zstd_socket(data: bytes):
+    import os
+    import socket
+
+    path = os.environ.get("READCON_ZSTD_SOCK")
+    if not path:
+        return None
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect(path)
+        sock.sendall(len(data).to_bytes(4, "little") + data)
+
+        def recvall(n: int) -> bytes:
+            buf = b""
+            while len(buf) < n:
+                chunk = sock.recv(n - len(buf))
+                if not chunk:
+                    raise SystemExit("READCON_ZSTD_SOCK closed before the frame")
+                buf += chunk
+            return buf
+
+        n = int.from_bytes(recvall(4), "little")
+        return recvall(n)
+    finally:
+        sock.close()
+
+
+def _zstd_compress(data: bytes):
+    for attempt in (_zstd_module, _zstd_cli, _zstd_lib, _zstd_socket):
+        frame = attempt(data)
+        if frame is not None:
+            return frame
+    return None
+
+
 def zst(data: bytes) -> bytes:
-    return zstandard.ZstdCompressor(level=3).compress(data)
+    frame = _zstd_compress(data)
+    if frame is None:
+        raise SystemExit(
+            "No module named 'zstandard' and neither the zstd CLI, "
+            "libzstd, nor READCON_ZSTD_SOCK is available"
+        )
+    return frame
 
 
 CASES: list[dict] = []
@@ -306,18 +430,17 @@ accept(
     "rewrite keeps minor 1 and fs.",
     rewrite=True,
 )
-reject(
+accept(
     "v31_convel_no_time.convel",
     con(
         "corpus31 minor-1 convel, no time",
         obj(M31, U30, '"sections":["velocities"]'),
         tail=VEL2,
     ),
-    "InvalidUnits",
-    2,
-    "CON-units.11",
+    1,
+    "CON-units.9",
     "explicit",
-    "Minor 1 frame whose line 2 declares a velocities section and carries no units.time.",
+    "Minor 1 declares a velocities section and omits units.time. CON-units.9 says a missing units.time must not reject any minor of major 3.",
 )
 accept(
     "v31_legacy_velocity_time.convel",
@@ -328,15 +451,13 @@ accept(
     "No sections key: the blank line that begins a complete velocity block opens the legacy velocity section "
     "(Sections), whose velocities are in units.time fs.",
 )
-reject(
+accept(
     "v31_legacy_velocity_no_time.convel",
     con("corpus31 minor-1 legacy velocity block, no time", obj(M31, U30), tail=VEL2),
-    "InvalidUnits",
-    14,
-    "CON-section.1, CON-units.11",
+    1,
+    "CON-section.1, CON-units.9",
     "explicit",
-    "No sections key and no units.time at minor 1. The blank line 14 begins a complete velocity block, so the "
-    "frame has a velocities section from that line and fails CON-units.11 there.",
+    "No sections key. The blank line opens a legacy velocity block. CON-units.9 says a missing units.time must not reject that minor-1 frame.",
 )
 accept(
     "v30_convel_fs.convel",
@@ -453,7 +574,7 @@ accept(
     "explicit",
     "mol is a count, so kcal/mol is an energy.",
 )
-accept(
+reject(
     "v31_units_compound.convel",
     con(
         "corpus31 compound units",
@@ -465,11 +586,11 @@ accept(
         ),
         tail=VEL2,
     ),
-    1,
-    "CON-units.1, CON-units.2, CON-units.16",
-    "open",
-    "Products, quotients and parentheses of the matching dimensions (Units). The energy is written kJ / mol; "
-    "the text does not say whether white space may stand inside an expression, and the reader removes it.",
+    "InvalidUnits",
+    2,
+    "CON-units.21",
+    "explicit",
+    "units.velocity is nm/ps. In major 3 the time of that quotient is the natural unit, not units.time ps, so the scale differs and CON-units.21 requires InvalidUnits.",
 )
 reject(
     "v31_length_area.con",
@@ -1200,14 +1321,13 @@ reject(
     "explicit",
     "JSON con_spec_version 0 or 1 is UnsupportedVersion; version 1 exists only as non-JSON line 2.",
 )
-reject(
+accept(
     "json_version_4.con",
     con("corpus31 major 4", obj('"con_spec_version":4', '"con_spec_minor":0', U31)),
-    "UnsupportedVersion",
-    2,
-    "CON-line2.6",
+    1,
+    "CON-line2.6, CON-status.1",
     "explicit",
-    "Unknown major 4 is UnsupportedVersion.",
+    "Major 4 is the current major. CON-line2.6 rejects an unknown major, and CON-status.1 requires every minor of major 4 to be accepted.",
 )
 accept(
     "v31_version_float.con",
@@ -1361,14 +1481,13 @@ reject(
     "explicit",
     "Probe D1: units.time m is a length, not a time.",
 )
-reject(
+accept(
     "d02_legacy_velocity_no_time.convel",
     probe({**PROBE_M31, "units": PROBE_UNITS}, extra=PROBE_VEL),
-    "InvalidUnits",
-    14,
-    "CON-section.1, CON-units.11",
+    1,
+    "CON-section.1, CON-units.9",
     "explicit",
-    "Probe D2: a minor-1 legacy velocity block without units.time fails on the blank line that opens it.",
+    "Probe D2: a minor-1 legacy velocity block without units.time. CON-units.9 says a missing units.time must not reject that frame.",
 )
 reject(
     "d03_nbsp_after_id.con",
@@ -1611,13 +1730,14 @@ reject(
     "class-open",
     "Begins with the UTF-8 byte-order mark EF BB BF; the clause names no class.",
 )
-accept(
+reject(
     "v31_bom_later_frame.con",
     BASE + b"\xef\xbb\xbf" + BASE_B,
-    2,
-    "CON-file.2, CON-header.2",
+    "ValidationError",
+    14,
+    "CON-file.2",
     "explicit",
-    "A U+FEFF begins line 1 of the second frame, which is text of that line.",
+    "U+FEFF begins the second frame. CON-file.2 rejects a byte-order mark at the start of any frame as ValidationError.",
 )
 reject(
     "v31_utf8_line1.con",

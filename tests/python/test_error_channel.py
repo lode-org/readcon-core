@@ -116,6 +116,28 @@ def test_streaming_iterator_locates_the_later_frame(tmp_path):
         raise AssertionError("skip accepted the bad second frame")
 
 
+def test_streaming_iterator_rejects_a_bom_on_a_later_frame(tmp_path):
+    # CON-file.2: no frame may begin with U+FEFF.
+    path = tmp_path / "bom-frame-2.con"
+    path.write_text(_good_frame() + "\ufeff" + _good_frame(), encoding="utf-8")
+    name = str(path)
+    try:
+        readcon.read_con(name)
+    except readcon.ValidationError:
+        pass
+    else:
+        raise AssertionError("read_con accepted a later frame BOM")
+    for kwargs in ({}, {"mmap": True}, {"stream": True}):
+        iterator = readcon.iter_con(name, **kwargs)
+        assert iterator.forward() is True
+        try:
+            iterator.forward()
+        except readcon.ValidationError:
+            pass
+        else:
+            raise AssertionError(f"iter_con accepted a later frame BOM {kwargs}")
+
+
 def test_count_frames_locates_the_later_frame(tmp_path):
     path = _later_frame_path(tmp_path)
     try:

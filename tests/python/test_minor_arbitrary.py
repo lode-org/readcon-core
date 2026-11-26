@@ -341,12 +341,15 @@ def test_v4_blockers_and_duplicate_semantics_in_python():
             readcon.read_con_string(txt)
 
     # 4. Last-key -0, frame_index:-0, section_arity >= 2^64, and major overflow match BASE.
+    #    con_spec_version -0 is major 0 (CON-line2.4, CON-line2.5).
+    txt = 'gen\n{"con_spec_version":-0}\n10 10 10\n90 90 90\n\n\n0\n\n\n'
+    with pytest.raises(readcon.UnsupportedVersion):
+        readcon.read_con_string(txt)
     for line2 in (
         '{"con_spec_version":2,"sections":[],"validate":true,"frame_index":-0}',
         '{"con_spec_version":2,"section_arity":{"widgets":-0}}',
         f'{{"con_spec_version":2,"section_arity":{{"widgets":{TWO_POW_64}}}}}',
         f'{{"con_spec_version":3,"units":{{"length":"angstrom","energy":"eV"}},"section_arity":{{"velocities":{TWO_POW_64}}}}}',
-        '{"con_spec_version":-0}',
         f'{{"con_spec_version":{TWO_POW_64}}}',
         '{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":-0,"units":{"length":"angstrom","energy":"eV"}}',
         f'{{"con_spec_version":3,"con_spec_minor":{TWO_POW_64},"con_spec_minor":-0,"units":{{"length":"angstrom","energy":"eV"}}}}',
@@ -750,27 +753,14 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     # change from BASE rejection to accepted 2^64, and Python enables the zstd
     # files. Every other verdict that differs from BASE is the one
     # manifest.toml gives, except where CON 4 decides the file otherwise.
-    con4_accepts = {
-        # CON-units.9: a missing units.time does not reject any minor of major 3.
-        "d02_legacy_velocity_no_time.convel": 3,
-        "v31_convel_no_time.convel": 3,
-        "v31_legacy_velocity_no_time.convel": 3,
-        # Major 4 is the current major, so CON-line2.6 does not reject it.
-        "json_version_4.con": 4,
-    }
-    # CON-units.21. Major 3 assigns the natural time unit, and units.time
-    # must not decide the quotient. The base oracle and the corpus manifest
-    # still accept velocity nm/ps. The reader rejects that scale.
-    con21_rejects = {
-        "v31_units_compound.convel": (
-            "units.velocity must equal units.length divided by the time unit, "
-            "not 'nm/ps'"
-        ),
-    }
+    con4_accepts = {}
     bom = "CON validation failed: frame begins with a byte-order mark"
     con4_messages = {
         "v31_bom.con": bom,
         "v31_bom_later_frame.con": bom,
+        "v2_time_banana.con": "invalid units: units.time: CON validation failed: "
+        "unknown unit 'banana'; unit symbols are case-sensitive "
+        "(meV is milli, MeV is mega)",
         "v31_minor_string.con": "invalid JSON metadata on line 2: con_spec_minor "
         "must be a JSON integer >= 0 that fits in an unsigned 64-bit integer",
         "v31_validate_bad_label.convel": "CON validation failed: expected section "
@@ -818,12 +808,6 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
             assert frames[0].spec_version == con4_accepts[name], name
             con4_diffs.append(name)
             continue
-        if name in con21_rejects:
-            assert expected["status"] == "ok", name
-            assert labels[name] == "accept", name
-            with pytest.raises(readcon.InvalidUnits, match=con21_rejects[name]):
-                readcon.read_con(p)
-            continue
         if name.endswith(".zst"):
             frames = readcon.read_con(p)
             assert len(frames) >= 1, name
@@ -856,7 +840,20 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
             assert str(exc_info.value) == message, name
     assert sorted(huge_minor_diffs) == ["d14_minor_2pow64.con", "v2_minor_2pow64.con"]
     assert sorted(con4_diffs) == sorted(con4_accepts)
-    assert len(manifest_diffs) == 26
+    # The oracle still accepts these coordinate labels. CON-coord.1 rejects
+    # them in every mode, and the manifest records that rejection.
+    assert sorted(manifest_diffs) == [
+        "d02_legacy_velocity_no_time.convel",
+        "json_version_4.con",
+        "v31_blank_symbol_velocities.convel",
+        "v31_bom_later_frame.con",
+        "v31_convel_no_time.convel",
+        "v31_coord_label_mismatch.con",
+        "v31_label_coordinates_1_xyz.con",
+        "v31_label_coordinates_2.con",
+        "v31_legacy_velocity_no_time.convel",
+        "v31_units_compound.convel",
+    ]
 
 
 @pytest.mark.parametrize(

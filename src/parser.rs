@@ -929,7 +929,7 @@ pub fn parse_line_of_range_f64_stack(
         let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..])
             .map_err(|_| ParseError::InvalidNumberFormat(format!("invalid float: {token}")))?;
         let next = i + consumed;
-        // Reject partial tokens like "1.2abc" (must end at whitespace or EOS).
+        // Reject partial tokens like "1.2abc" (must end at space/tab or EOS).
         if next != end {
             return Err(ParseError::InvalidNumberFormat(format!(
                 "invalid float: {token}"
@@ -984,7 +984,7 @@ pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError>
         return Ok(buf[..n].to_vec());
     }
     let mut values = Vec::with_capacity(n.min(max_tokens_on_line(line)));
-    for token in line.split_ascii_whitespace() {
+    for token in split_field_ws(line) {
         values.push(parse_finite_float_token(token)?);
     }
     if values.len() == n {
@@ -1006,12 +1006,10 @@ pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError>
 /// failing path only, and the frame is named by whoever knows its index.
 pub(crate) fn parse_cell_line(line: &str, name: &str) -> Result<Vec<f64>, ParseError> {
     parse_line_of_n_f64(line, 3).map_err(|error| match error {
-        ParseError::NonFiniteValue(token) => {
-            match line.split_ascii_whitespace().position(|t| t == token) {
-                Some(index) => ParseError::non_finite_cell(&format!("{name}[{index}]"), token),
-                None => ParseError::NonFiniteValue(token),
-            }
-        }
+        ParseError::NonFiniteValue(token) => match split_field_ws(line).position(|t| t == token) {
+            Some(index) => ParseError::non_finite_cell(&format!("{name}[{index}]"), token),
+            None => ParseError::NonFiniteValue(token),
+        },
         other => other,
     })
 }
@@ -1035,7 +1033,7 @@ pub fn parse_line_of_range_f64(
         return Ok(buf[..max].to_vec());
     }
     let mut values = Vec::with_capacity(max);
-    for token in line.split_ascii_whitespace() {
+    for token in split_field_ws(line) {
         values.push(parse_finite_float_token(token)?);
     }
     if values.len() < min || values.len() > max {
@@ -1183,6 +1181,10 @@ fn is_field_ws(b: u8) -> bool {
     matches!(b, b' ' | b'\t')
 }
 
+fn split_field_ws(line: &str) -> impl Iterator<Item = &str> {
+    line.split([' ', '\t']).filter(|token| !token.is_empty())
+}
+
 /// True at the end of a row: end of input, LF, or a CR that ends the line.
 #[inline(always)]
 fn at_row_end(bytes: &[u8], i: usize) -> bool {
@@ -1228,7 +1230,7 @@ fn skip_field_ws(bytes: &[u8], mut i: usize) -> usize {
 
 fn token_on_line(bytes: &[u8], i: usize) -> String {
     let mut j = i;
-    while j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+    while j < bytes.len() && !is_field_ws(bytes[j]) && !at_row_end(bytes, j) {
         j += 1;
     }
     String::from_utf8_lossy(&bytes[i..j]).into_owned()
@@ -1238,11 +1240,11 @@ fn count_tokens_on_line(bytes: &[u8], mut i: usize) -> usize {
     let mut n = 0usize;
     loop {
         i = skip_field_ws(bytes, i);
-        if i >= bytes.len() || bytes[i] == b'\n' {
+        if at_row_end(bytes, i) {
             break;
         }
         n += 1;
-        while i < bytes.len() && !is_field_ws(bytes[i]) && bytes[i] != b'\n' {
+        while i < bytes.len() && !is_field_ws(bytes[i]) && !at_row_end(bytes, i) {
             i += 1;
         }
     }
@@ -1264,7 +1266,7 @@ fn utf8_or_number(bytes: &[u8], line_start: usize, i: usize) -> ParseError {
 
 #[inline(always)]
 fn parse_f64_at(bytes: &[u8], i: usize, line_start: usize) -> Result<(f64, usize), ParseError> {
-    if i >= bytes.len() || bytes[i] == b'\n' {
+    if at_row_end(bytes, i) {
         return Err(ParseError::InvalidVectorLength {
             expected: 5,
             found: 0,
@@ -1284,14 +1286,14 @@ fn parse_f64_at(bytes: &[u8], i: usize, line_start: usize) -> Result<(f64, usize
     })?;
     let next = i + consumed;
     let boundary = ends_field(bytes, next);
-    if !boundary || !val.is_finite() {
-        let token = token_on_line(bytes, i);
-        if is_nonfinite_spelling(&token) || !val.is_finite() {
-            return Err(ParseError::NonFiniteValue(token));
-        }
+    if !boundary {
         return Err(ParseError::InvalidNumberFormat(format!(
-            "invalid float: {token}"
+            "invalid float: {}",
+            token_on_line(bytes, i)
         )));
+    }
+    if !val.is_finite() {
+        return Err(ParseError::NonFiniteValue(token_on_line(bytes, i)));
     }
     Ok((val, next))
 }
@@ -1302,7 +1304,7 @@ fn parse_flag_at(
     i: usize,
     spec_version: u32,
 ) -> Result<([bool; 3], usize), ParseError> {
-    if i >= bytes.len() || bytes[i] == b'\n' {
+    if at_row_end(bytes, i) {
         return Err(ParseError::InvalidVectorLength {
             expected: 5,
             found: 3,
@@ -1347,7 +1349,7 @@ fn parse_flag_at(
 
 #[inline(always)]
 fn parse_id_at(bytes: &[u8], i: usize) -> Result<(u64, usize), ParseError> {
-    if i >= bytes.len() || bytes[i] == b'\n' || !bytes[i].is_ascii_digit() {
+    if at_row_end(bytes, i) || !bytes[i].is_ascii_digit() {
         return Err(ParseError::InvalidNumberFormat(format!(
             "invalid integer: {}",
             token_on_line(bytes, i)
@@ -1579,7 +1581,7 @@ fn parse_scalar_section_row(
     let atom_id = parse_atom_id_token(id_tok)?;
     let i = skip_ascii_ws(bytes, i);
     if i < bytes.len() {
-        let found = 3 + line[i..].split_ascii_whitespace().count();
+        let found = 3 + split_field_ws(&line[i..]).count();
         return Err(ParseError::InvalidVectorLength { expected: 3, found });
     }
     Ok((value, fixed, atom_id))
@@ -1607,14 +1609,15 @@ fn parse_finite_at(line: &str, i: usize) -> Result<(f64, usize), ParseError> {
     })?;
     let next = i + consumed;
     let boundary = ends_field(bytes, next);
-    if !boundary || !val.is_finite() {
+    if !boundary {
         let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
-        if is_nonfinite_spelling(token) || !val.is_finite() {
-            return Err(ParseError::NonFiniteValue(token.to_string()));
-        }
         return Err(ParseError::InvalidNumberFormat(format!(
             "invalid float: {token}"
         )));
+    }
+    if !val.is_finite() {
+        let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
+        return Err(ParseError::NonFiniteValue(token.to_string()));
     }
     Ok((val, next))
 }
@@ -1634,7 +1637,7 @@ fn looks_like_nonfinite(bytes: &[u8], i: usize) -> bool {
 }
 
 /// Case-insensitive, after collapsing each run of spaces (CON-file.5, D17).
-fn labels_equal(found: &str, expected: &str) -> bool {
+pub(crate) fn labels_equal(found: &str, expected: &str) -> bool {
     let mut found_words = found.split_ascii_whitespace();
     let mut expected_words = expected.split_ascii_whitespace();
     loop {
@@ -1648,6 +1651,33 @@ fn labels_equal(found: &str, expected: &str) -> bool {
             _ => return false,
         }
     }
+}
+
+/// Label prefix of a reserved section, in the form the section parser checks.
+pub(crate) fn reserved_section_label_prefix(name: &str) -> Option<&'static str> {
+    match name {
+        crate::types::SECTION_VELOCITIES => Some("Velocities of Component"),
+        crate::types::SECTION_FORCES => Some("Forces of Component"),
+        crate::types::SECTION_ENERGIES => Some("Energies of Component"),
+        crate::types::SECTION_CHARGES => Some("Charges of Component"),
+        crate::types::SECTION_SPINS => Some("Spins of Component"),
+        crate::types::SECTION_MAGMOMS => Some("Magmoms of Component"),
+        crate::types::SECTION_DISPLACEMENTS => Some("Displacements of Component"),
+        crate::types::SECTION_SPREADS => Some("Spreads of Component"),
+        _ => None,
+    }
+}
+
+/// True when `line`, after the same folding, starts with every word of `prefix`.
+pub(crate) fn label_has_prefix(line: &str, prefix: &str) -> bool {
+    let mut found_words = line.split_ascii_whitespace();
+    for word in prefix.split_ascii_whitespace() {
+        match found_words.next() {
+            Some(got) if got.eq_ignore_ascii_case(word) => {}
+            _ => return false,
+        }
+    }
+    true
 }
 
 fn token_count(line: &str) -> usize {
@@ -1765,9 +1795,12 @@ fn skip_json_ws(bytes: &[u8], i: &mut usize) {
     }
 }
 
-/// Same ASCII whitespace as [`skip_ascii_ws`], including form feed.
+/// ASCII whitespace between line-2 JSON tokens, including form feed: the
+/// set `simple_metadata_version` skips. Row fields use [`is_field_ws`].
 fn skip_ascii_ws_mut(bytes: &[u8], i: &mut usize) {
-    *i = skip_ascii_ws(bytes, *i);
+    while *i < bytes.len() && bytes[*i].is_ascii_whitespace() {
+        *i += 1;
+    }
 }
 
 fn scan_json_string_end(bytes: &[u8], start: usize) -> Option<usize> {
@@ -2061,6 +2094,21 @@ fn json_u64(value: &Value) -> Option<u64> {
     value.as_u64()
 }
 
+/// CON-line2.4: the major is a JSON number, not a string. `3.0` and `3e0`
+/// are that number. A non-integer such as `3.5` is not a major.
+fn json_major_version(value: &Value) -> Option<u64> {
+    if let Some(n) = value.as_u64() {
+        return Some(n);
+    }
+    let n = value.as_f64()?;
+    // A major fits in u32. A float above that, including 2^64, is not one.
+    if n.is_finite() && n >= 0.0 && n <= u32::MAX as f64 && n.fract() == 0.0 {
+        Some(n as u64)
+    } else {
+        None
+    }
+}
+
 fn validate_section_arity_value(value: &Value) -> Result<(), ParseError> {
     let obj = value.as_object().ok_or_else(|| {
         metadata_json_error("section_arity must be an object mapping section names to integers")
@@ -2092,7 +2140,7 @@ fn validate_section_arity_value(value: &Value) -> Result<(), ParseError> {
 /// rejects a per-type count of 0 when the type count is 1 or more (D4).
 pub(crate) fn parse_count_line(line: &str, n: usize) -> Result<Vec<usize>, ParseError> {
     let mut values = Vec::with_capacity(n.min(max_tokens_on_line(line)));
-    for token in line.split_ascii_whitespace() {
+    for token in split_field_ws(line) {
         if token.is_empty() || !token.bytes().all(|b| b.is_ascii_digit()) {
             return Err(ParseError::InvalidCount(format!(
                 "count field is not an unsigned integer: {token}"
@@ -2165,6 +2213,56 @@ fn validate_metadata_integer(key: &str, value: &Value) -> Result<(), ParseError>
             "{key} must be a non-negative integer"
         )))
     }
+}
+
+/// Check the types of reserved metadata keys that apply in every mode (CON-line2.13).
+///
+/// `bonds` stays gated by `validate = true` (CON-bonds.2, CON-bonds.3), and
+/// `units` / `sections` / `con_spec_version` / `con_spec_minor` / `section_arity` /
+/// `validate` are validated by the caller or `validate_metadata_schema`.
+fn validate_reserved_key_types(
+    json_obj: &serde_json::Map<String, Value>,
+) -> Result<(), ParseError> {
+    for (key, value) in json_obj {
+        match key.as_str() {
+            meta::ENERGY
+            | meta::TIME
+            | meta::TIMESTEP
+            | meta::CONVERGENCE_FMAX
+            | meta::CONVERGENCE_ENERGY
+            | meta::FMAX => {
+                validate_metadata_number(key, value)?;
+                if value.as_f64().is_some_and(|n| !n.is_finite()) {
+                    return Err(metadata_json_error(format!(
+                        "{key} must be a finite number"
+                    )));
+                }
+            }
+            meta::FRAME_INDEX | meta::NEB_BEAD | meta::NEB_BAND => {
+                validate_metadata_integer(key, value)?;
+            }
+            meta::GENERATOR if !value.is_string() => {
+                return Err(metadata_json_error("generator must be a string"));
+            }
+            meta::POTENTIAL if !value.is_object() => {
+                return Err(metadata_json_error("potential must be an object"));
+            }
+            meta::POTENTIAL => {
+                if let Some(potential_type) = value.get("type")
+                    && !potential_type.is_string()
+                {
+                    return Err(metadata_json_error("potential.type must be a string"));
+                }
+            }
+            meta::PBC => validate_pbc_metadata(value)?,
+            meta::LATTICE_VECTORS => validate_lattice_vectors_metadata(value)?,
+            meta::CONVERGED if !value.is_boolean() => {
+                return Err(metadata_json_error("converged must be a boolean"));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// Validates a parsed metadata JSON object against the spec v2 schema.
@@ -2352,7 +2450,11 @@ fn validate_lattice_vectors_metadata(value: &Value) -> Result<(), ParseError> {
                 "lattice_vectors must be a 3x3 numeric array",
             ));
         };
-        if entries.len() != 3 || entries.iter().any(|entry| entry.as_f64().is_none()) {
+        if entries.len() != 3
+            || entries
+                .iter()
+                .any(|entry| !entry.as_f64().is_some_and(|n| n.is_finite()))
+        {
             return Err(metadata_json_error(
                 "lattice_vectors must be a 3x3 numeric array",
             ));
@@ -2894,11 +2996,17 @@ where
 pub fn parse_frame_header<'a>(
     lines: &mut impl Iterator<Item = &'a str>,
 ) -> Result<FrameHeader, ParseError> {
+    parse_frame_header_inner(lines)
+}
+
+pub(crate) fn parse_frame_header_inner<'a>(
+    lines: &mut impl Iterator<Item = &'a str>,
+) -> Result<FrameHeader, ParseError> {
     let prebox1 = lines
         .next()
         .ok_or(ParseError::IncompleteHeader)?
         .to_string();
-    // CON-file.2: U+FEFF at the start of any frame is rejected.
+    // CON-file.2: no frame may begin with U+FEFF.
     if prebox1.starts_with('\u{feff}') {
         return Err(ParseError::ValidationError(
             "frame begins with a byte-order mark".into(),
@@ -2936,7 +3044,7 @@ pub fn parse_frame_header<'a>(
         let ver_value = json_obj
             .get(meta::CON_SPEC_VERSION)
             .ok_or(ParseError::MissingSpecVersion)?;
-        let ver = json_u64(ver_value).ok_or_else(|| {
+        let ver = json_major_version(ver_value).ok_or_else(|| {
             ParseError::InvalidMetadataJson(
                 "con_spec_version must be a JSON integer, the major version".into(),
             )
@@ -3051,6 +3159,19 @@ pub fn parse_frame_header<'a>(
         if validate {
             validate_metadata_schema(json_obj)?;
         }
+
+        // Reserved-key types apply in every mode (CON-line2.13).
+        validate_reserved_key_types(json_obj)?;
+
+        if ver < 3
+            && let Some(units) = json_obj.get(meta::UNITS)
+        {
+            crate::units::validate_present_unit_dimensions(units)?;
+        }
+        // Unknown names are line 2 (CON-section.7, CON-section.9, CON-error.4).
+        let minor =
+            crate::types::FrameMeta::from_shared(std::sync::Arc::from(trimmed)).spec_minor();
+        reject_unknown_sections(json_obj, &sections, minor)?;
         let has_declared_velocities =
             sections_declared && sections.iter().any(|name| name == SECTION_VELOCITIES);
         note_declared_velocities(has_declared_velocities);
@@ -3509,7 +3630,7 @@ where
     L: LineStream<'a> + Iterator<Item = &'a str>,
 {
     reset_sequential_plain();
-    let header = parse_frame_header(lines)?;
+    let header = parse_frame_header_inner(lines)?;
     // A count the unread input can hold stays in this function, on the same
     // reservation and `Arc` bump as before the bound existed. A count that
     // cannot fit is a separate cold function so it does not shape this loop.
@@ -3911,6 +4032,33 @@ mod symbol_share_tests {
     }
 }
 
+/// CON-section.7 and CON-section.9, reported on line 2 (CON-error.4).
+fn reject_unknown_sections(
+    obj: &serde_json::Map<String, Value>,
+    sections: &[String],
+    minor: u64,
+) -> Result<(), ParseError> {
+    let newer = minor > u64::from(crate::CON_SPEC_MINOR);
+    for name in sections {
+        if reserved_section_label_prefix(name).is_some() {
+            continue;
+        }
+        let skippable = newer && section_arity_known(obj, name);
+        if !skippable {
+            return Err(ParseError::UnknownSection(name.clone()));
+        }
+    }
+    Ok(())
+}
+
+fn section_arity_known(obj: &serde_json::Map<String, Value>, name: &str) -> bool {
+    obj.get(meta::SECTION_ARITY)
+        .and_then(|value| value.as_object())
+        .and_then(|map| map.get(name))
+        .and_then(|entry| entry.as_u64())
+        .is_some_and(|n| n >= 1)
+}
+
 fn validate_header_geometry(boxl: &[f64], angles: &[f64]) -> Result<(), ParseError> {
     if boxl
         .iter()
@@ -4078,7 +4226,7 @@ fn validate_section_atom_identity(
 ///
 /// A blank line followed only by whitespace to EOF does not open a section
 /// (CON-frame.5). The lines stay in the stream.
-fn frame_minor(header: &FrameHeader) -> u64 {
+pub(crate) fn frame_minor(header: &FrameHeader) -> u64 {
     header.metadata.spec_minor()
 }
 
@@ -4097,7 +4245,7 @@ fn implemented_minor(spec_version: u32) -> u64 {
     }
 }
 
-fn section_row_arity(header: &FrameHeader, name: &str) -> Option<usize> {
+pub(crate) fn section_row_arity(header: &FrameHeader, name: &str) -> Option<usize> {
     let obj = header.metadata.get(meta::SECTION_ARITY)?.as_object()?;
     let n = obj.get(name)?.as_u64()?;
     if n >= 1 { Some(n as usize) } else { None }
@@ -4162,6 +4310,37 @@ fn open_section<'a>(lines: &mut impl LineStream<'a>) -> Result<bool, ParseError>
     }
 }
 
+/// CON-validate.4. The symbol line is the line this error names.
+fn reject_symbol_mismatch(
+    section: &str,
+    type_idx: usize,
+    atom_idx: usize,
+    symbol: &str,
+    header: &FrameHeader,
+    atom_data: &[AtomDatum],
+    validate: bool,
+) -> Result<(), ParseError> {
+    if !validate || header.natms_per_type.get(type_idx).copied().unwrap_or(0) == 0 {
+        return Ok(());
+    }
+    let expected_symbol = atom_data
+        .get(atom_idx)
+        .map(|atom| atom.symbol.as_ref())
+        .ok_or_else(|| {
+            ParseError::ValidationError(format!(
+                "{section} component {} has no coordinate atom to validate against",
+                type_idx + 1
+            ))
+        })?;
+    if symbol != expected_symbol {
+        return Err(ParseError::ValidationError(format!(
+            "{section} component {} symbol mismatch: expected {expected_symbol}, found {symbol}",
+            type_idx + 1
+        )));
+    }
+    Ok(())
+}
+
 /// Attempts to parse an optional velocity section following coordinate blocks.
 ///
 /// In `.convel` files, after all coordinate blocks there is a blank separator line
@@ -4198,7 +4377,7 @@ pub fn parse_velocity_section<'a>(
     column.resize(n.saturating_mul(3), 0.0);
     let mut atom_idx: usize = 0;
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
-        // Symbol line
+        // Symbol line. A symbol mismatch is this line (CON-validate.4).
         let symbol = lines
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?
@@ -4214,7 +4393,7 @@ pub fn parse_velocity_section<'a>(
             )?;
         }
 
-        // "Velocities of Component N" line
+        // CON-section.15: the label is exactly "Velocities of Component N".
         let comp_line = lines
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?;
@@ -4285,6 +4464,9 @@ pub fn parse_force_section<'a>(
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_FORCES.into()))?
             .trim();
+        reject_symbol_mismatch(
+            "Forces", type_idx, atom_idx, symbol, header, atom_data, validate,
+        )?;
 
         let comp_line = lines
             .next_line()
@@ -4351,6 +4533,9 @@ pub fn parse_energy_section<'a>(
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_ENERGIES.into()))?
             .trim();
+        reject_symbol_mismatch(
+            "Energies", type_idx, atom_idx, symbol, header, atom_data, validate,
+        )?;
 
         let comp_line = lines
             .next_line()
@@ -4558,6 +4743,15 @@ fn parse_scalar_atom_section<'a>(
             .next_line()
             .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?
             .trim();
+        reject_symbol_mismatch(
+            component_label.trim_end_matches(" of Component").trim(),
+            type_idx,
+            atom_idx,
+            symbol,
+            header,
+            atom_data,
+            validate,
+        )?;
 
         let comp_line = lines
             .next_line()
@@ -4649,6 +4843,9 @@ fn parse_vector_named_section<'a>(
             .next_line()
             .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?
             .trim();
+        reject_symbol_mismatch(
+            label_kind, type_idx, atom_idx, symbol, header, atom_data, validate,
+        )?;
         let comp_line = lines
             .next_line()
             .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
@@ -6432,11 +6629,12 @@ Forces of Component 1
             "",
             "",
         ];
+        // -0 is the JSON number 0. Major 0 is UnsupportedVersion (CON-line2.5).
         assert_eq!(
             parse_frame_header(&mut neg_zero_major.iter().copied())
                 .unwrap_err()
                 .class_name(),
-            "InvalidMetadataJson"
+            "UnsupportedVersion"
         );
 
         // Value equality, -0 float preservation, frame_index:-0, section_arity:-0, 1e400/1e999.
@@ -6763,9 +6961,9 @@ Forces of Component 1
         );
     }
 
-    /// The strict minor scanner does not treat form feed as JSON
-    /// whitespace, so the fast path leaves that minor absent. A decoded
-    /// top-level escape is still the reserved key.
+    /// ASCII whitespace between line-2 tokens includes a form feed, and
+    /// the fast path skips it. A decoded top-level escape is that key.
+    /// Major 3 keeps a frame that has velocities and no units.time.
     #[test]
     fn form_feed_and_escaped_top_level_minor_match_the_fast_path() {
         let ff = '\u{000c}';
@@ -6779,7 +6977,7 @@ Forces of Component 1
         ];
         for line in &minor_lines {
             let meta = crate::types::FrameMeta::from_line(line.as_str());
-            assert_eq!(meta.spec_minor(), 0, "{line:?}");
+            assert_eq!(meta.spec_minor(), 5, "{line:?}");
         }
         let escaped =
             crate::types::FrameMeta::from_line(r#"{"con_spec_version":2,"con_spec_\u006dinor":5}"#);
@@ -6798,8 +6996,90 @@ Forces of Component 1
             );
             let frames = crate::iterators::frames_from_text(&text, None)
                 .unwrap_or_else(|err| panic!("{line2:?}: {err}"));
-            assert_eq!(frames[0].header.metadata.spec_minor(), 0);
+            assert_eq!(frames[0].header.metadata.spec_minor(), 1, "{line2:?}");
         }
+    }
+    #[test]
+    fn nonfinite_prefix_with_trailing_junk_is_invalid_number_format() {
+        let coord = "pre\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n-Inf{inity 0 0 0 0\n";
+        let err = crate::iterators::ConFrameIterator::new(coord)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.class_name(), "InvalidNumberFormat", "{err}");
+
+        let box_line = "pre\n{\"con_spec_version\":2}\n-Inf{inity 10 10\n90 90 90\n\n\n0\n\n\n";
+        let err = crate::iterators::ConFrameIterator::new(box_line)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.class_name(), "InvalidNumberFormat", "{err}");
+    }
+
+    #[test]
+    fn leading_space_or_tab_on_line2_is_trimmed_and_reserved_types_checked() {
+        let tabbed_valid = "pre\n\t{\"con_spec_version\":2}\n10 10 10\n90 90 90\n\n\n0\n\n\n";
+        let fr = crate::iterators::ConFrameIterator::new(tabbed_valid)
+            .next()
+            .unwrap()
+            .unwrap();
+        assert_eq!(fr.header.spec_version, 2);
+
+        let tabbed_bad = "pre\n\t{\"con_spec_version\":2,\"bad\":\n10 10 10\n90 90 90\n\n\n0\n\n\n";
+        let err = crate::iterators::ConFrameIterator::new(tabbed_bad)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.class_name(), "InvalidMetadataJson", "{err}");
+
+        for bad_meta in [
+            r#"{"con_spec_version":2,"time":"fs"}"#,
+            r#"{"con_spec_version":2,"timestep":"1.0"}"#,
+            r#"{"con_spec_version":2,"frame_index":-1}"#,
+            r#"{"con_spec_version":2,"neb_bead":"0"}"#,
+            r#"{"con_spec_version":2,"neb_band":1.5}"#,
+            r#"{"con_spec_version":2,"generator":123}"#,
+            r#"{"con_spec_version":2,"potential":"lj"}"#,
+            r#"{"con_spec_version":2,"potential":{"type":7}}"#,
+            r#"{"con_spec_version":2,"converged":"yes"}"#,
+            r#"{"con_spec_version":2,"fmax":"0.1"}"#,
+            r#"{"con_spec_version":2,"convergence_fmax":true}"#,
+            r#"{"con_spec_version":2,"convergence_energy":"0"}"#,
+        ] {
+            let text = format!("pre\n{bad_meta}\n10 10 10\n90 90 90\n\n\n0\n\n\n");
+            let err = crate::iterators::ConFrameIterator::new(&text)
+                .next()
+                .unwrap()
+                .unwrap_err();
+            assert_eq!(err.class_name(), "InvalidMetadataJson", "{bad_meta}: {err}");
+        }
+
+        // CON-bonds.3: unknown `bonds` shapes stay preserved when validate=false.
+        let bonds_open =
+            "pre\n{\"con_spec_version\":2,\"bonds\":\"legacy\"}\n10 10 10\n90 90 90\n\n\n0\n\n\n";
+        assert!(
+            crate::iterators::ConFrameIterator::new(bonds_open)
+                .next()
+                .unwrap()
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn form_feed_on_cell_or_count_line_is_not_separator_or_trailing_ws() {
+        let cell_ff = "pre\n{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\n10 10 10\n90 90 90\x0c\n\n\n0\n\n\n";
+        let err = crate::iterators::ConFrameIterator::new(cell_ff)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.class_name(), "InvalidNumberFormat", "{err}");
+
+        let count_ff = "pre\n{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\n10 10 10\n90 90 90\n\n\n1\x0c\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0\n";
+        let err = crate::iterators::ConFrameIterator::new(count_ff)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.class_name(), "InvalidCount", "{err}");
     }
 }
 

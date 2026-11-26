@@ -420,6 +420,179 @@ class CxxArchiveStabilityTest(unittest.TestCase):
                 self.assertEqual(_slim_sha(bare, bare_out), pin)
 
 
+class CallerEpochTest(unittest.TestCase):
+    def test_a_caller_epoch_does_not_move_the_recorded_pin(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _shared_clone(repo)
+            first = _repo_script(repo, "record-cxx-wrap.sh", None)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            _git(
+                repo,
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "commit",
+                "--quiet",
+                "--allow-empty",
+                "-am",
+                "record the pin",
+            )
+            pin = (repo / "packaging" / "wrapdb" / "readcon-core.sha256").read_text(
+                encoding="utf-8"
+            )
+            epoch = (repo / "packaging" / "wrapdb" / "source-date-epoch").read_text(
+                encoding="utf-8"
+            )
+            second = _repo_script(repo, "record-cxx-wrap.sh", "123")
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertEqual(
+                (repo / "packaging" / "wrapdb" / "readcon-core.sha256").read_text(
+                    encoding="utf-8"
+                ),
+                pin,
+            )
+            self.assertEqual(
+                (repo / "packaging" / "wrapdb" / "source-date-epoch").read_text(
+                    encoding="utf-8"
+                ),
+                epoch,
+            )
+            self.assertIn(
+                f"ignoring SOURCE_DATE_EPOCH=123; using the committed epoch {epoch.strip()}",
+                second.stderr,
+            )
+            status = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo),
+                    "status",
+                    "--porcelain",
+                    "--untracked-files=no",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(status.stdout, "")
+            check = _repo_script(repo, "check_cxx_wrap_pin.sh", "123")
+            self.assertEqual(check.returncode, 0, check.stderr)
+            self.assertIn("matches the packaged tree", check.stdout)
+
+
+def _repo_script(
+    repo: Path, script: str, epoch: str | None
+) -> subprocess.CompletedProcess[str]:
+    """Run a script of the clone from its root, with SOURCE_DATE_EPOCH set to epoch or unset."""
+    env = os.environ.copy()
+    env["RUSTUP_TOOLCHAIN"] = "1.88.0"
+    env.pop("CARGO_TARGET_DIR", None)
+    env.pop("SOURCE_DATE_EPOCH", None)
+    if epoch is not None:
+        env["SOURCE_DATE_EPOCH"] = epoch
+    return subprocess.run(
+        ["bash", str(repo / "scripts" / script)],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+# The commit that recorded the previous pin, and that pin. Its archive still carried paper/ and the other
+# trees that the include list of Cargo.toml now leaves out.
+BASE_PIN_COMMIT = "eb37eeed07f7e99eed2f78cc057dca3ee81e3472"
+BASE_PIN_SHA = "2b1f4a9a15f1f67e7fcffeaaa6e764807d530bd087fa0370ecdd44c858569f1a"
+# The file edited on purpose since that pin, the manifest, and the copy of it cargo keeps.
+EDITED = ("Cargo.toml", "Cargo.toml.orig")
+# Library sources, the inputs build.rs reads, and the cxx wrap surface that package-cxx.sh lays over the crate.
+LIBRARY_FILES = {
+    "Cargo.lock",
+    "build.rs",
+    "VERSION",
+    "LICENSE",
+    "grammar/readcon.pest",
+    "support/metatensor_install.rs",
+    "schema/ReadCon.capnp",
+    "CMakeLists.txt",
+    "meson.build",
+    "meson_options.txt",
+    "README.md",
+    "README.cxx.md",
+    "scripts/meson_cargo_build.py",
+    "examples/c_api_sample.c",
+    "examples/cpp_api_sample.cpp",
+    "examples/cpp_v31_units_roundtrip.cpp",
+    "examples/frame_builder_consume.c",
+    "examples/meson.build",
+    "resources/test/tiny_multi_cuh2.con",
+}
+LIBRARY_TREES = ("src/", "include/", "cmake/", "third_party/metatensor-sys/")
+
+
+class CxxArchiveAgainstBasePinTest(unittest.TestCase):
+    def test_every_change_from_the_base_pin_archive_is_the_manifest_an_exclusion_or_library_source(
+        self,
+    ) -> None:
+        from test_cargo_package_list import allowed
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp) / "base"
+            head = Path(tmp) / "head"
+            _shared_clone(base)
+            _git(base, "checkout", "--quiet", "--detach", BASE_PIN_COMMIT)
+            _shared_clone(head)
+            for repo in (base, head):
+                subprocess.run(
+                    ["git", "-C", str(repo), "tag", "-d", f"v{VERSION}"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            self.assertEqual(_slim_sha(base, Path(tmp) / "base-out"), BASE_PIN_SHA)
+            _slim_sha(head, Path(tmp) / "head-out")
+            old = _archive_files(
+                Path(tmp) / "base-out" / f"readcon-core-cxx-{VERSION}.tar.gz"
+            )
+            new = _archive_files(
+                Path(tmp) / "head-out" / f"readcon-core-cxx-{VERSION}.tar.gz"
+            )
+        changed = sorted(name for name in new if old.get(name) != new[name])
+        removed = sorted(set(old) - set(new))
+        library = [
+            name
+            for name in changed
+            if name in LIBRARY_FILES or name.startswith(LIBRARY_TREES)
+        ]
+        # Every change is an edited manifest or a library source; anything else is a leak.
+        self.assertEqual(set(changed), {*EDITED, *library})
+        self.assertEqual(
+            [
+                name
+                for name in removed
+                if allowed(name) and not name.startswith(LIBRARY_TREES)
+            ],
+            [],
+        )
+
+
+def _archive_files(path: Path) -> dict[str, bytes]:
+    """Each regular file of the archive by its path below the top directory, with its bytes."""
+    files = {}
+    with tarfile.open(path) as archive:
+        for item in archive.getmembers():
+            if item.isfile():
+                handle = archive.extractfile(item)
+                assert handle is not None
+                files[item.name.split("/", 1)[1]] = handle.read()
+    return files
+
+
 def _shared_clone(dest: Path) -> None:
     subprocess.run(
         ["git", "clone", "--shared", str(ROOT), str(dest)],
