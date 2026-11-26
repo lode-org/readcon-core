@@ -182,10 +182,10 @@ fn link_libpython_for_tests_and_benches() {
     let no_python = env::var_os("PYO3_NO_PYTHON").is_some();
     let mut plan = python_link::python_link_plan(config, &os, &env_name, no_python);
     if !no_python && !config.suppress_build_script_link_lines {
-        if let Some(name) = config.lib_name.as_deref() {
-            if !python_link::lib_name_ok(name) {
-                panic!("pyo3-build-config reported an unusable lib_name: {name}");
-            }
+        if let Some(name) = config.lib_name.as_deref()
+            && !python_link::lib_name_ok(name)
+        {
+            panic!("pyo3-build-config reported an unusable lib_name: {name}");
         }
         if plan.args.iter().any(|arg| arg.starts_with("-l")) {
             for dir in host_libpl_dirs(config) {
@@ -201,6 +201,9 @@ fn link_libpython_for_tests_and_benches() {
     }
     for arg in &plan.args {
         python_link::require_single_line("link arg", arg);
+    }
+    if !plan.is_target_scoped() {
+        panic!("libpython link arguments are not scoped to tests and benches");
     }
     for line in plan.cargo_lines() {
         println!("{line}");
@@ -226,10 +229,10 @@ fn host_libpl_dirs(config: &pyo3_build_config::InterpreterConfig) -> Vec<String>
     if env::var("HOST").ok() != env::var("TARGET").ok() {
         return Vec::new();
     }
-    if let Some(dir) = config.lib_dir.as_deref() {
-        if libpl_has_link_name(dir, lib_name) {
-            return Vec::new();
-        }
+    if let Some(dir) = config.lib_dir.as_deref()
+        && libpl_has_link_name(dir, lib_name)
+    {
+        return Vec::new();
     }
     let Some(libpl) = libpl_dir(config) else {
         return Vec::new();

@@ -52,18 +52,19 @@ pub fn python_link_plan(
     if no_python || config.suppress_build_script_link_lines {
         return suppressed_plan(&config.extra_build_script_lines, os, env_name);
     }
-    if let Some(prefix) = config.python_framework_prefix.as_deref() {
-        if is_apple(os) && framework_prefix_ok(prefix) {
-            return PythonLinkPlan {
-                args: vec![
-                    format!("-F{prefix}"),
-                    "-framework".to_string(),
-                    "Python".to_string(),
-                    format!("-Wl,-rpath,{prefix}"),
-                ],
-                passthrough: Vec::new(),
-            };
-        }
+    if let Some(prefix) = config.python_framework_prefix.as_deref()
+        && is_apple(os)
+        && framework_prefix_ok(prefix)
+    {
+        return PythonLinkPlan {
+            args: vec![
+                format!("-F{prefix}"),
+                "-framework".to_string(),
+                "Python".to_string(),
+                format!("-Wl,-rpath,{prefix}"),
+            ],
+            passthrough: Vec::new(),
+        };
     }
     let mut args = Vec::new();
     if let Some(dir) = nonempty(config.lib_dir.as_deref()) {
@@ -72,10 +73,11 @@ pub fn python_link_plan(
     if let Some(name) = nonempty(config.lib_name.as_deref()) {
         args.extend(lib_flags(name, config.shared, os, env_name));
     }
-    if config.shared && os != "windows" {
-        if let Some(dir) = nonempty(config.lib_dir.as_deref()) {
-            args.push(format!("-Wl,-rpath,{dir}"));
-        }
+    if config.shared
+        && os != "windows"
+        && let Some(dir) = nonempty(config.lib_dir.as_deref())
+    {
+        args.push(format!("-Wl,-rpath,{dir}"));
     }
     PythonLinkPlan {
         args,
@@ -90,12 +92,13 @@ pub fn harness_link_rs(config: &InterpreterConfig, os: &str, no_python: bool) ->
     if no_python || config.suppress_build_script_link_lines {
         return String::new();
     }
-    if let Some(prefix) = config.python_framework_prefix.as_deref() {
-        if is_apple(os) && framework_prefix_ok(prefix) {
-            return "#[link(name = \"Python\", kind = \"framework\")]\n\
-                unsafe extern \"C\" {}\n"
-                .to_string();
-        }
+    if let Some(prefix) = config.python_framework_prefix.as_deref()
+        && is_apple(os)
+        && framework_prefix_ok(prefix)
+    {
+        return "#[link(name = \"Python\", kind = \"framework\")]\n\
+            unsafe extern \"C\" {}\n"
+            .to_string();
     }
     let Some(name) = nonempty(config.lib_name.as_deref()) else {
         return String::new();
