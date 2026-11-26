@@ -193,6 +193,83 @@ fn macos_framework_link_is_target_scoped() {
 }
 
 #[test]
+fn apple_ld64_static_link_is_plain() {
+    for os in ["macos", "ios"] {
+        let plan = python_link_plan(
+            &config(
+                Some("python3.12"),
+                Some("/opt/py/lib"),
+                false,
+                false,
+                None,
+                Some("/usr/bin/python3"),
+                &[],
+            ),
+            os,
+            "",
+            false,
+        );
+        assert_args(&plan, &["-L/opt/py/lib", "-lpython3.12"]);
+        let scoped = python_link_plan(
+            &config(
+                Some("python3.12"),
+                None,
+                true,
+                true,
+                None,
+                None,
+                &[
+                    "cargo::rustc-link-lib=static:-bundle=python3.12:py",
+                    "cargo::rustc-link-lib=static=python3.12",
+                ],
+            ),
+            os,
+            "",
+            false,
+        );
+        assert_args(&scoped, &["-lpy", "-lpython3.12"]);
+    }
+}
+
+#[test]
+#[should_panic(expected = "ld64 has no --whole-archive")]
+fn apple_ld64_whole_archive_is_rejected() {
+    python_link_plan(
+        &config(
+            Some("python3.12"),
+            None,
+            true,
+            true,
+            None,
+            None,
+            &["cargo::rustc-link-lib=static:+whole-archive,-bundle=util"],
+        ),
+        "macos",
+        "",
+        false,
+    );
+}
+
+#[test]
+#[should_panic(expected = "ld64 has no --whole-archive")]
+fn apple_ld64_dylib_whole_archive_is_rejected() {
+    python_link_plan(
+        &config(
+            Some("python3.12"),
+            None,
+            true,
+            true,
+            None,
+            None,
+            &["cargo::rustc-link-lib=dylib:+whole-archive=util"],
+        ),
+        "ios",
+        "",
+        false,
+    );
+}
+
+#[test]
 fn windows_release_import_lib_is_target_scoped() {
     let plan = python_link_plan(
         &config(
