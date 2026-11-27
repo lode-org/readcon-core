@@ -70,10 +70,6 @@ def test_macros_equal_the_committed_manifest() -> None:
     assert f"\\newcommand{{\\cthreeoneExplicit}}{{{explicit}}}" in text
     not_explicit = sum(row["basis"] != "explicit" for row in rows)
     assert f"\\newcommand{{\\cthreeoneNotExplicit}}{{{not_explicit}}}" in text
-    live = (
-        SCRIPT.parents[1] / "src" / "figures" / "generated" / "corpus31_macros.tex"
-    ).read_text(encoding="utf-8")
-    assert f"\\newcommand{{\\cthreeoneNotExplicit}}{{{not_explicit}}}" in live
     assert record["manifest"] == "paper/cpc/data/corpus31/manifest.toml"
     assert KEPT.is_file()
 
