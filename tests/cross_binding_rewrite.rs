@@ -352,14 +352,22 @@ fn debug_cdylib_candidate(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr
     target_base_from(root, cargo_target_dir).join("debug/libreadcon_core.so")
 }
 
+/// Plain and Python side builds use the same base as the debug cdylib.
+fn binding_side_dirs(
+    root: &Path,
+    cargo_target_dir: Option<&std::ffi::OsStr>,
+) -> (PathBuf, PathBuf) {
+    let base = target_base_from(root, cargo_target_dir);
+    (base.join("binding-plain"), base.join("binding-py"))
+}
+
 fn binding_libraries() -> (PathBuf, PathBuf) {
     static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _lock = BUILD.lock().unwrap_or_else(|err| err.into_inner());
     let root = repo_root();
     let cargo_target_dir = std::env::var_os("CARGO_TARGET_DIR");
     let debug = debug_cdylib_candidate(&root, cargo_target_dir.as_deref());
-    let plain_dir = root.join("target/binding-plain");
-    let py_dir = root.join("target/binding-py");
+    let (plain_dir, py_dir) = binding_side_dirs(&root, cargo_target_dir.as_deref());
     let plain_side = plain_dir.join("debug/libreadcon_core.so");
     let py_side = py_dir.join("debug/libreadcon_core.so");
     let plain = if usable(&debug, false) {
