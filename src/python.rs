@@ -11466,17 +11466,29 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
         }
     }
 
-    fn cargo_target_base(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
-        cargo_target_dir
-            .map(PathBuf::from)
-            .map(|path| {
+    /// `CARGO_TARGET_DIR`, relative to the invoking cwd. An unset value
+    /// stays `<manifest>/target`. Absolute values are unchanged.
+    fn resolve_cargo_target_base(
+        value: Option<&std::ffi::OsStr>,
+        cwd: &Path,
+        manifest: &Path,
+    ) -> PathBuf {
+        match value {
+            Some(value) => {
+                let path = Path::new(value);
                 if path.is_absolute() {
-                    path
+                    path.to_path_buf()
                 } else {
-                    root.join(path)
+                    cwd.join(path)
                 }
-            })
-            .unwrap_or_else(|| root.join("target"))
+            }
+            None => manifest.join("target"),
+        }
+    }
+
+    fn cargo_target_base(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+        let cwd = std::env::current_dir().unwrap_or_else(|err| panic!("current dir: {err}"));
+        resolve_cargo_target_base(cargo_target_dir, &cwd, root)
     }
 
     /// The extension lives under `python-extension-link`, not the shared
@@ -11731,13 +11743,38 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
         assert_ne!(chosen, stale);
         assert!(stale.is_file(), "stale shared cdylib should stay put");
         let relative = std::ffi::OsStr::new("rel-target");
+        let cwd = std::env::current_dir().expect("cwd");
         assert_eq!(
             extension_cdylib_lib(&root, Some(relative)),
-            root.join("rel-target/python-extension-link/debug/libreadcon_core.so")
+            cwd.join("rel-target/python-extension-link/debug/libreadcon_core.so")
         );
         assert_eq!(
             extension_cdylib_lib(&root, None),
             root.join("target/python-extension-link/debug/libreadcon_core.so")
+        );
+    }
+
+    #[test]
+    fn relative_cargo_target_dir_resolves_against_the_cwd() {
+        let manifest = Path::new("/opt/readcon-manifest");
+        let cwd = Path::new("/opt/invoke-cwd");
+        let value = std::ffi::OsStr::new("rel-target3");
+        assert_eq!(
+            resolve_cargo_target_base(Some(value), cwd, manifest),
+            cwd.join(value)
+        );
+        assert_ne!(
+            resolve_cargo_target_base(Some(value), cwd, manifest),
+            manifest.join(value)
+        );
+        let absolute = Path::new("/opt/abs-target");
+        assert_eq!(
+            resolve_cargo_target_base(Some(absolute.as_os_str()), cwd, manifest),
+            absolute
+        );
+        assert_eq!(
+            resolve_cargo_target_base(None, cwd, manifest),
+            manifest.join("target")
         );
     }
 }
