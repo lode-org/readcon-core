@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "paper" / "cpc" / "scripts" / "gen_spec_supp.py"
 IDENTITY = (
@@ -114,6 +116,7 @@ def test_spec_edit_measure_writes_blob_record_that_reader_selects(
     assert module.active_versions_file() == by_blob
 
 
+@pytest.mark.skipif(shutil.which("pandoc") is None, reason="needs pandoc")
 def test_spec_edit_measure_then_generate_in_temp_copy(tmp_path: Path) -> None:
     clone = tmp_path / "clone"
     _git(ROOT, "clone", "-q", "--local", str(ROOT), str(clone))

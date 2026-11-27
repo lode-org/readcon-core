@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import gzip
 import random
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -43,6 +44,7 @@ def _text(n_frames: int, n_atoms: int, species: tuple[str, ...]) -> str:
     return "".join(parts)
 
 
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs the zstd CLI")
 @pytest.mark.parametrize("n_threads", [1, 2, 8])
 def test_a_reused_slot_address_writes_its_own_frames(
     tmp_path: Path, n_threads: int
@@ -83,6 +85,7 @@ def test_a_reused_slot_address_writes_its_own_frames(
         del frames
 
 
+@pytest.mark.skipif(shutil.which("zstd") is None, reason="needs the zstd CLI")
 @pytest.mark.parametrize("n_threads", [1, 2, 8])
 def test_mutated_read_con_list_matches_serial_plain_and_compressed(
     tmp_path: Path, n_threads: int

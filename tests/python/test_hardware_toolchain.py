@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "bench" / "h2h"))
@@ -19,6 +22,7 @@ def _first_line(argv: list[str]) -> str:
     return lines[0] if lines else ""
 
 
+@pytest.mark.skipif(shutil.which("gfortran") is None, reason="needs gfortran")
 def test_toolchain_versions_match_this_machine():
     got = scale_r6.toolchain_versions()
     assert got["kernel"] == platform.release()

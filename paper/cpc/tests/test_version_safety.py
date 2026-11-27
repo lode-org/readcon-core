@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
 import sys
 from pathlib import Path
@@ -15,6 +16,23 @@ sys.path.insert(0, str(SCRIPTS))
 import version_safety as vs  # noqa: E402
 
 
+def _release_has_c_abi() -> bool:
+    path = vs.lib_path()
+    if not path.is_file():
+        return False
+    try:
+        library = ctypes.CDLL(str(path))
+    except OSError:
+        return False
+    return hasattr(library, "rkr_read_all_frames")
+
+
+@pytest.mark.skipif(
+    not _release_has_c_abi(),
+    reason=(
+        "needs target/release/libreadcon_core.so built with the capi,benchmark features"
+    ),
+)
 def test_every_rule_matches_the_live_readers():
     pytest.importorskip("readcon")
     rows = vs.measure_rows()
