@@ -11047,10 +11047,14 @@ mod extension_link_regression {
         false
     }
 
+    /// `[KIND[:MODIFIERS]=]NAME[:RENAME]`.
+    ///
+    /// rustc links `RENAME` when it is present and `NAME` otherwise, so
+    /// the library name can sit on either side of the rename colon.
     fn link_lib_name(spec: &str) -> &str {
         let spec = spec.trim();
         let named = spec.split_once('=').map(|(_, name)| name).unwrap_or(spec);
-        named.split(':').next().unwrap_or(named)
+        named.split_once(':').map(|(_, link)| link).unwrap_or(named)
     }
 
     fn names_python_library(name: &str) -> bool {
@@ -11101,6 +11105,24 @@ cargo:rustc-link-lib=python312
                 "cargo:rustc-link-arg-tests=-lpython3.12",
                 "cargo:rustc-link-arg-benches=-L/usr/lib/python3.12",
                 "cargo:rustc-link-lib=python312",
+            ]
+        );
+    }
+
+    #[test]
+    fn renamed_link_lib_checks_both_orders() {
+        let output = "\
+cargo:rustc-link-lib=dylib=crypt:python3.12
+cargo:rustc-link-lib=crypt:python3.12
+cargo:rustc-link-lib=python3.12:crypt
+cargo:rustc-link-lib=dylib=python3.12:crypt
+cargo:rustc-link-lib=dylib=metatensor
+";
+        assert_eq!(
+            python_link_directives(output),
+            vec![
+                "cargo:rustc-link-lib=dylib=crypt:python3.12",
+                "cargo:rustc-link-lib=crypt:python3.12",
             ]
         );
     }
