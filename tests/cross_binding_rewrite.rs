@@ -461,6 +461,29 @@ fn binding_candidate_follows_cargo_target_dir() {
 }
 
 #[test]
+fn fallback_binding_dirs_follow_cargo_target_dir() {
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let root = scratch.path().join("root");
+    let absolute = scratch.path().join("cargo-target");
+    std::fs::create_dir_all(root.join("target")).expect("create root target");
+    std::fs::create_dir_all(&absolute).expect("create absolute target");
+    let (plain, py) = binding_side_dirs(&root, Some(absolute.as_os_str()));
+    std::fs::create_dir_all(&plain).expect("create plain dir");
+    std::fs::create_dir_all(&py).expect("create python dir");
+    assert_eq!(plain, absolute.join("binding-plain"));
+    assert_eq!(py, absolute.join("binding-py"));
+    assert_ne!(plain, root.join("target/binding-plain"));
+    assert_ne!(py, root.join("target/binding-py"));
+    let relative = std::ffi::OsStr::new("side-target");
+    let (plain, py) = binding_side_dirs(&root, Some(relative));
+    assert_eq!(plain, root.join("side-target/binding-plain"));
+    assert_eq!(py, root.join("side-target/binding-py"));
+    let (plain, py) = binding_side_dirs(&root, None);
+    assert_eq!(plain, root.join("target/binding-plain"));
+    assert_eq!(py, root.join("target/binding-py"));
+}
+
+#[test]
 fn binding_libraries_are_checked_without_julia() {
     let Some((plain, python)) = binding_libraries_without_julia() else {
         return;
