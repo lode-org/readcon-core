@@ -7,10 +7,13 @@ Used by meson.build. Headers are shipped; this script never invokes cbindgen.
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+_CACHE_WRAPPERS = {"ccache", "sccache", "distcc"}
 
 _SHARED_ALIASES = (
     "readcon_core.dll",
@@ -46,6 +49,61 @@ def _copy_artifact(
         f"cargo artifact {wanted!r} not in {built} (tried {[str(p) for p in candidates]}); "
         f"directory listing: {listing}"
     )
+
+
+def _tool_name(part: str) -> str:
+    name = Path(part).name
+    if name.lower().endswith(".exe"):
+        name = name[:-4]
+    return name.lower()
+
+
+def compiler_without_cache(command: list[str]) -> list[str]:
+    """Drop leading ccache/sccache/distcc. They are not linkers."""
+    index = 0
+    while index < len(command) and _tool_name(command[index]) in _CACHE_WRAPPERS:
+        index += 1
+    return command[index:]
+
+
+def cargo_linker_key(triple: str) -> str:
+    return "CARGO_TARGET_" + triple.upper().replace("-", "_") + "_LINKER"
+
+
+def cargo_cc_env(
+    command: list[str], triple: str, host: str, wrapper: Path
+) -> dict[str, str]:
+    """CC and linker for cargo, or nothing when plain ``cc`` already matches.
+
+    A single ``cc`` is cargo's default, including ``ccache cc``. Extra
+    arguments (``gcc -m32``) become a wrapper both CC and the linker exec.
+    The linker variable is the cargo target, not always the rustc host.
+    """
+    real = compiler_without_cache(command)
+    if not real or (len(real) == 1 and _tool_name(real[0]) == "cc"):
+        return {}
+    if len(real) == 1:
+        program = real[0]
+    else:
+        quoted = " ".join(shlex.quote(part) for part in real)
+        wrapper.parent.mkdir(parents=True, exist_ok=True)
+        wrapper.write_text("#!/bin/sh\nexec " + quoted + ' "$@"\n', encoding="utf-8")
+        wrapper.chmod(0o755)
+        program = str(wrapper)
+    assigned = {cargo_linker_key(triple): program}
+    if triple == host:
+        assigned["CC"] = program
+    else:
+        assigned[f"CC_{triple}"] = program
+    return assigned
+
+
+def _rustc_host(env: dict[str, str]) -> str:
+    out = subprocess.check_output(["rustc", "-vV"], text=True, env=env)
+    for line in out.splitlines():
+        if line.startswith("host: "):
+            return line[len("host: ") :]
+    raise RuntimeError("rustc did not report its host target")
 
 
 def _cxx_link_args(text: str) -> list[str]:
@@ -115,6 +173,28 @@ def main(argv: list[str]) -> int:
     if profile == "release":
         cmd.append("--release")
     env = os.environ.copy()
+    cc_file = env.pop("READCON_MESON_CC_FILE", "")
+    meson_cc: list[str] = []
+    if cc_file:
+        meson_cc = [
+            part
+            for part in Path(cc_file).read_text(encoding="utf-8").split("\n")
+            if part
+        ]
+    if meson_cc:
+        host = _rustc_host(env)
+        triple = env.get("CARGO_BUILD_TARGET", "").strip() or host
+        assigned = cargo_cc_env(
+            meson_cc, triple, host, Path(target_dir) / "readcon-cc"
+        )
+        env.update(assigned)
+        program = assigned.get("CC", "")
+        if not program:
+            program = next(
+                (value for key, value in assigned.items() if key.startswith("CC_")),
+                "default",
+            )
+        print(f"cargo cc: {program}", file=sys.stderr)
     rustc_extra: list[str] = []
     cxx_link = _cxx_link_args(features)
     if cxx_link:

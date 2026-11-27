@@ -90,3 +90,20 @@ jobs:
           c++ --version
       - name: Plain cargo chemfiles build
         run: env -u CXX -u CC -u LIBRARY_PATH -u RUSTFLAGS -u CMAKE_TOOLCHAIN_FILE cargo build --locked --features chemfiles
+
+  # ccache on PATH makes meson prefix the compiler. That prefix is not a
+  # linker; the job also builds with CC=gcc and CC=clang.
+  meson-ccache:
+    name: meson cargo link (ccache, gcc, clang)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: ccache, gcc, clang, meson
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ccache gcc clang
+          python -m pip install 'meson>=1.3' ninja
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Compile with ccache, gcc, and clang
+        run: bash scripts/check_meson_cc.sh

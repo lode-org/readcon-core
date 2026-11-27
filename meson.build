@@ -41,6 +41,27 @@ if _rv_bits.length() < 2 or not _rv_bits[1].version_compare('>= 1.88.0')
     error('readcon-core requires rustc >= 1.88.0')
 endif
 
+# Ninja rejects a newline in a rule, so the compiler argv is a build-dir
+# file. The cargo script strips a ccache prefix and, only when the
+# remaining command is not plain cc, passes that full command as CC and
+# as the linker for the cargo target (CARGO_BUILD_TARGET, else the host).
+_cc_list = _mbproot / 'readcon-meson-cc.txt'
+_write_cc = [
+    _py,
+    '-c',
+    'import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(chr(10).join(sys.argv[2:]) + chr(10))',
+    _cc_list,
+]
+foreach _cc_part : cc.cmd_array()
+    _write_cc += [_cc_part]
+endforeach
+run_command(_write_cc, check: true)
+_cargo_env = {'READCON_MESON_CC_FILE': _cc_list}
+_meson_c_args = get_option('c_args')
+if _meson_c_args.length() > 0
+    _cargo_env += {'CFLAGS': ' '.join(_meson_c_args)}
+endif
+
 _rust_sys_deps = []
 _needs_cxx = false
 foreach _part : get_option('cargo_features').split(',')
@@ -123,6 +144,7 @@ readcon_cargo = custom_target(
         '@OUTPUT1@',
         get_option('cargo_features'),
     ],
+    env: _cargo_env,
     build_by_default: true,
     install: true,
     install_dir: [get_option('libdir'), get_option('libdir')],
