@@ -307,6 +307,93 @@ fn cdylib_links_libpython(path: &Path) -> bool {
     dynamic.contains("libpython") || dynamic.contains("python.framework")
 }
 
+/// `NEEDED` sonames from `readelf -d`. Independent of `cdylib_links_libpython`.
+fn needed_shared_objects(path: &Path) -> Vec<String> {
+    let output = Command::new("readelf")
+        .args(["-d"])
+        .arg(path)
+        .output()
+        .unwrap_or_else(|err| panic!("readelf {}: {err}", path.display()));
+    assert!(
+        output.status.success(),
+        "readelf -d {} failed\n{}",
+        path.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut needed = Vec::new();
+    for line in text.lines() {
+        if !line.contains("(NEEDED)") {
+            continue;
+        }
+        let Some(start) = line.find('[') else {
+            continue;
+        };
+        let Some(rel_end) = line[start + 1..].find(']') else {
+            continue;
+        };
+        needed.push(line[start + 1..start + 1 + rel_end].to_string());
+    }
+    needed
+}
+
+fn needed_is_libpython(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    (lower.starts_with("libpython3") && lower.contains(".so")) || lower.contains("python.framework")
+}
+
+fn cpython_shared_link_args() -> Vec<String> {
+    let script = "\
+import sysconfig
+for key in ('LIBPL', 'LIBDIR', 'LDVERSION'):
+    print(sysconfig.get_config_var(key) or '')
+";
+    let output = Command::new("python3")
+        .arg("-c")
+        .arg(script)
+        .output()
+        .unwrap_or_else(|err| panic!("python3 sysconfig: {err}"));
+    assert!(
+        output.status.success(),
+        "python3 sysconfig failed\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut lines = text.lines();
+    let libpl = lines.next().unwrap_or("").trim();
+    let libdir = lines.next().unwrap_or("").trim();
+    let version = lines.next().unwrap_or("").trim();
+    assert!(!version.is_empty(), "python LDVERSION is empty");
+    let mut args = Vec::new();
+    if !libpl.is_empty() {
+        args.push(format!("-L{libpl}"));
+    }
+    if !libdir.is_empty() && libdir != libpl {
+        args.push(format!("-L{libdir}"));
+    }
+    args.push(format!("-lpython{version}"));
+    args
+}
+
+fn build_fixture_cdylib(dir: &Path, name: &str, link_python: bool) -> PathBuf {
+    let source = dir.join(format!("{name}.c"));
+    std::fs::write(&source, "void readcon_fixture(void) {}\n")
+        .unwrap_or_else(|err| panic!("write {}: {err}", source.display()));
+    let shared = dir.join(format!("lib{name}.so"));
+    let mut cmd = Command::new("cc");
+    cmd.args(["-shared", "-fPIC", "-o"])
+        .arg(&shared)
+        .arg(&source);
+    if link_python {
+        cmd.args(cpython_shared_link_args());
+    }
+    let status = cmd
+        .status()
+        .unwrap_or_else(|err| panic!("cc {}: {err}", shared.display()));
+    assert!(status.success(), "cc fixture {name} failed");
+    shared
+}
+
 fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(repo_root())
@@ -494,9 +581,46 @@ fn binding_libraries_are_checked_without_julia() {
         plain.display()
     );
     assert!(
-        extension_without_libpython(&python),
-        "python cdylib links libpython: {}",
+        usable(&python, true),
+        "python cdylib is not a python extension: {}",
         python.display()
+    );
+    let needed = needed_shared_objects(&python);
+    assert!(
+        needed.iter().all(|name| !needed_is_libpython(name)),
+        "python cdylib NEEDED links libpython: {needed:?} ({})",
+        python.display()
+    );
+}
+
+#[test]
+fn cdylib_libpython_detector_matches_needed_entries() {
+    for tool in ["cc", "python3", "readelf"] {
+        if !tool_runs(tool) {
+            eprintln!("skip libpython detector oracle: {tool} is not installed");
+            return;
+        }
+    }
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let with_python = build_fixture_cdylib(scratch.path(), "with_python", true);
+    let without_python = build_fixture_cdylib(scratch.path(), "without_python", false);
+    let with_needed = needed_shared_objects(&with_python);
+    let without_needed = needed_shared_objects(&without_python);
+    assert!(
+        with_needed.iter().any(|name| needed_is_libpython(name)),
+        "oracle: fixture should need libpython3: {with_needed:?}"
+    );
+    assert!(
+        without_needed.iter().all(|name| !needed_is_libpython(name)),
+        "oracle: plain fixture should not need libpython: {without_needed:?}"
+    );
+    assert!(
+        cdylib_links_libpython(&with_python),
+        "detector missed libpython in {with_needed:?}"
+    );
+    assert!(
+        !cdylib_links_libpython(&without_python),
+        "detector reported libpython in {without_needed:?}"
     );
 }
 
