@@ -11014,10 +11014,10 @@ mod extension_link_regression {
         String::from_utf8_lossy(&output.stdout).into_owned()
     }
 
-    /// `libpython` / `python3` link-lib lines, and the search or link-arg
-    /// lines that name those libraries. chemfiles and metatensor
-    /// `cargo:rustc-link-lib` and `cargo:rustc-link-search` lines stay.
-    /// Both the `cargo::` and `cargo:` prefixes count.
+    /// Python `rustc-link-lib` lines and `-l` / `-l:` link-args.
+    /// Search directories are not python directives. chemfiles and
+    /// metatensor lines stay, even when their path contains `python3`
+    /// or `libpython`. Both the `cargo::` and `cargo:` prefixes count.
     fn python_link_directives(output: &str) -> Vec<&str> {
         output
             .lines()
@@ -11033,8 +11033,7 @@ mod extension_link_regression {
             .or_else(|| line.strip_prefix("cargo:"))
     }
 
-    /// A `rustc-link-lib` line whose library is Python (`python3*`,
-    /// `libpython`, or another name `names_python_library` accepts).
+    /// A `rustc-link-lib` line whose link name is Python.
     /// chemfiles and metatensor link lines do not count.
     fn has_rustc_link_lib_directive(output: &str) -> bool {
         output.lines().any(|line| {
@@ -11046,66 +11045,175 @@ mod extension_link_regression {
     }
 
     fn is_python_link_directive(line: &str) -> bool {
-        let Some(body) = cargo_directive_body(line) else {
+        let Some(body) = cargo_directive_body(line.trim()) else {
             return false;
         };
         let Some((key, value)) = body.split_once('=') else {
             return false;
         };
+        let key = key.trim();
         if key == "rustc-link-lib" {
-            return names_python_library(link_lib_name(value));
+            return rustc_link_lib_is_python(value);
         }
+        // A search directory is never a python directive.
         if key == "rustc-link-search" || key.starts_with("rustc-link-search-") {
-            return text_names_python(value);
+            return false;
         }
         if key == "rustc-link-arg"
             || key.starts_with("rustc-link-arg-")
             || key == "rustc-cdylib-link-arg"
             || key.starts_with("rustc-cdylib-link-arg-")
         {
-            return value.split_whitespace().any(text_names_python);
+            return link_arg_names_python(value);
         }
         false
     }
 
     /// `[KIND[:MODIFIERS]=]NAME[:RENAME]`.
     ///
-    /// rustc links `RENAME` when it is present and `NAME` otherwise, so
-    /// the library name can sit on either side of the rename colon.
+    /// The link name is `RENAME` when present and `NAME` otherwise.
     fn link_lib_name(spec: &str) -> &str {
         let spec = spec.trim();
-        let named = spec.split_once('=').map(|(_, name)| name).unwrap_or(spec);
-        named.split_once(':').map(|(_, link)| link).unwrap_or(named)
+        let named = spec
+            .split_once('=')
+            .map(|(_, name)| name.trim())
+            .unwrap_or(spec);
+        named
+            .split_once(':')
+            .map(|(_, link)| link.trim())
+            .unwrap_or(named)
     }
 
+    fn rustc_link_lib_is_python(spec: &str) -> bool {
+        let spec = spec.trim();
+        let kind = spec.split_once('=').map(|(kind, _)| kind.trim());
+        let name = link_lib_name(spec);
+        if names_python_library(name) {
+            return true;
+        }
+        kind.is_some_and(|kind| is_framework_kind(kind) && name.eq_ignore_ascii_case("python"))
+    }
+
+    fn is_framework_kind(kind: &str) -> bool {
+        kind.split(':')
+            .next()
+            .unwrap_or(kind)
+            .trim()
+            .eq_ignore_ascii_case("framework")
+    }
+
+    /// `python3`, `python3.X`, `python3.X` plus `d`/`m`/`t`, the Windows
+    /// `python3XY` spelling, or a verbatim `libpython3.X.so[.N]` / `.a` name.
     fn names_python_library(name: &str) -> bool {
-        let lower = name.to_ascii_lowercase();
-        if lower == "python" || lower.contains("libpython") || lower.contains("python3") {
-            return true;
-        }
-        let rest = lower.strip_prefix("python");
-        rest.is_some_and(|tail| tail.starts_with(|c: char| c.is_ascii_digit()))
+        let lower = name.trim().to_ascii_lowercase();
+        is_python3_short_name(&lower) || is_libpython_filename(&lower)
     }
 
-    fn text_names_python(text: &str) -> bool {
-        let lower = text.to_ascii_lowercase();
-        if lower.contains("libpython")
-            || lower.contains("python3")
-            || lower.contains("python.framework")
-        {
+    fn is_python3_short_name(lower: &str) -> bool {
+        let Some(rest) = lower.strip_prefix("python3") else {
+            return false;
+        };
+        if rest.is_empty() {
             return true;
         }
-        lower
-            .split(|c: char| c == '=' || c == ':' || c == ',' || c.is_whitespace())
-            .any(|part| {
-                let part = part.trim_start_matches("-l");
-                names_python_library(part)
-            })
+        let rest = rest.strip_suffix("_d").unwrap_or(rest);
+        if rest.is_empty() {
+            return true;
+        }
+        let rest = rest.strip_prefix('.').unwrap_or(rest);
+        let (digits, abi) = split_leading_digits(rest);
+        !digits.is_empty() && abi_flags_ok(abi)
+    }
+
+    fn is_libpython_filename(lower: &str) -> bool {
+        let Some(rest) = lower.strip_prefix("libpython3.") else {
+            return false;
+        };
+        if let Some(version) = rest.strip_suffix(".a") {
+            return python_version_abi(version);
+        }
+        let Some((version, so)) = rest.split_once(".so") else {
+            return false;
+        };
+        if !python_version_abi(version) {
+            return false;
+        }
+        if so.is_empty() {
+            return true;
+        }
+        let Some(numbers) = so.strip_prefix('.') else {
+            return false;
+        };
+        !numbers.is_empty()
+            && numbers
+                .split('.')
+                .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+    }
+
+    fn python_version_abi(text: &str) -> bool {
+        let (digits, abi) = split_leading_digits(text);
+        !digits.is_empty() && abi_flags_ok(abi)
+    }
+
+    fn split_leading_digits(text: &str) -> (&str, &str) {
+        let end = text
+            .bytes()
+            .position(|byte| !byte.is_ascii_digit())
+            .unwrap_or(text.len());
+        text.split_at(end)
+    }
+
+    fn abi_flags_ok(abi: &str) -> bool {
+        let mut seen = 0u8;
+        for flag in abi.chars() {
+            let bit = match flag {
+                'd' => 1u8,
+                'm' => 2,
+                't' => 4,
+                _ => return false,
+            };
+            if seen & bit != 0 {
+                return false;
+            }
+            seen |= bit;
+        }
+        true
+    }
+
+    /// The `-l` / `-l:` argument, including a name split off by whitespace.
+    fn link_arg_names_python(value: &str) -> bool {
+        let tokens: Vec<&str> = value.split_whitespace().collect();
+        for (index, token) in tokens.iter().enumerate() {
+            let Some(name) = link_arg_name(token, tokens.get(index + 1).copied()) else {
+                continue;
+            };
+            if names_python_library(name) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn link_arg_name<'a>(token: &'a str, next: Option<&'a str>) -> Option<&'a str> {
+        if let Some(rest) = token.strip_prefix("-l:") {
+            if rest.is_empty() { next } else { Some(rest) }
+        } else if token == "-l" {
+            next
+        } else if let Some(rest) = token.strip_prefix("-l") {
+            if rest.is_empty() || rest.starts_with('-') {
+                None
+            } else {
+                Some(rest)
+            }
+        } else {
+            None
+        }
     }
 
     #[test]
     fn chemfiles_and_metatensor_link_lines_are_not_python_directives() {
-        let scratch = std::env::temp_dir();
+        // Always under a python3.12/libpython directory, whatever the temp root is.
+        let scratch = std::env::temp_dir().join("python3.12").join("libpython");
         let metatensor = scratch.join("metatensor").join("lib");
         let chemfiles = scratch.join("chemfiles").join("out");
         let output = format!(
@@ -11130,12 +11238,75 @@ cargo:rustc-link-lib=python312
             python_link_directives(&output),
             vec![
                 "cargo:rustc-link-lib=dylib=python3.12",
-                "cargo:rustc-link-search=native=/usr/lib/python3.12/config-3.12-x86_64-linux-gnu",
                 "cargo:rustc-link-arg-tests=-lpython3.12",
-                "cargo:rustc-link-arg-benches=-L/usr/lib/python3.12",
                 "cargo:rustc-link-lib=python312",
             ]
         );
+    }
+
+    #[test]
+    fn search_paths_and_link_args_under_python3_are_not_python_directives() {
+        let metatensor = "/opt/venv/lib/python3.12/site-packages/metatensor/lib";
+        let chemfiles = "/opt/venv/lib/python3.12/site-packages/libpython/chemfiles/out";
+        let output = format!(
+            "\
+cargo:rustc-link-search=native={metatensor}
+cargo:rustc-link-lib=dylib=metatensor
+cargo:rustc-link-search=native={chemfiles}
+cargo:rustc-link-lib=static=readcon_chemfiles_atom_view
+cargo:rustc-link-arg=-Wl,-rpath,{metatensor}
+cargo:rustc-link-arg=-L{chemfiles}
+cargo:rustc-link-arg=-lmetatensor
+cargo:rustc-link-arg=-lreadcon_chemfiles_atom_view
+cargo:rustc-cdylib-link-arg=-Wl,--exclude-libs,{chemfiles}/libchemfiles.a
+cargo::rustc-link-search=native={metatensor}
+cargo:rustc-link-arg-tests=-L{metatensor}
+",
+        );
+        let found = python_link_directives(&output);
+        assert!(
+            found.is_empty(),
+            "metatensor and chemfiles paths were classified as python:\n{}",
+            found.join("\n")
+        );
+    }
+
+    #[test]
+    fn accepted_python_link_forms() {
+        let accepted = [
+            "cargo:rustc-link-lib=python3",
+            "cargo:rustc-link-lib=dylib=python3.12",
+            "cargo:rustc-link-lib=static=python3.12",
+            "cargo:rustc-link-lib=python3.12d",
+            "cargo:rustc-link-lib=python3.12m",
+            "cargo:rustc-link-lib=python3.12t",
+            "cargo:rustc-link-lib=framework=Python",
+            "cargo:rustc-link-lib=dylib:+verbatim=libpython3.12.so.1",
+            "cargo::rustc-link-arg=-l:libpython3.12.so.1",
+            "cargo:rustc-link-arg=-l:libpython3.12.so",
+            "cargo:rustc-link-arg=-l:libpython3.12.a",
+            "cargo:rustc-link-arg=-l:libpython3.12.so.1.0",
+            "cargo:rustc-link-arg=-lpython3.12",
+            "cargo:rustc-link-arg=-l python3.12",
+            "cargo:rustc-link-lib= dylib=python3.12",
+            "cargo:rustc-link-lib=dylib=crypt:python3.12",
+            "cargo:rustc-link-lib=python312",
+        ];
+        for line in accepted {
+            assert!(is_python_link_directive(line), "{line}");
+        }
+        let rejected = [
+            "cargo:rustc-link-search=native=/opt/venv/lib/python3.12/site-packages/libpython/metatensor/lib",
+            "cargo:rustc-link-arg=-L/opt/venv/lib/python3.12/site-packages/libpython/chemfiles/out",
+            "cargo:rustc-link-arg=-Wl,-rpath,/opt/venv/lib/python3.12/libpython",
+            "cargo:rustc-link-lib=dylib=metatensor",
+            "cargo:rustc-link-lib=static=readcon_chemfiles_atom_view",
+            "cargo:rustc-link-lib=python3.12:crypt",
+            "cargo:rustc-link-lib=dylib=notpython3.12",
+        ];
+        for line in rejected {
+            assert!(!is_python_link_directive(line), "{line}");
+        }
     }
 
     #[test]
@@ -11169,7 +11340,6 @@ cargo:rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
             python_link_directives(old),
             vec![
                 "cargo:rustc-link-lib=dylib=python3.12",
-                "cargo:rustc-link-search=native=/usr/lib/python3.12",
                 "cargo:rustc-link-arg=-lpython3.12",
             ]
         );
@@ -11184,7 +11354,6 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
             python_link_directives(new),
             vec![
                 "cargo::rustc-link-lib=dylib=python3.12",
-                "cargo::rustc-link-search=native=/usr/lib/python3.12",
                 "cargo::rustc-link-arg=-lpython3.12",
             ]
         );
