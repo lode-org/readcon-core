@@ -285,6 +285,26 @@ def test_eon_cpp_sample_uses_the_python_clock(tmp_path, monkeypatch):
     assert (tmp_path / "eon-cpp-con-read.stdout").is_file()
 
 
+def test_multiframe_ase_con_reads_fixatoms():
+    pytest.importorskip("ase")
+    from ase import Atoms
+    from ase.constraints import FixAtoms
+
+    def image():
+        atoms = Atoms("Cu2", positions=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], cell=[2.0, 2.0, 2.0], pbc=True)
+        atoms.set_constraint(FixAtoms(indices=[1]))
+        return atoms
+
+    one = samefmt._got_from_ase(image(), "con")
+    many = samefmt._got_from_ase([image(), image()], "con")
+    assert list(one["fixed"]) == [0, 7]
+    assert many["fixed"] is not None
+    assert many["fixed"].shape == (2, 2)
+    assert list(many["fixed"][0]) == [0, 7]
+    assert list(many["fixed"][1]) == [0, 7]
+    assert many["velocities"] is None
+
+
 def test_a_failed_arm_is_stored(tmp_path, monkeypatch):
     monkeypatch.setattr(samefmt, "REPEATS", 1)
     monkeypatch.setattr(samefmt, "prepare", lambda: None)

@@ -1071,6 +1071,30 @@ def _ase_images(fmt: str, variant: str = "single"):
     return [atoms]
 
 
+def _ase_fixed(image):
+    """Per-atom fixed mask, from the fixed array or from FixAtoms.
+
+    write_eon stores a partial mask as FixAtoms, not as a fixed array.
+    The single-image unpack already reads that constraint. A stacked
+    read has to use the same source or the mask is reported missing.
+    """
+    if "fixed" in image.arrays:
+        return np.asarray(image.arrays["fixed"])
+    if not image.constraints:
+        return None
+    from ase.constraints import FixAtoms
+
+    mask = np.zeros(len(image), dtype=bool)
+    for constraint in image.constraints:
+        if isinstance(constraint, FixAtoms):
+            index = np.asarray(constraint.index)
+            if index.dtype == bool:
+                mask |= index
+            else:
+                mask[index] = True
+    return _bitmask_from_bools(mask)
+
+
 def _got_from_ase(images, fmt: str) -> dict:
     if not isinstance(images, list):
         images = [images]
@@ -1081,7 +1105,15 @@ def _got_from_ase(images, fmt: str) -> dict:
         cell = np.empty((n_frames, 6), dtype=np.float64)
         masses = np.empty((n_frames, n), dtype=np.float64)
         ids = np.empty((n_frames, n), dtype=np.float64) if "id" in images[0].arrays else None
-        fixed = np.empty((n_frames, n), dtype=np.float64) if "fixed" in images[0].arrays else None
+        fixed_rows = [_ase_fixed(image) for image in images]
+        fixed = None
+        if any(row is not None for row in fixed_rows):
+            fixed = np.vstack(
+                [
+                    np.zeros(n, dtype=np.int64) if row is None else np.asarray(row).reshape(n)
+                    for row in fixed_rows
+                ]
+            )
         velocities = None
         if "vel" in images[0].arrays or images[0].get_velocities() is not None:
             velocities = np.empty((n_frames, n, 3), dtype=np.float64)
@@ -1092,8 +1124,6 @@ def _got_from_ase(images, fmt: str) -> dict:
             masses[index] = image.get_masses()
             if ids is not None:
                 ids[index] = image.arrays["id"]
-            if fixed is not None:
-                fixed[index] = image.arrays["fixed"]
             if velocities is not None:
                 if "vel" in image.arrays:
                     velocities[index] = image.arrays["vel"]
@@ -1112,21 +1142,7 @@ def _got_from_ase(images, fmt: str) -> dict:
         ]
     )
     ids = image.arrays["id"] if "id" in image.arrays else None
-    fixed = None
-    if "fixed" in image.arrays:
-        fixed = image.arrays["fixed"]
-    elif image.constraints:
-        from ase.constraints import FixAtoms
-
-        mask = np.zeros(len(image), dtype=bool)
-        for constraint in image.constraints:
-            if isinstance(constraint, FixAtoms):
-                index = np.asarray(constraint.index)
-                if index.dtype == bool:
-                    mask |= index
-                else:
-                    mask[index] = True
-        fixed = _bitmask_from_bools(mask)
+    fixed = _ase_fixed(image)
     velocities = None
     if "vel" in image.arrays:
         velocities = np.asarray(image.arrays["vel"], dtype=np.float64)
