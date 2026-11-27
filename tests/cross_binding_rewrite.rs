@@ -414,6 +414,42 @@ fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
     lib
 }
 
+/// Directory that contains `<profile>` for this test binary.
+///
+/// `target/<profile>/deps/<bin>` yields `target`.
+/// `target/<triple>/<profile>/deps/<bin>` yields `target/<triple>`.
+/// `target/<profile>/build/<pkg>/<hash>/out/<bin>` yields `target`.
+fn artifact_root_from_exe(exe: &Path) -> Option<PathBuf> {
+    let mut up = exe.ancestors();
+    let _bin = up.next()?;
+    let parent = up.next()?;
+    if parent.file_name().is_some_and(|name| name == "deps") {
+        let _profile = up.next()?;
+        return up.next().map(Path::to_path_buf);
+    }
+    if parent.file_name().is_some_and(|name| name == "out") {
+        let _hash = up.next()?;
+        let _pkg = up.next()?;
+        let build = up.next()?;
+        if build.file_name().is_some_and(|name| name == "build") {
+            let _profile = up.next()?;
+            return up.next().map(Path::to_path_buf);
+        }
+    }
+    None
+}
+
+fn artifact_root() -> PathBuf {
+    if let Some(tmp) = option_env!("CARGO_TARGET_TMPDIR") {
+        return Path::new(tmp)
+            .parent()
+            .expect("parent of the cargo target directory")
+            .to_path_buf();
+    }
+    let exe = std::env::current_exe().unwrap_or_else(|err| panic!("current exe: {err}"));
+    artifact_root_from_exe(&exe).unwrap_or_else(|| panic!("artifact root from {}", exe.display()))
+}
+
 /// Plain cdylib for C, Fortran, and Julia, plus the Python extension.
 ///
 /// `cargo test` does not emit the cdylib. The Python extension is built
@@ -424,18 +460,14 @@ fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
 /// otherwise `<manifest>/target`. A relative value is joined to `root`.
 /// `CARGO_TARGET_DIR`, relative to the invoking cwd. An unset value
 /// stays `<manifest>/target`. Absolute values are unchanged.
-fn resolve_cargo_target_base(
-    value: Option<&std::ffi::OsStr>,
-    cwd: &Path,
-    manifest: &Path,
-) -> PathBuf {
+fn resolve_cargo_target_base(value: Option<&std::ffi::OsStr>, manifest: &Path) -> PathBuf {
     match value {
         Some(value) => {
             let path = Path::new(value);
             if path.is_absolute() {
                 path.to_path_buf()
             } else {
-                cwd.join(path)
+                artifact_root()
             }
         }
         None => manifest.join("target"),
@@ -443,8 +475,7 @@ fn resolve_cargo_target_base(
 }
 
 fn target_base_from(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
-    let cwd = std::env::current_dir().unwrap_or_else(|err| panic!("current dir: {err}"));
-    resolve_cargo_target_base(cargo_target_dir, &cwd, root)
+    resolve_cargo_target_base(cargo_target_dir, root)
 }
 
 fn debug_cdylib_candidate(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
@@ -555,10 +586,15 @@ fn binding_candidate_follows_cargo_target_dir() {
         absolute.join("debug/libreadcon_core.so")
     );
     let relative = std::ffi::OsStr::new("target/referee-r9-rel");
-    let cwd = std::env::current_dir().expect("cwd");
     assert_eq!(
         debug_cdylib_candidate(&root, Some(relative)),
-        cwd.join("target/referee-r9-rel/debug/libreadcon_core.so")
+        artifact_root().join("debug/libreadcon_core.so")
+    );
+    assert_ne!(
+        debug_cdylib_candidate(&root, Some(relative)),
+        std::env::current_dir()
+            .expect("cwd")
+            .join("target/referee-r9-rel/debug/libreadcon_core.so")
     );
     assert_eq!(
         debug_cdylib_candidate(&root, None),
@@ -567,26 +603,76 @@ fn binding_candidate_follows_cargo_target_dir() {
 }
 
 #[test]
-fn relative_cargo_target_dir_resolves_against_the_cwd() {
-    let manifest = Path::new("/opt/readcon-manifest");
-    let cwd = Path::new("/opt/invoke-cwd");
-    let value = std::ffi::OsStr::new("rel-target3");
+fn relative_target_dir_is_the_artifact_root() {
+    let root = repo_root();
+    let relative = std::ffi::OsStr::new("rel-r13");
+    let cwd = std::env::current_dir().expect("cwd");
+    let artifact = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .parent()
+        .expect("parent of the cargo target directory")
+        .to_path_buf();
+    let exe = std::env::current_exe().expect("current exe");
     assert_eq!(
-        resolve_cargo_target_base(Some(value), cwd, manifest),
-        cwd.join(value)
+        artifact_root_from_exe(&exe).as_deref(),
+        Some(artifact.as_path()),
+        "test binary and cargo target tmp disagree: {}",
+        exe.display()
     );
-    assert_ne!(
-        resolve_cargo_target_base(Some(value), cwd, manifest),
-        manifest.join(value)
+    let debug = debug_cdylib_candidate(&root, Some(relative));
+    let (plain, py) = binding_side_dirs(&root, Some(relative));
+    let mpi = binding_mpi_dir(&root, Some(relative));
+    eprintln!("artifact_root={}", artifact.display());
+    eprintln!("debug_cdylib={}", debug.display());
+    eprintln!("binding_plain={}", plain.display());
+    eprintln!("binding_py={}", py.display());
+    eprintln!("binding_mpi={}", mpi.display());
+    assert_eq!(debug, artifact.join("debug/libreadcon_core.so"));
+    assert_ne!(debug, cwd.join("rel-r13/debug/libreadcon_core.so"));
+    assert_ne!(debug, root.join("rel-r13/debug/libreadcon_core.so"));
+    assert_eq!(plain, artifact.join("binding-plain"));
+    assert_eq!(py, artifact.join("binding-py"));
+    assert_eq!(mpi, artifact.join("binding-mpi"));
+}
+
+#[test]
+fn artifact_root_from_exe_handles_a_target_triple() {
+    let host = Path::new("/opt/work/target/debug/deps/cross_binding_rewrite-hash");
+    assert_eq!(
+        artifact_root_from_exe(host).as_deref(),
+        Some(Path::new("/opt/work/target"))
     );
+    let triple = Path::new(
+        "/opt/work/target/x86_64-unknown-linux-gnu/release/deps/cross_binding_rewrite-hash",
+    );
+    assert_eq!(
+        artifact_root_from_exe(triple).as_deref(),
+        Some(Path::new("/opt/work/target/x86_64-unknown-linux-gnu"))
+    );
+    let unit = Path::new(
+        "/opt/work/target/aarch64-apple-darwin/debug/build/readcon-core/0123456789abcdef/out/readcon_core-test",
+    );
+    assert_eq!(
+        artifact_root_from_exe(unit).as_deref(),
+        Some(Path::new("/opt/work/target/aarch64-apple-darwin"))
+    );
+    let manifest = Path::new("/opt/readcon-manifest");
     let absolute = Path::new("/opt/abs-target");
     assert_eq!(
-        resolve_cargo_target_base(Some(absolute.as_os_str()), cwd, manifest),
+        resolve_cargo_target_base(Some(absolute.as_os_str()), manifest),
         absolute
     );
     assert_eq!(
-        resolve_cargo_target_base(None, cwd, manifest),
+        resolve_cargo_target_base(None, manifest),
         manifest.join("target")
+    );
+    let relative = std::ffi::OsStr::new("rel-target3");
+    assert_eq!(
+        resolve_cargo_target_base(Some(relative), manifest),
+        artifact_root()
+    );
+    assert_ne!(
+        resolve_cargo_target_base(Some(relative), manifest),
+        manifest.join(relative)
     );
 }
 
@@ -605,10 +691,13 @@ fn fallback_binding_dirs_follow_cargo_target_dir() {
     assert_ne!(plain, root.join("target/binding-plain"));
     assert_ne!(py, root.join("target/binding-py"));
     let relative = std::ffi::OsStr::new("side-target");
+    let artifact = artifact_root();
     let cwd = std::env::current_dir().expect("cwd");
     let (plain, py) = binding_side_dirs(&root, Some(relative));
-    assert_eq!(plain, cwd.join("side-target/binding-plain"));
-    assert_eq!(py, cwd.join("side-target/binding-py"));
+    assert_eq!(plain, artifact.join("binding-plain"));
+    assert_eq!(py, artifact.join("binding-py"));
+    assert_ne!(plain, cwd.join("side-target/binding-plain"));
+    assert_ne!(py, cwd.join("side-target/binding-py"));
     let (plain, py) = binding_side_dirs(&root, None);
     assert_eq!(plain, root.join("target/binding-plain"));
     assert_eq!(py, root.join("target/binding-py"));
@@ -616,7 +705,8 @@ fn fallback_binding_dirs_follow_cargo_target_dir() {
     assert_eq!(mpi, absolute.join("binding-mpi"));
     assert_ne!(mpi, root.join("target/binding-mpi"));
     let mpi = binding_mpi_dir(&root, Some(relative));
-    assert_eq!(mpi, cwd.join("side-target/binding-mpi"));
+    assert_eq!(mpi, artifact.join("binding-mpi"));
+    assert_ne!(mpi, cwd.join("side-target/binding-mpi"));
     let mpi = binding_mpi_dir(&root, None);
     assert_eq!(mpi, root.join("target/binding-mpi"));
 }
