@@ -12,7 +12,7 @@ import statistics
 
 from numbers_lib import Rule, grep, jget, text
 
-CROSSCHECK = "data/corpus_crosscheck.json"
+CROSSCHECK = "data/referee/r1h/corpus_crosscheck.json"
 E5 = "evidence/results/e5_prefactor.json"
 DLPACK = "data/dlpack_cost.txt"
 

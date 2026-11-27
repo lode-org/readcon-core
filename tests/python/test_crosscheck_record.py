@@ -24,7 +24,8 @@ def test_the_crosscheck_sentence_names_the_recorded_build() -> None:
     module = _load()
     record = json.loads(RECORD.read_text(encoding="utf-8"))
     text = module.tex(record)
-    assert r"readcon-core commit \texttt{10a836eec35d}" in text
+    commit = record["provenance"]["build"]["source_commit"]
+    assert rf"readcon-core commit \texttt{{{commit[:12]}}}" in text
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     assert f"readcon-core {version} puts no line" not in text
     assert "data/referee/r1h/corpus_crosscheck.json" in text
@@ -64,6 +65,6 @@ def test_the_clause_count_rule_reads_the_r1h_record() -> None:
     from number_rules import spec
 
     rule = spec.RULES[0]
-    assert rule.printed == "127"
-    assert rule.value == 127
+    assert rule.printed == "179"
+    assert rule.value == 179
     assert rule.source.endswith("referee/r1h/corpus_crosscheck.json")

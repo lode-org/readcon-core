@@ -19,20 +19,27 @@ CROSSCHECK_TABLE = "figures/generated/corpus_crosscheck.tex"
 
 RULES: list[Rule] = [
     Rule(
-        "127",
+        "179",
         jget(RECORDED, "spec.clauses"),
         RECORDED,
-        "spec.clauses: the clauses of the recorded CON 3.1 specification",
+        "spec.clauses: the clauses of the recorded specification",
         where=(f"{CROSSCHECK_TABLE}~clauses\\)",),
     ),
     *[
         Rule(
             printed,
-            jget(CROSSCHECK, f"groups.corpus31.basis.{basis}"),
-            CROSSCHECK,
-            f"groups.corpus31.basis.{basis}: {basis} entries of the CON 3.1 corpus manifest",
+            jget(RECORDED, f"groups.corpus31.basis.{basis}"),
+            RECORDED,
+            f"groups.corpus31.basis.{basis}: {basis} entries of the corpus manifest",
             where=(f"{CROSSCHECK_TABLE}~The corpus has",),
         )
-        for printed, basis in (("95", "explicit"), ("21", "class-open"), ("23", "open"))
+        for printed, basis in (("96", "explicit"), ("21", "class-open"), ("22", "open"))
     ],
+    Rule(
+        "4.0.4",
+        jget(RECORDED, "spec.version"),
+        RECORDED,
+        "spec.version of the recorded specification",
+        (f"{CROSSCHECK_TABLE}~CON 4\\.0\\.4",),
+    ),
 ]
