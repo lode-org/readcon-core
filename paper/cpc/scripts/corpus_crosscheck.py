@@ -150,8 +150,16 @@ def lattice(rows) -> list | None:
 
 
 def applied_unit(frame):
-    value = getattr(frame, "velocity_time_unit", None)
-    return value() if callable(value) else value
+    """Time unit velocities are stored in (CON-units.8 to CON-units.10).
+
+    The frame has no ``velocity_time_unit`` attribute. Through major 3 the
+    natural unit applies whatever ``units.time`` says; major 4 and later
+    take that label. ``canonical_unit`` equates the symbol spelling with
+    the historical amu/angstrom spelling.
+    """
+    if int(frame.spec_version) < 4:
+        return "(u*Å^2/eV)^0.5"
+    return ((frame.metadata or {}).get("units") or {}).get("time")
 
 
 def readcon_view(frames) -> list[dict]:
@@ -160,7 +168,6 @@ def readcon_view(frames) -> list[dict]:
         meta = f.metadata or {}
         atoms = f.atoms
         vel = [(a.vx, a.vy, a.vz) for a in atoms] if f.has_velocities else None
-        pbc = getattr(f, "pbc", None)
         out.append(
             {
                 "coords": [hexes((a.x, a.y, a.z)) for a in atoms],
@@ -177,7 +184,7 @@ def readcon_view(frames) -> list[dict]:
                     hexes(f.angles),
                     lattice(meta.get("lattice_vectors")),
                 ],
-                "pbc": None if pbc is None else [bool(b) for b in pbc],
+                "pbc": [bool(b) for b in f.pbc_effective],
                 "symbols_masses": [[a.symbol, float(a.mass).hex()] for a in atoms],
             }
         )
