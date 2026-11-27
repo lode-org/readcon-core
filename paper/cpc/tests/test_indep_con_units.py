@@ -43,6 +43,41 @@ def test_major_3_velocities_use_the_natural_unit() -> None:
     assert frame["time_override"] == ("fs", indep_reader.NATURAL_TIME)
 
 
+NO_TIME = FRAME.replace(
+    '"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"}',
+    '"units":{"length":"angstrom","energy":"eV","mass":"amu"}',
+    1,
+)
+
+
+def test_needs_time_starts_at_major_4() -> None:
+    """Major 4 with velocities and no units.time is invalid; major 3 is not.
+
+    spec_major rejects an unknown major before this line, so this test admits
+    major 4 for the call. ``major > 4`` would accept that frame, and
+    ``major >= 3`` would reject the major-3 frame.
+    """
+    indep_reader = _reader()
+    known = indep_reader.KNOWN_MAJORS
+    indep_reader.KNOWN_MAJORS = (2, 3, 4)
+    try:
+        assert indep_reader.read_text(NO_TIME)[0]["major"] == 3
+        major4 = NO_TIME.replace(
+            '"con_spec_version":3,"con_spec_minor":1',
+            '"con_spec_version":4,"con_spec_minor":0',
+            1,
+        )
+        try:
+            indep_reader.read_text(major4)
+        except indep_reader.Rejection as exc:
+            assert exc.cls == "InvalidUnits"
+            assert exc.clause == "CON-units.11"
+        else:
+            raise AssertionError("major 4 velocities without units.time were accepted")
+    finally:
+        indep_reader.KNOWN_MAJORS = known
+
+
 def test_a_coordinate_label_is_checked_when_validate_is_off() -> None:
     indep_reader = _reader()
     bad = FRAME.replace("Coordinates of Component 1", "Coordinates of CompXnent 1", 1)
