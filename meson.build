@@ -108,7 +108,7 @@ _src_rs = run_command(
 readcon_cargo = custom_target(
     'readcon-cargo',
     input: files('Cargo.toml', 'src/lib.rs'),
-    depend_files: files('Cargo.lock', 'build.rs') + files(_src_rs),
+    depend_files: files('Cargo.lock', 'build.rs', 'support/chemfiles_link.rs') + files(_src_rs),
     output: [_cargo_shared, _cargo_static],
     command: [
         _py,

@@ -1433,6 +1433,15 @@ mod tests {
     use chemfiles::{Atom, Frame, Property, UnitCell};
     use std::io::Write;
 
+    #[test]
+    fn build_script_recorded_a_known_string_abi() {
+        let abi = env!("READCON_CHEMFILES_STRING_ABI");
+        assert!(
+            abi == "cow" || abi == "cxx11" || abi == "foreign",
+            "linked chemfiles string ABI was {abi}"
+        );
+    }
+
     fn make_water_frame() -> Frame {
         let mut frame = Frame::new();
         frame.add_atom(&Atom::new("O"), [0.0, 0.0, 0.0], None);

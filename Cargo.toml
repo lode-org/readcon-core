@@ -16,8 +16,9 @@ license = "MIT"
 # wrap archive is built from it, so a file outside this list cannot move the
 # archive digest. Each path is anchored at the package root. Besides the
 # library sources, the build needs VERSION (build.rs), grammar/readcon.pest
-# (pest_derive), support/metatensor_install.rs (build.rs) and
-# schema/ReadCon.capnp (build.rs, rpc feature). The examples and the
+# (pest_derive), support/metatensor_install.rs and
+# support/chemfiles_link.rs (build.rs), and schema/ReadCon.capnp
+# (build.rs, rpc feature). The examples and the
 # .con inputs are the ones examples/meson.build builds and reads.
 # frame_builder_consume.c is the extra example that meson.build builds.
 include = [
@@ -31,6 +32,7 @@ include = [
   "/VERSION",
   "/grammar/readcon.pest",
   "/support/metatensor_install.rs",
+  "/support/chemfiles_link.rs",
   "/schema/ReadCon.capnp",
   "/CMakeLists.txt",
   "/cmake/**",
