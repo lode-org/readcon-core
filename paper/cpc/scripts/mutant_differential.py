@@ -43,7 +43,7 @@ from error_class import classify
 
 ROOT = Path(__file__).resolve().parents[1]
 C31 = ROOT / "data" / "corpus31"
-OUT = ROOT / "data" / "spec" / "mutant_differential.json"
+OUT = ROOT / "data" / "referee" / "r1t" / "mutant_differential.json"
 MACROS = ROOT / "src" / "figures" / "generated" / "mutant_macros.tex"
 MAX_BYTES = 4000
 SEEDS = "1-7"
@@ -84,6 +84,8 @@ ALPHABET = (
 COUNTS_OF = indep_reader.counts_of
 JSON_NUMBER = indep_reader._json_number
 SPLIT_LINES = indep_reader.split_lines
+CELL_MATRIX = indep_reader.cell_matrix
+SPEC_MAJOR = indep_reader.spec_major
 
 
 def counts_field_first(raw: str, line: int, n: int) -> list[int]:
@@ -111,6 +113,44 @@ def json_number_unbounded(text: str, i: int) -> tuple[int | float, int]:
 def split_lines_final_cr(data: bytes) -> list[str]:
     """split_lines with a CR that is the last byte of the input read as a line end."""
     return SPLIT_LINES(data[:-1] if data.endswith(b"\r") else data)
+
+
+def legacy_block_lookahead(
+    lines: indep_reader.Lines, i: int, counts: list[int]
+) -> bool:
+    """legacy_block using readcon's two-line probe."""
+    if i + 2 >= lines.n or not indep_reader.white(lines.raw[i]):
+        return False
+    symbol = lines.raw[i + 1].strip()
+    if not symbol or symbol.lstrip().startswith("{"):
+        return False
+    words = [word.lower() for word in lines.raw[i + 2].split()]
+    return any(words[k : k + 2] == ["of", "component"] for k in range(len(words) - 1))
+
+
+def cell_matrix_sin_tol(
+    lengths: list[float], angles: list[float]
+) -> list[list[float]] | None:
+    """cell_matrix rejecting |sin(gamma)| below 1e-15."""
+    if abs(math.sin(math.radians(angles[2]))) < 1e-15:
+        return None
+    return CELL_MATRIX(lengths, angles)
+
+
+def spec_major_unsigned(version, line: int) -> int:
+    """spec_major rejecting a negative integer version as invalid metadata."""
+    if (
+        indep_reader.is_number(version)
+        and (type(version) is int or version.is_integer())
+        and int(version) < 0
+    ):
+        raise indep_reader.Rejection(
+            "InvalidMetadataJson",
+            line,
+            "CON-line2.4",
+            f"con_spec_version {version!r} is negative",
+        )
+    return SPEC_MAJOR(version, line)
 
 
 GROUPS = (
@@ -144,6 +184,24 @@ GROUPS = (
         "ends there (IncompleteHeader, CON-frame.3), for the independent reader.",
         "variant": "the independent reader with a CR that is the last byte of the input read as a line end",
         "patch": ("split_lines", split_lines_final_cr),
+    },
+    {
+        "group": "legacy velocity block lookahead",
+        "rule": "No clause states how far a reader looks before a legacy velocity block.",
+        "variant": "the independent reader using readcon's two-line probe",
+        "patch": ("legacy_block", legacy_block_lookahead),
+    },
+    {
+        "group": "zero-sine tolerance in CON-cell.6",
+        "rule": "CON-cell.6 does not state a binary64 tolerance on sin(gamma).",
+        "variant": "the independent reader rejecting a near-zero sin(gamma)",
+        "patch": ("cell_matrix", cell_matrix_sin_tol),
+    },
+    {
+        "group": "negative con_spec_version",
+        "rule": "No clause states whether a negative con_spec_version is malformed.",
+        "variant": "the independent reader rejecting a negative major as invalid metadata",
+        "patch": ("spec_major", spec_major_unsigned),
     },
 )
 
@@ -332,7 +390,9 @@ def macros(record: dict) -> str:
         "mutantMaxBytes": f"{record['max_bytes']:,}",
         "mutantSame": f"{t['same']:,}",
         "mutantDiffer": f"{t['differ']:,}",
-        "mutantGroups": sum(1 for g in record["groups"] if g["group"] != "unexplained"),
+        "mutantGroups": "/".join(
+            str(g["count"]) for g in record["groups"] if g["group"] != "unexplained"
+        ),
         "mutantUnexplained": t["unexplained"],
     }
     return (

@@ -75,7 +75,7 @@ of readcon-core. ${tag_state}
 **Authors:** ${author} (corresponding), ${address}. Email ${email}. ORCID ${orcid}.
 The author enters the phone number in EM.
 
-**Abstract:** plain text, ${abstract_chars} characters, ${abstract_plain_words} words (`check_manuscript.py` counts
+**Abstract:** plain text, ${abstract_chars} characters, ${abstract_words} words (`check_manuscript.py` counts
 ${abstract_words} in the TeX source, limit 250). Macros expanded: ${macro_list}.${micro_note}
 
 ```

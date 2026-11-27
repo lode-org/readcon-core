@@ -1,0 +1,151 @@
+{
+  "manifest": "paper/cpc/data/corpus31/manifest-r1t-overlay.toml",
+  "spec": {
+    "path": "docs/orgmode/spec.org",
+    "version": "3.1",
+    "sha256": "ff86b93bfcbdf97e4ddf216a67891c3903ec9272dfe980b7f9978e4dbea6bcbd",
+    "blob": "206fca2f14b5aa476ad7231b029a3ec5bd428954"
+  },
+  "reader_minor": 1,
+  "fixture_sha256": "28c2758ac9e18f8161d67e5838e9fb6dad006bd34abff4bd8273cf4de573a622",
+  "review": {
+    "status": "single_author_judged",
+    "verdict_author_identity": "Rohit Goswami <rgoswami@ieee.org>",
+    "identity_evidence": "author of the first committed corpus manifest",
+    "second_review_status": "none_recorded",
+    "second_review_evidence": [],
+    "audit_scope": "record structure and basis classification, not fixture verdicts",
+    "audit_source_commit": "a557972c00cda886e70379612aa37e5b37f7f77e",
+    "audit_source_sha256": "b8ccf812daae2ee627c67168052918e452ac2fd3758b1c48b948f02cc2f6b3dc"
+  },
+  "summary": {
+    "files": 143,
+    "match": 143,
+    "by_basis": {
+      "class-open": {
+        "files": 22,
+        "match": 22
+      },
+      "explicit": {
+        "files": 97,
+        "match": 97
+      },
+      "open": {
+        "files": 20,
+        "match": 20
+      },
+      "optional": {
+        "files": 4,
+        "match": 4
+      }
+    },
+    "disagreements": [],
+    "manifest_not_followed": [],
+    "thread_settings": [
+      "auto",
+      "1",
+      "2",
+      "8"
+    ],
+    "threads_disagree": [],
+    "accepted": 63,
+    "rejected": 80,
+    "verdict_sets": {
+      "normative": {
+        "basis": "explicit",
+        "files": 97,
+        "match": 97
+      },
+      "class_open": {
+        "basis": "class-open",
+        "files": 22,
+        "match": 22
+      },
+      "discretionary": {
+        "basis": "optional",
+        "files": 4,
+        "match": 4
+      },
+      "gap": {
+        "basis": "open",
+        "files": 20,
+        "match": 20
+      }
+    },
+    "manifest_accept": 63,
+    "manifest_reject": 80
+  },
+  "provenance": {
+    "build": {
+      "readcon_version": "0.24.0",
+      "readcon_module": "site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
+      "readcon_module_sha256": "4e290af4e93519b69dbc6179e923ea62ab02ece82644ae50bd4606dabc569407",
+      "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+      "newer_sources": [],
+      "library_digest": "7ea0ca4523de8e767ea5bce435d1f4613acd32bc7de4db6e58a06a81c0923807",
+      "source_files": 54,
+      "source_tag": null,
+      "source_commit": "a357106d3cbb20f083e6505a46ef46d2cbbe2405"
+    },
+    "host": {
+      "kernel": "6.12.113+",
+      "uname_m": "x86_64",
+      "nproc": 8,
+      "family": "6",
+      "model": "207",
+      "cpu_model": "Intel Xeon Processor",
+      "mhz": 2400.0,
+      "mem_kb": 49342816
+    }
+  },
+  "explicit_files_stored": false,
+  "regenerate": "paper/cpc/scripts/corpus31_results.py",
+  "files": [
+    {"file":"v2_minor1_velocity_no_time.convel","basis":"open","clause":"CON-units.8, CON-units.11","expected":{"outcome":"accept","frames":1},"got":{"outcome":"accept","frames":1,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"v31_units_compound.convel","basis":"open","clause":"CON-units.1, CON-units.2, CON-units.16","expected":{"outcome":"accept","frames":1},"got":{"outcome":"accept","frames":1,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"v32_unknown_section_arity.con","basis":"optional","clause":"CON-line2.7, CON-section.8, CON-section.14","expected":{"outcome":"accept","frames":1},"got":{"outcome":"accept","frames":1,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"v33_unknown_section_arity.con","basis":"optional","clause":"CON-line2.7, CON-section.8, CON-section.14","expected":{"outcome":"accept","frames":1},"got":{"outcome":"accept","frames":1,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"v31_two_blanks_before_section.convel","basis":"class-open","clause":"CON-section.2, CON-section.4, CON-error.4","expected":{"outcome":"reject","error":"IncompleteSection","line":15},"got":{"outcome":"reject","error":"IncompleteSection","line":15},"threads_agree":true,"match":true},
+    {"file":"v31_unicode_blank_before_section.convel","basis":"open","clause":"CON-section.2, CON-file.4","expected":{"outcome":"accept","frames":1},"got":{"outcome":"accept","frames":1,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"v31_spreads_negative.con","basis":"class-open","clause":"CON-section.20","expected":{"outcome":"reject","error":"ValidationError","line":17},"got":{"outcome":"reject","error":"ValidationError","line":17},"threads_agree":true,"match":true},
+    {"file":"v31_section_label_mismatch.convel","basis":"class-open","clause":"CON-section.15","expected":{"outcome":"reject","error":"IncompleteSection","line":16},"got":{"outcome":"reject","error":"IncompleteSection","line":16},"threads_agree":true,"match":true},
+    {"file":"v31_label_velocities_no_index.convel","basis":"class-open","clause":"CON-section.15","expected":{"outcome":"reject","error":"IncompleteSection","line":16},"got":{"outcome":"reject","error":"IncompleteSection","line":16},"threads_agree":true,"match":true},
+    {"file":"v31_label_velocities_xyz.convel","basis":"class-open","clause":"CON-section.15","expected":{"outcome":"reject","error":"IncompleteSection","line":16},"got":{"outcome":"reject","error":"IncompleteSection","line":16},"threads_agree":true,"match":true},
+    {"file":"v31_label_velocities_1_xyz.convel","basis":"class-open","clause":"CON-section.15","expected":{"outcome":"reject","error":"IncompleteSection","line":16},"got":{"outcome":"reject","error":"IncompleteSection","line":16},"threads_agree":true,"match":true},
+    {"file":"v31_label_velocities_0.convel","basis":"class-open","clause":"CON-section.15","expected":{"outcome":"reject","error":"IncompleteSection","line":16},"got":{"outcome":"reject","error":"IncompleteSection","line":16},"threads_agree":true,"match":true},
+    {"file":"v31_label_velocities_2.convel","basis":"class-open","clause":"CON-section.15","expected":{"outcome":"reject","error":"IncompleteSection","line":16},"got":{"outcome":"reject","error":"IncompleteSection","line":16},"threads_agree":true,"match":true},
+    {"file":"v31_label_velocities_01.convel","basis":"class-open","clause":"CON-section.15","expected":{"outcome":"reject","error":"IncompleteSection","line":16},"got":{"outcome":"reject","error":"IncompleteSection","line":16},"threads_agree":true,"match":true},
+    {"file":"v31_label_coordinates_2.con","basis":"open","clause":"CON-count.8, CON-validate.4","expected":{"outcome":"accept","frames":1},"got":{"outcome":"accept","frames":1,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"v31_sections_out_of_order.convel","basis":"open","clause":"CON-section.1, CON-section.15","expected":{"outcome":"reject","error":"IncompleteSection","line":16},"got":{"outcome":"reject","error":"IncompleteSection","line":16},"threads_agree":true,"match":true},
+    {"file":"v31_blank_symbol_velocities.convel","basis":"class-open","clause":"CON-section.4, CON-validate.4","expected":{"outcome":"reject","error":"IncompleteSection","line":15},"got":{"outcome":"reject","error":"IncompleteSection","line":15},"threads_agree":true,"match":true},
+    {"file":"v31_section_row_id_mismatch.convel","basis":"optional","clause":"CON-section.17","expected":{"outcome":"accept","frames":1},"got":{"outcome":"accept","frames":1,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"f26_cell_10_10_170.con","basis":"class-open","clause":"CON-cell.6","expected":{"outcome":"reject","error":"ValidationError","line":4},"got":{"outcome":"reject","error":"ValidationError","line":4},"threads_agree":true,"match":true},
+    {"file":"gram_170_v1.con","basis":"class-open","clause":"CON-cell.6","expected":{"outcome":"reject","error":"ValidationError","line":4},"got":{"outcome":"reject","error":"ValidationError","line":4},"threads_agree":true,"match":true},
+    {"file":"gram_170_v2.con","basis":"class-open","clause":"CON-cell.6","expected":{"outcome":"reject","error":"ValidationError","line":4},"got":{"outcome":"reject","error":"ValidationError","line":4},"threads_agree":true,"match":true},
+    {"file":"gram_170_v30.con","basis":"class-open","clause":"CON-cell.6","expected":{"outcome":"reject","error":"ValidationError","line":4},"got":{"outcome":"reject","error":"ValidationError","line":4},"threads_agree":true,"match":true},
+    {"file":"gram_170_v31_validate.con","basis":"class-open","clause":"CON-cell.6","expected":{"outcome":"reject","error":"ValidationError","line":4},"got":{"outcome":"reject","error":"ValidationError","line":4},"threads_agree":true,"match":true},
+    {"file":"gram_60_60_120_1.con","basis":"class-open","clause":"CON-cell.6","expected":{"outcome":"reject","error":"ValidationError","line":4},"got":{"outcome":"reject","error":"ValidationError","line":4},"threads_agree":true,"match":true},
+    {"file":"gram_60_60_120_1_validate.con","basis":"class-open","clause":"CON-cell.6","expected":{"outcome":"reject","error":"ValidationError","line":4},"got":{"outcome":"reject","error":"ValidationError","line":4},"threads_agree":true,"match":true},
+    {"file":"v31_version_3_5.con","basis":"open","clause":"CON-line2.4, CON-line2.6","expected":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"got":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"threads_agree":true,"match":true},
+    {"file":"v2_json_depth_127.con","basis":"open","clause":"CON-line2.1","expected":{"outcome":"accept","frames":1},"got":{"outcome":"accept","frames":1,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"v2_json_depth_128.con","basis":"open","clause":"CON-line2.1, CON-line2.2","expected":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"got":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"threads_agree":true,"match":true},
+    {"file":"d06_lattice_1e999.con","basis":"open","clause":"CON-cell.5, CON-line2.13","expected":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"got":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"threads_agree":true,"match":true},
+    {"file":"d10_json_depth_129.con","basis":"open","clause":"CON-line2.1, CON-line2.2","expected":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"got":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"threads_agree":true,"match":true},
+    {"file":"d11_validate_pbc_object.con","basis":"open","clause":"CON-cell.4, CON-validate.4","expected":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"got":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"threads_agree":true,"match":true},
+    {"file":"d12_length_trailing_space.con","basis":"open","clause":"CON-units.1, CON-units.16","expected":{"outcome":"accept","frames":1},"got":{"outcome":"accept","frames":1,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"d13_blank_symbol_energies.con","basis":"class-open","clause":"CON-section.4, CON-validate.4","expected":{"outcome":"reject","error":"IncompleteSection","line":15},"got":{"outcome":"reject","error":"IncompleteSection","line":15},"threads_agree":true,"match":true},
+    {"file":"d15_json_depth_100001.con","basis":"open","clause":"CON-line2.1, CON-line2.2","expected":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"got":{"outcome":"reject","error":"InvalidMetadataJson","line":2},"threads_agree":true,"match":true},
+    {"file":"v31_type_count_2pow64.con","basis":"open","clause":"CON-error.3","expected":{"outcome":"reject","error":"InvalidCount","line":7},"got":{"outcome":"reject","error":"InvalidCount","line":7},"threads_agree":true,"match":true},
+    {"file":"v31_gzip_by_content.con","basis":"optional","clause":"CON-compress.3","expected":{"outcome":"accept","frames":1},"got":{"outcome":"accept","frames":1,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"v31_bom.con","basis":"class-open","clause":"CON-file.2","expected":{"outcome":"reject","error":"ValidationError","line":1},"got":{"outcome":"reject","error":"ValidationError","line":1},"threads_agree":true,"match":true},
+    {"file":"v31_utf8_line1.con","basis":"class-open","clause":"CON-file.1","expected":{"outcome":"reject","error":"ValidationError","line":1},"got":{"outcome":"reject","error":"ValidationError","line":1},"threads_agree":true,"match":true},
+    {"file":"v31_utf8_number_token.con","basis":"class-open","clause":"CON-file.1, CON-num.8","expected":{"outcome":"reject","error":"InvalidNumberFormat","line":12},"got":{"outcome":"reject","error":"InvalidNumberFormat","line":12},"threads_agree":true,"match":true},
+    {"file":"v31_utf8_separator_line.convel","basis":"class-open","clause":"CON-file.1, CON-section.2","expected":{"outcome":"reject","error":"ValidationError","line":14},"got":{"outcome":"reject","error":"ValidationError","line":14},"threads_agree":true,"match":true},
+    {"file":"v31_unicode_tail.con","basis":"open","clause":"CON-frame.1, CON-frame.3","expected":{"outcome":"reject","error":"IncompleteHeader","line":16},"got":{"outcome":"reject","error":"IncompleteHeader","line":16},"threads_agree":true,"match":true},
+    {"file":"ff_tail_610_frames.con","basis":"open","clause":"CON-frame.1","expected":{"outcome":"accept","frames":610},"got":{"outcome":"accept","frames":610,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"whitespace_only.con","basis":"open","clause":"CON-frame.1, CON-num.8","expected":{"outcome":"reject","error":"InvalidNumberFormat","line":3},"got":{"outcome":"reject","error":"InvalidNumberFormat","line":3},"threads_agree":true,"match":true},
+    {"file":"v31_zero_atom_unicode_blank.con","basis":"open","clause":"CON-count.1","expected":{"outcome":"reject","error":"InvalidCount","line":21},"got":{"outcome":"reject","error":"InvalidCount","line":21},"threads_agree":true,"match":true},
+    {"file":"v31_label_case_coordinates.con","basis":"open","clause":"CON-file.5, CON-validate.4","expected":{"outcome":"accept","frames":1},"got":{"outcome":"accept","frames":1,"pbc":[true,true,true]},"threads_agree":true,"match":true},
+    {"file":"empty.con","basis":"open","clause":"CON-frame.1","expected":{"outcome":"accept","frames":0},"got":{"outcome":"accept","frames":0,"pbc":[true,true,true]},"threads_agree":true,"match":true}
+  ]
+}

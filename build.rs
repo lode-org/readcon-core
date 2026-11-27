@@ -154,6 +154,47 @@ fn main() {
         // cdylib dynamic export table.
         println!("cargo:rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL");
     }
+
+    #[cfg(feature = "python")]
+    write_python_test_link();
+}
+
+#[cfg(feature = "python")]
+fn write_python_test_link() {
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let output = std::process::Command::new("python3")
+        .args([
+            "-c",
+            "import sysconfig; print(sysconfig.get_config_var('LDLIBRARY') or '')",
+        ])
+        .output()
+        .expect("python3 is required to name libpython for the test binary");
+    if !output.status.success() {
+        panic!(
+            "python3 could not name LDLIBRARY: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let ldlibrary = String::from_utf8(output.stdout).expect("LDLIBRARY is utf-8");
+    let mut name = ldlibrary.trim();
+    if let Some(rest) = name.strip_prefix("lib") {
+        name = rest;
+    }
+    for ext in [".so", ".a", ".dylib"] {
+        if let Some((stem, _)) = name.split_once(ext) {
+            name = stem;
+            break;
+        }
+    }
+    if name.is_empty() {
+        panic!("python3 reported an empty LDLIBRARY");
+    }
+    let path = out_dir.join("python_test_link.rs");
+    fs::write(
+        &path,
+        format!("#[link(name = \"{name}\")]\nunsafe extern \"C\" {{}}\n"),
+    )
+    .unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
 }
 
 #[cfg(feature = "chemfiles")]

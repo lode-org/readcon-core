@@ -1,4 +1,4 @@
-"""The million-atom comparison reads the 0.23.0 record and does not rewrite it."""
+"""The million-atom comparison reads the committed record and does not rewrite it."""
 
 from __future__ import annotations
 
@@ -201,6 +201,25 @@ def _snakemake(
     )
 
 
+def _saved_record(tree: Path) -> Path:
+    """The committed million record, at the path its host.json names."""
+    listed = subprocess.check_output(
+        ["git", "ls-files", "--", "bench/h2h/million/*/host.json"],
+        cwd=tree,
+        text=True,
+    ).split()
+    named = [
+        record
+        for rel in listed
+        if (
+            record := json.loads((tree / rel).read_text(encoding="utf-8")).get("record")
+        )
+        == Path(rel).parent.as_posix()
+    ]
+    assert len(named) == 1, named
+    return tree / named[0]
+
+
 def _record_hashes(record: Path) -> dict[str, str]:
     found = {}
     for path in sorted(record.rglob("*")):
@@ -262,7 +281,7 @@ def test_million_rule_targets_the_versioned_record(tmp_path: Path):
         existing_fresh.mkdir(parents=True)
         (existing_fresh / "cross-format.json").write_text("kept\n", encoding="utf-8")
         (existing_fresh / "cross-format.log").write_text("kept\n", encoding="utf-8")
-        saved_existing = existing / "bench/h2h/million" / f"v{version}"
+        saved_existing = _saved_record(existing)
         existing_before = (
             (saved_existing / "cross-format.json").read_bytes(),
             (saved_existing / "cross-format.log").read_bytes(),
@@ -330,7 +349,7 @@ def test_superseded_note_follows_a_complete_measurement(tmp_path: Path):
 
         failed = _worktree(tmp_path, "failed")
         trees.append(failed)
-        failed_saved = failed / "bench/h2h/million" / f"v{version}"
+        failed_saved = _saved_record(failed)
         failed_run = _snakemake(
             failed, "million_measure", env={"READCON_STUB_FAIL": "1"}
         )
@@ -341,7 +360,7 @@ def test_superseded_note_follows_a_complete_measurement(tmp_path: Path):
 
         empty = _worktree(tmp_path, "empty")
         trees.append(empty)
-        empty_saved = empty / "bench/h2h/million" / f"v{version}"
+        empty_saved = _saved_record(empty)
         empty_run = _snakemake(
             empty, "million_measure", env={"READCON_STUB_EMPTY": "1"}
         )

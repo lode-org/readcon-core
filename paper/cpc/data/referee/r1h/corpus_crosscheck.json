@@ -1,0 +1,398 @@
+{
+  "csv": "paper/cpc/data/referee/r1h/corpus_crosscheck.csv",
+  "spec": {
+    "doc": "docs/orgmode/spec.org",
+    "version": "3.1",
+    "sha256": "0b5d372993695a31269933bf1cdf68b7d7015622eb710e390174ee2a28cb6c02",
+    "blob": "76724eab2ec91787769cf55754973f84f1b673b2",
+    "clauses": 127,
+    "manifest_spec_doc": "docs/orgmode/spec.org",
+    "manifest_reader_minor": 1,
+    "indep_reader_minor": 1
+  },
+  "groups": {
+    "conformance valid": {
+      "files": 14,
+      "basis": {
+        "explicit": 14,
+        "class-open": 0,
+        "optional": 0,
+        "open": 0
+      },
+      "readers": {
+        "readcon": {
+          "matches": 14,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 14,
+          "field_mismatches": 14
+        },
+        "readcon_iter": {
+          "matches": 14,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 14,
+          "field_mismatches": 14
+        },
+        "indep": {
+          "matches": 14,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 0
+        }
+      },
+      "readcon_iter_same_as_read_con": 14,
+      "readcon_indep_same_decision": 14,
+      "accepted_by_both": 14,
+      "field_identical": 0,
+      "readcon_crashes": 0,
+      "rewrite_files": 0,
+      "rewrite_kept": 0,
+      "expected_reject": 0
+    },
+    "conformance invalid": {
+      "files": 8,
+      "basis": {
+        "explicit": 8,
+        "class-open": 0,
+        "optional": 0,
+        "open": 0
+      },
+      "readers": {
+        "readcon": {
+          "matches": 8,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 0,
+          "field_mismatches": 0
+        },
+        "readcon_iter": {
+          "matches": 8,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 0,
+          "field_mismatches": 0
+        },
+        "indep": {
+          "matches": 8,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 0
+        }
+      },
+      "readcon_iter_same_as_read_con": 8,
+      "readcon_indep_same_decision": 8,
+      "accepted_by_both": 0,
+      "field_identical": 0,
+      "readcon_crashes": 0,
+      "rewrite_files": 0,
+      "rewrite_kept": 0,
+      "expected_reject": 8
+    },
+    "corpus31 accept": {
+      "files": 62,
+      "basis": {
+        "explicit": 48,
+        "class-open": 0,
+        "optional": 4,
+        "open": 10
+      },
+      "readers": {
+        "readcon": {
+          "matches": 49,
+          "disagreements": 12,
+          "not_followed": 1,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 56,
+          "field_mismatches": 55
+        },
+        "readcon_iter": {
+          "matches": 49,
+          "disagreements": 12,
+          "not_followed": 1,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 56,
+          "field_mismatches": 55
+        },
+        "indep": {
+          "matches": 62,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 0
+        }
+      },
+      "readcon_iter_same_as_read_con": 62,
+      "readcon_indep_same_decision": 56,
+      "accepted_by_both": 56,
+      "field_identical": 1,
+      "readcon_crashes": 0,
+      "rewrite_files": 6,
+      "rewrite_kept": 2,
+      "expected_reject": 0
+    },
+    "corpus31 reject": {
+      "files": 81,
+      "basis": {
+        "explicit": 47,
+        "class-open": 21,
+        "optional": 0,
+        "open": 13
+      },
+      "readers": {
+        "readcon": {
+          "matches": 54,
+          "disagreements": 11,
+          "not_followed": 16,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 0,
+          "field_mismatches": 0
+        },
+        "readcon_iter": {
+          "matches": 53,
+          "disagreements": 11,
+          "not_followed": 17,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 0,
+          "field_mismatches": 0
+        },
+        "indep": {
+          "matches": 81,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 81
+        }
+      },
+      "readcon_iter_same_as_read_con": 80,
+      "readcon_indep_same_decision": 54,
+      "accepted_by_both": 0,
+      "field_identical": 0,
+      "readcon_crashes": 0,
+      "rewrite_files": 0,
+      "rewrite_kept": 0,
+      "expected_reject": 81
+    },
+    "conformance": {
+      "files": 22,
+      "basis": {
+        "explicit": 22,
+        "class-open": 0,
+        "optional": 0,
+        "open": 0
+      },
+      "readers": {
+        "readcon": {
+          "matches": 22,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 14,
+          "field_mismatches": 14
+        },
+        "readcon_iter": {
+          "matches": 22,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 14,
+          "field_mismatches": 14
+        },
+        "indep": {
+          "matches": 22,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 0
+        }
+      },
+      "readcon_iter_same_as_read_con": 22,
+      "readcon_indep_same_decision": 22,
+      "accepted_by_both": 14,
+      "field_identical": 0,
+      "readcon_crashes": 0,
+      "rewrite_files": 0,
+      "rewrite_kept": 0,
+      "expected_reject": 8
+    },
+    "corpus31": {
+      "files": 143,
+      "basis": {
+        "explicit": 95,
+        "class-open": 21,
+        "optional": 4,
+        "open": 23
+      },
+      "readers": {
+        "readcon": {
+          "matches": 103,
+          "disagreements": 23,
+          "not_followed": 17,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 56,
+          "field_mismatches": 55
+        },
+        "readcon_iter": {
+          "matches": 102,
+          "disagreements": 23,
+          "not_followed": 18,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 56,
+          "field_mismatches": 55
+        },
+        "indep": {
+          "matches": 143,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 81
+        }
+      },
+      "readcon_iter_same_as_read_con": 142,
+      "readcon_indep_same_decision": 110,
+      "accepted_by_both": 56,
+      "field_identical": 1,
+      "readcon_crashes": 0,
+      "rewrite_files": 6,
+      "rewrite_kept": 2,
+      "expected_reject": 81
+    },
+    "all": {
+      "files": 165,
+      "basis": {
+        "explicit": 117,
+        "class-open": 21,
+        "optional": 4,
+        "open": 23
+      },
+      "readers": {
+        "readcon": {
+          "matches": 125,
+          "disagreements": 23,
+          "not_followed": 17,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 70,
+          "field_mismatches": 69
+        },
+        "readcon_iter": {
+          "matches": 124,
+          "disagreements": 23,
+          "not_followed": 18,
+          "crashes": 0,
+          "lines_compared": 0,
+          "accepted_with_indep": 70,
+          "field_mismatches": 69
+        },
+        "indep": {
+          "matches": 165,
+          "disagreements": 0,
+          "not_followed": 0,
+          "crashes": 0,
+          "lines_compared": 81
+        }
+      },
+      "readcon_iter_same_as_read_con": 164,
+      "readcon_indep_same_decision": 132,
+      "accepted_by_both": 70,
+      "field_identical": 1,
+      "readcon_crashes": 0,
+      "rewrite_files": 6,
+      "rewrite_kept": 2,
+      "expected_reject": 89
+    }
+  },
+  "verdict_sets": {
+    "normative": {
+      "basis": "explicit",
+      "files": 117,
+      "readcon_matches": 94,
+      "separate_reader_matches": 117
+    },
+    "class_open": {
+      "basis": "class-open",
+      "files": 21,
+      "readcon_matches": 7,
+      "separate_reader_matches": 21
+    },
+    "discretionary": {
+      "basis": "optional",
+      "files": 4,
+      "readcon_matches": 4,
+      "separate_reader_matches": 4
+    },
+    "gap": {
+      "basis": "open",
+      "files": 23,
+      "readcon_matches": 20,
+      "separate_reader_matches": 23
+    }
+  },
+  "readcon_no_zstd": {
+    "readcon": [],
+    "readcon_iter": []
+  },
+  "corpus31_features": {
+    "files": 143,
+    "con_spec_minor": 115,
+    "velocity_block": 41,
+    "gzip": 3,
+    "zstd": 2
+  },
+  "indep_reader_lines": 1246,
+  "provenance": {
+    "build": {
+      "readcon_version": "0.24.0",
+      "readcon_module": "paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
+      "readcon_module_sha256": "e0f183590cfc47bf7998958572b435408c2d425aee329d5034b82fbd90b3ef60",
+      "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+      "newer_sources": [],
+      "library_digest": "257edd02c1e814e25e2485c2d410cf28dcd7bdc9220f53f14a7ea31441f25b2b",
+      "source_files": 53,
+      "source_tag": null,
+      "source_commit": "10a836eec35dfab2ed49a1e7cf2b2f0b385ab976"
+    },
+    "host": {
+      "kernel": "6.12.113+",
+      "uname_m": "x86_64",
+      "nproc": 8,
+      "family": "6",
+      "model": "207",
+      "cpu_model": "Intel Xeon Processor",
+      "mhz": 2400.0,
+      "mem_kb": 49342816
+    },
+    "peers": {
+      "ase": "3.29.0",
+      "chemfiles": "0.10.4",
+      "MDAnalysis": "2.11.0",
+      "h5py": "3.16.0",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "ovito": "3.17.2",
+      "openbabel": "3.2.1",
+      "python": "3.12.16"
+    }
+  },
+  "differing_stored": 41,
+  "field_mismatch_stored": 69,
+  "regenerate": "paper/cpc/scripts/corpus_crosscheck.py"
+}
