@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -41,3 +42,23 @@ def test_legal_counts_ignore_the_reader_totals() -> None:
     assert r"\newcommand{\cthreeoneAccepted}{1}" in text
     assert r"\newcommand{\cthreeoneRejected}{1}" in text
     assert "data/referee/r1t/corpus31-results.json" in text
+
+
+def test_a_short_files_list_uses_the_manifest_totals() -> None:
+    module = _load()
+    record = json.loads(
+        (SCRIPT.parents[1] / "data" / "referee" / "r1t" / "corpus31-results.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    summary = record["summary"]
+    assert len(record["files"]) != summary["files"]
+    text = module.macros(record)
+    assert (
+        f"\\newcommand{{\\cthreeoneAccepted}}{{{summary['manifest_accept']}}}" in text
+    )
+    assert (
+        f"\\newcommand{{\\cthreeoneRejected}}{{{summary['manifest_reject']}}}" in text
+    )
+    assert summary["manifest_accept"] == 63
+    assert summary["manifest_reject"] == 80

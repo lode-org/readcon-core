@@ -139,16 +139,34 @@ def results(binary: Path, threads: tuple[str, ...]) -> dict:
     }
 
 
+def manifest_counts(record: dict) -> tuple[int, int]:
+    """Legal and illegal counts are the manifest verdicts.
+
+    Summary accepted and rejected count what the reader did. The stored
+    ``files`` list omits explicit rows when ``explicit_files_stored`` is
+    false, so a short list is not the manifest total. That total is
+    ``summary.manifest_accept`` and ``summary.manifest_reject``.
+    """
+    summary = record["summary"]
+    files = record["files"]
+    if (
+        len(files) != summary["files"]
+        and "manifest_accept" in summary
+        and "manifest_reject" in summary
+    ):
+        return summary["manifest_accept"], summary["manifest_reject"]
+    legal = sum(f["expected"]["outcome"] == "accept" for f in files)
+    return legal, len(files) - legal
+
+
 def macros(record: dict) -> str:
     s = record["summary"]
-    # Legal and illegal are what the manifest says. Summary accepted and
-    # rejected count what the reader did.
-    legal = sum(f["expected"]["outcome"] == "accept" for f in record["files"])
+    legal, illegal = manifest_counts(record)
     values = {
         "cthreeoneFiles": s["files"],
         "cthreeoneMatch": s["match"],
         "cthreeoneAccepted": legal,
-        "cthreeoneRejected": len(record["files"]) - legal,
+        "cthreeoneRejected": illegal,
         "cthreeoneExplicit": s["by_basis"].get("explicit", {}).get("files", 0),
         "cthreeoneNotExplicit": s["files"]
         - s["by_basis"].get("explicit", {}).get("files", 0),
