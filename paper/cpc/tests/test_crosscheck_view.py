@@ -107,6 +107,31 @@ def test_major4_uses_the_declared_time_unit(tmp_path: Path) -> None:
     assert _module().applied_unit(frame) == "fs"
 
 
+MAJOR3_DECLARED = MAJOR3_NO_TIME.replace(
+    '"units":{"length":"angstrom","energy":"eV","mass":"amu"}',
+    '"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"}',
+    1,
+)
+MAJOR4_PS = MAJOR4_TIME.replace('"time":"fs"', '"time":"ps"', 1)
+
+
+def test_major3_ignores_a_declared_time_unit(tmp_path: Path) -> None:
+    """A major below 4 keeps the natural unit when units.time is set.
+
+    Returning the declared unit, or the declared unit when it is present and
+    the natural unit otherwise, fails this frame: its metadata time is fs.
+    """
+    frame = _frame(tmp_path, MAJOR3_DECLARED, "major3-fs.convel")
+    assert (frame.metadata or {}).get("units", {}).get("time") == "fs"
+    assert _module().applied_unit(frame) == NATURAL
+
+
+def test_major4_returns_the_declared_unit_not_fs(tmp_path: Path) -> None:
+    """Major 4 returns units.time, which is not always fs."""
+    frame = _frame(tmp_path, MAJOR4_PS, "major4-ps.con")
+    assert _module().applied_unit(frame) == "ps"
+
+
 def test_pbc_absent_partial_and_full_come_from_pbc_effective(tmp_path: Path) -> None:
     module = _module()
     cases = (

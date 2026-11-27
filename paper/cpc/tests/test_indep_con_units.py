@@ -78,6 +78,59 @@ def test_needs_time_starts_at_major_4() -> None:
         indep_reader.KNOWN_MAJORS = known
 
 
+def _admit_major4(indep_reader):
+    known = indep_reader.KNOWN_MAJORS
+    indep_reader.KNOWN_MAJORS = (2, 3, 4)
+    return known
+
+
+def test_major4_without_velocities_needs_no_time() -> None:
+    """The needs_time rejection applies only when a velocities section is named.
+
+    Dropping that conjunct rejects a major-4 frame that stores no velocities.
+    """
+    indep_reader = _reader()
+    known = _admit_major4(indep_reader)
+    text = NO_TIME.replace(
+        '"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu"},"sections":["velocities"]',
+        '"con_spec_version":4,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV","mass":"amu"},"sections":[]',
+        1,
+    )
+    head, _, _ = text.partition("\n\nPt\nVelocities")
+    try:
+        frame = indep_reader.read_text(head + "\n")[0]
+    finally:
+        indep_reader.KNOWN_MAJORS = known
+    assert frame["major"] == 4
+    assert frame["velocities"] is None
+
+
+def test_legacy_major4_velocities_need_a_time_unit() -> None:
+    """A legacy velocity block on major 4 without units.time is invalid.
+
+    Replacing ``if needs_time`` with false on the legacy path accepts it.
+    """
+    indep_reader = _reader()
+    known = _admit_major4(indep_reader)
+    text = FRAME.replace(
+        '{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"},"sections":["velocities"]}',
+        '{"con_spec_version":4,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV","mass":"amu"}}',
+        1,
+    )
+    try:
+        try:
+            indep_reader.read_text(text)
+        except indep_reader.Rejection as exc:
+            assert exc.cls == "InvalidUnits"
+            assert exc.clause == "CON-units.11"
+        else:
+            raise AssertionError(
+                "legacy major-4 velocities without units.time were accepted"
+            )
+    finally:
+        indep_reader.KNOWN_MAJORS = known
+
+
 def test_a_coordinate_label_is_checked_when_validate_is_off() -> None:
     indep_reader = _reader()
     bad = FRAME.replace("Coordinates of Component 1", "Coordinates of CompXnent 1", 1)
