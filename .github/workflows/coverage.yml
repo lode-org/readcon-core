@@ -138,7 +138,7 @@ jobs:
       - name: Generate python binding coverage (src/python.rs LCOV)
         id: coverage
         env:
-          READCON_PY_FEATURES: python,chemfiles-from-sources
+          READCON_PY_FEATURES: python,chemfiles-from-sources,race-hooks
           READCON_PY_VENV: ${{ github.workspace }}/.venv-coverage-python
           RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
         run: |
