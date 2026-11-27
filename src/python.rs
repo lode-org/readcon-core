@@ -11466,20 +11466,54 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
         }
     }
 
-    /// `CARGO_TARGET_DIR`, relative to the invoking cwd. An unset value
-    /// stays `<manifest>/target`. Absolute values are unchanged.
-    fn resolve_cargo_target_base(
-        value: Option<&std::ffi::OsStr>,
-        cwd: &Path,
-        manifest: &Path,
-    ) -> PathBuf {
+    /// Directory that contains `<profile>` for this test binary.
+    ///
+    /// `target/<profile>/deps/<bin>` yields `target`.
+    /// `target/<triple>/<profile>/deps/<bin>` yields `target/<triple>`.
+    /// `target/<profile>/build/<pkg>/<hash>/out/<bin>` yields `target`.
+    fn artifact_root_from_exe(exe: &Path) -> Option<PathBuf> {
+        let mut up = exe.ancestors();
+        let _bin = up.next()?;
+        let parent = up.next()?;
+        if parent.file_name().is_some_and(|name| name == "deps") {
+            let _profile = up.next()?;
+            return up.next().map(Path::to_path_buf);
+        }
+        if parent.file_name().is_some_and(|name| name == "out") {
+            let _hash = up.next()?;
+            let _pkg = up.next()?;
+            let build = up.next()?;
+            if build.file_name().is_some_and(|name| name == "build") {
+                let _profile = up.next()?;
+                return up.next().map(Path::to_path_buf);
+            }
+        }
+        None
+    }
+
+    fn artifact_root() -> PathBuf {
+        if let Some(tmp) = option_env!("CARGO_TARGET_TMPDIR") {
+            return Path::new(tmp)
+                .parent()
+                .expect("parent of the cargo target directory")
+                .to_path_buf();
+        }
+        let exe = std::env::current_exe().unwrap_or_else(|err| panic!("current exe: {err}"));
+        artifact_root_from_exe(&exe)
+            .unwrap_or_else(|| panic!("artifact root from {}", exe.display()))
+    }
+
+    /// Absolute `CARGO_TARGET_DIR` is kept. A relative value was already
+    /// resolved by cargo, so use the artifact root of this test binary.
+    /// An unset value stays `<manifest>/target`.
+    fn resolve_cargo_target_base(value: Option<&std::ffi::OsStr>, manifest: &Path) -> PathBuf {
         match value {
             Some(value) => {
                 let path = Path::new(value);
                 if path.is_absolute() {
                     path.to_path_buf()
                 } else {
-                    cwd.join(path)
+                    artifact_root()
                 }
             }
             None => manifest.join("target"),
@@ -11487,8 +11521,7 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
     }
 
     fn cargo_target_base(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
-        let cwd = std::env::current_dir().unwrap_or_else(|err| panic!("current dir: {err}"));
-        resolve_cargo_target_base(cargo_target_dir, &cwd, root)
+        resolve_cargo_target_base(cargo_target_dir, root)
     }
 
     /// The extension lives under `python-extension-link`, not the shared
@@ -11743,8 +11776,13 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
         assert_ne!(chosen, stale);
         assert!(stale.is_file(), "stale shared cdylib should stay put");
         let relative = std::ffi::OsStr::new("rel-target");
-        let cwd = std::env::current_dir().expect("cwd");
+        let artifact = artifact_root();
         assert_eq!(
+            extension_cdylib_lib(&root, Some(relative)),
+            artifact.join("python-extension-link/debug/libreadcon_core.so")
+        );
+        let cwd = std::env::current_dir().expect("cwd");
+        assert_ne!(
             extension_cdylib_lib(&root, Some(relative)),
             cwd.join("rel-target/python-extension-link/debug/libreadcon_core.so")
         );
@@ -11755,26 +11793,76 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
     }
 
     #[test]
-    fn relative_cargo_target_dir_resolves_against_the_cwd() {
-        let manifest = Path::new("/opt/readcon-manifest");
-        let cwd = Path::new("/opt/invoke-cwd");
-        let value = std::ffi::OsStr::new("rel-target3");
+    fn relative_target_dir_follows_the_test_binary() {
+        let exe = std::env::current_exe().expect("current exe");
+        let deps = exe.parent().expect("deps dir");
         assert_eq!(
-            resolve_cargo_target_base(Some(value), cwd, manifest),
-            cwd.join(value)
+            deps.file_name().and_then(|name| name.to_str()),
+            Some("deps"),
+            "unit test binary is not under deps: {}",
+            exe.display()
+        );
+        let artifact = deps
+            .parent()
+            .and_then(Path::parent)
+            .expect("artifact root")
+            .to_path_buf();
+        let root = Path::new("/opt/readcon-manifest");
+        let relative = std::ffi::OsStr::new("rel-target");
+        let cwd = std::env::current_dir().expect("cwd");
+        let got = extension_cdylib_lib(root, Some(relative));
+        eprintln!("artifact_root={}", artifact.display());
+        eprintln!("extension_cdylib={}", got.display());
+        assert_eq!(
+            got,
+            artifact.join("python-extension-link/debug/libreadcon_core.so"),
+            "relative target dir followed the cwd {}",
+            cwd.display()
         );
         assert_ne!(
-            resolve_cargo_target_base(Some(value), cwd, manifest),
-            manifest.join(value)
+            got,
+            cwd.join("rel-target/python-extension-link/debug/libreadcon_core.so")
         );
+    }
+
+    #[test]
+    fn artifact_root_from_exe_handles_a_target_triple() {
+        let host = Path::new("/opt/work/target/debug/deps/readcon_core-test");
+        assert_eq!(
+            artifact_root_from_exe(host).as_deref(),
+            Some(Path::new("/opt/work/target"))
+        );
+        let triple =
+            Path::new("/opt/work/target/x86_64-unknown-linux-gnu/release/deps/readcon_core-test");
+        assert_eq!(
+            artifact_root_from_exe(triple).as_deref(),
+            Some(Path::new("/opt/work/target/x86_64-unknown-linux-gnu"))
+        );
+        let unit = Path::new(
+            "/opt/work/target/aarch64-apple-darwin/debug/build/readcon-core/0123456789abcdef/out/readcon_core-test",
+        );
+        assert_eq!(
+            artifact_root_from_exe(unit).as_deref(),
+            Some(Path::new("/opt/work/target/aarch64-apple-darwin"))
+        );
+        let manifest = Path::new("/opt/readcon-manifest");
         let absolute = Path::new("/opt/abs-target");
         assert_eq!(
-            resolve_cargo_target_base(Some(absolute.as_os_str()), cwd, manifest),
+            resolve_cargo_target_base(Some(absolute.as_os_str()), manifest),
             absolute
         );
         assert_eq!(
-            resolve_cargo_target_base(None, cwd, manifest),
+            resolve_cargo_target_base(None, manifest),
             manifest.join("target")
+        );
+        let relative = std::ffi::OsStr::new("rel-target3");
+        assert_eq!(
+            resolve_cargo_target_base(Some(relative), manifest),
+            artifact_root()
+        );
+        assert_ne!(
+            resolve_cargo_target_base(Some(relative), manifest),
+            manifest.join(relative)
         );
     }
 }
