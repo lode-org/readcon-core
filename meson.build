@@ -42,14 +42,38 @@ if _rv_bits.length() < 2 or not _rv_bits[1].version_compare('>= 1.88.0')
 endif
 
 _rust_sys_deps = []
+_needs_cxx = false
+foreach _part : get_option('cargo_features').split(',')
+    _name = _part.strip()
+    if _name == 'zstd' or _name == 'chemfiles' or _name.startswith('chemfiles')
+        _needs_cxx = true
+    endif
+endforeach
+_cxx_libdir = ''
+if _needs_cxx and host_machine.system() == 'linux'
+    _stdcxx_probe = run_command('g++', '-print-file-name=libstdc++.so', check: false)
+    if _stdcxx_probe.returncode() == 0
+        _stdcxx_file = _stdcxx_probe.stdout().strip()
+        if _stdcxx_file != '' and _stdcxx_file != 'libstdc++.so'
+            _cxx_libdir = fs.parent(_stdcxx_file)
+        endif
+    endif
+endif
 if host_machine.system() == 'linux'
     _rust_sys_deps += [
         dependency('threads'),
         cc.find_library('dl', required: true),
         cc.find_library('m', required: true),
     ]
+    if _needs_cxx
+        _stdcxx_dirs = _cxx_libdir != '' ? [_cxx_libdir] : []
+        _rust_sys_deps += cc.find_library('stdc++', dirs: _stdcxx_dirs, required: true)
+    endif
 elif host_machine.system() == 'darwin'
     _rust_sys_deps += [dependency('threads')]
+    if _needs_cxx
+        _rust_sys_deps += cc.find_library('c++', required: true)
+    endif
 elif host_machine.system() == 'windows'
     _rust_sys_deps += [
         cc.find_library('ws2_32', required: true),

@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[cfg(feature = "metatensor")]
 extern crate metatensor_sys;
@@ -103,6 +104,70 @@ fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
+fn cxx_runtime() -> Option<(&'static str, Option<PathBuf>)> {
+    // zstd-sys is C. A chemfiles build is C++. The archive still has to name
+    // the C++ runtime or the link drops it. Linux uses libstdc++; macOS and
+    // iOS use libc++. MSVC pulls its own. clang does not search GCC's
+    // libstdc++ directory, so the link also needs that path.
+    let needs = env::var_os("CARGO_FEATURE_ZSTD").is_some()
+        || env::var_os("CARGO_FEATURE_CHEMFILES").is_some();
+    if !needs {
+        return None;
+    }
+    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let env_name = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    match (os.as_str(), env_name.as_str()) {
+        // The host g++ library directory is wrong for a cross link.
+        ("linux" | "android", _) => Some((
+            "stdc++",
+            if compiling_for_host() {
+                linux_libstdcxx_dir()
+            } else {
+                None
+            },
+        )),
+        ("macos" | "ios", _) => Some(("c++", None)),
+        ("windows", "gnu") => Some(("stdc++", None)),
+        _ => None,
+    }
+}
+
+fn compiling_for_host() -> bool {
+    match (env::var("TARGET"), env::var("HOST")) {
+        (Ok(target), Ok(host)) => target == host,
+        _ => true,
+    }
+}
+
+fn linux_libstdcxx_dir() -> Option<PathBuf> {
+    let output = Command::new("g++")
+        .args(["-print-file-name=libstdc++.so"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let path = String::from_utf8(output.stdout).ok()?;
+    let path = path.trim();
+    if path.is_empty() || path == "libstdc++.so" {
+        return None;
+    }
+    Path::new(path).parent().map(Path::to_path_buf)
+}
+
+fn link_cxx_runtime() {
+    let Some((lib, search)) = cxx_runtime() else {
+        return;
+    };
+    println!("cargo:rerun-if-changed=build.rs");
+    if let Some(dir) = search
+        && dir.is_dir()
+    {
+        println!("cargo:rustc-link-search=native={}", dir.display());
+    }
+    println!("cargo:rustc-link-lib=dylib={lib}");
+}
+
 fn emit_build_identity() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let commit = git_rev("HEAD");
@@ -117,6 +182,7 @@ fn emit_build_identity() {
 
 fn main() {
     check_package_version_file();
+    link_cxx_runtime();
     emit_build_identity();
 
     // Cap'n Proto schema compilation (behind rpc feature)
@@ -163,6 +229,12 @@ fn compile_chemfiles_atom_view() {
     println!("cargo:rerun-if-changed=src/chemfiles_atom_view.cpp");
     println!("cargo:rerun-if-changed={}", headers.display());
     let mut build = cc::Build::new();
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        // cc passes --target to clang. That driver does not search GCC's
+        // libstdc++ headers, so the scan fails on `#include <string>`.
+        // g++ searches its own headers and its libstdc++.
+        build.compiler("g++");
+    }
     build
         .cpp(true)
         .file("src/chemfiles_atom_view.cpp")

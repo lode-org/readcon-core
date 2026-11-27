@@ -71,3 +71,22 @@ jobs:
       - name: Parallel library tests
         if: matrix.features == 'capi,parallel'
         run: cargo test --lib --features parallel
+
+  # /usr/bin/c++ on a stock Ubuntu runner is g++, which finds libstdc++.
+  # Point c++ at clang and build chemfiles with a clean environment so
+  # the toolchain file is what makes project() link.
+  clang-cxx-chemfiles:
+    name: chemfiles link (clang as c++)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Point c++ at clang and keep g++ for libstdc++
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang g++
+          sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
+          sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 100
+          c++ --version
+      - name: Plain cargo chemfiles build
+        run: env -u CXX -u CC -u LIBRARY_PATH -u RUSTFLAGS -u CMAKE_TOOLCHAIN_FILE cargo build --locked --features chemfiles

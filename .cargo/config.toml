@@ -2,5 +2,10 @@
 # cmake_minimum_required(< 3.5). Modern CMake rejects that unless
 # CMAKE_POLICY_VERSION_MINIMUM is set; export it for all cargo builds
 # that pull the optional `chemfiles` feature.
+#
+# scripts/libstdcxx.cmake runs before project(), so clang-as-c++ can
+# link -lstdc++ during chemfiles-sys's compiler test. An explicit
+# CMAKE_TOOLCHAIN_FILE in the environment is left alone.
 [env]
 CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+CMAKE_TOOLCHAIN_FILE = { value = "scripts/libstdcxx.cmake", relative = true }
