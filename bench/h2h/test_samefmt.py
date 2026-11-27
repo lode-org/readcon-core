@@ -133,6 +133,9 @@ def test_convel_dump_stays_a_mismatch_and_is_known_lossy(monkeypatch):
     assert row["correct"] is False
     assert row["fields"]["velocities"] != "ok"
     assert "known-lossy" in row["reason"]
+    assert "known-lossy" in row["notes"].lower()
+    assert "false" in row["notes"].lower()
+    assert "getvelocities" in row["notes"].lower()
 
 
 def test_stock_eon_patch_is_not_part_of_the_harness():
@@ -252,10 +255,20 @@ def test_setup_passes_variant_and_does_not_source_eon(monkeypatch):
     assert calls == []
 
 
-def test_eon_cpp_sample_uses_the_python_clock(tmp_path, monkeypatch):
+def test_eon_cpp_sample_excludes_the_replay(tmp_path, monkeypatch):
+    binary = tmp_path / "eon_samefmt"
+    binary.write_text(
+        "#!/bin/sh\n"
+        "printf 'ns 2500000\\n'\n"
+        "sleep 0.2\n"
+        "printf 'x' > \"$3\"\n",
+        encoding="utf-8",
+    )
+    binary.chmod(0o755)
     monkeypatch.setattr(samefmt, "REPEATS", 1)
     monkeypatch.setattr(samefmt, "prepare", lambda: None)
-    monkeypatch.setattr(samefmt, "_ensure_eon_binary", lambda: tmp_path / "eon_samefmt")
+    monkeypatch.setattr(samefmt, "WORK", tmp_path)
+    monkeypatch.setattr(samefmt, "_ensure_eon_binary", lambda: binary)
     monkeypatch.setattr(
         samefmt,
         "_check",
@@ -270,19 +283,19 @@ def test_eon_cpp_sample_uses_the_python_clock(tmp_path, monkeypatch):
         },
     )
     monkeypatch.setattr(samefmt, "RESULTS", tmp_path)
-    ticks = iter([10.0, 10.25])
-    monkeypatch.setattr(samefmt.time, "perf_counter", lambda: next(ticks))
-
-    def inner_wall(*_args, **_kwargs):
-        raise AssertionError("inner wall")
-
-    monkeypatch.setattr(samefmt, "_eon_cpp_timed", inner_wall, raising=False)
-    monkeypatch.setattr(samefmt, "once", lambda _arm: "called")
     row = samefmt.run("eon-cpp-con-read")
-    assert row["median_s"] == pytest.approx(0.25)
+    assert row["median_s"] == pytest.approx(0.0025)
+    assert row["median_s"] < 0.05
     assert row["arm"] == "eon-cpp-con-read"
-    assert row["variant"] == "single"
     assert (tmp_path / "eon-cpp-con-read.stdout").is_file()
+
+
+def test_eon_cpp_prints_ns_before_the_replay():
+    text = (Path(__file__).resolve().parent / "eon_samefmt.cpp").read_text(encoding="utf-8")
+    printed = text.find('<< "ns "')
+    replay = text.find("con2matter replay")
+    assert printed >= 0
+    assert replay > printed
 
 
 def test_multiframe_ase_con_reads_fixatoms():
@@ -303,6 +316,108 @@ def test_multiframe_ase_con_reads_fixatoms():
     assert list(many["fixed"][0]) == [0, 7]
     assert list(many["fixed"][1]) == [0, 7]
     assert many["velocities"] is None
+
+
+def _extxyz_payloads(text: str) -> list[str]:
+    lines = text.splitlines()
+    payloads = []
+    index = 0
+    while index < len(lines):
+        count = int(lines[index].split()[0])
+        payloads.append("\n".join(lines[index + 2 : index + 2 + count]))
+        index += 2 + count
+    return payloads
+
+
+def _con_frames(text: str) -> list[str]:
+    return [part.strip() for part in text.split("samefmt\n") if part.strip()]
+
+
+def _assert_unique(blocks: list[str]) -> None:
+    assert len(blocks) >= 2
+    for index, left in enumerate(blocks):
+        for right in blocks[index + 1 :]:
+            assert left != right
+
+
+def test_written_frames_are_distinct(tmp_path, monkeypatch):
+    monkeypatch.setattr(samefmt, "N_ATOMS", 4)
+    monkeypatch.setattr(samefmt, "MF_ATOMS", 4)
+    monkeypatch.setattr(samefmt, "MF_FRAMES", 4)
+    monkeypatch.setattr(samefmt, "CC_ATOMS", 3)
+    monkeypatch.setattr(samefmt, "CC_FRAMES", 4)
+    monkeypatch.setattr(samefmt, "WORK", tmp_path / "work")
+    samefmt._GEOM = None
+    samefmt._MF = None
+    samefmt._ALLOY = None
+    samefmt._CC = None
+    samefmt.prepare()
+    for fmt in ("con", "convel"):
+        _assert_unique(_con_frames(samefmt._paths(fmt, True).read_text(encoding="utf-8")))
+    for variant in ("mf", "cc"):
+        _assert_unique(
+            _extxyz_payloads(samefmt._paths("extxyz", variant=variant).read_text(encoding="utf-8"))
+        )
+    for builder, count in ((samefmt.mf_geometry, 4), (samefmt.cc_geometry, 4)):
+        geom = builder()
+        for name in ("positions", "velocities", "cell"):
+            _assert_unique([geom[name][frame].tobytes() for frame in range(count)])
+        assert geom["frame_seed"] == samefmt.FRAME_SEED
+
+
+def test_row_records_the_frame_seed():
+    row = {
+        "n": 1,
+        "median_s": 0.0,
+        "iqr_s": 0.0,
+        "q25_s": 0.0,
+        "q75_s": 0.0,
+        "correct": True,
+        "reordered": False,
+        "id_map_ok": True,
+        "fields": {},
+        "reason": "ok",
+    }
+    samefmt._annotate_row("mf-readcon-con-read", row)
+    assert row["frame_seed"] == samefmt.FRAME_SEED
+
+
+def test_asv_track_reads_every_format_check_supports(monkeypatch, tmp_path):
+    monkeypatch.setattr(samefmt, "N_ATOMS", 4)
+    monkeypatch.setattr(samefmt, "MF_ATOMS", 4)
+    monkeypatch.setattr(samefmt, "MF_FRAMES", 2)
+    monkeypatch.setattr(samefmt, "CC_ATOMS", 3)
+    monkeypatch.setattr(samefmt, "CC_FRAMES", 2)
+    monkeypatch.setattr(samefmt, "WORK", tmp_path / "work")
+    samefmt._GEOM = None
+    samefmt._MF = None
+    samefmt._ALLOY = None
+    samefmt._CC = None
+    samefmt.prepare()
+
+    def written(arm):
+        _tool, fmt, _op, multi, variant = samefmt.split_arm(arm)
+        return samefmt._paths(fmt, multi, variant)
+
+    monkeypatch.setattr(samefmt, "once", written)
+    module = _asv()
+    formats = set()
+    for arm in samefmt.ARMS:
+        _tool, fmt, op, _multi, _variant = samefmt.split_arm(arm)
+        if op != "write" or fmt in formats:
+            continue
+        formats.add(fmt)
+        bench = getattr(module, "Same_" + arm.replace("-", "_"))()
+        bench.arm = arm
+        assert bench.track_n_atoms() == 4.0
+    assert formats == {"con", "convel", "extxyz", "pdb", "xyz", "cextxyz"}
+
+
+def test_readme_states_convel_is_known_lossy():
+    text = (ROOT / "bench" / "README.md").read_text(encoding="utf-8").lower()
+    assert "known-lossy" in text
+    assert "getvelocities" in text
+    assert "correct" in text and "false" in text
 
 
 def test_a_failed_arm_is_stored(tmp_path, monkeypatch):
