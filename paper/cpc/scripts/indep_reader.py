@@ -1043,7 +1043,7 @@ def read_frame(lines: Lines, start: int, force_validate: bool) -> tuple[dict, in
                 clause,
                 f"{name[:40]!r} at minor {shown(minor)}",
             )
-    needs_time = refined >= 1 and "time" not in units
+    needs_time = major >= 4 and "time" not in units
     if needs_time and "velocities" in (sections or ()):
         raise Rejection(
             "InvalidUnits",
@@ -1085,7 +1085,7 @@ def read_frame(lines: Lines, start: int, force_validate: bool) -> tuple[dict, in
         "length_unit": units.get("length", "angstrom"),
         "mass_unit": units.get("mass", "amu"),
         "declared_time": declared_time,
-        "time_unit": declared_time if refined >= 1 else NATURAL_TIME,
+        "time_unit": NATURAL_TIME if major < 4 else declared_time,
         "time_override": None,
         "cell_lengths": lengths,
         "cell_angles": angles,
@@ -1158,7 +1158,7 @@ def read_frame(lines: Lines, start: int, force_validate: bool) -> tuple[dict, in
                 f"component {t + 1} label missing",
             )
         label = lines.text(i + 1)
-        if validate and not label_ok(label, "Coordinates", t + 1):
+        if not label_ok(label, "Coordinates", t + 1):
             w = words(label)
             clause = (
                 "CON-count.8"
@@ -1205,7 +1205,7 @@ def read_frame(lines: Lines, start: int, force_validate: bool) -> tuple[dict, in
         frame["legacy_velocities"] = True
     if (
         frame["velocities"] is not None
-        and refined == 0
+        and major < 4
         and declared_time is not None
         and canonical_unit(declared_time) != NATURAL_TIME
     ):
