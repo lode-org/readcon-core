@@ -333,11 +333,31 @@ fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
 /// with `PYO3_BUILD_EXTENSION_MODULE` set, so libpython stays unresolved
 /// and Julia refuses to load that file. Side target directories keep
 /// these builds off the lock `cargo test` already holds.
+/// Same base as `extension_cdylib`: `CARGO_TARGET_DIR` when it is set,
+/// otherwise `<manifest>/target`. A relative value is joined to `root`.
+fn target_base_from(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+    cargo_target_dir
+        .map(PathBuf::from)
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                root.join(path)
+            }
+        })
+        .unwrap_or_else(|| root.join("target"))
+}
+
+fn debug_cdylib_candidate(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+    target_base_from(root, cargo_target_dir).join("debug/libreadcon_core.so")
+}
+
 fn binding_libraries() -> (PathBuf, PathBuf) {
     static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _lock = BUILD.lock().unwrap_or_else(|err| err.into_inner());
     let root = repo_root();
-    let debug = root.join("target/debug/libreadcon_core.so");
+    let cargo_target_dir = std::env::var_os("CARGO_TARGET_DIR");
+    let debug = debug_cdylib_candidate(&root, cargo_target_dir.as_deref());
     let plain_dir = root.join("target/binding-plain");
     let py_dir = root.join("target/binding-py");
     let plain_side = plain_dir.join("debug/libreadcon_core.so");
@@ -411,6 +431,25 @@ fn binding_libraries_without_julia() -> Option<(PathBuf, PathBuf)> {
         }
     }
     Some(binding_libraries())
+}
+
+#[test]
+fn binding_candidate_follows_cargo_target_dir() {
+    let root = repo_root();
+    let absolute = root.join("target/referee-r9-abs");
+    assert_eq!(
+        debug_cdylib_candidate(&root, Some(absolute.as_os_str())),
+        absolute.join("debug/libreadcon_core.so")
+    );
+    let relative = std::ffi::OsStr::new("target/referee-r9-rel");
+    assert_eq!(
+        debug_cdylib_candidate(&root, Some(relative)),
+        root.join("target/referee-r9-rel/debug/libreadcon_core.so")
+    );
+    assert_eq!(
+        debug_cdylib_candidate(&root, None),
+        root.join("target/debug/libreadcon_core.so")
+    );
 }
 
 #[test]
