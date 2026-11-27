@@ -2041,7 +2041,12 @@ struct RawSlabs {
     spreads: Option<*mut f64>,
 }
 
+// SAFETY: workers share these pointers and each writes one disjoint
+// frame range. The slabs stay allocated until those workers join.
 unsafe impl Send for RawSlabs {}
+
+// SAFETY: same partition as `Send`. A worker does not read a frame
+// another worker is writing.
 unsafe impl Sync for RawSlabs {}
 
 fn raw_slabs(slabs: &mut Slabs<'_>) -> RawSlabs {
@@ -2126,7 +2131,13 @@ struct TilePtrs {
     spins: Option<*mut f64>,
 }
 
+// SAFETY: `paint_tile` copies these pointers and writes only its
+// `start..end` frames. That range does not overlap another worker,
+// and the slabs outlive the join.
 unsafe impl Send for TilePtrs {}
+
+// SAFETY: same partition as `Send`. Workers do not read a frame
+// another worker is writing.
 unsafe impl Sync for TilePtrs {}
 
 fn paint_tile(
