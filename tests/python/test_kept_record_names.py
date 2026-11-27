@@ -29,6 +29,7 @@ def test_kept_records_have_printed_names() -> None:
     expected = {
         "data/referee/r1h/corpus_crosscheck.json": "Corpus cross-check, r1h",
         "data/referee/r1t/corpus31-results.json": "CON 3.1 corpus results, r1t",
+        "data/referee/r19/corpus31-results.json": "CON 3.1 corpus results, r19",
         "data/referee/r1t/mutant_differential.json": "Mutant differential, r1t",
         "data/referee/r1j/drift/drift_con.json": "OVITO drift, r1j",
         "data/h2h/format_h2h_record.json": "Cross-format campaign, measured commit",

@@ -126,6 +126,7 @@ RECORD_NAMES = (
     (r"data/corpus31-results\.json", "CON 3.1 corpus results"),
     (r"data/referee/r1h/corpus_crosscheck\.json", "Corpus cross-check, r1h"),
     (r"data/referee/r1t/corpus31-results\.json", "CON 3.1 corpus results, r1t"),
+    (r"data/referee/r19/corpus31-results\.json", "CON 3.1 corpus results, r19"),
     (
         r"data/referee/r1t/mutant_differential\.json",
         "Mutant differential, r1t",

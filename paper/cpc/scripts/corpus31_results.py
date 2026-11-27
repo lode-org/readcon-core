@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
-"""Read every corpus31 file with the Rust reader and compare it with the manifest.
+"""Read every corpus31 file with readcon and compare it with the manifest.
 
-examples/corpus31_report reads each file of data/corpus31/manifest.toml with
-read_all_frames_with_threads, once per thread setting. A file matches when
-every run gives the manifest's outcome and, for an accepted file, its frame
-count and pbc, or, for a rejected one, its error class and line. A
-disagreement is a file of basis explicit that does not match; a file of
-another basis that does not match is a manifest entry the reader no longer
-follows. Both counts must be 0.
+The reader is the installed readcon module, the current build. It reads each
+file of data/corpus31/manifest.toml with read_con, once per thread setting.
+A file matches when every run gives the manifest's outcome and, for an
+accepted file, its frame count and pbc, or, for a rejected one, its error
+class and line. A disagreement is a file of basis explicit that does not
+match; a file of another basis that does not match is a manifest entry the
+reader no longer follows.
 
-    python paper/cpc/scripts/corpus31_results.py            # writes data/referee/r1t/corpus31-results.json
+    python paper/cpc/scripts/corpus31_results.py            # writes data/referee/r19/corpus31-results.json
     python paper/cpc/scripts/corpus31_results.py --check    # compares with that file
     python paper/cpc/scripts/corpus31_results.py --tables   # rewrites the TeX from that file only
 
-It also writes corpus31_macros.tex, the counts the paper prints, and
-corpus31_table.tex, Table tab:corpus31-open of the supplement: every entry of
-another basis than explicit, with the reading its manifest entry records.
+The r1t record is kept and is not the source of the printed counts. Every
+macro and every table row comes from the r19 record, and that record is
+checked against the manifest it names. A record that names a missing
+manifest is an error.
 
-Build the reader first: cargo build --release --features zstd,parallel --example corpus31_report
+It also writes corpus31_macros.tex and corpus31_table.tex. The table lists
+every entry whose basis is not explicit, in manifest order: the entries
+whose outcome no clause decides by name.
 """
 
 from __future__ import annotations
@@ -25,7 +28,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -34,7 +36,8 @@ import provenance
 
 ROOT = Path(__file__).resolve().parents[1]
 C31 = ROOT / "data" / "corpus31"
-OUT = ROOT / "data" / "referee" / "r1t" / "corpus31-results.json"
+MANIFEST = C31 / "manifest.toml"
+OUT = ROOT / "data" / "referee" / "r19" / "corpus31-results.json"
 MACROS = ROOT / "src" / "figures" / "generated" / "corpus31_macros.tex"
 TABLE = ROOT / "src" / "figures" / "generated" / "corpus31_table.tex"
 SPECIAL = {
@@ -50,24 +53,49 @@ SPECIAL = {
     "$": r"\$",
 }
 CORPUS_FILE = re.compile(r"\b\w+\.(?:convel|con)\b")
-BINARY = provenance.REPO / "target" / "release" / "examples" / "corpus31_report"
 THREADS = ("auto", "1", "2", "8")
 
 
-def run(binary: Path, threads: str) -> dict[str, dict]:
-    argv = (
-        [str(binary)]
-        + ([] if threads == "auto" else ["--threads", threads])
-        + [str(C31)]
-    )
-    out = subprocess.run(argv, check=True, capture_output=True, text=True).stdout
-    return {entry["file"]: entry for entry in json.loads(out)["files"]}
+def manifest_path(record: dict) -> Path:
+    """The manifest the record names, or an error when that file is absent.
+
+    Counts are not taken from a path that is not in the tree. The r1t record
+    names manifest-r1t-overlay.toml, and that file is not a commit of this
+    repository.
+    """
+    named = record.get("manifest")
+    if not named:
+        raise SystemExit("the results record names no manifest")
+    path = Path(named)
+    if not path.is_absolute():
+        path = provenance.REPO / path
+    if not path.is_file():
+        raise SystemExit(
+            f"{named}: the results record names a manifest that is not in the tree"
+        )
+    return path
 
 
-def verdict(got: dict) -> dict:
-    if got["outcome"] == "accept":
-        return {"outcome": "accept", "frames": got["frames"], "pbc": got["pbc"]}
-    return {"outcome": "reject", "error": got["class"], "line": got["line"]}
+def manifest_rows(record: dict) -> list[dict]:
+    return tomllib.loads(manifest_path(record).read_text(encoding="utf-8"))["file"]
+
+
+def read_file(path: Path, threads: str) -> dict:
+    import readcon
+
+    kwargs = {} if threads == "auto" else {"n_threads": int(threads)}
+    try:
+        frames = readcon.read_con(str(path), **kwargs)
+    except readcon.ConError as exc:
+        return {"outcome": "reject", "error": type(exc).__name__, "line": exc.line}
+    got = {"outcome": "accept", "frames": len(frames)}
+    if frames:
+        got["pbc"] = [bool(bit) for bit in frames[0].pbc_effective]
+    return got
+
+
+def verdict_runs(path: Path, threads: tuple[str, ...]) -> dict[str, dict]:
+    return {setting: read_file(path, setting) for setting in threads}
 
 
 def expected(entry: dict) -> dict:
@@ -83,13 +111,17 @@ def matches(want: dict, got: dict) -> bool:
     return all(got.get(key) == value for key, value in want.items())
 
 
-def results(binary: Path, threads: tuple[str, ...]) -> dict:
-    manifest = tomllib.loads((C31 / "manifest.toml").read_text())
-    runs = {t: run(binary, t) for t in threads}
+def results(threads: tuple[str, ...] = THREADS) -> dict:
+    manifest = tomllib.loads(MANIFEST.read_text(encoding="utf-8"))
     files = []
     for entry in manifest["file"]:
         name = entry["file"]
-        got = {t: verdict(runs[t][name]) for t in threads}
+        path = C31 / name
+        if not path.is_file():
+            raise SystemExit(
+                f"{name}: the committed manifest names a file that is not in the tree"
+            )
+        got = verdict_runs(path, threads)
         first = got[threads[0]]
         want = expected(entry)
         files.append(
@@ -97,85 +129,143 @@ def results(binary: Path, threads: tuple[str, ...]) -> dict:
                 "file": name,
                 "basis": entry["basis"],
                 "clause": entry["clause"],
+                "reason": entry["reason"],
                 "expected": want,
                 "got": first,
-                "threads_agree": all(g == first for g in got.values()),
-                "match": all(matches(want, g) for g in got.values()),
+                "threads_agree": all(item == first for item in got.values()),
+                "match": all(matches(want, item) for item in got.values()),
             }
         )
     by_basis: dict[str, dict] = {}
-    for f in files:
-        b = by_basis.setdefault(f["basis"], {"files": 0, "match": 0})
-        b["files"] += 1
-        b["match"] += f["match"]
+    for item in files:
+        basis = by_basis.setdefault(item["basis"], {"files": 0, "match": 0})
+        basis["files"] += 1
+        basis["match"] += item["match"]
+    legal = sum(item["expected"]["outcome"] == "accept" for item in files)
     summary = {
         "files": len(files),
-        "match": sum(f["match"] for f in files),
+        "match": sum(item["match"] for item in files),
         "by_basis": dict(sorted(by_basis.items())),
         "disagreements": sorted(
-            f["file"] for f in files if f["basis"] == "explicit" and not f["match"]
+            item["file"]
+            for item in files
+            if item["basis"] == "explicit" and not item["match"]
         ),
         "manifest_not_followed": sorted(
-            f["file"] for f in files if f["basis"] != "explicit" and not f["match"]
+            item["file"]
+            for item in files
+            if item["basis"] != "explicit" and not item["match"]
         ),
         "thread_settings": list(threads),
-        "threads_disagree": sorted(f["file"] for f in files if not f["threads_agree"]),
-        "accepted": sum(f["got"]["outcome"] == "accept" for f in files),
-        "rejected": sum(f["got"]["outcome"] == "reject" for f in files),
+        "threads_disagree": sorted(
+            item["file"] for item in files if not item["threads_agree"]
+        ),
+        "accepted": sum(item["got"]["outcome"] == "accept" for item in files),
+        "rejected": sum(item["got"]["outcome"] == "reject" for item in files),
+        "manifest_accept": legal,
+        "manifest_reject": len(files) - legal,
     }
     return {
-        "manifest": provenance.portable(C31 / "manifest.toml"),
+        "manifest": provenance.portable(MANIFEST),
         "spec_doc": manifest["spec_doc"],
         "reader_minor": manifest["reader_minor"],
+        "explicit_files_stored": True,
         "summary": summary,
         "files": files,
-        "provenance": {
-            "build": {
-                **provenance.binary_build(binary),
-                "readcon_version": provenance.library_version(),
-            },
-            "host": provenance.host(),
-        },
+        "provenance": {"build": provenance.readcon_build(), "host": provenance.host()},
     }
+
+
+def check_against_manifest(record: dict) -> None:
+    """The record and the manifest it names are one accounting.
+
+    Every stored row keeps the manifest's basis, clause, reason and verdict.
+    The summary's file counts are the manifest's. A missing manifest is an
+    error from ``manifest_path``.
+    """
+    if "manifest" not in record:
+        return
+    rows = manifest_rows(record)
+    summary = record["summary"]
+    if summary["files"] != len(rows):
+        raise SystemExit(
+            f"{record['manifest']}: the record has {summary['files']} files "
+            f"and the manifest has {len(rows)}"
+        )
+    legal = sum(row["expected"] == "accept" for row in rows)
+    if (
+        summary.get("manifest_accept") != legal
+        or summary.get("manifest_reject") != len(rows) - legal
+    ):
+        raise SystemExit(
+            f"{record['manifest']}: manifest_accept/manifest_reject are "
+            f"{summary.get('manifest_accept')}/{summary.get('manifest_reject')}, "
+            f"the file counts {legal}/{len(rows) - legal}"
+        )
+    counted: dict[str, int] = {}
+    for row in rows:
+        counted[row["basis"]] = counted.get(row["basis"], 0) + 1
+    recorded = {name: block["files"] for name, block in summary["by_basis"].items()}
+    if recorded != counted:
+        raise SystemExit(
+            f"{record['manifest']}: by_basis file counts are {recorded}, the manifest counts {counted}"
+        )
+    stored = record["files"]
+    if [item["file"] for item in stored] != [row["file"] for row in rows]:
+        raise SystemExit(
+            f"{record['manifest']}: the record's file order is not the manifest's"
+        )
+    for item, row in zip(stored, rows):
+        want = expected(row)
+        if (
+            item["basis"] != row["basis"]
+            or item["clause"] != row["clause"]
+            or item["reason"] != row["reason"]
+        ):
+            raise SystemExit(
+                f"{item['file']}: the record does not copy the manifest entry"
+            )
+        if item["expected"] != want:
+            raise SystemExit(
+                f"{item['file']}: the record expects {item['expected']}, the manifest expects {want}"
+            )
 
 
 def manifest_counts(record: dict) -> tuple[int, int]:
-    """Legal and illegal counts are the manifest verdicts.
+    """Legal and illegal counts are the manifest the record names.
 
-    Summary accepted and rejected count what the reader did. The stored
-    ``files`` list omits explicit rows when ``explicit_files_stored`` is
-    false, so a short list is not the manifest total. That total is
-    ``summary.manifest_accept`` and ``summary.manifest_reject``.
+    A record with no manifest key is a synthetic list, and the counts are
+    that list. A named manifest that is not in the tree is an error.
     """
-    summary = record["summary"]
-    files = record["files"]
-    if (
-        len(files) != summary["files"]
-        and "manifest_accept" in summary
-        and "manifest_reject" in summary
-    ):
-        return summary["manifest_accept"], summary["manifest_reject"]
-    legal = sum(f["expected"]["outcome"] == "accept" for f in files)
-    return legal, len(files) - legal
+    if "manifest" not in record:
+        files = record["files"]
+        legal = sum(item["expected"]["outcome"] == "accept" for item in files)
+        return legal, len(files) - legal
+    check_against_manifest(record)
+    rows = manifest_rows(record)
+    legal = sum(row["expected"] == "accept" for row in rows)
+    return legal, len(rows) - legal
 
 
 def macros(record: dict) -> str:
-    s = record["summary"]
     legal, illegal = manifest_counts(record)
+    summary = record["summary"]
+    explicit = summary["by_basis"].get("explicit", {}).get("files", 0)
     values = {
-        "cthreeoneFiles": s["files"],
-        "cthreeoneMatch": s["match"],
+        "cthreeoneFiles": summary["files"],
+        "cthreeoneMatch": summary["match"],
         "cthreeoneAccepted": legal,
         "cthreeoneRejected": illegal,
-        "cthreeoneExplicit": s["by_basis"].get("explicit", {}).get("files", 0),
-        "cthreeoneNotExplicit": s["files"]
-        - s["by_basis"].get("explicit", {}).get("files", 0),
-        "cthreeoneDisagree": len(s["disagreements"]) + len(s["manifest_not_followed"]),
-        "cthreeoneThreadsDisagree": len(s["threads_disagree"]),
-        "cthreeoneThreadSettings": len(s["thread_settings"]),
+        "cthreeoneExplicit": explicit,
+        "cthreeoneNotExplicit": summary["files"] - explicit,
+        "cthreeoneDisagree": len(summary["disagreements"])
+        + len(summary["manifest_not_followed"]),
+        "cthreeoneThreadsDisagree": len(summary["threads_disagree"]),
+        "cthreeoneThreadSettings": len(summary["thread_settings"]),
     }
+    source = provenance.portable(OUT)
     return (
-        "% Written by paper/cpc/scripts/corpus31_results.py from data/referee/r1t/corpus31-results.json.\n"
+        f"% Written by paper/cpc/scripts/corpus31_results.py from {source}.\n"
         + "".join(
             f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
         )
@@ -189,9 +279,9 @@ def latex(text: str) -> str:
 def prose(text: str) -> str:
     """``text`` for LaTeX, with each corpus file it names in ``\\path``, which breaks inside a narrow column."""
     out, last = [], 0
-    for m in CORPUS_FILE.finditer(text):
-        out += [latex(text[last : m.start()]), rf"\path{{{m.group(0)}}}"]
-        last = m.end()
+    for match in CORPUS_FILE.finditer(text):
+        out += [latex(text[last : match.start()]), rf"\path{{{match.group(0)}}}"]
+        last = match.end()
     return "".join([*out, latex(text[last:])])
 
 
@@ -201,16 +291,24 @@ def outcome(want: dict) -> str:
     return rf"\texttt{{{want['error']}}}, line {want['line']}"
 
 
+def table_files(record: dict) -> list[dict]:
+    """Every entry whose basis is not explicit, in manifest order.
+
+    An explicit entry is one the clause text decides by name. The table lists
+    every other entry. The row count is the number of manifest entries whose
+    basis is not explicit.
+    """
+    if "manifest" in record:
+        check_against_manifest(record)
+    return [item for item in record["files"] if item["basis"] != "explicit"]
+
+
 def table(record: dict) -> str:
-    """Every entry of another basis than explicit, with its outcome, clauses and the reading of its manifest entry."""
-    reasons = {
-        e["file"]: e["reason"]
-        for e in tomllib.loads((C31 / "manifest.toml").read_text())["file"]
-    }
+    """The non-explicit entries, from the record alone."""
+    source = provenance.portable(OUT)
     head = [r"\toprule", r"File & Outcome; basis & Clauses & Reading\\", r"\midrule"]
     lines = [
-        "% Written by paper/cpc/scripts/corpus31_results.py from data/referee/r1t/corpus31-results.json and "
-        "data/corpus31/manifest.toml.",
+        f"% Written by paper/cpc/scripts/corpus31_results.py from {source}.",
         r"\begin{longtable}{@{}p{0.20\linewidth}p{0.27\linewidth}p{0.14\linewidth}p{0.29\linewidth}@{}}",
         r"\caption{Entries of the CON 3.1 corpus whose outcome no clause decides by name, each with the reading that "
         r"its manifest entry records.}\label{tab:corpus31-open}\\",
@@ -222,10 +320,9 @@ def table(record: dict) -> str:
         r"\endfoot",
     ]
     lines += [
-        rf"\path{{{f['file']}}} & {outcome(f['expected'])}; {f['basis']} & {latex(f['clause'])} & "
-        rf"{prose(reasons[f['file']].replace(' as missing', ' as absent'))}\\"
-        for f in record["files"]
-        if f["basis"] != "explicit"
+        rf"\path{{{item['file']}}} & {outcome(item['expected'])}; {item['basis']} & {latex(item['clause'])} & "
+        rf"{prose(item['reason'].replace(' as missing', ' as absent'))}\\"
+        for item in table_files(record)
     ]
     return "\n".join([*lines, r"\end{longtable}", ""])
 
@@ -240,12 +337,6 @@ def comparable(record: dict) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "--binary",
-        type=Path,
-        default=BINARY,
-        help="corpus31_report (default: %(default)s)",
-    )
     parser.add_argument(
         "--threads",
         default=",".join(THREADS),
@@ -264,13 +355,13 @@ def main() -> int:
     )
     args = parser.parse_args()
     if args.tables:
-        stored = json.loads(args.out.read_text())
+        stored = json.loads(args.out.read_text(encoding="utf-8"))
         MACROS.write_text(macros(stored))
         TABLE.write_text(table(stored))
         print(f"wrote {MACROS} and {TABLE} from {args.out}")
         return 0
     if args.check:
-        stored = json.loads(args.out.read_text())
+        stored = json.loads(args.out.read_text(encoding="utf-8"))
         recorded = stored["provenance"]["build"]["library_digest"]
         current = provenance.library_digest()
         if recorded != current:
@@ -279,39 +370,38 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-    if not args.binary.is_file():
-        sys.exit(
-            f"{args.binary} is missing; build it with "
-            "cargo build --release --features zstd,parallel --example corpus31_report"
-        )
-    stale = provenance.newer_sources(args.binary)
-    if stale:
-        sys.exit(f"{args.binary} is older than {', '.join(stale[:3])}; rebuild it")
-    record = results(args.binary, tuple(args.threads.split(",")))
-    s = record["summary"]
+    threads = tuple(args.threads.split(","))
+    record = results(threads)
+    summary = record["summary"]
     print(
-        f"corpus31: {s['files']} files, {s['match']} match the manifest, "
-        f"{len(s['disagreements'])} disagreements, {len(s['manifest_not_followed'])} entries not followed, "
-        f"{len(s['threads_disagree'])} files where thread settings differ"
+        f"corpus31: {summary['files']} files, {summary['match']} match the manifest, "
+        f"{len(summary['disagreements'])} disagreements, "
+        f"{len(summary['manifest_not_followed'])} entries not followed, "
+        f"{len(summary['threads_disagree'])} files where thread settings differ"
     )
-    for name, b in s["by_basis"].items():
-        print(f"  {name}: {b['match']} of {b['files']} match")
+    for name, block in summary["by_basis"].items():
+        print(f"  {name}: {block['match']} of {block['files']} match")
     if args.check:
-        stored = json.loads(args.out.read_text())
+        stored = json.loads(args.out.read_text(encoding="utf-8"))
         if comparable(stored) != comparable(record):
             print(f"{args.out} differs from this run", file=sys.stderr)
             return 1
         for path, text in ((MACROS, macros(stored)), (TABLE, table(stored))):
-            if not path.is_file() or path.read_text() != text:
+            if not path.is_file() or path.read_text(encoding="utf-8") != text:
                 print(f"{path} differs from {args.out}", file=sys.stderr)
                 return 1
         print(f"{args.out}, {MACROS.name} and {TABLE.name} match this run")
     else:
-        args.out.write_text(json.dumps(record, indent=1) + "\n")
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
         MACROS.write_text(macros(record))
         TABLE.write_text(table(record))
         print(f"wrote {args.out}, {MACROS} and {TABLE}")
-    bad = s["disagreements"] or s["manifest_not_followed"] or s["threads_disagree"]
+    bad = (
+        summary["disagreements"]
+        or summary["manifest_not_followed"]
+        or summary["threads_disagree"]
+    )
     return 1 if bad else 0
 
 

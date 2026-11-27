@@ -1,0 +1,2837 @@
+{
+ "manifest": "paper/cpc/data/corpus31/manifest.toml",
+ "spec_doc": "docs/orgmode/spec.org",
+ "reader_minor": 1,
+ "explicit_files_stored": true,
+ "summary": {
+  "files": 143,
+  "match": 143,
+  "by_basis": {
+   "class-open": {
+    "files": 21,
+    "match": 21
+   },
+   "explicit": {
+    "files": 96,
+    "match": 96
+   },
+   "open": {
+    "files": 22,
+    "match": 22
+   },
+   "optional": {
+    "files": 4,
+    "match": 4
+   }
+  },
+  "disagreements": [],
+  "manifest_not_followed": [],
+  "thread_settings": [
+   "auto",
+   "1",
+   "2",
+   "8"
+  ],
+  "threads_disagree": [],
+  "accepted": 64,
+  "rejected": 79,
+  "manifest_accept": 64,
+  "manifest_reject": 79
+ },
+ "files": [
+  {
+   "file": "v31_units_time.con",
+   "basis": "explicit",
+   "clause": "CON-line2.9, CON-units.1, CON-units.2",
+   "reason": "Minor 1 header whose units carry length, energy, mass and time (fs).",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_convel_natural.convel",
+   "basis": "explicit",
+   "clause": "CON-units.5, CON-units.10",
+   "reason": "Minor 1 velocities section with units.time spelled (amu*angstrom^2/eV)^0.5.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_convel_fs.convel",
+   "basis": "explicit",
+   "clause": "CON-units.10",
+   "reason": "Minor 1 velocities section with units.time fs, which is authoritative from minor 1. The reference writer's rewrite keeps minor 1 and fs.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_convel_no_time.convel",
+   "basis": "explicit",
+   "clause": "CON-units.9",
+   "reason": "Minor 1 declares a velocities section and omits units.time. CON-units.9 says a missing units.time must not reject any minor of major 3.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_legacy_velocity_time.convel",
+   "basis": "explicit",
+   "clause": "CON-section.1, CON-frame.7, CON-units.10",
+   "reason": "No sections key: the blank line that begins a complete velocity block opens the legacy velocity section (Sections), whose velocities are in units.time fs.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_legacy_velocity_no_time.convel",
+   "basis": "explicit",
+   "clause": "CON-section.1, CON-units.9",
+   "reason": "No sections key. The blank line opens a legacy velocity block. CON-units.9 says a missing units.time must not reject that minor-1 frame.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v30_convel_fs.convel",
+   "basis": "explicit",
+   "clause": "CON-units.8, CON-units.9",
+   "reason": "Version 3.0 velocities labelled time fs are read in angstrom per natural time unit and the label is not applied; the conversion to ASE warns that it is not. The reference writer's rewrite keeps version 3.0 and the fs label.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v30_convel_fs_validate.convel",
+   "basis": "explicit",
+   "clause": "CON-units.9, CON-validate.4",
+   "reason": "The 3.0 frame labelled fs with validate true: CON-validate.4 adds no time-unit check, and the velocities are read in the natural time unit; the conversion to ASE warns that the fs label is not applied.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v30_legacy_velocity_time_fs.convel",
+   "basis": "explicit",
+   "clause": "CON-section.1, CON-units.8, CON-units.9",
+   "reason": "A 3.0 legacy velocity block under units.time fs is read in the natural time unit; the conversion to ASE warns that the fs label is not applied.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v2_convel_time_fs.convel",
+   "basis": "explicit",
+   "clause": "CON-units.7, CON-units.8, CON-units.9",
+   "reason": "Version 2 velocities labelled time fs are read in the natural time unit; the conversion to ASE warns that the fs label is not applied. A binding rewrite writes major 3 at minor 0, where the fs label is kept and not applied, so the velocities stay in the natural unit.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "f20_v30_time_fs.convel",
+   "basis": "explicit",
+   "clause": "CON-units.8, CON-units.9",
+   "reason": "Round-2 report B, item F20: resources/test/tiny_cuh2.convel with line 2 set to version 3.0, a velocities section and units.time fs. The read applies the natural time unit, the conversion to ASE warns that the fs label is not applied, and the rewrite keeps version 3.0 and the fs label.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v1_convel.convel",
+   "basis": "explicit",
+   "clause": "CON-status.2, CON-section.1, CON-units.8",
+   "reason": "Implicit version 1 (line 2 not JSON) eOn convel with the legacy velocity block, read in the natural time unit.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v2_minor1_velocity_no_time.convel",
+   "basis": "open",
+   "clause": "CON-units.8, CON-units.11",
+   "reason": "Major 2 with con_spec_minor 1. CON-units.8 reads version 2 velocities in the natural time unit, and CON-units.11 rejects a frame of minor 1 or later without units.time. The reader takes a minor to refine major 3 only, so it reads the velocities in the natural time unit.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_kcal_per_mol.con",
+   "basis": "explicit",
+   "clause": "CON-units.1, CON-units.16",
+   "reason": "mol is a count, so kcal/mol is an energy.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_units_compound.convel",
+   "basis": "explicit",
+   "clause": "CON-units.21",
+   "reason": "units.velocity is nm/ps. In major 3 the time of that quotient is the natural unit, not units.time ps, so the scale differs and CON-units.21 requires InvalidUnits.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_length_area.con",
+   "basis": "explicit",
+   "clause": "CON-units.1",
+   "reason": "units.length angstrom^2 is an area, not a length.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_units_string.con",
+   "basis": "explicit",
+   "clause": "CON-units.1",
+   "reason": "units is a string, so the frame has no units.length and no units.energy.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_mass_ev.con",
+   "basis": "explicit",
+   "clause": "CON-units.2",
+   "reason": "units.mass eV is an energy, not a mass.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v2_time_banana.con",
+   "basis": "explicit",
+   "clause": "CON-units.2, CON-units.7",
+   "reason": "Version 2 may carry units, and a present units.time must be a time; banana is no unit expression.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_masks_0to7.con",
+   "basis": "explicit",
+   "clause": "CON-mask.4",
+   "reason": "Column 4 values 0 through 7 read as the x, y, z bitmask.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_mask_8.con",
+   "basis": "explicit",
+   "clause": "CON-mask.5, CON-error.3",
+   "reason": "Column 4 value 8 is InvalidFixedFlag in every mode, validate absent.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidFixedFlag",
+    "line": 13
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidFixedFlag",
+    "line": 13
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_mask_float.con",
+   "basis": "explicit",
+   "clause": "CON-mask.5",
+   "reason": "A float spelling of column 4 is InvalidFixedFlag in every mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidFixedFlag",
+    "line": 13
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidFixedFlag",
+    "line": 13
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_ids_beyond_binary64.con",
+   "basis": "explicit",
+   "clause": "CON-id.1, CON-id.6",
+   "reason": "Two frames carrying the same out-of-order ids, including 2^53+1 and 2^64-1, which binary64 cannot hold.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 2
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 2,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_repeated_ids.con",
+   "basis": "explicit",
+   "clause": "CON-id.4",
+   "reason": "Two atoms share id 5 and validate is absent, so the frame is read.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v32_repeated_ids.con",
+   "basis": "explicit",
+   "clause": "CON-id.4, CON-line2.7",
+   "reason": "Two atoms share id 5 in a minor-2 frame without validate.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_validate_repeated_ids.con",
+   "basis": "explicit",
+   "clause": "CON-id.4, CON-validate.4",
+   "reason": "The repeated ids with validate true: CON-validate.4 has no id-uniqueness check, and CON-id.4 accepts them.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v32_validate_repeated_ids.con",
+   "basis": "explicit",
+   "clause": "CON-id.4, CON-line2.7, CON-validate.4",
+   "reason": "The repeated ids at minor 2 with validate true are accepted as at minor 1.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_mixed_ids.con",
+   "basis": "explicit",
+   "clause": "CON-id.9",
+   "reason": "Minor 1: the middle row has no column 5 and takes its 0-based position in the frame, so the ids read 7, 1, 9.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v32_mixed_ids.con",
+   "basis": "explicit",
+   "clause": "CON-id.9, CON-line2.7",
+   "reason": "Minor 2: the 4-column middle row takes its 0-based position as its id, as at minor 1.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_id_2pow64.con",
+   "basis": "explicit",
+   "clause": "CON-id.1, CON-error.3",
+   "reason": "Column 5 must be an integer in 0 through 2^64-1; 2^64 is InvalidNumberFormat.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 13
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 13
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "f27_minor1_no_ids.con",
+   "basis": "explicit",
+   "clause": "CON-id.9",
+   "reason": "Round-2 report B, item F27: two minor-1 frames of two Pt atoms with 4-column rows in swapped order; each row takes its 0-based position as its id.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 2
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 2,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "f27_minor2_no_ids.con",
+   "basis": "explicit",
+   "clause": "CON-id.9, CON-line2.7",
+   "reason": "The item F27 frames with con_spec_minor 2: each 4-column row takes its 0-based position as its id.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 2
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 2,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_validate_count_change.con",
+   "basis": "explicit",
+   "clause": "CON-count.7, CON-validate.4",
+   "reason": "Two validated minor-1 frames of 2 and 1 atoms: each frame declares its own count, and CON-validate.4 has no check across frames.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 2
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 2,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v32_validate_count_change.con",
+   "basis": "explicit",
+   "clause": "CON-count.7, CON-line2.7, CON-validate.4",
+   "reason": "A minor-2 validated frame of 1 atom after a frame of 2 atoms is read like its minor-1 counterpart.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 2
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 2,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_validate_symbol_change.con",
+   "basis": "explicit",
+   "clause": "CON-validate.4",
+   "reason": "Id 0 is Pt in frame 1 and H in frame 2 with validate true: CON-validate.4 has no check across frames.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 2
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 2,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v32_validate_symbol_change.con",
+   "basis": "explicit",
+   "clause": "CON-line2.7, CON-validate.4",
+   "reason": "Id 0 is Pt in frame 1 and H in frame 2 at minor 2 with validate true is read like its minor-1 counterpart.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 2
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 2,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_unknown_section.con",
+   "basis": "explicit",
+   "clause": "CON-section.7",
+   "reason": "Frame minor 1 is not newer than the reader's minor 1, so the unknown section stress is UnknownSection even with section_arity.",
+   "expected": {
+    "outcome": "reject",
+    "error": "UnknownSection",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "UnknownSection",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v32_unknown_section_arity.con",
+   "basis": "optional",
+   "clause": "CON-line2.7, CON-section.8, CON-section.14",
+   "reason": "Frame minor 2 is newer than the reader's minor 1 and section_arity gives stress 6 value fields, so the reader may skip the stress section, and it does.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v33_unknown_section_arity.con",
+   "basis": "optional",
+   "clause": "CON-line2.7, CON-section.8, CON-section.14",
+   "reason": "Frame minor 3 is newer than the reader's minor 1 and section_arity gives stress 6 value fields, so the reader may skip the stress section, and it does.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v33_unknown_section_no_arity.con",
+   "basis": "explicit",
+   "clause": "CON-section.9",
+   "reason": "Frame minor 3 is newer than the reader's minor 1, but section_arity does not give the stress arity.",
+   "expected": {
+    "outcome": "reject",
+    "error": "UnknownSection",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "UnknownSection",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_reserved_arity_wrong.con",
+   "basis": "explicit",
+   "clause": "CON-section.13",
+   "reason": "A section_arity entry for the reserved vector section forces must be 3.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidVectorLength",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidVectorLength",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_two_blanks_before_section.convel",
+   "basis": "class-open",
+   "clause": "CON-section.2, CON-section.4, CON-section.15",
+   "reason": "Two blank lines before the velocities section: the first opens it, the second is its symbol line, and the line Pt fails as its label. Outside validate true no clause names the class of a wrong label; the reader reports the declared section as missing.",
+   "expected": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_unicode_blank_before_section.convel",
+   "basis": "open",
+   "clause": "CON-section.2, CON-file.4",
+   "reason": "The line before the velocities section holds U+2003 only. The reader takes a line of Unicode White_Space characters to be blank before a section or a legacy velocity block. The ignored end of the file is one such line, then lines of spaces, tabs, form feeds and carriage returns only. The text does not define whitespace or blank otherwise. So the line is blank and opens the declared section.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_spreads_negative.con",
+   "basis": "class-open",
+   "clause": "CON-section.20",
+   "reason": "Each spreads value must be >= 0 in every mode; the clause names no class, and the reader reports ValidationError.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 17
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 17
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_velocity_no_id.convel",
+   "basis": "explicit",
+   "clause": "CON-num.9",
+   "reason": "The coordinate rows carry ids, and identity columns repeat the coordinate flag and id (Sections), so a 4-field velocity row has the wrong number of fields.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidVectorLength",
+    "line": 17
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidVectorLength",
+    "line": 17
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_validate_ok.convel",
+   "basis": "explicit",
+   "clause": "CON-validate.4",
+   "reason": "validate true with matching labels, symbols and identity columns.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_validate_bad_label.convel",
+   "basis": "explicit",
+   "clause": "CON-section.15, CON-validate.4",
+   "reason": "validate true and the velocities label reads Velocity of Component 1: a section label mismatch in that mode is ValidationError.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_label_case.convel",
+   "basis": "explicit",
+   "clause": "CON-file.5, CON-section.15",
+   "reason": "Labels compare case-insensitively after collapsing runs of spaces, also with validate true.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_section_label_mismatch.convel",
+   "basis": "class-open",
+   "clause": "CON-section.15",
+   "reason": "The section label reads Velocity of Component 1 without validate. CON-section.15 applies in every mode and names no class; the reader reports the declared section as missing.",
+   "expected": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_label_velocities_no_index.convel",
+   "basis": "class-open",
+   "clause": "CON-section.15",
+   "reason": "The label of component 1 of the velocities section reads Velocities of Component; the reader reports the declared section as missing.",
+   "expected": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_label_velocities_xyz.convel",
+   "basis": "class-open",
+   "clause": "CON-section.15",
+   "reason": "The label of component 1 of the velocities section reads Velocities of Component xyz; the reader reports the declared section as missing.",
+   "expected": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_label_velocities_1_xyz.convel",
+   "basis": "class-open",
+   "clause": "CON-section.15",
+   "reason": "The label of component 1 of the velocities section reads Velocities of Component 1 xyz; the reader reports the declared section as missing.",
+   "expected": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_label_velocities_0.convel",
+   "basis": "class-open",
+   "clause": "CON-section.15",
+   "reason": "The label of component 1 of the velocities section reads Velocities of Component 0; the reader reports the declared section as missing.",
+   "expected": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_label_velocities_2.convel",
+   "basis": "class-open",
+   "clause": "CON-section.15",
+   "reason": "The label of component 1 of the velocities section reads Velocities of Component 2; the reader reports the declared section as missing.",
+   "expected": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_label_velocities_01.convel",
+   "basis": "class-open",
+   "clause": "CON-section.15",
+   "reason": "The label of component 1 of the velocities section reads Velocities of Component 01; the reader reports the declared section as missing.",
+   "expected": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_coord_label_mismatch.con",
+   "basis": "open",
+   "clause": "CON-validate.4",
+   "reason": "The coordinate label reads Coords of Component 1 without validate. CON-validate.4 lists the coordinate label check under validate true, and no clause asks for it in other modes; the reader checks it in every mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 11
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 11
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_label_coordinates_2.con",
+   "basis": "class-open",
+   "clause": "CON-count.8",
+   "reason": "The coordinate label of component 1 reads Coordinates of Component 2, and component numbers start at 1.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 11
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 11
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_label_coordinates_1_xyz.con",
+   "basis": "open",
+   "clause": "CON-validate.4",
+   "reason": "The coordinate label of component 1 reads Coordinates of Component 1 xyz without validate; as for v31_coord_label_mismatch.con, the reader checks the label in every mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 11
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 11
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_sections_out_of_order.convel",
+   "basis": "open",
+   "clause": "CON-section.1, CON-section.15",
+   "reason": "sections lists forces then velocities and the blocks are written velocities then forces. No clause fixes the order of the section blocks; the reader reads them in sections order, so the first label fails.",
+   "expected": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "IncompleteSection",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_blank_symbol_velocities.convel",
+   "basis": "open",
+   "clause": "CON-section.4, CON-validate.4",
+   "reason": "The symbol line of the velocities block is blank. CON-validate.4 checks section symbols under validate true, and no clause says what a symbol line holds in other modes; the reader does not check it.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_validate_symbol_mismatch.convel",
+   "basis": "explicit",
+   "clause": "CON-validate.4",
+   "reason": "validate true and the velocities symbol line reads H for the Pt component.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 15
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 15
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_section_row_id_mismatch.convel",
+   "basis": "optional",
+   "clause": "CON-section.17",
+   "reason": "A velocity row's id differs from its coordinate row and validate is absent; the reader may ignore the mismatch, and it does.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_validate_row_id_mismatch.convel",
+   "basis": "explicit",
+   "clause": "CON-validate.4",
+   "reason": "validate true and a velocity row's id differs from its coordinate row.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 17
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 17
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "sections_empty_velocity.con",
+   "basis": "explicit",
+   "clause": "CON-section.1, CON-frame.7, CON-header.4, CON-num.8",
+   "reason": "Round-2 report K, item 1: sections [] and then an undeclared velocity block. The blank line after the frame is line 1 of the next frame, whose line 3 reads Velocities of Component 1 and is not a decimal.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 15
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 15
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "sections_empty_velocity_x300.con",
+   "basis": "explicit",
+   "clause": "CON-section.1, CON-frame.7, CON-header.4, CON-num.8",
+   "reason": "The frame of sections_empty_velocity.con 300 times: the first copy fails at the same line in every reader path.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 15
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 15
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "sections_empty_velocity_6001_frames.con",
+   "basis": "explicit",
+   "clause": "CON-section.1, CON-frame.7, CON-header.4, CON-num.8",
+   "reason": "Round-2 report J, case A: 3000 legal frames, a frame with sections [] and then a velocity block, and 3000 legal frames.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 36015
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 36015
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "f26_cell_10_10_170.con",
+   "basis": "class-open",
+   "clause": "CON-cell.6",
+   "reason": "Round-2 report B, item F26: validate true, lengths 10 10 10 and angles 10 10 170; the radicand of the c vector of CON-cell.6 is negative, so no real cell exists; no clause names the class, and the reader rejects the angles line as ValidationError in every mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "gram_170_v1.con",
+   "basis": "class-open",
+   "clause": "CON-cell.6",
+   "reason": "Angles 170 170 170 in a version 1 frame: the radicand of the c vector of CON-cell.6 is negative, so no real cell exists; no clause names the class, and the reader rejects the angles line as ValidationError in every mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "gram_170_v2.con",
+   "basis": "class-open",
+   "clause": "CON-cell.6",
+   "reason": "Angles 170 170 170 in a version 2 frame: the radicand of the c vector of CON-cell.6 is negative, so no real cell exists; no clause names the class, and the reader rejects the angles line as ValidationError in every mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "gram_170_v30.con",
+   "basis": "class-open",
+   "clause": "CON-cell.6",
+   "reason": "Angles 170 170 170 in a version 3.0 frame: the radicand of the c vector of CON-cell.6 is negative, so no real cell exists; no clause names the class, and the reader rejects the angles line as ValidationError in every mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "gram_170_v31_validate.con",
+   "basis": "class-open",
+   "clause": "CON-cell.6",
+   "reason": "Angles 170 170 170 in a minor 1, validate true frame: the radicand of the c vector of CON-cell.6 is negative, so no real cell exists; no clause names the class, and the reader rejects the angles line as ValidationError in every mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "gram_60_60_120.con",
+   "basis": "explicit",
+   "clause": "CON-cell.6",
+   "reason": "Angles 60 60 120: the radicand of the c vector of CON-cell.6 is 0, so the cell is built with c in the a-b plane.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "gram_60_60_119_9.con",
+   "basis": "explicit",
+   "clause": "CON-cell.6",
+   "reason": "Angles 60 60 119.9, validate absent: the radicand of CON-cell.6 is positive.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "gram_60_60_120_1.con",
+   "basis": "class-open",
+   "clause": "CON-cell.6",
+   "reason": "Angles 60 60 120.1, validate absent: the radicand of the c vector of CON-cell.6 is negative, so no real cell exists; no clause names the class, and the reader rejects the angles line as ValidationError in every mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "gram_60_60_119_9_validate.con",
+   "basis": "explicit",
+   "clause": "CON-cell.6",
+   "reason": "Angles 60 60 119.9, validate true: the radicand of CON-cell.6 is positive.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "gram_60_60_120_1_validate.con",
+   "basis": "class-open",
+   "clause": "CON-cell.6",
+   "reason": "Angles 60 60 120.1, validate true: the radicand of the c vector of CON-cell.6 is negative, so no real cell exists; no clause names the class, and the reader rejects the angles line as ValidationError in every mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 4
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v2_pbc_absent.con",
+   "basis": "explicit",
+   "clause": "CON-cell.3",
+   "reason": "No pbc key: the frame is periodic in all three directions.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_pbc_slab.con",
+   "basis": "explicit",
+   "clause": "CON-cell.4",
+   "reason": "pbc [true, true, false] is an array of 3 booleans, one per axis.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     false
+    ]
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     false
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v2_pbc_string.con",
+   "basis": "explicit",
+   "clause": "CON-cell.4, CON-line2.13",
+   "reason": "pbc bad is a string, not an array of 3 booleans, in every mode; a reserved key of the wrong type is InvalidMetadataJson.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_pbc_two.con",
+   "basis": "explicit",
+   "clause": "CON-cell.4, CON-line2.13",
+   "reason": "pbc holds 2 booleans, not 3.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_pbc_numbers.con",
+   "basis": "explicit",
+   "clause": "CON-cell.4, CON-line2.13",
+   "reason": "pbc holds numbers, not booleans.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_lattice_ok.con",
+   "basis": "explicit",
+   "clause": "CON-cell.1, CON-cell.5",
+   "reason": "lattice_vectors is 3 arrays of 3 numbers.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_lattice_two_rows.con",
+   "basis": "explicit",
+   "clause": "CON-cell.5, CON-line2.13",
+   "reason": "lattice_vectors holds 2 rows, not 3.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_lattice_string.con",
+   "basis": "explicit",
+   "clause": "CON-cell.5, CON-line2.13",
+   "reason": "One lattice_vectors entry is a string, not a number.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "json_version_1.con",
+   "basis": "explicit",
+   "clause": "CON-line2.5",
+   "reason": "JSON con_spec_version 0 or 1 is UnsupportedVersion; version 1 exists only as non-JSON line 2.",
+   "expected": {
+    "outcome": "reject",
+    "error": "UnsupportedVersion",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "UnsupportedVersion",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "json_version_4.con",
+   "basis": "explicit",
+   "clause": "CON-line2.6, CON-status.1",
+   "reason": "Major 4 is the current major. CON-line2.6 rejects an unknown major, and CON-status.1 requires every minor of major 4 to be accepted.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_version_float.con",
+   "basis": "explicit",
+   "clause": "CON-line2.4",
+   "reason": "con_spec_version 3.0 is a JSON number equal to the major 3.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_version_3e0.con",
+   "basis": "explicit",
+   "clause": "CON-line2.4",
+   "reason": "con_spec_version 3e0 is a JSON number equal to the major 3.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_version_string.con",
+   "basis": "explicit",
+   "clause": "CON-line2.4",
+   "reason": "con_spec_version is the string 3, not a number.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_version_3_5.con",
+   "basis": "open",
+   "clause": "CON-line2.4, CON-line2.6",
+   "reason": "con_spec_version 3.5 is a JSON number that names no integer major. CON-line2.6 makes an unknown major UnsupportedVersion, and the error table makes a reserved key of the wrong type InvalidMetadataJson; the reader takes a major to be an integer and reports InvalidMetadataJson.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_minor_string.con",
+   "basis": "explicit",
+   "clause": "CON-line2.9",
+   "reason": "con_spec_minor must be a JSON integer >= 0, not a string.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_minor_2pow64_minus_1.con",
+   "basis": "explicit",
+   "clause": "CON-line2.7, CON-line2.9",
+   "reason": "con_spec_minor 2^64-1 is a legal minor, and a rewrite keeps it.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v2_minor_2pow64.con",
+   "basis": "explicit",
+   "clause": "CON-line2.7, CON-line2.9",
+   "reason": "con_spec_minor 2^64 is a JSON integer >= 0, and no clause bounds a minor. A binding rewrite writes major 3 and keeps the digits of the minor.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v2_json_depth_127.con",
+   "basis": "open",
+   "clause": "CON-line2.1",
+   "reason": "Line 2 nests 127 deep counting the outer object. No clause bounds the nesting depth of line 2, and RFC 8259 section 9 lets a parser set one. The reader accepts 127 levels counting the outer object and rejects deeper nesting.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v2_json_depth_128.con",
+   "basis": "open",
+   "clause": "CON-line2.1, CON-line2.2",
+   "reason": "Line 2 nests 128 deep counting the outer object. No clause bounds the nesting depth of line 2, and RFC 8259 section 9 lets a parser set one. The reader accepts 127 levels counting the outer object and rejects deeper nesting.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_validate_string.con",
+   "basis": "explicit",
+   "clause": "CON-line2.12",
+   "reason": "validate is the string yes, not a boolean.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_energy_string.con",
+   "basis": "explicit",
+   "clause": "CON-line2.13",
+   "reason": "energy is a string, not a number.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_bonds_one_index.con",
+   "basis": "explicit",
+   "clause": "CON-bonds.3",
+   "reason": "A bonds entry of one index with validate absent: unknown bonds shapes are preserved.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d01_time_unit_metre.convel",
+   "basis": "explicit",
+   "clause": "CON-units.2",
+   "reason": "Probe D1: units.time m is a length, not a time.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidUnits",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d02_legacy_velocity_no_time.convel",
+   "basis": "explicit",
+   "clause": "CON-section.1, CON-units.9",
+   "reason": "Probe D2: a minor-1 legacy velocity block without units.time. CON-units.9 says a missing units.time must not reject that frame.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d03_nbsp_after_id.con",
+   "basis": "explicit",
+   "clause": "CON-token.3, CON-file.4, CON-error.3",
+   "reason": "Probe D3: U+00A0 is neither a separator nor a trailing space or tab, so column 5 reads 0 followed by U+00A0.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 12
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 12
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d04_vertical_tab_separator.con",
+   "basis": "explicit",
+   "clause": "CON-token.3, CON-num.8",
+   "reason": "Probe D4: a vertical tab separates no fields, so the first field 0.0, VT, 0.0 is no decimal.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 12
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 12
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d05_lattice_nan.con",
+   "basis": "explicit",
+   "clause": "CON-line2.2",
+   "reason": "Probe D5: NaN is not JSON.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d06_lattice_1e999.con",
+   "basis": "open",
+   "clause": "CON-cell.5, CON-line2.13",
+   "reason": "Probe D6: 1e999 is a JSON number whose binary64 value is infinite. CON-cell.5 asks for finite numbers, and the error table makes an Inf value NonFiniteValue. A reserved key must hold the type this document gives it (CON-line2.13), and the reader reports a reserved key with a number that is not a finite binary64 as InvalidMetadataJson on line 2.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d07_sections_capital_velocities.convel",
+   "basis": "explicit",
+   "clause": "CON-section.1, CON-section.7",
+   "reason": "Probe D7: sections lists Velocities. CON-file.5 folds case in labels only, so Velocities is not the reserved name velocities and is an unknown section at minor 1.",
+   "expected": {
+    "outcome": "reject",
+    "error": "UnknownSection",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "UnknownSection",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d08_sections_null.con",
+   "basis": "explicit",
+   "clause": "CON-line2.11",
+   "reason": "Probe D8: sections null is not an array of strings.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d09_arity_velocities_1.con",
+   "basis": "explicit",
+   "clause": "CON-section.13",
+   "reason": "Probe D9: section_arity gives the reserved vector section velocities arity 1, not 3.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidVectorLength",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidVectorLength",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d10_json_depth_129.con",
+   "basis": "open",
+   "clause": "CON-line2.1, CON-line2.2",
+   "reason": "Probe D10: line 2 nests 129 deep counting the outer object. No clause bounds the nesting depth of line 2, and RFC 8259 section 9 lets a parser set one. The reader accepts 127 levels counting the outer object and rejects deeper nesting.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d11_validate_pbc_object.con",
+   "basis": "open",
+   "clause": "CON-cell.4, CON-validate.4",
+   "reason": "Probe D11: validate true and pbc is an object. The error table makes a reserved key of the wrong type InvalidMetadataJson in every mode, and CON-validate.4 names ValidationError for a bad reserved-key type under validate true. The reader applies the check of every mode first.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d12_length_trailing_space.con",
+   "basis": "open",
+   "clause": "CON-units.1, CON-units.16",
+   "reason": "Probe D12: units.length is angstrom with a trailing space. The text does not say whether white space may stand inside a unit expression; the reader removes it.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d13_blank_symbol_energies.con",
+   "basis": "open",
+   "clause": "CON-section.4, CON-validate.4",
+   "reason": "Probe D13: the symbol line of the energies block is blank. As for v31_blank_symbol_velocities.convel, the reader does not check section symbols outside validate true.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d14_minor_2pow64.con",
+   "basis": "explicit",
+   "clause": "CON-line2.7, CON-line2.9",
+   "reason": "Probe D14: con_spec_minor 2^64 is a JSON integer >= 0 of the known major 3, and no clause bounds a minor.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "d15_json_depth_100001.con",
+   "basis": "open",
+   "clause": "CON-line2.1, CON-line2.2",
+   "reason": "Probe D15: line 2 nests 100001 deep, and the reader rejects it without exhausting its stack. No clause bounds the nesting depth of line 2, and RFC 8259 section 9 lets a parser set one. The reader accepts 127 levels counting the outer object and rejects deeper nesting.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_type_count_2pow64_minus_1.con",
+   "basis": "explicit",
+   "clause": "CON-num.9",
+   "reason": "Line 7 declares 2^64-1 atom types and line 8 holds one count.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidVectorLength",
+    "line": 8
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidVectorLength",
+    "line": 8
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_type_count_2pow64.con",
+   "basis": "open",
+   "clause": "CON-error.3",
+   "reason": "The type count is 2^64. No clause bounds a count; the reader reads counts as integers in 0 through 2^64-1 and reports a larger one as InvalidCount.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidCount",
+    "line": 7
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidCount",
+    "line": 7
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_atom_count_1e12.con",
+   "basis": "explicit",
+   "clause": "CON-frame.4",
+   "reason": "Line 8 declares 10^12 atoms and the file ends after 2 coordinate rows.",
+   "expected": {
+    "outcome": "reject",
+    "error": "IncompleteFrame",
+    "line": 14
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "IncompleteFrame",
+    "line": 14
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_gzip.con.gz",
+   "basis": "explicit",
+   "clause": "CON-compress.1",
+   "reason": "One gzip member holding a legal minor-1 convel frame.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_gzip_two_members.con.gz",
+   "basis": "explicit",
+   "clause": "CON-compress.1",
+   "reason": "Two gzip members, one frame each; every member is exposed in order.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 2
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 2,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_gzip_by_content.con",
+   "basis": "optional",
+   "clause": "CON-compress.3",
+   "reason": "Gzip bytes under a plain .con name; readers should detect gzip by its magic bytes, and this one does.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_zstd.con.zst",
+   "basis": "explicit",
+   "clause": "CON-compress.2",
+   "reason": "One zstd frame holding a legal minor-1 convel frame.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_zstd_two_frames.con.zst",
+   "basis": "explicit",
+   "clause": "CON-compress.2",
+   "reason": "Two zstd frames, one CON frame each; every frame is exposed in order.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 2
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 2,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_bom.con",
+   "basis": "class-open",
+   "clause": "CON-file.2",
+   "reason": "Begins with the UTF-8 byte-order mark EF BB BF; the clause names no class.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 1
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 1
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_bom_later_frame.con",
+   "basis": "explicit",
+   "clause": "CON-file.2",
+   "reason": "U+FEFF begins the second frame. CON-file.2 rejects a byte-order mark at the start of any frame as ValidationError.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 14
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 14
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_utf8_line1.con",
+   "basis": "class-open",
+   "clause": "CON-file.1",
+   "reason": "Line 1 holds the bytes C0 AF, which are not UTF-8; the clause names no class.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 1
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 1
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_utf8_number_token.con",
+   "basis": "class-open",
+   "clause": "CON-file.1, CON-num.8",
+   "reason": "The byte C0 inside the first coordinate of line 12 is not UTF-8, and the token is not a decimal. CON-num.8 names InvalidNumberFormat and CON-file.1 names no class; the reader reports InvalidNumberFormat.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 12
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 12
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_utf8_separator_line.convel",
+   "basis": "class-open",
+   "clause": "CON-file.1, CON-section.2",
+   "reason": "Line 14, where the velocities section needs its blank line, holds the bytes C0 AF, which are not UTF-8; neither clause names a class.",
+   "expected": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 14
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "ValidationError",
+    "line": 14
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_crlf.con",
+   "basis": "explicit",
+   "clause": "CON-file.3",
+   "reason": "CRLF line endings.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_trailing_ws.con",
+   "basis": "explicit",
+   "clause": "CON-file.4, CON-frame.1",
+   "reason": "Trailing spaces and tabs on every line, then lines of spaces and tabs only after the last frame.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_trailing_ff.con",
+   "basis": "explicit",
+   "clause": "CON-file.4, CON-line2.1, CON-line2.2",
+   "reason": "A form feed ends every line. CON-file.4 ignores trailing spaces and tabs only, so line 2 is a JSON object followed by a form feed, which is not one JSON object and nothing else.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidMetadataJson",
+    "line": 2
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_unicode_tail.con",
+   "basis": "open",
+   "clause": "CON-frame.1, CON-frame.3",
+   "reason": "Lines of U+00A0 U+3000 and of U+2003 follow the last frame. The reader takes a line of Unicode White_Space characters to be blank before a section or a legacy velocity block. The ignored end of the file is one such line, then lines of spaces, tabs, form feeds and carriage returns only. The text does not define whitespace or blank otherwise. The second line holds U+2003, so the two lines are lines 1 and 2 of a further frame, which ends before its line 3.",
+   "expected": {
+    "outcome": "reject",
+    "error": "IncompleteHeader",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "IncompleteHeader",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "ff_tail_610_frames.con",
+   "basis": "open",
+   "clause": "CON-frame.1",
+   "reason": "610 legal frames and a last line holding a form feed. The reader takes a line of Unicode White_Space characters to be blank before a section or a legacy velocity block. The ignored end of the file is one such line, then lines of spaces, tabs, form feeds and carriage returns only. The text does not define whitespace or blank otherwise. So the form feed line is the ignored end of the file.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 610
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 610,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "whitespace_only.con",
+   "basis": "open",
+   "clause": "CON-frame.1, CON-num.8",
+   "reason": "Lines 1 and 2 hold a space and a tab, line 3 holds U+3000. The reader takes a line of Unicode White_Space characters to be blank before a section or a legacy velocity block. The ignored end of the file is one such line, then lines of spaces, tabs, form feeds and carriage returns only. The text does not define whitespace or blank otherwise. Line 3 holds U+3000, so the file holds a frame whose line 3 is not a decimal.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 3
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 3
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_zero_atom_unicode_blank.con",
+   "basis": "open",
+   "clause": "CON-count.1",
+   "reason": "A zero-atom frame whose lines 8 and 9 hold U+3000 and U+00A0. The reader takes white space inside a line to be spaces and tabs, the separators of CON-token.3 and the trailing characters of CON-file.4; the text does not define whitespace or blank otherwise. So line 8 holds a token, which CON-count.1 makes InvalidCount.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidCount",
+    "line": 21
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidCount",
+    "line": 21
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_form_feed_separator.con",
+   "basis": "explicit",
+   "clause": "CON-token.3, CON-num.8",
+   "reason": "A form feed stands between the first two fields of an atom line. Separators are spaces or tabs, so the first field 0.0, FF, 0.0 is no decimal.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 12
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 12
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_cr_separator.con",
+   "basis": "explicit",
+   "clause": "CON-token.3, CON-file.3, CON-num.8",
+   "reason": "A carriage return that ends no line stands between the first two fields of an atom line. Separators are spaces or tabs, so the first field 2.5, CR, 2.5 is no decimal.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 13
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 13
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_float_forms.con",
+   "basis": "explicit",
+   "clause": "CON-num.5, CON-token.2",
+   "reason": "Signs, leading and trailing dots, exponents, long significands, subnormals and underflow to 0; each must round correctly to binary64.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_nan_coordinate.con",
+   "basis": "explicit",
+   "clause": "CON-num.1",
+   "reason": "NaN coordinate is NonFiniteValue in every mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "NonFiniteValue",
+    "line": 13
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "NonFiniteValue",
+    "line": 13
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_inf_velocity.convel",
+   "basis": "explicit",
+   "clause": "CON-num.1",
+   "reason": "-Infinity in a velocity row is NonFiniteValue.",
+   "expected": {
+    "outcome": "reject",
+    "error": "NonFiniteValue",
+    "line": 18
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "NonFiniteValue",
+    "line": 18
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_overflow_coordinate.con",
+   "basis": "explicit",
+   "clause": "CON-num.5, CON-num.1",
+   "reason": "1e400 is a decimal whose correctly rounded binary64 value is infinite, and the error table makes an Inf value NonFiniteValue in any mode.",
+   "expected": {
+    "outcome": "reject",
+    "error": "NonFiniteValue",
+    "line": 13
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "NonFiniteValue",
+    "line": 13
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v31_label_case_coordinates.con",
+   "basis": "open",
+   "clause": "CON-file.5, CON-validate.4",
+   "reason": "The coordinate label has leading spaces, a tab between words and upper case. CON-file.5 collapses runs of spaces; the reader compares labels word by word, splitting at spaces and tabs, with ASCII letters folded.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 1
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 1,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "v1_then_json_frame_empty_title.con",
+   "basis": "explicit",
+   "clause": "CON-section.1, CON-frame.7, CON-header.4",
+   "reason": "After a version 1 frame, a blank line followed by a line that starts with { begins no velocity block (Sections); it is the empty line 1 of a version 2 frame.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 2
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 2,
+    "pbc": [
+     true,
+     true,
+     true
+    ]
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "two_frames_blank.con",
+   "basis": "explicit",
+   "clause": "CON-frame.7, CON-num.8",
+   "reason": "Two legal frames separated by one blank line. The blank is line 1 of frame 2, so its JSON line is read as line 3; the first frame has sections [] so the legacy velocity block is off.",
+   "expected": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 16
+   },
+   "got": {
+    "outcome": "reject",
+    "error": "InvalidNumberFormat",
+    "line": 16
+   },
+   "threads_agree": true,
+   "match": true
+  },
+  {
+   "file": "empty.con",
+   "basis": "open",
+   "clause": "CON-frame.1",
+   "reason": "Zero bytes. No clause speaks to a file without a frame; the reader returns zero frames.",
+   "expected": {
+    "outcome": "accept",
+    "frames": 0
+   },
+   "got": {
+    "outcome": "accept",
+    "frames": 0
+   },
+   "threads_agree": true,
+   "match": true
+  }
+ ],
+ "provenance": {
+  "build": {
+   "readcon_version": "0.24.0",
+   "readcon_module": "site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
+   "readcon_module_sha256": "c6f94c99b69a0c8674197b84150cbc4281d7bbd1b42a1ab3076c861f70754ef9",
+   "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+   "newer_sources": [],
+   "library_digest": "9bd0986396367fee2d1b3a88b357fd041e4d902349110561685a2a8b23a556fd",
+   "source_files": 56,
+   "source_tag": null,
+   "source_commit": "cfafae6b54e802bcc4bab91d9df957a5f449d457"
+  },
+  "host": {
+   "kernel": "6.12.113+",
+   "uname_m": "x86_64",
+   "nproc": 8,
+   "family": "6",
+   "model": "207",
+   "cpu_model": "Intel Xeon Processor",
+   "mhz": 2400.0,
+   "mem_kb": 49342816
+  }
+ }
+}

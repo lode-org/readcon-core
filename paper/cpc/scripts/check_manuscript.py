@@ -1229,7 +1229,7 @@ def check_conformance() -> str:
     record is what the specification, the corpora, the probes and the tests give, and a rerun of the mutant
     differential gives its record, with no case left unexplained."""
     bad = []
-    corpus31_record = "data/referee/r1t/corpus31-results.json"
+    corpus31_record = "data/referee/r19/corpus31-results.json"
     c31 = json.loads((ROOT / corpus31_record).read_text())["summary"]
     for key in ("disagreements", "manifest_not_followed", "threads_disagree"):
         if c31[key]:

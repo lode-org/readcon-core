@@ -473,8 +473,8 @@ _RULES = [
     ),
     Rule(
         "4",
-        str(jget(CROSSCHECK, "groups.corpus31.basis.optional")),
-        CROSSCHECK,
+        str(jget(REFEREE_CROSSCHECK, "groups.corpus31.basis.optional")),
+        REFEREE_CROSSCHECK,
         "optional entries of the CON 3.1 corpus",
         (f"{GEN}corpus_crosscheck.tex~4 optional",),
     ),
