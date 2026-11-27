@@ -12,7 +12,6 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "corpus31_results.py"
 MANIFEST = SCRIPT.parents[1] / "data" / "corpus31" / "manifest.toml"
-RECORD = SCRIPT.parents[1] / "data" / "referee" / "r19" / "corpus31-results.json"
 KEPT = SCRIPT.parents[1] / "data" / "referee" / "r1t" / "corpus31-results.json"
 
 
@@ -27,6 +26,10 @@ def _load():
 
 def _manifest_rows() -> list[dict]:
     return tomllib.loads(MANIFEST.read_text(encoding="utf-8"))["file"]
+
+
+def _record(module) -> Path:
+    return SCRIPT.parents[1] / module.RECORD_REL
 
 
 def test_legal_counts_ignore_the_reader_totals() -> None:
@@ -51,12 +54,12 @@ def test_legal_counts_ignore_the_reader_totals() -> None:
     text = module.macros(record)
     assert r"\newcommand{\cthreeoneAccepted}{1}" in text
     assert r"\newcommand{\cthreeoneRejected}{1}" in text
-    assert "data/referee/r19/corpus31-results.json" in text
+    assert module.RECORD_REL in text
 
 
 def test_macros_equal_the_committed_manifest() -> None:
     module = _load()
-    record = json.loads(RECORD.read_text(encoding="utf-8"))
+    record = json.loads(_record(module).read_text(encoding="utf-8"))
     rows = _manifest_rows()
     legal = sum(row["expected"] == "accept" for row in rows)
     illegal = len(rows) - legal
@@ -84,7 +87,7 @@ def test_a_missing_manifest_is_refused() -> None:
 
 def test_every_table_row_matches_the_manifest() -> None:
     module = _load()
-    record = json.loads(RECORD.read_text(encoding="utf-8"))
+    record = json.loads(_record(module).read_text(encoding="utf-8"))
     rows = _manifest_rows()
     by_file = {row["file"]: row for row in rows}
     selected = module.table_files(record)

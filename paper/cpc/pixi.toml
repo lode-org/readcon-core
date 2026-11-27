@@ -63,7 +63,7 @@ cpc-packet = { cmd = "python packet/make_packet.py", description = "Write the su
 cpc-measure = { cmd = "python scripts/regen_paper.py --measure", description = "Rerun the survey, drift, corpora, conformance, restart, prefactor and velocity measurements, then format" }
 cpc-probes = { cmd = "python scripts/referee_probes.py --check", description = "Run the reader probes and compare them with data/referee_probes.json" }
 cpc-crosscheck = { cmd = "python scripts/corpus_crosscheck.py", description = "Read both corpora with readcon and with the independent reader and write data/corpus_crosscheck.json" }
-cpc-corpus31 = { cmd = "python scripts/corpus31_results.py", description = "Read corpus31 at 1, 2, 8 and the default number of threads and write data/corpus31-results.json" }
+cpc-corpus31 = { cmd = "python scripts/corpus31_results.py", description = "Read corpus31 at 1, 2, 8 and the default number of threads and write data/referee/r19/corpus31-results.json" }
 cpc-corpus-paths = { cmd = "python scripts/corpus_paths.py", description = "Read both corpora through every entry point of the readcon module and of the C library in its default and parallel builds, and write data/corpus_paths.json" }
 cpc-every-path = { cmd = "python scripts/every_path_count.py", description = "Run the tests that read each input on every reader path, count the inputs, and write data/every_path.json" }
 cpc-recount = { cmd = "python scripts/spec_corpus_recount.py", description = "Recount the conformance corpus by released clause" }
