@@ -40,6 +40,7 @@ def test_packet_counts_match_the_manuscript() -> None:
     _tables(CPC / "evidence" / "e5_prefactor.py")
     _tables(CPC / "scripts" / "velocity_case.py")
     corpus = generated / "corpus_macros.tex"
+    planted = False
     if not corpus.is_file() and "corpusFiles" not in cm.macros():
         record = json.loads(
             (CPC / "data" / "referee" / "r1h" / "corpus_crosscheck.json").read_text(
@@ -50,13 +51,20 @@ def test_packet_counts_match_the_manuscript() -> None:
         corpus.write_text(
             f"\\newcommand{{\\corpusFiles}}{{{files}}}\n", encoding="utf-8"
         )
-    problems = cm.packet_count_problems(
-        cm.MAIN.read_text(), (CPC / "packet" / "CPC-FORM.md").read_text()
-    )
-    assert problems == []
-    changed = (
-        (CPC / "packet" / "CPC-FORM.md")
-        .read_text()
-        .replace("Additional comments 121", "Additional comments 122", 1)
-    )
-    assert cm.packet_count_problems(cm.MAIN.read_text(), changed)
+        planted = True
+    try:
+        problems = cm.packet_count_problems(
+            cm.MAIN.read_text(), (CPC / "packet" / "CPC-FORM.md").read_text()
+        )
+        assert problems == []
+        changed = (
+            (CPC / "packet" / "CPC-FORM.md")
+            .read_text()
+            .replace("Additional comments 121", "Additional comments 122", 1)
+        )
+        assert cm.packet_count_problems(cm.MAIN.read_text(), changed)
+    finally:
+        # A one-line plant is not the fragment corpus_crosscheck.py writes.
+        # Leaving it makes the later trace check report a stale file.
+        if planted:
+            corpus.unlink(missing_ok=True)
