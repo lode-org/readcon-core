@@ -11273,9 +11273,8 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
         }
     }
 
-    fn extension_cdylib() -> PathBuf {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let base = std::env::var_os("CARGO_TARGET_DIR")
+    fn cargo_target_base(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+        cargo_target_dir
             .map(PathBuf::from)
             .map(|path| {
                 if path.is_absolute() {
@@ -11284,8 +11283,26 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
                     root.join(path)
                 }
             })
-            .unwrap_or_else(|| root.join("target"));
-        let target = base.join("python-extension-link");
+            .unwrap_or_else(|| root.join("target"))
+    }
+
+    /// The extension lives under `python-extension-link`, not the shared
+    /// debug cdylib, which can still need libpython.
+    fn extension_cdylib_lib(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+        cargo_target_base(root, cargo_target_dir)
+            .join("python-extension-link")
+            .join("debug")
+            .join("libreadcon_core.so")
+    }
+
+    fn extension_cdylib() -> PathBuf {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let lib = extension_cdylib_lib(&root, std::env::var_os("CARGO_TARGET_DIR").as_deref());
+        let target = lib
+            .parent()
+            .and_then(Path::parent)
+            .expect("python-extension-link directory")
+            .to_path_buf();
         let status = Command::new("cargo")
             .args([
                 "rustc",
@@ -11305,7 +11322,6 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
             .status()
             .expect("cargo rustc extension module");
         assert!(status.success(), "extension module build failed");
-        let lib = target.join("debug/libreadcon_core.so");
         assert!(lib.is_file(), "missing {}", lib.display());
         lib
     }
@@ -11422,6 +11438,46 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
         assert!(
             text.contains("cargo:rustc-link-lib="),
             "build-unit pyo3 stdout was not read:\n{text}"
+        );
+    }
+
+    #[test]
+    fn extension_cdylib_path_avoids_the_stale_shared_library() {
+        let scratch = std::env::temp_dir().join(format!(
+            "readcon-ext-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let _guard = RemoveOnDrop(scratch.clone());
+        let root = scratch.join("root");
+        let base = scratch.join("cargo-target");
+        let stale = base.join("debug/libreadcon_core.so");
+        std::fs::create_dir_all(stale.parent().expect("stale parent"))
+            .unwrap_or_else(|err| panic!("create stale dir: {err}"));
+        std::fs::write(&stale, b"needs libpython")
+            .unwrap_or_else(|err| panic!("write stale lib: {err}"));
+        let chosen = extension_cdylib_lib(&root, Some(base.as_os_str()));
+        std::fs::create_dir_all(chosen.parent().expect("extension parent"))
+            .unwrap_or_else(|err| panic!("create extension dir: {err}"));
+        std::fs::write(&chosen, b"extension")
+            .unwrap_or_else(|err| panic!("write extension lib: {err}"));
+        assert_eq!(
+            chosen,
+            base.join("python-extension-link/debug/libreadcon_core.so")
+        );
+        assert_ne!(chosen, stale);
+        assert!(stale.is_file(), "stale shared cdylib should stay put");
+        let relative = std::ffi::OsStr::new("rel-target");
+        assert_eq!(
+            extension_cdylib_lib(&root, Some(relative)),
+            root.join("rel-target/python-extension-link/debug/libreadcon_core.so")
+        );
+        assert_eq!(
+            extension_cdylib_lib(&root, None),
+            root.join("target/python-extension-link/debug/libreadcon_core.so")
         );
     }
 }
