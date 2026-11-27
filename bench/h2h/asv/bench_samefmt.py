@@ -25,10 +25,13 @@ def _arm_class(arm: str):
 
         def setup(self):
             samefmt.prepare()
-            tool, fmt, op, _multi, _variant = samefmt.split_arm(arm)
+            tool, fmt, op, _multi, variant = samefmt.split_arm(arm)
             self.arm = arm
+            if tool == "eon-cpp":
+                samefmt._ensure_eon_binary()
+                return
             if op != "read":
-                samefmt._source(tool, fmt)
+                samefmt._source(tool, fmt, variant)
 
         def time_call(self):
             samefmt.once(self.arm)

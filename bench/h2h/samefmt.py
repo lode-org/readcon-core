@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -132,6 +133,8 @@ ARMS = (
     "mdtraj-xyz-roundtrip",
     "ovito-pdb-read",
     # eOn C++ client (libeonclib): reads and the three writers. No xyz reader.
+    # The linked library is stock eOn. matter2xyz is the extxyz writer. A
+    # file the extxyz parser rejects is an unsupported row, not a dropped arm.
     "eon-cpp-con-read",
     "eon-cpp-convel-read",
     "eon-cpp-con-write",
@@ -1903,29 +1906,42 @@ EON_SRC = (
 )
 
 
-def _ensure_eon_binary() -> Path:
-    binary = WORK / "eon_samefmt"
-    source = BENCH / "eon_samefmt.cpp"
-    library = EON_BUILD / "client" / "libeonclib.so"
-    if (
-        binary.is_file()
-        and binary.stat().st_mtime >= source.stat().st_mtime
-        and library.is_file()
-    ):
-        return binary
-    if not library.is_file():
-        raise RuntimeError(f"missing {library}")
-    binary.parent.mkdir(parents=True, exist_ok=True)
-    subprocess_cmd = [
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _eigen_cflags() -> list[str]:
+    """Include flags for Eigen. pkg-config is the only lookup."""
+    completed = subprocess.run(
+        ["pkg-config", "--cflags", "eigen3"],
+        capture_output=True,
+        text=True,
+    )
+    flags = completed.stdout.split()
+    if completed.returncode != 0 or not flags:
+        detail = (completed.stderr or completed.stdout).strip()
+        if not detail:
+            detail = "pkg-config --cflags eigen3 failed"
+        raise RuntimeError(f"Eigen was not found via pkg-config eigen3: {detail}")
+    return flags
+
+
+def _eon_link_command(binary: Path, _library: Path) -> list[str]:
+    """Link the samefmt client to stock libeonclib.so.
+
+    No velocity patch is applied. convel rows record that
+    getVelocities() drops fixed-axis components.
+    """
+    return [
         "g++",
         "-O2",
         "-std=c++20",
-        str(source),
+        str(BENCH / "eon_samefmt.cpp"),
         "-o",
         str(binary),
         f"-I{EON_SRC}/include",
         f"-I{EON_SRC}/subprojects/readcon-core/include",
-        "-I/usr/include/eigen3",
+        *_eigen_cflags(),
         f"-I{EON_SRC}/client/thirdparty",
         f"-I{EON_SRC}/subprojects/quill-11.1.0/include",
         f"-I{EON_SRC}/subprojects/inih-r62/cpp",
@@ -1941,8 +1957,23 @@ def _ensure_eon_binary() -> Path:
         "-ldl",
         "-pthread",
     ]
-    import subprocess
 
+
+def _ensure_eon_binary() -> Path:
+    """Link against stock eOn. The prebuilt libeonclib.so is not patched."""
+    binary = WORK / "eon_samefmt"
+    source = BENCH / "eon_samefmt.cpp"
+    library = EON_BUILD / "client" / "libeonclib.so"
+    if (
+        binary.is_file()
+        and binary.stat().st_mtime >= source.stat().st_mtime
+        and library.is_file()
+    ):
+        return binary
+    if not library.is_file():
+        raise RuntimeError("missing libeonclib.so")
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    subprocess_cmd = _eon_link_command(binary, library)
     completed = subprocess.run(subprocess_cmd, capture_output=True, text=True)
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr[-2000:] or "eon_samefmt compile failed")
@@ -1959,9 +1990,8 @@ def _eon_cpp_job(fmt: str, op: str, multi: bool) -> tuple[str, Path, Path]:
     return f"write-{fmt}", source, WORK / "outs" / f"eon-cpp-write-{fmt}-{int(multi)}{suffix}"
 
 
-def _eon_cpp_timed(fmt: str, op: str, multi: bool) -> tuple[float, Path]:
-    import subprocess
-
+def _eon_cpp_once(fmt: str, op: str, multi: bool) -> Path:
+    """Run one eon-cpp call. The harness clock is outside this function."""
     binary = _ensure_eon_binary()
     operation, source, dest = _eon_cpp_job(fmt, op, multi)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -1987,18 +2017,8 @@ def _eon_cpp_timed(fmt: str, op: str, multi: bool) -> tuple[float, Path]:
         env=env,
     )
     if completed.returncode != 0:
-        raise RuntimeError((completed.stderr or completed.stdout)[-800:])
-    wall = None
-    for line in completed.stdout.splitlines():
-        if line.startswith("wall_s "):
-            wall = float(line.split()[1])
-    if wall is None:
-        raise RuntimeError(completed.stdout or "missing wall_s")
-    return wall, dest
-
-
-def _eon_cpp_once(fmt: str, op: str, multi: bool) -> Path:
-    _wall, dest = _eon_cpp_timed(fmt, op, multi)
+        detail = (completed.stderr or completed.stdout).strip()
+        raise RuntimeError(detail[-800:] or "eon-cpp failed")
     return dest
 
 
@@ -2081,15 +2101,72 @@ def _tool_judge(tool: str, fmt: str, got: dict, geom: dict) -> dict:
     return judge(fmt, got, geom)
 
 
+def _public_error(exc: BaseException) -> str:
+    text = f"{type(exc).__name__}: {exc}"
+    for prefix in (str(_repo_root()), str(Path.home())):
+        if prefix:
+            text = text.replace(prefix, ".")
+    return " ".join(text.split())[:400]
+
+
+def _blank_verdict(reason: str) -> dict:
+    text = reason if str(reason).startswith("unsupported:") else f"unsupported: {reason}"
+    return {
+        "n_atoms": None,
+        "n_frames": None,
+        "fields": {},
+        "id_map_ok": None,
+        "reordered": None,
+        "correct": None,
+        "reason": text,
+        "convel_fidelity": "",
+    }
+
+
+def _mark_convel(tool: str, fmt: str, verdict: dict) -> dict:
+    """Name the stock velocity dump without changing the comparison."""
+    if tool == "eon-cpp" and fmt == "convel":
+        verdict["convel_fidelity"] = "known-lossy"
+        note = "known-lossy: stock getVelocities drops fixed-axis components"
+        reason = str(verdict.get("reason") or "")
+        fields = verdict.get("fields") or {}
+        if fields.get("velocities") not in (None, "ok", "not_in_format") and note not in reason:
+            verdict["reason"] = f"{reason}; {note}" if reason else note
+    else:
+        verdict.setdefault("convel_fidelity", "")
+    return verdict
+
+
+def _eon_extxyz_verdict(path: Path, geom: dict) -> dict:
+    """Score matter2xyz output, or an unsupported row when it is not extxyz."""
+    if not path.is_file():
+        return _blank_verdict("eon-cpp extxyz write produced no file")
+    with path.open("rb") as handle:
+        head = handle.read(65536)
+    if b"Properties=" not in head:
+        return _blank_verdict(
+            "eon-cpp extxyz write has no Properties= header, so it is not extxyz"
+        )
+    try:
+        file_got = read_file_with_readcon("extxyz", path)
+    except Exception as exc:
+        return _blank_verdict(f"eon-cpp extxyz write was not accepted: {_public_error(exc)}")
+    verdict = judge("extxyz", file_got, geom)
+    verdict["source"] = "file"
+    return verdict
+
+
 def _check(arm: str, result) -> dict:
     tool, fmt, op, _multi, variant = split_arm(arm)
     geom = _active_geom(variant)
     if tool == "eon-cpp" and op == "read":
-        return judge(fmt, _load_eon_dump(result), geom)
+        return _mark_convel(tool, fmt, judge(fmt, _load_eon_dump(result), geom))
     if op == "read":
-        return _tool_judge(tool, fmt, _materialize(tool, fmt, result), geom)
+        return _mark_convel(tool, fmt, _tool_judge(tool, fmt, _materialize(tool, fmt, result), geom))
     out = result if op == "write" else _out_path(arm, fmt)
-    if fmt == "cextxyz" or (tool == "eon-cpp" and fmt == "extxyz"):
+    if tool == "eon-cpp" and fmt == "extxyz":
+        return _mark_convel(tool, fmt, _eon_extxyz_verdict(Path(out), geom))
+    if fmt == "cextxyz":
         file_fmt = "extxyz"
     else:
         file_fmt = fmt
@@ -2100,22 +2177,26 @@ def _check(arm: str, result) -> dict:
     file_judge = judge(fmt, file_got, geom)
     if op == "write":
         file_judge["source"] = "file"
-        return file_judge
+        return _mark_convel(tool, fmt, file_judge)
     tool_judge = _tool_judge(tool, fmt, _materialize(tool, fmt, result), geom)
     correct = bool(file_judge["correct"] and tool_judge["correct"])
     reason = tool_judge["reason"]
     if file_judge["reason"] != "ok":
         reason = f"tool {tool_judge['reason']}; file {file_judge['reason']}"
-    return {
-        "n_atoms": tool_judge["n_atoms"],
-        "n_frames": tool_judge["n_frames"],
-        "fields": tool_judge["fields"],
-        "file_fields": file_judge["fields"],
-        "id_map_ok": bool(tool_judge["id_map_ok"] and file_judge["id_map_ok"]),
-        "reordered": bool(tool_judge["reordered"] or file_judge["reordered"]),
-        "correct": correct,
-        "reason": "ok" if correct else reason,
-    }
+    return _mark_convel(
+        tool,
+        fmt,
+        {
+            "n_atoms": tool_judge["n_atoms"],
+            "n_frames": tool_judge["n_frames"],
+            "fields": tool_judge["fields"],
+            "file_fields": file_judge["fields"],
+            "id_map_ok": bool(tool_judge["id_map_ok"] and file_judge["id_map_ok"]),
+            "reordered": bool(tool_judge["reordered"] or file_judge["reordered"]),
+            "correct": correct,
+            "reason": "ok" if correct else reason,
+        },
+    )
 
 
 def _versions() -> str:
@@ -2147,42 +2228,94 @@ def _versions() -> str:
     return " ".join(parts)
 
 
-def run(arm: str) -> dict:
-    if arm not in ARMS:
-        raise SystemExit(f"unknown arm {arm}")
-    os.environ["OMP_NUM_THREADS"] = "1"
-    os.environ["OPENBLAS_NUM_THREADS"] = "1"
-    os.environ["MKL_NUM_THREADS"] = "1"
-    os.environ["NUMEXPR_NUM_THREADS"] = "1"
-    prepare()
-    tool, fmt, op, _multi, _variant = split_arm(arm)
-    if tool == "eon-cpp":
-        _ensure_eon_binary()
-    elif tool in ("ase", "eon", "chemfiles", "ovito", "mdanalysis", "mdtraj", "readcon") and op != "read":
-        _source(tool, fmt, _variant)
-    if tool == "mdtraj" and fmt == "xyz":
-        _mdtraj_topology()
-    print(f"warmup {arm}", flush=True)
-    once(arm)
-    samples = []
-    last = None
-    for index in range(REPEATS):
-        if tool == "eon-cpp":
-            wall, last = _eon_cpp_timed(fmt, op, _multi)
-            samples.append(wall)
-        else:
-            started = time.perf_counter()
-            last = once(arm)
-            samples.append(time.perf_counter() - started)
-        print(f"sample {arm} {index} {samples[-1]:.6f}", flush=True)
-    check = _check(arm, last)
-    row = support.stats_block(samples)
-    row.update(check)
+def _num_text(value, digits: int) -> str:
+    if value is None:
+        return ""
+    return f"{float(value):.{digits}f}"
+
+
+def _bit(value) -> str:
+    if value is None:
+        return ""
+    return str(int(bool(value)))
+
+
+def _readcon_sha() -> str:
+    """The readcon commit this row was measured on.
+
+    An empty ``READCON_SHA`` is ``git rev-parse HEAD``. A failure there is
+    an error. Nothing substitutes a remembered hash.
+    """
+    env = os.environ.get("READCON_SHA", "").strip()
+    if env:
+        return env
+    try:
+        sha = subprocess.check_output(
+            ["git", "-C", str(_repo_root()), "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.STDOUT,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        detail = getattr(exc, "output", "") or str(exc)
+        raise RuntimeError(
+            f"READCON_SHA is empty and git rev-parse HEAD failed: {detail}"
+        ) from exc
+    if not sha:
+        raise RuntimeError("READCON_SHA is empty and git rev-parse HEAD returned nothing")
+    return sha
+
+
+def _annotate_row(arm: str, row: dict) -> None:
+    tool, fmt, op, multi, variant = split_arm(arm)
     row["arm"] = arm
-    row["tool"], row["format"], row["operation"], row["multi"], _variant = split_arm(arm)
-    recorded = extxyz_bytes_xyz() if tool == "mdanalysis" and fmt == "extxyz" else _paths(fmt, row["multi"], _variant)
-    row["file"] = support.rel(recorded)
-    row["readcon_sha"] = os.environ.get("READCON_SHA", "").strip()
+    row["variant"] = variant
+    row["tool"] = tool
+    row["format"] = fmt
+    row["operation"] = op
+    row["multi"] = multi
+    if tool == "eon-cpp" and fmt == "convel":
+        row["convel_fidelity"] = "known-lossy"
+    else:
+        row.setdefault("convel_fidelity", "")
+    if not str(row.get("readcon_sha") or "").strip():
+        row["readcon_sha"] = _readcon_sha()
+    if "file" not in row:
+        recorded = (
+            extxyz_bytes_xyz()
+            if tool == "mdanalysis" and fmt == "extxyz"
+            else _paths(fmt, multi, variant)
+        )
+        row["file"] = support.rel(recorded)
+
+
+def _unsupported_row(_arm: str, reason: str, samples: list[float]) -> dict:
+    text = reason if reason.startswith("unsupported:") else f"unsupported: {reason}"
+    if samples:
+        row = support.stats_block(samples)
+    else:
+        row = {
+            "samples": [],
+            "n": 0,
+            "median_s": None,
+            "q25_s": None,
+            "q75_s": None,
+            "iqr_s": None,
+        }
+    row.update(
+        {
+            "n_atoms": None,
+            "n_frames": None,
+            "fields": {},
+            "id_map_ok": None,
+            "reordered": None,
+            "correct": None,
+            "reason": text,
+        }
+    )
+    return row
+
+
+def _finish_row(arm: str, row: dict, samples: list[float]) -> None:
     command = [
         "taskset",
         "-c",
@@ -2202,35 +2335,76 @@ def run(arm: str) -> dict:
     ]
     for sample in samples:
         lines.append(f"sample {sample:.9f}")
-    lines.append(f"median_s {row['median_s']:.9f}")
-    lines.append(f"q25_s {row['q25_s']:.9f}")
-    lines.append(f"q75_s {row['q75_s']:.9f}")
-    lines.append(f"iqr_s {row['iqr_s']:.9f}")
-    lines.append(f"n_atoms {row['n_atoms']}")
-    lines.append(f"n_frames {row['n_frames']}")
-    for name, value in row["fields"].items():
+    lines.append(f"median_s {_num_text(row.get('median_s'), 9)}")
+    lines.append(f"q25_s {_num_text(row.get('q25_s'), 9)}")
+    lines.append(f"q75_s {_num_text(row.get('q75_s'), 9)}")
+    lines.append(f"iqr_s {_num_text(row.get('iqr_s'), 9)}")
+    lines.append(f"n_atoms {'' if row.get('n_atoms') is None else row['n_atoms']}")
+    lines.append(f"n_frames {'' if row.get('n_frames') is None else row['n_frames']}")
+    for name, value in (row.get("fields") or {}).items():
         lines.append(f"field {name} {value}")
-    lines.append(f"id_map_ok {int(bool(row['id_map_ok']))}")
-    lines.append(f"reordered {int(bool(row['reordered']))}")
-    lines.append(f"correct {int(bool(row['correct']))}")
-    lines.append(f"reason {row['reason']}")
-    if row["readcon_sha"]:
+    lines.append(f"id_map_ok {_bit(row.get('id_map_ok'))}")
+    lines.append(f"reordered {_bit(row.get('reordered'))}")
+    lines.append(f"correct {_bit(row.get('correct'))}")
+    lines.append(f"reason {row.get('reason')}")
+    if row.get("convel_fidelity"):
+        lines.append(f"convel_fidelity {row['convel_fidelity']}")
+    if row.get("readcon_sha"):
         lines.append(f"readcon_sha {row['readcon_sha']}")
     lines.append(json.dumps(row, default=str))
     body = "\n".join(lines) + "\n"
     RESULTS.mkdir(parents=True, exist_ok=True)
     destination = RESULTS / f"{arm}.stdout"
     destination.write_text(support.log_text(command, body, 0), encoding="utf-8")
+
+
+def run(arm: str) -> dict:
+    if arm not in ARMS:
+        raise SystemExit(f"unknown arm {arm}")
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["OPENBLAS_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    os.environ["NUMEXPR_NUM_THREADS"] = "1"
+    prepare()
+    tool, fmt, op, _multi, variant = split_arm(arm)
+    samples: list[float] = []
+    try:
+        if tool == "eon-cpp":
+            _ensure_eon_binary()
+        elif (
+            tool in ("ase", "eon", "chemfiles", "ovito", "mdanalysis", "mdtraj", "readcon")
+            and op != "read"
+        ):
+            _source(tool, fmt, variant)
+        if tool == "mdtraj" and fmt == "xyz":
+            _mdtraj_topology()
+        print(f"warmup {arm}", flush=True)
+        once(arm)
+        last = None
+        for index in range(REPEATS):
+            started = time.perf_counter()
+            last = once(arm)
+            samples.append(time.perf_counter() - started)
+            print(f"sample {arm} {index} {samples[-1]:.6f}", flush=True)
+        check = _check(arm, last)
+        row = support.stats_block(samples)
+        row.update(check)
+    except Exception as exc:
+        row = _unsupported_row(arm, _public_error(exc), samples)
+        _annotate_row(arm, row)
+        _finish_row(arm, row, samples)
+        print(f"unsupported {arm} {row['reason']}", flush=True)
+        return row
+    _annotate_row(arm, row)
+    _finish_row(arm, row, samples)
+    shown = row.get("correct")
+    flag = "unsupported" if shown is None else str(int(bool(shown)))
     print(
-        f"done {arm} median {row['median_s']:.6f} iqr {row['iqr_s']:.6f} correct {int(row['correct'])}",
+        f"done {arm} median {_num_text(row.get('median_s'), 6)} "
+        f"iqr {_num_text(row.get('iqr_s'), 6)} correct {flag}",
         flush=True,
     )
     return row
-
-
-# Rows measured before the parallel-scaling wheel recorded no SHA. That wheel
-# was readcon 0.22.0 at this commit.
-LEGACY_READCON_SHA = "68dfb7c307e0923044d4a9f41159b7a2ed2dd605"
 
 
 def _row_from_log(arm: str) -> dict:
@@ -2252,39 +2426,61 @@ TABLE_NOTE = (
 )
 
 
+def _csv_cell(value) -> str:
+    if value is None:
+        return ""
+    return str(value).replace(",", ";").replace("\n", " ")
+
+
+def _csv_num(value) -> str:
+    if value is None or value == "":
+        return ""
+    return f"{float(value):.9e}"
+
+
+def _csv_flag(value) -> str:
+    if value is None or value == "":
+        return ""
+    return str(int(bool(value)))
+
+
 def _write_csv(rows: list[dict], destination: Path) -> None:
     header = (
-        "tool,format,operation,n_atoms,n_frames,n,median_s,iqr_s,q25_s,q75_s,"
+        "arm,variant,tool,format,operation,n_atoms,n_frames,n,median_s,iqr_s,q25_s,q75_s,"
         "correct,reordered,id_map_ok,positions,ids,cell,masses,fixed,velocities,"
-        "readcon_sha\n"
+        "convel_fidelity,readcon_sha,reason\n"
     )
     lines = [TABLE_NOTE, header]
     for row in rows:
-        fields = row["fields"]
-        sha = row.get("readcon_sha") or LEGACY_READCON_SHA
+        fields = row.get("fields") or {}
+        sha = str(row.get("readcon_sha") or "").strip() or _readcon_sha()
         lines.append(
             ",".join(
                 [
-                    row["tool"],
-                    row["format"],
-                    row["operation"],
-                    str(row["n_atoms"]),
-                    str(row["n_frames"]),
-                    str(row["n"]),
-                    f"{row['median_s']:.9e}",
-                    f"{row['iqr_s']:.9e}",
-                    f"{row['q25_s']:.9e}",
-                    f"{row['q75_s']:.9e}",
-                    str(int(bool(row["correct"]))),
-                    str(int(bool(row["reordered"]))),
-                    str(int(bool(row["id_map_ok"]))),
-                    str(fields.get("positions", "")).replace(",", ";"),
-                    str(fields.get("ids", "")).replace(",", ";"),
-                    str(fields.get("cell", "")).replace(",", ";"),
-                    str(fields.get("masses", "")).replace(",", ";"),
-                    str(fields.get("fixed", "")).replace(",", ";"),
-                    str(fields.get("velocities", "")).replace(",", ";"),
+                    _csv_cell(row.get("arm")),
+                    _csv_cell(row.get("variant")),
+                    _csv_cell(row.get("tool")),
+                    _csv_cell(row.get("format")),
+                    _csv_cell(row.get("operation")),
+                    _csv_cell(row.get("n_atoms")),
+                    _csv_cell(row.get("n_frames")),
+                    _csv_cell(row.get("n")),
+                    _csv_num(row.get("median_s")),
+                    _csv_num(row.get("iqr_s")),
+                    _csv_num(row.get("q25_s")),
+                    _csv_num(row.get("q75_s")),
+                    _csv_flag(row.get("correct")),
+                    _csv_flag(row.get("reordered")),
+                    _csv_flag(row.get("id_map_ok")),
+                    _csv_cell(fields.get("positions", "")),
+                    _csv_cell(fields.get("ids", "")),
+                    _csv_cell(fields.get("cell", "")),
+                    _csv_cell(fields.get("masses", "")),
+                    _csv_cell(fields.get("fixed", "")),
+                    _csv_cell(fields.get("velocities", "")),
+                    _csv_cell(row.get("convel_fidelity")),
                     sha,
+                    _csv_cell(row.get("reason")),
                 ]
             )
             + "\n"
@@ -2342,9 +2538,82 @@ def self_check() -> None:
         bench_disk.release(tmp)
 
 
+def smoke() -> None:
+    """One repetition at the small geometry. Every arm stores one row."""
+    global N_ATOMS, MF_ATOMS, MF_FRAMES, CC_ATOMS, CC_FRAMES, REPEATS
+    global WORK, RESULTS, _GEOM, _MF, _ALLOY, _CC, _CACHE
+    import bench_disk
+
+    saved = (
+        N_ATOMS,
+        MF_ATOMS,
+        MF_FRAMES,
+        CC_ATOMS,
+        CC_FRAMES,
+        REPEATS,
+        WORK,
+        RESULTS,
+        _GEOM,
+        _MF,
+        _ALLOY,
+        _CC,
+    )
+    tmp = bench_disk.bench_dir("samefmt-smoke")
+    N_ATOMS = 4
+    MF_ATOMS = 4
+    MF_FRAMES = 2
+    CC_ATOMS = 3
+    CC_FRAMES = 2
+    REPEATS = 1
+    WORK = tmp / "work"
+    RESULTS = tmp / "results"
+    _GEOM = None
+    _MF = None
+    _ALLOY = None
+    _CC = None
+    _CACHE = {}
+    try:
+        prepare()
+        scored = 0
+        unsupported = 0
+        for arm in ARMS:
+            row = run(arm)
+            reason = str(row.get("reason") or "")
+            if reason.startswith("unsupported:"):
+                unsupported += 1
+                label = "unsupported"
+            else:
+                scored += 1
+                label = "scored"
+            print(f"smoke {arm} {label} {reason}", flush=True)
+        print(
+            f"smoke arms {len(ARMS)} scored {scored} unsupported {unsupported}",
+            flush=True,
+        )
+        if scored + unsupported != len(ARMS):
+            raise SystemExit("smoke lost an arm")
+    finally:
+        (
+            N_ATOMS,
+            MF_ATOMS,
+            MF_FRAMES,
+            CC_ATOMS,
+            CC_FRAMES,
+            REPEATS,
+            WORK,
+            RESULTS,
+            _GEOM,
+            _MF,
+            _ALLOY,
+            _CC,
+        ) = saved
+        _CACHE = {}
+        bench_disk.release(tmp)
+
+
 def main() -> None:
     if len(sys.argv) < 2:
-        raise SystemExit("usage: samefmt.py prepare|report|self-check|ARM")
+        raise SystemExit("usage: samefmt.py prepare|report|self-check|smoke|ARM")
     command = sys.argv[1]
     if command == "prepare":
         prepare()
@@ -2354,6 +2623,9 @@ def main() -> None:
         return
     if command == "self-check":
         self_check()
+        return
+    if command == "smoke":
+        smoke()
         return
     if command == "all":
         prepare()

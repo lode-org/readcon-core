@@ -82,6 +82,9 @@ void dump_matter(std::ostream &out, eonc::Matter &matter, bool velocities) {
         put_u8(out, bits);
     }
     if (velocities) {
+        // Stock Matter::getVelocities() zeros a component on a fixed axis.
+        // This build has no raw accessor. The harness records convel
+        // fidelity as known-lossy and still compares the dumped values.
         const auto vel = matter.getVelocities();
         std::vector<double> row(static_cast<std::size_t>(n) * 3);
         for (long atom = 0; atom < n; ++atom) {
