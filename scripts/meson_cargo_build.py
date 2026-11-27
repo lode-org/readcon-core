@@ -139,19 +139,45 @@ def _rustc_host(env: dict[str, str]) -> str:
     raise RuntimeError("rustc did not report its host target")
 
 
+def _ndk_triple(target: str) -> bool:
+    """True for an Android cargo target, including armv7 androideabi.
+
+    ``armv7-linux-androideabi`` has no ``android`` component. The NDK
+    still ships libc++ for that triple.
+    """
+    parts = target.split("-")
+    return "android" in parts or "androideabi" in parts
+
+
 def _cxx_link_args(text: str, target: str = "") -> list[str]:
     """Name the C++ runtime when the cargo features pull in C++ objects."""
     names = {part.strip() for part in text.split(",") if part.strip()}
     if "zstd" not in names and not any(name.startswith("chemfiles") for name in names):
         return []
     # The NDK uses libc++, including when the meson host is Linux.
-    if "android" in target.split("-"):
+    if _ndk_triple(target):
         return ["-Clink-arg=-lc++"]
     if sys.platform.startswith("linux"):
         return ["-Clink-arg=-lstdc++"]
     if sys.platform == "darwin":
         return ["-Clink-arg=-lc++"]
     return []
+
+
+def _host_libstdcxx_library_path(
+    target: str, libdir: str | None, current: str
+) -> str | None:
+    """Prepend the host g++ libstdc++ directory, or leave the path alone.
+
+    An Android cargo target must not search that host directory. None
+    means the caller keeps the current ``LIBRARY_PATH``.
+    """
+    if not libdir or _ndk_triple(target):
+        return None
+    parts = [part for part in current.split(":") if part]
+    if libdir in parts:
+        return None
+    return ":".join([libdir, *parts])
 
 
 def _linux_libstdcxx_dir() -> str | None:
@@ -232,14 +258,16 @@ def main(argv: list[str]) -> int:
             )
         print(f"cargo cc: {program}", file=sys.stderr)
     rustc_extra: list[str] = []
-    cxx_link = _cxx_link_args(features, env.get("CARGO_BUILD_TARGET", ""))
+    cargo_target = env.get("CARGO_BUILD_TARGET", "")
+    cxx_link = _cxx_link_args(features, cargo_target)
     if cxx_link:
-        libdir = _linux_libstdcxx_dir()
-        if libdir:
-            current = env.get("LIBRARY_PATH", "")
-            parts = [part for part in current.split(":") if part]
-            if libdir not in parts:
-                env["LIBRARY_PATH"] = ":".join([libdir, *parts])
+        library_path = _host_libstdcxx_library_path(
+            cargo_target,
+            _linux_libstdcxx_dir(),
+            env.get("LIBRARY_PATH", ""),
+        )
+        if library_path is not None:
+            env["LIBRARY_PATH"] = library_path
     if sys.platform.startswith("linux"):
         rustc_extra.append(f"-Clink-arg=-Wl,-soname,{shared_name}")
     elif sys.platform == "darwin":

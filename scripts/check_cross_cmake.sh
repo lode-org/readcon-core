@@ -16,15 +16,17 @@ rustup target add "$triple" --toolchain "$RUSTUP_TOOLCHAIN"
 work="$(scratch_dir)"
 trap 'status=$?; if [[ $status -eq 0 ]]; then rm -rf "$work"; else echo "left $work" >&2; fi' EXIT
 
-cat >"$work/cc" <<EOF
+# Quoted so the scratch path is not expanded while the wrapper is written.
+# The compiler inherits READCON_CROSS_INVOKED from the cargo environment.
+cat >"$work/cc" <<'EOF'
 #!/bin/sh
-printf '%s\n' "cc:\$0" >> "$work/invoked"
-exec gcc "\$@"
+printf '%s\n' "cc:$0" >> "$READCON_CROSS_INVOKED"
+exec gcc "$@"
 EOF
-cat >"$work/cxx" <<EOF
+cat >"$work/cxx" <<'EOF'
 #!/bin/sh
-printf '%s\n' "cxx:\$0" >> "$work/invoked"
-exec g++ "\$@"
+printf '%s\n' "cxx:$0" >> "$READCON_CROSS_INVOKED"
+exec g++ "$@"
 EOF
 chmod +x "$work/cc" "$work/cxx"
 
@@ -32,6 +34,7 @@ set +e
 env -u CXX -u CC -u LIBRARY_PATH -u RUSTFLAGS -u CMAKE_TOOLCHAIN_FILE \
     "CC_${triple}=$work/cc" \
     "CXX_${triple}=$work/cxx" \
+    "READCON_CROSS_INVOKED=$work/invoked" \
     CARGO_TARGET_DIR="$work/target" \
     cargo build --manifest-path "$root/Cargo.toml" --locked \
     --features chemfiles --target "$triple" \

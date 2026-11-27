@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -69,6 +71,31 @@ def test_android_links_the_ndk_runtime() -> None:
     ]
 
 
+def test_androideabi_links_the_ndk_runtime() -> None:
+    module = _load()
+    assert module._cxx_link_args("zstd", "armv7-linux-androideabi") == [
+        "-Clink-arg=-lc++"
+    ]
+
+
+def test_android_does_not_take_the_host_libstdcxx_dir() -> None:
+    module = _load()
+    host = "/usr/lib/gcc/x86_64-linux-gnu/13"
+    assert (
+        module._host_libstdcxx_library_path(
+            "armv7-linux-androideabi", host, "/opt/ndk/lib"
+        )
+        is None
+    )
+    assert (
+        module._host_libstdcxx_library_path("aarch64-linux-android", host, "")
+        is None
+    )
+    assert module._host_libstdcxx_library_path(
+        "x86_64-unknown-linux-gnu", host, "/opt/lib"
+    ) == f"{host}:/opt/lib"
+
+
 def test_static_keeps_link_args_that_are_not_l() -> None:
     module = _load()
     args = [
@@ -108,6 +135,35 @@ def test_msvc_cl_is_not_the_linker(tmp_path: Path) -> None:
     assert assigned["CC"].endswith("cl.exe")
     assert module.cargo_linker_key(triple) not in assigned
     assert not (tmp_path / "readcon-cc").exists()
+
+
+def test_cross_check_heredoc_does_not_interpolate_the_scratch_path(
+    tmp_path: Path,
+) -> None:
+    text = (ROOT / "scripts" / "check_cross_cmake.sh").read_text(encoding="utf-8")
+    blocks = re.findall(
+        r"cat >\"\$work/(cc|cxx)\" <<'EOF'\n(.*?)\nEOF",
+        text,
+        re.S,
+    )
+    assert [name for name, _body in blocks] == ["cc", "cxx"]
+    work = tmp_path / "scratch dir"
+    work.mkdir()
+    invoked = work / "invoked"
+    for name, body in blocks:
+        assert "$work" not in body
+        wrapper = work / name
+        wrapper.write_text(body, encoding="utf-8")
+        wrapper.chmod(0o755)
+        subprocess.run(
+            [str(wrapper), "-dumpversion"],
+            check=True,
+            env={**os.environ, "READCON_CROSS_INVOKED": str(invoked)},
+            stdout=subprocess.DEVNULL,
+        )
+    log = invoked.read_text(encoding="utf-8")
+    assert f"cc:{work / 'cc'}" in log
+    assert f"cxx:{work / 'cxx'}" in log
 
 
 def test_linker_key_is_the_cargo_target(tmp_path: Path) -> None:
