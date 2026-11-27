@@ -66,8 +66,6 @@ import re
 import subprocess
 from pathlib import Path
 
-import provenance
-
 
 _repo = next(
     _p for _p in Path(__file__).resolve().parents if (_p / "readcon_bench.py").is_file()
@@ -90,17 +88,53 @@ VERSIONS_OUT = PAPER_SRC / "figures" / "generated" / "versions_table.tex"
 MACROS_OUT = PAPER_SRC / "figures" / "generated" / "spec_macros.tex"
 SPEC_DATA = ROOT / "paper" / "cpc" / "data" / "spec"
 LEGACY_VERSIONS = SPEC_DATA / "versions.json"
-MEASUREMENTS = provenance.revisions(
-    SPEC_DATA,
-    "spec-measurement",
-    (ROOT / "VERSION").read_text().strip(),
-)
-MEASUREMENT = provenance.latest_record(
-    SPEC_DATA,
-    "spec-measurement",
-    (ROOT / "VERSION").read_text().strip(),
-)
-VERSIONS = MEASUREMENT
+VERSION = (ROOT / "VERSION").read_text().strip()
+MEASUREMENT = SPEC_DATA / f"spec-measurement-{VERSION}.json"
+
+
+def _spec_blob() -> str:
+    return subprocess.run(
+        ["git", "hash-object", str(SPEC)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+
+def measurement_path(version: str | None = None, blob: str | None = None) -> Path:
+    version = version or VERSION
+    blob = blob or _spec_blob()
+    base = SPEC_DATA / f"spec-measurement-{version}.json"
+    by_blob = SPEC_DATA / f"spec-measurement-{version}-{blob[:8]}.json"
+    if by_blob.is_file():
+        return by_blob
+    if base.is_file():
+        existing = json.loads(base.read_text()).get("tree", {}).get("spec_blob")
+        if existing == blob:
+            return base
+        return by_blob
+    return base
+
+
+def active_versions_file() -> Path:
+    blob = _spec_blob()
+    path = measurement_path(blob=blob)
+    if not path.is_file():
+        raise SystemExit(
+            f"no specification measurement for {SPEC.relative_to(ROOT)} "
+            f"blob {blob[:8]}: run gen_spec_supp.py --measure"
+        )
+    recorded = json.loads(path.read_text()).get("tree", {}).get("spec_blob")
+    if recorded != blob:
+        raise SystemExit(
+            f"{path.relative_to(ROOT)} records spec blob {recorded}, "
+            f"not {blob}: run gen_spec_supp.py --measure"
+        )
+    return path
+
+
+VERSIONS = measurement_path()
 RELEASE = r"[0-9]+\.[0-9]+\.[0-9]+"
 CLAUSE_ID = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) ::", re.M)
 CLAUSE_LINE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+ :: .*)$")
@@ -601,6 +635,40 @@ def read_versions() -> dict:
     return json.loads(VERSIONS.read_text())
 
 
+def _unreleased_history() -> list[dict]:
+    return [
+        {"version": row["version"], "date": row["date"]}
+        for row in history_rows(SPEC.read_text(encoding="utf-8"))
+        if row["version"] != "1"
+    ]
+
+
+def measurement_record() -> dict:
+    record = read_versions()
+    if not SPEC.is_file():
+        return record
+    contents = SPEC.read_bytes()
+    spec_blob = hashlib.sha1(f"blob {len(contents)}\0".encode() + contents).hexdigest()
+    tree = record["tree"]
+    release = package_version()
+    tagged_releases = {entry["tag"] for entry in record["tags"]}
+    live_untagged = (
+        not tree["tagged"]
+        and tree["release"] == release
+        and f"v{release}" not in tagged_releases
+    )
+    if VERSIONS == MEASUREMENT and live_untagged:
+        record["tree"] = {
+            "release": release,
+            "tagged": False,
+            "spec_blob": spec_blob,
+        }
+        record["unreleased_history"] = _unreleased_history()
+    elif live_untagged and tree.get("spec_blob") == spec_blob:
+        record["unreleased_history"] = _unreleased_history()
+    return record
+
+
 def release_rows(org: str) -> list[dict]:
     """The version history of a spec.org without a Release column, as a release tree ships it.
 
@@ -610,7 +678,7 @@ def release_rows(org: str) -> list[dict]:
     of that version. It is a row of its own after the version's rows, dated by the tag, and its change is
     what --measure recorded for the tag (second_text_change).
     """
-    record = read_versions()
+    record = measurement_record()
     rows = history_rows(org)
     for row in rows:
         if row["version"] == "1":
@@ -690,7 +758,7 @@ def spec_macros(org: str) -> str:
     A release-preparation tree may name the upcoming release before its tag
     exists. Any other spec.org that no release tag holds stops the build.
     """
-    record = read_versions()
+    record = measurement_record()
     blob = git("hash-object", str(SPEC)).stdout.strip()
     same = next((t["tag"][1:] for t in record["tags"] if t["spec_blob"] == blob), None)
     tree = record["tree"]
@@ -802,9 +870,7 @@ def versions_record() -> dict:
             previous, previous_org = entry, org
         entries.append(entry)
     release = package_version()
-    measured = git("rev-parse", "HEAD").stdout.strip()
     return {
-        "measured_at": {"commit": measured},
         "spec": spec,
         "tags": entries,
         "tree": {
@@ -815,15 +881,40 @@ def versions_record() -> dict:
     }
 
 
-def measure() -> None:
-    previous = MEASUREMENTS[-2] if len(MEASUREMENTS) > 1 else None
-    supersedes = {}
-    if previous:
-        supersedes["supersedes"] = previous.relative_to(ROOT).as_posix()
+def measure(commit: str | None = None) -> None:
+    """Write the specification measurement. An existing versioned file stays.
+
+    The record pairs the release in VERSION with the spec.org blob, so the
+    measured commit is the last one to change either file.
+    """
+    spec_rel = (
+        SPEC.relative_to(ROOT).as_posix()
+        if SPEC.is_relative_to(ROOT)
+        else "docs/orgmode/spec.org"
+    )
+    measured_commit = (
+        commit
+        or git(
+            "log", "-n", "1", "--format=%H", "HEAD", "--", spec_rel, "VERSION"
+        ).stdout.strip()
+        or git("rev-parse", "HEAD").stdout.strip()
+    )
+    if not re.fullmatch(r"[0-9a-f]{40}", measured_commit):
+        raise SystemExit("git did not return a commit")
+    body = versions_record()
+    stored = measurement_path(body["tree"]["release"], body["tree"]["spec_blob"])
+    # Each rerun on the same (release, spec_blob) supersedes the newest file
+    # of its chain: -measured.json, then -measured-2.json, and so on.
+    previous, out, n = None, stored, 1
+    while out.is_file():
+        previous = out
+        suffix = "measured" if n == 1 else f"measured-{n}"
+        out = stored.with_name(f"{stored.stem}-{suffix}.json")
+        n += 1
     versions = {
         "generator": "paper/cpc/scripts/gen_spec_supp.py --measure",
-        **supersedes,
-        **versions_record(),
+        "measured_at": {"commit": measured_commit},
+        **body,
     }
     if previous is not None:
         versions = {
@@ -839,7 +930,7 @@ def measure() -> None:
         handle.write(json.dumps(versions, indent=2) + "\n")
     print(
         f"wrote {out.relative_to(ROOT)}: {len(versions['tags'])} tags, "
-        f"release {versions['tree']}, measured_at.commit {commit}"
+        f"release {versions['tree']}, measured_at.commit {measured_commit}"
     )
 
 

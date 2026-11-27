@@ -1,9 +1,9 @@
 name: cxx wrap pin
 
-# Rebuild the slim cxx archive on every push and pull request and fail when
-# packaging/wrapdb still names the previous tree. bench/** and paper/** do
-# not enter the archive, so a campaign-only or paper-only change does not run
-# this job.
+# Rebuild the slim cxx archive on protected refs and pull requests.
+# Pull requests report stale pins without failing. Branch and tag pushes
+# remain strict release gates. bench/** and paper/** do not enter the
+# archive, so a campaign-only or paper-only change does not run this job.
 on:
   push:
     branches:

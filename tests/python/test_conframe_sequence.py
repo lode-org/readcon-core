@@ -5,9 +5,7 @@ import tempfile
 
 import numpy as np
 import pytest
-
 import readcon
-
 
 RESOURCES = os.path.join(os.path.dirname(__file__), "..", "..", "resources", "test")
 
@@ -235,14 +233,14 @@ class TestSequence:
             metadata={"generator": "right"},
         )
         assert left == right
-        assert not (left != right)
+        assert left.__ne__(right) is False
         right[0].x = 1.0
         assert left != right
         missing = make_frame(atom("H", 0.0, y=0.5, mass=1.0))
         present = make_frame(atom("H", 0.0, y=0.5, mass=1.0, vx=0.0, vy=0.0, vz=0.0))
         assert missing != present
         nan = make_frame(atom("H", float("nan"), mass=1.0))
-        assert nan != nan
+        assert nan.__ne__(nan) is True
         swapped = make_frame(atom("He", 0.0, mass=4.0), atom("H", 1.0, mass=1.0))
         other_order = make_frame(atom("H", 1.0, mass=1.0), atom("He", 0.0, mass=4.0))
         assert swapped != other_order

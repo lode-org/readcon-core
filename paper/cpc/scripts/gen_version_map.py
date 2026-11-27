@@ -59,18 +59,21 @@ RECORD_DIRS = ("data/", "evidence/", "bench/results/", "src/figures/generated/")
 DATA_SUFFIXES = {".json", ".csv", ".npz", ".h5", ".h5md", ".dat"}
 OUTPUT_KEYS = ("outputs", "csv")
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
-SPEC_DATA = CPC / "data" / "spec"
 # Records no readcon-core build writes: clauses copied from the specifications they cite, and the version
 # history that gen_spec_supp.py --measure reads from spec.org at each release tag.
 NO_BUILD = {
     "evidence/results/e4_cells.csv",
+    *(
+        f"data/spec/{p.name}"
+        for p in (CPC / "data" / "spec").glob("spec-measurement-*.json")
+    ),
     "data/spec/versions.json",
     "data/spec/clause_coverage.json",
-    *{
-        path.relative_to(CPC).as_posix()
-        for stem in ("spec-measurement", "clause_coverage")
-        for path in SPEC_DATA.glob(f"{stem}-{VERSION}*.json")
-    },
+    f"data/spec/clause_coverage-{VERSION}.json",
+    *(
+        f"data/spec/{p.name}"
+        for p in (CPC / "data" / "spec").glob("clause_coverage-*.json")
+    ),
     # Stored tables the restored figures draw. The database rows come from
     # readcon-db, and these files carry no readcon-core provenance block.
     "data/db/dedup.json",
@@ -90,17 +93,18 @@ NO_BUILD = {
     "data/eon/readcon_pins.json",
     "data/peers/releases.json",
 }
-# A measurement of a later spec.org of the same release is named by its blob.
-NO_BUILD |= {
-    p.relative_to(CPC).as_posix()
-    for p in (CPC / "data" / "spec").glob(f"spec-measurement-{VERSION}-*.json")
-}
-# A clause recount after the release record is named by its specification
-# digest and likewise carries no build.
-NO_BUILD |= {
-    p.relative_to(CPC).as_posix()
-    for p in (CPC / "data" / "spec").glob(f"clause_coverage-{VERSION}-*.json")
-}
+
+
+def no_build(rel: str) -> bool:
+    return rel in NO_BUILD or rel.startswith(
+        (
+            f"data/spec/clause_coverage-{VERSION}-",
+            f"data/spec/spec-measurement-{VERSION}-",
+            "data/referee_probes",
+        )
+    )
+
+
 # Record directories copied verbatim from lode-org/readcon-db: their build is a readcon-db commit, not a readcon-core build.
 EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/", "data/db33/")
 HOST_BUILD_KEYS = ("readcon_core", "readcon_sha", "rustc", "python")

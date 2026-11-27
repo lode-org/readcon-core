@@ -183,12 +183,22 @@ MEASUREMENT_RECORDS = frozenset(
         "paper/cpc/data/sizes.json",
         "paper/cpc/data/restart_walls/restart_walls.json",
         "paper/cpc/data/spec/corpus_recount.json",
+        # The model release is PET-MAD-S 1.1.0. The record keeps the
+        # upstream file token, which is not a tag of this repository.
+        "paper/cpc/data/claisen/results.json",
+        *(
+            p.relative_to(ROOT).as_posix()
+            for p in sorted(
+                (ROOT / "paper" / "cpc" / "data" / "spec").glob("clause_coverage*.json")
+            )
+        ),
         "paper/cpc/data/spec/mutant_differential.json",
         *(
-            path.relative_to(ROOT).as_posix()
-            for stem in ("clause_coverage", "spec-measurement")
-            for path in (ROOT / "paper/cpc/data/spec").glob(
-                f"{stem}-{CURRENT_VERSION}*.json"
+            p.relative_to(ROOT).as_posix()
+            for p in sorted(
+                (ROOT / "paper" / "cpc" / "data" / "spec").glob(
+                    "spec-measurement-*.json"
+                )
             )
         ),
         "paper/cpc/data/spec/versions.json",

@@ -71,7 +71,6 @@ LISTED = 40
 
 sys.path.insert(0, str(SCRIPTS))
 
-import clause_coverage  # noqa: E402
 import provenance  # noqa: E402
 
 
@@ -1157,12 +1156,15 @@ def check_conformance() -> str:
     every = json.loads((ROOT / "data" / "every_path.json").read_text())["results"][
         "totals"
     ]
-    version = (ROOT.parents[1] / "VERSION").read_text().strip()
-    coverage_path = provenance.latest_record(
-        ROOT / "data" / "spec", "clause_coverage", version
-    )
-    coverage_record = coverage_path.name
-    clauses = json.loads(coverage_path.read_text())["totals"]
+    import clause_coverage
+
+    _, coverage_path = clause_coverage.default_paths(root=ROOT, repo=REPO)
+    if coverage_path.is_file():
+        coverage_record = coverage_path.name
+        clauses = json.loads(coverage_path.read_text(encoding="utf-8"))["totals"]
+    else:
+        coverage_record = "live clause regeneration"
+        clauses = live_clause_coverage()["totals"]
     mutants = json.loads(
         (ROOT / "data" / "spec" / "mutant_differential.json").read_text()
     )["totals"]

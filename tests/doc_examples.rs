@@ -8,7 +8,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
 
-include!("common/metatensor_link.rs");
+#[cfg(feature = "capi")]
+include!("metatensor_link.rs");
 
 #[cfg(feature = "capi")]
 #[path = "common/plain_library.rs"]

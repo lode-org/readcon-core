@@ -1365,6 +1365,7 @@ pub unsafe extern "C" fn rkr_mpi_rewrite_block_f(
 }
 
 #[cfg(feature = "capi")]
+#[allow(clippy::too_many_arguments)]
 unsafe fn mpi_write_block(
     comm_f: ffi::RSMPI_Fint,
     path_c: *const std::ffi::c_char,

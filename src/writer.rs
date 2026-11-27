@@ -628,7 +628,8 @@ impl<W: Write> ConFrameWriter<W> {
         &mut self,
         spec_version: u32,
         metadata: &BTreeMap<String, Value>,
-        sections: [bool; 8],
+        minor_raw: Option<&str>,
+        present: [bool; 8],
     ) -> Result<(), WriteError> {
         let [
             has_vel,
@@ -639,7 +640,7 @@ impl<W: Write> ConFrameWriter<W> {
             has_mm,
             has_dsp,
             has_spr,
-        ] = sections;
+        ] = present;
         let cache_hit = !self.canonical
             && self.metadata_cache.as_ref().is_some_and(|c| {
                 c.matches(
@@ -1141,18 +1142,19 @@ impl<W: Write> ConFrameWriter<W> {
                     buf,
                     LineFmt { ryu, slots },
                     &frame.atom_data[atom_idx_offset..atom_idx_offset + num_atoms_in_type],
-                    CoordJob {
-                        prec,
-                        spec_version,
-                        workers: self.atom_workers,
+                    &coord_buf[atom_idx_offset * 3..(atom_idx_offset + num_atoms_in_type) * 3],
+                    prec,
+                    spec_version,
+                    self.atom_workers,
+                    AppendOut {
                         mapped,
                         force_map: self.force_map,
-                    },
-                    stream_out.as_mut().map(|out| &mut out.file),
-                    if save_velocity && !direct_velocity {
-                        Some(&mut velocity_rows.as_mut().unwrap().0[type_idx])
-                    } else {
-                        None
+                        stream: stream_out.as_mut().map(|out| &mut out.file),
+                        vel: if save_velocity && !direct_velocity {
+                            Some(&mut velocity_rows.as_mut().unwrap().0[type_idx])
+                        } else {
+                            None
+                        },
                     },
                 )?;
                 atom_idx_offset += num_atoms_in_type;
@@ -2133,30 +2135,26 @@ fn check_position_rows(frame: &ConFrame) -> Result<(), WriteError> {
     ))
 }
 
-type FormattedPart = std::sync::Mutex<Option<(Vec<u8>, Vec<u8>)>>;
-
-struct MotionFormat<'a> {
+struct MotionFmt<'a> {
     ryu: &'a mut ryu::Buffer,
     slots: &'a mut [FmtSlot; 3],
     vel_slots: &'a mut [FmtSlot; 3],
-    prec: FloatFormat,
-    spec_version: u32,
 }
 
 fn push_atom_motion(
     coord: &mut Vec<u8>,
     vel: Option<&mut Vec<u8>>,
+    fmt: MotionFmt<'_>,
     xyz: [f64; 3],
     atom: &crate::types::AtomDatum,
-    format: MotionFormat<'_>,
+    prec: FloatFormat,
+    spec_version: u32,
 ) {
-    let MotionFormat {
+    let MotionFmt {
         ryu,
         slots,
         vel_slots,
-        prec,
-        spec_version,
-    } = format;
+    } = fmt;
     let fixed = written_fixed_flag(atom.fixed(), spec_version);
     push_xyz_line(coord, ryu, slots, xyz, prec, fixed, atom.atom_id);
     if let Some(vel) = vel {
@@ -2298,7 +2296,7 @@ pub(crate) fn format_coord_range(
     begin: usize,
     end: usize,
 ) -> Result<Vec<u8>, WriteError> {
-    let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
+    let spec = binding_spec(frame);
     let prec = FloatFormat::RoundTrip;
     let coords = frame_coords(frame)?;
     let mut buf = Vec::with_capacity((end - begin).saturating_mul(32) + 64);
@@ -2321,15 +2319,19 @@ pub(crate) fn format_coord_range(
                 push_atom_motion(
                     &mut buf,
                     None,
-                    load_xyz(atom, slab, index),
-                    atom,
-                    MotionFormat {
+                    MotionFmt {
                         ryu: &mut ryu,
                         slots: &mut slots,
                         vel_slots: &mut vel_slots,
-                        prec,
-                        spec_version: spec,
                     },
+                    [
+                        coords[(from + offset) * 3],
+                        coords[(from + offset) * 3 + 1],
+                        coords[(from + offset) * 3 + 2],
+                    ],
+                    atom,
+                    prec,
+                    spec,
                 );
             }
         }
@@ -2356,15 +2358,16 @@ pub fn format_coordinate_lines(
             slots: &mut slots,
         },
         atoms,
-        CoordJob {
-            prec: FloatFormat::RoundTrip,
-            spec_version: 2,
-            workers: 1,
+        coords,
+        FloatFormat::RoundTrip,
+        2,
+        1,
+        AppendOut {
             mapped: false,
             force_map: false,
+            stream: None,
+            vel: None,
         },
-        None,
-        None,
     )?;
     Ok(buf)
 }
@@ -2397,51 +2400,58 @@ fn append_velocity_lines(
     }
 }
 
-struct CoordJob {
-    prec: FloatFormat,
-    spec_version: u32,
-    workers: usize,
+type MotionSlot = std::sync::Mutex<Option<(Vec<u8>, Vec<u8>)>>;
+
+struct LineFmt<'a> {
+    ryu: &'a mut ryu::Buffer,
+    slots: &'a mut [FmtSlot; 3],
+}
+
+struct AppendOut<'a> {
     mapped: bool,
     force_map: bool,
+    stream: Option<&'a mut File>,
+    vel: Option<&'a mut Vec<u8>>,
 }
 
 #[allow(clippy::too_many_arguments)]
 fn append_coord_rows(
     buf: &mut Vec<u8>,
-    ryu: &mut ryu::Buffer,
-    slots: &mut [FmtSlot; 3],
+    fmt: LineFmt<'_>,
     atoms: &[crate::types::AtomDatum],
-    job: CoordJob,
-    stream: Option<&mut File>,
-    mut vel: Option<&mut Vec<u8>>,
+    coords: &[f64],
+    prec: FloatFormat,
+    spec_version: u32,
+    workers: usize,
+    out: AppendOut<'_>,
 ) -> Result<(), WriteError> {
-    let CoordJob {
-        prec,
-        spec_version,
-        workers,
+    let LineFmt { ryu, slots } = fmt;
+    let AppendOut {
         mapped,
         force_map,
-    } = job;
+        stream,
+        mut vel,
+    } = out;
     let want_vel = vel.is_some();
-    if let Some(file) = stream
-        && mapped
-        && !atoms.is_empty()
-    {
-        file.write_all(buf).map_err(WriteError::Io)?;
-        buf.clear();
-        let vel_bytes = stream_coord_rows(
-            file,
-            atoms,
-            workers,
-            prec,
-            spec_version,
-            want_vel,
-            force_map,
-        )?;
-        if let Some(dest) = vel.as_mut() {
-            dest.extend_from_slice(&vel_bytes);
+    if let Some(file) = stream {
+        if mapped && !atoms.is_empty() {
+            file.write_all(buf).map_err(WriteError::Io)?;
+            buf.clear();
+            let vel_bytes = stream_coord_rows(
+                file,
+                atoms,
+                coords,
+                workers,
+                prec,
+                spec_version,
+                want_vel,
+                force_map,
+            )?;
+            if let Some(dest) = vel.as_mut() {
+                dest.extend_from_slice(&vel_bytes);
+            }
+            return Ok(());
         }
-        return Ok(());
     }
     if workers < 2 || atoms.len() < WIDE_ATOM_GRAIN {
         let mut vel_slots = [FmtSlot::new(); 3];
@@ -2449,15 +2459,15 @@ fn append_coord_rows(
             push_atom_motion(
                 buf,
                 vel.as_deref_mut(),
-                load_xyz(atom, slab, index),
-                atom,
-                MotionFormat {
+                MotionFmt {
                     ryu,
                     slots,
                     vel_slots: &mut vel_slots,
-                    prec,
-                    spec_version,
                 },
+                xyz_from(coords, index),
+                atom,
+                prec,
+                spec_version,
             );
         }
         return Ok(());
@@ -2473,7 +2483,7 @@ fn append_coord_rows(
         let nparts = atoms.len().div_ceil(chunk);
         let bad_ids = std::sync::atomic::AtomicBool::new(false);
         let next = std::sync::atomic::AtomicUsize::new(0);
-        let parts: Vec<FormattedPart> = (0..nparts).map(|_| std::sync::Mutex::new(None)).collect();
+        let parts: Vec<MotionSlot> = (0..nparts).map(|_| std::sync::Mutex::new(None)).collect();
         crate::parser::on_pool(workers, || {
             use rayon::prelude::*;
             (0..workers).into_par_iter().for_each(|_| {
@@ -2501,15 +2511,15 @@ fn append_coord_rows(
                         push_atom_motion(
                             &mut local,
                             if want_vel { Some(&mut local_vel) } else { None },
-                            load_xyz(atom, slab, offset),
-                            atom,
-                            MotionFormat {
+                            MotionFmt {
                                 ryu: &mut ryu,
                                 slots: &mut slots,
                                 vel_slots: &mut vel_slots,
-                                prec,
-                                spec_version,
                             },
+                            xyz_from(coords, start + offset),
+                            atom,
+                            prec,
+                            spec_version,
                         );
                     }
                     *parts[index].lock().expect("format part") = Some((local, local_vel));
@@ -2570,7 +2580,7 @@ fn append_coord_rows(
             // bytes that were already initialised.
             unsafe { buf.set_len(coord_at + coord_len) };
         }
-        if let Some(dest) = vel {
+        if let Some(dest) = vel.as_mut() {
             for part in &parts {
                 let guard = part.lock().expect("format part");
                 if let Some((_, rows)) = guard.as_ref() {
@@ -2588,15 +2598,15 @@ fn append_coord_rows(
             push_atom_motion(
                 buf,
                 vel.as_deref_mut(),
-                load_xyz(atom, slab, index),
-                atom,
-                MotionFormat {
+                MotionFmt {
                     ryu,
                     slots,
                     vel_slots: &mut vel_slots,
-                    prec,
-                    spec_version,
                 },
+                xyz_from(coords, index),
+                atom,
+                prec,
+                spec_version,
             );
         }
         Ok(())
@@ -2746,7 +2756,7 @@ fn stream_coord_pipeline(
     let out = file.try_clone().map_err(WriteError::Io)?;
     let next = std::sync::atomic::AtomicUsize::new(0);
     let bad_ids = std::sync::atomic::AtomicBool::new(false);
-    let slots: Vec<FormattedPart> = (0..nparts).map(|_| std::sync::Mutex::new(None)).collect();
+    let slots: Vec<MotionSlot> = (0..nparts).map(|_| std::sync::Mutex::new(None)).collect();
     let flag = &bad_ids;
     let (end, mut vel_bytes) = std::thread::scope(|scope| -> Result<_, WriteError> {
         let mut handles = Vec::with_capacity(formatters);
@@ -2780,15 +2790,15 @@ fn stream_coord_pipeline(
                         push_atom_motion(
                             &mut coord,
                             if want_vel { Some(&mut vel) } else { None },
-                            load_xyz(atom, slab, offset),
-                            atom,
-                            MotionFormat {
+                            MotionFmt {
                                 ryu: &mut ryu,
                                 slots: &mut slots_fmt,
                                 vel_slots: &mut vel_slots,
-                                prec,
-                                spec_version,
                             },
+                            xyz_from(coords, start + offset),
+                            atom,
+                            prec,
+                            spec_version,
                         );
                     }
                     *slots[index].lock().expect("format slot") = Some((coord, vel));
@@ -3011,15 +3021,15 @@ fn stream_coord_rows(
                         push_atom_motion(
                             &mut coord,
                             if want_vel { Some(&mut vel) } else { None },
-                            load_xyz(atom, slab, offset),
-                            atom,
-                            MotionFormat {
+                            MotionFmt {
                                 ryu: &mut ryu,
                                 slots: &mut slots,
                                 vel_slots: &mut vel_slots,
-                                prec,
-                                spec_version,
                             },
+                            xyz_from(coords, start + offset),
+                            atom,
+                            prec,
+                            spec_version,
                         );
                     }
                     let n = coord.len();
@@ -3035,7 +3045,7 @@ fn stream_coord_rows(
                     }
                     lengths[index].store(n as u64 + 1, std::sync::atomic::Ordering::Release);
                     let mut offset = 0usize;
-                    for length in &lengths[..index] {
+                    for length in lengths.iter().take(index) {
                         loop {
                             if failed.load(std::sync::atomic::Ordering::Acquire) {
                                 return Err(WriteError::Io(io::Error::other(
@@ -5446,7 +5456,6 @@ fn place_packed(
     }
     // One mapping per worker, dropped on that worker. Tearing down a single
     // 184 MB map was a serial tail after the formatters had finished.
-
     std::thread::scope(|scope| {
         let mut guards = Vec::with_capacity(ranges.len());
         for (thread, &(start, end)) in ranges.iter().enumerate() {

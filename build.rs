@@ -179,7 +179,7 @@ fn compile_chemfiles_atom_view() {
 ///
 /// Cargo used to name that directory `chemfiles-sys-<hash>`. A target
 /// build now uses `chemfiles-sys/<hash>`. Both layouts are accepted.
-#[cfg(any(feature = "chemfiles", test))]
+#[cfg(feature = "chemfiles")]
 fn chemfiles_exports_include(build_dir: &Path) -> Option<PathBuf> {
     let exports = |dir: &Path| {
         let include = dir.join("out/include");
@@ -217,7 +217,7 @@ fn chemfiles_exports_include(build_dir: &Path) -> Option<PathBuf> {
 /// dependency is built under `target/<triple>/<profile>/build` even when
 /// the triple is the host. The package directory is either
 /// `<crate>-<hash>` or `<crate>/<hash>`.
-#[cfg(any(feature = "chemfiles", test))]
+#[cfg(feature = "chemfiles")]
 fn chemfiles_build_dirs(out_dir: &Path) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     let Some(hash_or_pkg) = out_dir.parent() else {

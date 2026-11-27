@@ -170,7 +170,12 @@ _ASE = object()
 
 
 _RULES = [
-    Rule("3.1", grammar_minor(), LIB, "CON_SPEC_VERSION.CON_SPEC_MINOR of the reader"),
+    Rule(
+        "3.1",
+        grep(SPEC, r"^\|\s+(3\.1) \| \d{4}-\d{2}-\d{2} \|"),
+        SPEC,
+        "the CON 3.1 row of the specification history",
+    ),
     Rule(
         "3.0",
         grep(SPEC, r"^\|\s+(3\.0) \| \d{4}-\d{2}-\d{2} \|"),

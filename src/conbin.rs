@@ -1250,56 +1250,6 @@ fn touch_mapped_pages(map: &memmap2::MmapMut, page: usize) {
     }
 }
 
-#[cfg(test)]
-thread_local! {
-    static POPULATE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    static MAP_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// File-backed private map, or an anonymous map filled by `read` when `mmap` fails.
-fn map_copy_or_read(file: &File) -> Result<memmap2::MmapMut, ParseError> {
-    #[cfg(test)]
-    if MAP_FAILS.with(|flag| flag.get()) {
-        return private_copy(file);
-    }
-    match unsafe { memmap2::MmapOptions::new().map_copy(file) } {
-        Ok(map) => Ok(map),
-        Err(_) => private_copy(file),
-    }
-}
-
-fn private_copy(file: &File) -> Result<memmap2::MmapMut, ParseError> {
-    let len = usize::try_from(
-        file.metadata()
-            .map_err(|err| ParseError::ValidationError(err.to_string()))?
-            .len(),
-    )
-    .map_err(|_| ParseError::InvalidCount("CON-bin file length overflows".into()))?;
-    if len < FIELD_BYTES {
-        return Err(ParseError::ValidationError(
-            "CON-bin header is not CONBIN01".into(),
-        ));
-    }
-    let mut anon = memmap2::MmapOptions::new()
-        .len(len)
-        .map_anon()
-        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
-    let mut reader = file
-        .try_clone()
-        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
-    reader
-        .read_exact(&mut anon[..])
-        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
-    Ok(anon)
-}
-
-fn touch_mapped_pages(map: &memmap2::MmapMut, page: usize) {
-    let page = page.max(1);
-    for chunk in map.chunks(page) {
-        std::hint::black_box(chunk.first().copied());
-    }
-}
-
 fn fault_in(
     path: &Path,
     map: &memmap2::MmapMut,
@@ -1964,6 +1914,25 @@ impl StoreLe for f32 {
     }
 }
 
+impl StoreLe for u64 {
+    fn store_le(self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.to_le_bytes());
+    }
+    fn load_le(self) -> Self {
+        u64::from_le_bytes(self.to_ne_bytes())
+    }
+}
+
+impl StoreLe for u8 {
+    fn store_le(self, out: &mut Vec<u8>) {
+        out.push(self);
+    }
+    fn load_le(self) -> Self {
+        self
+    }
+}
+
+#[cfg(test)]
 fn write_values<T: StoreLe>(file: &mut File, values: &[T]) -> Result<(), ParseError> {
     // A little-endian host already stores the file order. The byte view is
     // the values themselves, so the write does not build a second buffer.
@@ -2101,10 +2070,290 @@ fn write_header_page(
         .map_err(|err| ParseError::ValidationError(err.to_string()))
 }
 
+/// Store `values` in file order.
+#[cfg(feature = "python")]
+fn write_le<T: StoreLe>(file: &mut File, values: &[T]) -> Result<(), ParseError> {
+    #[cfg(target_endian = "little")]
+    let bytes = view_bytes(values);
+    #[cfg(target_endian = "big")]
+    let bytes = le_bytes(values);
+    file.write_all(bytes.as_ref())
+        .map_err(|err| ParseError::ValidationError(err.to_string()))
+}
+
+#[cfg(all(feature = "python", not(all(unix, target_endian = "little"))))]
+pub(crate) fn write_f64_le(file: &mut File, values: &[f64]) -> Result<(), ParseError> {
+    write_le(file, values)
+}
+
+/// Store the `len` doubles at `ptr` at the file position.
+///
+/// Only the kernel reads them; no Rust reference to them is formed, so
+/// another thread may store into them meanwhile, as with
+/// `ndarray.tofile`.
+///
+/// # Safety
+///
+/// `ptr` must stay valid for `len` doubles until this returns.
+#[cfg(all(feature = "python", unix, target_endian = "little"))]
+pub(crate) unsafe fn write_f64_raw(
+    file: &File,
+    ptr: *const f64,
+    len: usize,
+) -> Result<(), ParseError> {
+    use std::os::fd::AsRawFd;
+    let mut at = ptr.cast::<u8>();
+    let mut left = len * std::mem::size_of::<f64>();
+    while left > 0 {
+        let stored = unsafe { libc::write(file.as_raw_fd(), at.cast(), left.min(1 << 30)) };
+        if stored < 0 {
+            let err = std::io::Error::last_os_error();
+            if err.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(ParseError::ValidationError(err.to_string()));
+        }
+        if stored == 0 {
+            return Err(ParseError::ValidationError(
+                std::io::Error::from(std::io::ErrorKind::WriteZero).to_string(),
+            ));
+        }
+        at = unsafe { at.add(stored as usize) };
+        left -= stored as usize;
+    }
+    Ok(())
+}
+
+/// [`write_f64_columns`] with the binary64 columns handed over in runs.
+///
+/// The counts name the binary64 columns in payload order: positions,
+/// then velocities, masses and cell when present. `emit(column, values,
+/// file)` stores that range of that column at the file position, at most
+/// `run` values at a time, so the caller decides how memory it does not
+/// own reaches the file. The file matches [`write_f64_columns`] of the
+/// same values.
+#[cfg(feature = "python")]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn write_f64_columns_staged(
+    path: &Path,
+    n_frames: u64,
+    n_atoms: u64,
+    positions: usize,
+    velocities: Option<usize>,
+    masses: Option<usize>,
+    cell: Option<usize>,
+    atom_ids: Option<&[u64]>,
+    fixed: Option<&[u8]>,
+    run: usize,
+    mut emit: impl FnMut(usize, std::ops::Range<usize>, &mut File) -> Result<(), ParseError>,
+) -> Result<ConBinHeader, ParseError> {
+    let header = f64_columns_header(
+        n_frames,
+        n_atoms,
+        positions,
+        velocities,
+        masses,
+        cell,
+        atom_ids.map(<[u64]>::len),
+        fixed.map(<[u8]>::len),
+    )?;
+    let page = page_size()?;
+    let mut counts = vec![positions];
+    counts.extend(velocities);
+    counts.extend(masses);
+    counts.extend(cell);
+    let overflow = || ParseError::InvalidCount("CON-bin file length overflows".into());
+    let values = counts
+        .iter()
+        .copied()
+        .chain(atom_ids.map(<[u64]>::len))
+        .try_fold(0u64, |sum, count| sum.checked_add(count as u64))
+        .ok_or_else(overflow)?;
+    let total = values
+        .checked_mul(8)
+        .and_then(|bytes| bytes.checked_add(fixed.map_or(0, <[u8]>::len) as u64))
+        .and_then(|bytes| bytes.checked_add(page as u64))
+        .ok_or_else(overflow)?;
+    let run = run.max(1);
+    crate::writer::publish_new(
+        path,
+        |err| ParseError::ValidationError(err.to_string()),
+        |file| {
+            preallocate(file, total)?;
+            file.write_all(&header_page_bytes(&header, page))
+                .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+            for (column, count) in counts.iter().copied().enumerate() {
+                let mut at = 0;
+                while at < count {
+                    let end = (at + run).min(count);
+                    emit(column, at..end, file)?;
+                    at = end;
+                }
+            }
+            if let Some(values) = atom_ids {
+                write_le(file, values)?;
+            }
+            if let Some(values) = fixed {
+                write_le(file, values)?;
+            }
+            Ok(())
+        },
+    )?;
+    Ok(header)
+}
+
+/// Write version 2 from columns already in memory.
+///
+/// Positions are required. Velocities, masses, the cell, atom ids and the
+/// per-axis fixed mask are stored when the caller passes them. The payload
+/// order is positions, velocities, masses, cell, atom ids, fixed masks.
+fn column_len(name: &str, got: usize, want: usize) -> Result<(), ParseError> {
+    if got == want {
+        return Ok(());
+    }
+    Err(ParseError::InvalidCount(format!(
+        "CON-bin {name} has {got} values, need {want}"
+    )))
+}
+
+/// Check the value counts of a version-2 binary64 write and build its header.
+#[allow(clippy::too_many_arguments)]
+fn f64_columns_header(
+    n_frames: u64,
+    n_atoms: u64,
+    positions: usize,
+    velocities: Option<usize>,
+    masses: Option<usize>,
+    cell: Option<usize>,
+    atom_ids: Option<usize>,
+    fixed: Option<usize>,
+) -> Result<ConBinHeader, ParseError> {
+    let frames = usize::try_from(n_frames)
+        .map_err(|_| ParseError::InvalidCount("CON-bin frame count does not fit".into()))?;
+    let atoms = usize::try_from(n_atoms)
+        .map_err(|_| ParseError::InvalidCount("CON-bin atom count does not fit".into()))?;
+    let n = frames
+        .checked_mul(atoms)
+        .ok_or_else(|| ParseError::InvalidCount("CON-bin column length overflows".into()))?;
+    let xyz = n
+        .checked_mul(3)
+        .ok_or_else(|| ParseError::InvalidCount("CON-bin column length overflows".into()))?;
+    let cells = frames
+        .checked_mul(6)
+        .ok_or_else(|| ParseError::InvalidCount("CON-bin column length overflows".into()))?;
+    column_len("positions", positions, xyz)?;
+    if let Some(values) = velocities {
+        column_len("velocities", values, xyz)?;
+    }
+    if let Some(values) = masses {
+        column_len("masses", values, n)?;
+    }
+    if let Some(values) = cell {
+        column_len("cell", values, cells)?;
+    }
+    if let Some(values) = atom_ids {
+        column_len("atom ids", values, n)?;
+    }
+    if let Some(values) = fixed {
+        column_len("fixed masks", values, n)?;
+    }
+    Ok(ConBinHeader {
+        version: VERSION_2,
+        n_frames,
+        n_atoms,
+        binary32: false,
+        velocities: velocities.is_some(),
+        forces: false,
+        masses: masses.is_some(),
+        fixed: fixed.is_some(),
+        cell: cell.is_some(),
+        atom_ids: atom_ids.is_some(),
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn write_f64_columns(
+    path: &Path,
+    n_frames: u64,
+    n_atoms: u64,
+    positions: &[f64],
+    velocities: Option<&[f64]>,
+    masses: Option<&[f64]>,
+    cell: Option<&[f64]>,
+    atom_ids: Option<&[u64]>,
+    fixed: Option<&[u8]>,
+) -> Result<ConBinHeader, ParseError> {
+    let header = f64_columns_header(
+        n_frames,
+        n_atoms,
+        positions.len(),
+        velocities.map(<[f64]>::len),
+        masses.map(<[f64]>::len),
+        cell.map(<[f64]>::len),
+        atom_ids.map(<[u64]>::len),
+        fixed.map(<[u8]>::len),
+    )?;
+    if let Some(values) = cell {
+        crate::types::check_cell_rows(values)?;
+    }
+    let page = page_size()?;
+    #[cfg(target_endian = "little")]
+    {
+        let mut parts = Vec::with_capacity(6);
+        parts.push(view_bytes(positions));
+        if let Some(values) = velocities {
+            parts.push(view_bytes(values));
+        }
+        if let Some(values) = masses {
+            parts.push(view_bytes(values));
+        }
+        if let Some(values) = cell {
+            parts.push(view_bytes(values));
+        }
+        if let Some(values) = atom_ids {
+            parts.push(view_bytes(values));
+        }
+        if let Some(values) = fixed {
+            parts.push(view_bytes(values));
+        }
+        publish_assembled(path, &header, page, &parts)?;
+    }
+    #[cfg(target_endian = "big")]
+    {
+        let pos = le_bytes(positions);
+        let vel = velocities.map(le_bytes);
+        let mass = masses.map(le_bytes);
+        let box_cell = cell.map(le_bytes);
+        let ids = atom_ids.map(le_bytes);
+        let masks = fixed.map(le_bytes);
+        let mut parts = Vec::with_capacity(6);
+        parts.push(pos.as_slice());
+        if let Some(values) = vel.as_ref() {
+            parts.push(values);
+        }
+        if let Some(values) = mass.as_ref() {
+            parts.push(values);
+        }
+        if let Some(values) = box_cell.as_ref() {
+            parts.push(values);
+        }
+        if let Some(values) = ids.as_ref() {
+            parts.push(values);
+        }
+        if let Some(values) = masks.as_ref() {
+            parts.push(values);
+        }
+        publish_assembled(path, &header, page, &parts)?;
+    }
+    Ok(header)
+}
+
 /// Write one binary64 file whose columns come from `seed`.
 ///
 /// The header page and both runs match what [`map_file`] and [`read_into`] read.
 /// `seed` is mixed with each value index, so the same triple writes the same file.
+/// The bytes are published by rename, the same way [`write_f64_columns`] is,
+/// so a reader that still holds an older mapping keeps that inode.
 pub fn write_uniform(
     path: &Path,
     frames: u64,
@@ -2112,22 +2361,31 @@ pub fn write_uniform(
     seed: u64,
 ) -> Result<ConBinHeader, ParseError> {
     let header = ConBinHeader {
+        version: VERSION_2,
         n_frames: frames,
         n_atoms: atoms,
         binary32: false,
         velocities: true,
+        forces: false,
+        masses: false,
+        fixed: false,
+        cell: false,
+        atom_ids: false,
     };
     let n = header.position_len()?;
-    let mut file =
-        File::create(path).map_err(|err| ParseError::ValidationError(err.to_string()))?;
     let page = page_size()?;
-    write_header_page(&mut file, &header, page)?;
     let pos: Vec<f64> = (0..n).map(|i| mix_unit(seed, i as u64)).collect();
     let vel: Vec<f64> = (0..n)
         .map(|i| mix_unit(seed, (n as u64) + i as u64))
         .collect();
-    write_values(&mut file, &pos)?;
-    write_values(&mut file, &vel)?;
+    #[cfg(target_endian = "little")]
+    publish_assembled(path, &header, page, &[view_bytes(&pos), view_bytes(&vel)])?;
+    #[cfg(target_endian = "big")]
+    {
+        let pos_le = le_bytes(&pos);
+        let vel_le = le_bytes(&vel);
+        publish_assembled(path, &header, page, &[pos_le.as_slice(), vel_le.as_slice()])?;
+    }
     Ok(header)
 }
 

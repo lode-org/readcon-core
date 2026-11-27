@@ -76,7 +76,6 @@ while read -r commit; do
 
     python3 - "$worktree" "$ROOT" <<'PY'
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -91,29 +90,26 @@ from spec_measurement_schema import (
 )
 
 version = (root / "VERSION").read_text().strip()
-directory = root / "paper/cpc/data/spec"
-
-def revision(path: Path) -> int | None:
-    match = re.fullmatch(
-        rf"spec-measurement-{re.escape(version)}(-r([2-9]|[1-9][0-9]+))?",
-        path.stem,
-    )
-    if not match:
-        return None
-    return int(match[2]) if match[2] else 1
-
-paths = [
-    path
-    for path in directory.glob(f"spec-measurement-{version}*.json")
-    if revision(path) is not None
-]
-if not paths:
-    name = f"spec-measurement-{version}.json"
-    print(f"PENDING: {name} has not been measured")
+spec_blob = subprocess.run(
+    ["git", "-C", str(root), "hash-object", str(root / "docs/orgmode/spec.org")],
+    capture_output=True,
+    text=True,
+    check=True,
+).stdout.strip()
+by_blob = root / "paper/cpc/data/spec" / f"spec-measurement-{version}-{spec_blob[:8]}.json"
+path = (
+    by_blob
+    if by_blob.is_file()
+    else root / "paper/cpc/data/spec" / f"spec-measurement-{version}.json"
+)
+if not path.is_file():
+    print(f"PENDING: {path.name} has not been measured")
     raise SystemExit(0)
-
-path = max(paths, key=revision)
-record = json.loads(path.read_text())
+spec_dir = root / "paper/cpc/data/spec"
+records = {}
+for spec_path in sorted(spec_dir.glob("spec-measurement-*.json")):
+    rel = spec_path.resolve().relative_to(root.resolve()).as_posix()
+    records[rel] = json.loads(spec_path.read_text())
 relpath = path.resolve().relative_to(root.resolve()).as_posix()
 try:
     chosen, record = resolve_measurement(records, relpath)

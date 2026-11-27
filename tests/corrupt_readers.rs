@@ -493,7 +493,7 @@ fn line_endings_counts_and_nonfinite_stay_clean() {
             assert!(
                 tables.positions.iter().any(|value| value.is_nan()),
                 "extxyz nan t{threads} dropped the value"
-            )
+            );
         }
     }
     let xyz_inf = xyz.replacen("0.0", "inf", 1);
@@ -502,7 +502,7 @@ fn line_endings_counts_and_nonfinite_stay_clean() {
             assert!(
                 tables.positions.iter().any(|value| value.is_infinite()),
                 "extxyz inf t{threads} dropped the value"
-            )
+            );
         }
     }
 }

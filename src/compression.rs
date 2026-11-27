@@ -569,12 +569,13 @@ fn coord_member_rows(data: &[u8], parts: &[&[u8]]) -> Option<Vec<(u32, u32)>> {
     if total as usize != natoms {
         return None;
     }
-    if let Some(last_nl) = memchr::memrchr(b'\n', data)
-        && data[last_nl + 1..]
+    if let Some(last_nl) = memchr::memrchr(b'\n', data) {
+        if data[last_nl + 1..]
             .iter()
             .any(|byte| !byte.is_ascii_whitespace())
-    {
-        return None;
+        {
+            return None;
+        }
     }
     let mut row = 0u32;
     let mut table = Vec::with_capacity(parts.len());
@@ -713,8 +714,7 @@ fn write_fused_frame(
     }
     let header = crate::writer::binding_header_bytes(frame)
         .map_err(|err| io::Error::other(err.to_string()))?;
-    type MemberSlot = std::sync::Mutex<Option<io::Result<(Vec<u8>, usize)>>>;
-    let slots: Vec<MemberSlot> = (0..ranges.len())
+    let slots: Vec<GzipMemberSlot> = (0..ranges.len())
         .map(|_| std::sync::Mutex::new(None))
         .collect();
     let threads = threads.max(1).min(ranges.len());
@@ -1082,22 +1082,35 @@ fn gzip_into(src: &[u8], dst: &mut [u8]) -> io::Result<()> {
 }
 
 fn inflate_gzip(bytes: &[u8], out: &mut Vec<u8>) -> io::Result<()> {
-    if decode_thread_budget() != 1
-        && let Some(plan) = gzip_member_starts(bytes)
-        && plan.starts.len() > 1
-    {
-        let threads = worker_limit_from_budget(plan.starts.len());
-        if let Some(plain) = plan.plain.as_deref()
-            && plain.len() == plan.starts.len()
-        {
-            return inflate_sized(bytes, &plan.starts, plain, threads, gzip_into, out);
+    if decode_thread_budget() != 1 {
+        if let Some(plan) = gzip_member_starts(bytes) {
+            if plan.starts.len() > 1 {
+                let threads = worker_limit_from_budget(plan.starts.len());
+                let indexed = if let Some(plain) = plan.plain.as_deref() {
+                    if plain.len() == plan.starts.len() {
+                        inflate_sized(bytes, &plan.starts, plain, threads, gzip_into, out)
+                    } else {
+                        Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "gzip index has no plain length for every member",
+                        ))
+                    }
+                } else {
+                    let parts = inflate_unknown(bytes, &plan.starts, threads, gunzip_member)?;
+                    out.clear();
+                    for part in parts {
+                        out.extend_from_slice(&part);
+                    }
+                    Ok(())
+                };
+                if indexed.is_ok() {
+                    return indexed;
+                }
+                // A stale or partial index must not hide a later member.
+                // The serial decoder is what a file without our index uses.
+                out.clear();
+            }
         }
-        let parts = inflate_unknown(bytes, &plan.starts, threads, gunzip_member)?;
-        out.clear();
-        for part in parts {
-            out.extend_from_slice(&part);
-        }
-        return Ok(());
     }
     let mut decoder = flate2::read::MultiGzDecoder::new(bytes);
     out.clear();
@@ -1276,7 +1289,7 @@ where
     // eight-thread gzip write slower than four.
     let ranges = worker_ranges(parts.len(), threads);
     std::thread::scope(|scope| {
-        for (begin, end) in ranges.into_iter() {
+        for (begin, end) in ranges {
             let slots = &slots;
             let parts = &parts;
             let encode = &encode;

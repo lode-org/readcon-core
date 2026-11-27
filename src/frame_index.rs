@@ -318,9 +318,18 @@ impl BlockCursor {
             .fold(tail, |hash, lane| fnv1a(hash, &lane.to_le_bytes()))
     }
 
-    /// Restore a cursor that another rank stopped at a block boundary.
-    /// Only the MPI writer tests round-trip a cursor this way.
-    #[cfg(all(test, feature = "mpi"))]
+    /// Snapshot the lanes so the next rank can continue a partial block.
+    pub(crate) fn to_bytes(&self) -> [u8; 129] {
+        let mut out = [0u8; 129];
+        for (index, lane) in self.lanes.iter().enumerate() {
+            out[index * 8..index * 8 + 8].copy_from_slice(&lane.to_le_bytes());
+        }
+        out[64..128].copy_from_slice(&self.pending);
+        out[128] = self.pending_len as u8;
+        out
+    }
+
+    /// Restore a snapshot from the previous rank's partial block.
     pub(crate) fn from_bytes(bytes: &[u8]) -> Self {
         let mut lanes = [0u64; 8];
         for (index, lane) in lanes.iter_mut().enumerate() {
@@ -493,7 +502,7 @@ pub(crate) fn slice_block_parts(offset: u64, data: &[u8]) -> SliceParts {
 /// Content hash of a file split into ordered pieces. The pieces may
 /// start mid-block. The result matches [`content_hash`] of the
 /// concatenation.
-#[cfg(any(test, feature = "mpi"))]
+#[cfg(test)]
 pub(crate) fn fold_slice_parts(total: u64, parts: &[SliceParts]) -> u64 {
     if total == 0 {
         return fold_block_hashes(0, &[]);

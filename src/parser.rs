@@ -47,18 +47,30 @@ std::thread_local! {
     static WIDE_WORKERS: std::cell::Cell<usize> = const { std::cell::Cell::new(1) };
 }
 
-/// Output columns for a parallel coordinate fill. `ids` and `flags` may be null.
+/// Output columns for a parallel coordinate fill.
+#[derive(Clone, Copy)]
 #[cfg(feature = "parallel")]
-pub(crate) struct CoordColumns {
+pub(crate) struct CoordPtrs {
     pub xyz: *mut f64,
     pub ids: *mut u64,
     pub flags: *mut u8,
 }
 
+/// Output columns for one indexed member, including the atom records.
+#[derive(Clone, Copy)]
+#[cfg(feature = "parallel")]
+pub(crate) struct CoordRunOut {
+    pub xyz: *mut f64,
+    pub ids: *mut u64,
+    pub flags: *mut [bool; 3],
+    pub atoms: *mut std::mem::MaybeUninit<crate::types::AtomDatum>,
+}
+
 /// Fill `n` coordinate rows.
 ///
 /// `breaks[i]` is the absolute index of that row's `\n`. Row 0 begins at
-/// `row0`. `columns.xyz` receives `n * 3` values. `flags` is the packed column-4 mask.
+/// `row0`. `xyz` receives `n * 3` values. `ids` and `flags` may be null
+/// when the caller does not want them. `flags` is the packed column-4 mask.
 #[cfg(feature = "parallel")]
 pub(crate) fn fill_rows_from_breaks(
     bytes: &[u8],
@@ -67,9 +79,9 @@ pub(crate) fn fill_rows_from_breaks(
     spec_version: u32,
     start_id: u64,
     workers: usize,
-    columns: CoordColumns,
+    ptrs: CoordPtrs,
 ) -> Result<(), ParseError> {
-    let CoordColumns { xyz, ids, flags } = columns;
+    let CoordPtrs { xyz, ids, flags } = ptrs;
     let n = breaks.len();
     if n == 0 {
         return Ok(());
@@ -300,11 +312,10 @@ pub(crate) fn parallel_coord_rows(
     }
     let fill_chunk = |index: usize| -> Result<(), ParseError> {
         let (start, nrows) = chunks[index];
-        let row_base = row0[index];
+        let mut row = row0[index];
         let mut pos = start;
         let mut shares = symbol.map(|symbol| symbol_shares(symbol, nrows));
-        for step in 0..nrows {
-            let row = row_base + step;
+        for _ in 0..nrows {
             let ((xyz, fixed, atom_id), next) =
                 parse_coord_row_at(bytes, pos, spec_version, start_id + row as u64)?;
             unsafe {
@@ -325,6 +336,7 @@ pub(crate) fn parallel_coord_rows(
                 }
             }
             pos = next;
+            row += 1;
         }
         Ok(())
     };
@@ -374,14 +386,6 @@ pub(crate) fn parallel_coord_rows(
 /// This is the per-member kernel of [`fill_rows_from_chunks`], so a worker
 /// can parse a slice as soon as that slice has been inflated.
 #[cfg(feature = "parallel")]
-pub(crate) struct CoordRunOut {
-    pub xyz: *mut f64,
-    pub ids: *mut u64,
-    pub flags: *mut [bool; 3],
-    pub atoms: *mut std::mem::MaybeUninit<crate::types::AtomDatum>,
-}
-
-#[cfg(feature = "parallel")]
 pub(crate) fn parse_coord_run(
     bytes: &[u8],
     start: usize,
@@ -389,14 +393,14 @@ pub(crate) fn parse_coord_run(
     spec_version: u32,
     row_base: usize,
     symbol: Option<&std::sync::Arc<str>>,
-    out: CoordRunOut,
+    ptrs: CoordRunOut,
 ) -> Result<usize, ParseError> {
     let CoordRunOut {
         xyz,
         ids,
         flags,
         atoms,
-    } = out;
+    } = ptrs;
     let mut pos = start;
     let mut shares = symbol.map(|symbol| symbol_shares(symbol, nrows));
     for step in 0..nrows {
@@ -633,9 +637,9 @@ pub(crate) fn fill_rows_from_chunks(
     spec_version: u32,
     start_id: u64,
     workers: usize,
-    columns: CoordColumns,
+    ptrs: CoordPtrs,
 ) -> Result<(), ParseError> {
-    let CoordColumns { xyz, ids, flags } = columns;
+    let CoordPtrs { xyz, ids, flags } = ptrs;
     if chunks.is_empty() {
         return Ok(());
     }
@@ -728,12 +732,12 @@ fn newline_index_exact(cuts: &[usize], bytes: &[u8], base: usize) -> Vec<usize> 
         use rayon::prelude::*;
         (0..nchunks).into_par_iter().for_each(|index| {
             let from = cuts[index];
-            let at0 = slots[index];
-            for (step, rel) in memchr::memchr_iter(b'\n', &bytes[from..cuts[index + 1]]).enumerate()
-            {
+            let mut at = slots[index];
+            for rel in memchr::memchr_iter(b'\n', &bytes[from..cuts[index + 1]]) {
                 unsafe {
-                    *((ptr as *mut usize).add(at0 + step)) = base + from + rel;
+                    *((ptr as *mut usize).add(at)) = base + from + rel;
                 }
+                at += 1;
             }
         });
     };
@@ -3242,9 +3246,7 @@ pub(crate) fn parse_frame_header_inner<'a>(
 }
 
 // A trajectory stamps the same metadata line on every frame. A fresh
-// `Arc` per frame showed up in the all-frames read. This flag records
-// whether the rows stayed sequential and unfixed so the caller can skip
-// a second walk.
+// `Arc` per frame showed up in the all-frames read.
 thread_local! {
     static SEQUENTIAL_PLAIN: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
 }
@@ -3766,10 +3768,10 @@ where
             header.spec_version,
             global_atom_idx,
             &symbol,
-            &mut IngestRows {
-                pos_flat: &mut pos_flat,
+            ClonedRows {
+                pos: &mut pos_flat,
                 ids: &mut ids,
-                atom_data: &mut atom_data,
+                atoms: &mut atom_data,
             },
         )?;
     }
@@ -3859,35 +3861,29 @@ where
     L: LineStream<'a>,
 {
     let workers = wide_workers();
-    if workers >= 2
-        && n >= 4096
-        && let Some(mut block) =
+    if workers >= 2 && n >= 4096 {
+        if let Some(block) =
             lines.try_take_coord_block(n, spec_version, global_atom_idx, symbol, workers)
-    {
-        let base = pos_flat.len();
-        // Keep a reservation that covers the whole frame. Replacing it
-        // with a shorter block makes the next species group reallocate
-        // under live pointers.
-        if pos_flat.is_empty() && block.xyz.capacity() >= pos_flat.capacity() {
-            *pos_flat = block.xyz;
-        } else {
-            pos_flat.extend_from_slice(&block.xyz);
+        {
+            // Keep a reservation that covers the whole frame so the next
+            // species group does not allocate a second positions buffer.
+            if pos_flat.is_empty() && block.xyz.capacity() >= pos_flat.capacity() {
+                *pos_flat = block.xyz;
+            } else {
+                pos_flat.extend_from_slice(&block.xyz);
+            }
+            if ids.is_empty() {
+                *ids = block.ids;
+            } else {
+                ids.extend_from_slice(&block.ids);
+            }
+            if atom_data.is_empty() {
+                *atom_data = block.atoms;
+            } else {
+                atom_data.extend(block.atoms);
+            }
+            return Ok(global_atom_idx + n as u64);
         }
-        let ptr = pos_flat.as_mut_ptr();
-        for (i, atom) in block.atoms.iter_mut().enumerate() {
-            atom.retarget(unsafe { ptr.add(base + i * 3) });
-        }
-        if ids.is_empty() {
-            *ids = block.ids;
-        } else {
-            ids.extend_from_slice(&block.ids);
-        }
-        if atom_data.is_empty() {
-            *atom_data = block.atoms;
-        } else {
-            atom_data.extend(block.atoms);
-        }
-        return Ok(global_atom_idx + n as u64);
     }
     let mut shares = symbol_shares(symbol, n);
     for _ in 0..n {
@@ -3913,19 +3909,13 @@ struct ClonedRows<'a> {
 }
 
 /// Coordinate rows when the declared count must not bump an `Arc` by `n`.
-struct IngestRows<'a> {
-    pos_flat: &'a mut Vec<f64>,
-    ids: &'a mut Vec<u64>,
-    atom_data: &'a mut Vec<AtomDatum>,
-}
-
 fn ingest_coord_rows_cloned<'a, L>(
     lines: &mut L,
     n: usize,
     spec_version: u32,
     mut global_atom_idx: u64,
     symbol: &Arc<str>,
-    rows: &mut IngestRows<'_>,
+    rows: ClonedRows<'_>,
 ) -> Result<u64, ParseError>
 where
     L: LineStream<'a>,
@@ -3937,9 +3927,9 @@ where
     } = rows;
     for _ in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
-        rows.pos_flat.extend_from_slice(&xyz);
-        rows.ids.push(atom_id);
-        rows.atom_data.push(AtomDatum::coords(
+        pos_flat.extend_from_slice(&xyz);
+        ids.push(atom_id);
+        atom_data.push(AtomDatum::coords(
             Arc::clone(symbol),
             xyz[0],
             xyz[1],

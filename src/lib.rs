@@ -160,7 +160,9 @@ mod tests {
 
     #[test]
     fn test_spec_version_is_current() {
-        assert_eq!(CON_SPEC_VERSION, 3);
+        assert_eq!(CON_SPEC_VERSION, 4);
+        assert_eq!(CON_SPEC_MINOR, 0);
+        assert_eq!(CON_SPEC_PATCH, 4);
         #[cfg(feature = "capi")]
         assert_eq!(ffi::RKR_CON_SPEC_VERSION, CON_SPEC_VERSION);
     }

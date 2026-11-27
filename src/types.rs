@@ -450,8 +450,6 @@ impl FrameMeta {
     /// The parsed map is kept only after a lookup that expects to reuse it.
     /// A streaming write must not be one of those lookups: one map per frame
     /// is about a kilobyte, and a long trajectory holds every frame.
-    /// Used by the writer tests to check that a streaming write did not
-    /// keep a parsed map on every frame.
     #[cfg(test)]
     pub(crate) fn has_cached_map(&self) -> bool {
         self.map.get().is_some()
@@ -1199,9 +1197,6 @@ impl AtomSections {
 
 /// Optional per-atom sections. Absent on the coordinate-only path so a frame
 /// does not pay a fat tail on every atom.
-///
-/// Public because [`HeapTail::Full`] stores it and `HeapTail` is public.
-#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct AtomTail {
     velocity: Option<[f64; 3]>,
@@ -1526,8 +1521,8 @@ fn release_arc_str_count<T: ?Sized>(symbol: &std::sync::Arc<T>, n: usize) {
 ///
 /// Pair each added count with [`share_arc_str`]. The source `Arc` must stay
 /// alive until those shares exist, or the allocation can be freed early.
-#[cfg(feature = "chemfiles")]
-pub(crate) fn bump_arc_str(symbol: &std::sync::Arc<str>, extra: usize) {
+#[cfg(any(feature = "chemfiles", test))]
+pub(crate) fn bump_arc_str<T: ?Sized>(symbol: &std::sync::Arc<T>, extra: usize) {
     if extra == 0 {
         return;
     }
@@ -1537,8 +1532,7 @@ pub(crate) fn bump_arc_str(symbol: &std::sync::Arc<str>, extra: usize) {
 }
 
 /// One strong reference already counted by [`bump_arc_str`].
-#[cfg(feature = "chemfiles")]
-pub(crate) fn share_arc_str(symbol: &std::sync::Arc<str>) -> std::sync::Arc<str> {
+pub(crate) fn share_arc_str<T: ?Sized>(symbol: &std::sync::Arc<T>) -> std::sync::Arc<T> {
     unsafe { std::sync::Arc::from_raw(std::sync::Arc::as_ptr(symbol)) }
 }
 
@@ -1958,6 +1952,9 @@ pub(crate) unsafe fn atomic_load_f64(ptr: *const f64) -> f64 {
 }
 
 /// Store one potentially shared `f64` without creating an `f64` reference.
+///
+/// The write is one relaxed 64-bit atomic store. Callers must keep the
+/// allocation alive and check [`assert_atomic_f64_alignment`] first.
 #[cfg(feature = "python")]
 #[inline(always)]
 pub(crate) unsafe fn atomic_store_f64(ptr: *mut f64, value: f64) {
@@ -3223,15 +3220,123 @@ impl ConFrame {
         if n == 0 || self.column_tails.len() != n {
             return;
         }
-        for atom in &mut self.atom_data {
-            let velocity = atom.velocity();
-            let force = atom.force();
-            atom.detach_external_tail();
+        for force in [false, true] {
+            if !self.slots_address(force) {
+                continue;
+            }
+            let column = if force {
+                &mut self.forces
+            } else {
+                &mut self.velocities
+            };
+            if !column.is_present() {
+                continue;
+            }
+            let crate::storage_dtype::Array2Storage::F64(array) = &mut **column else {
+                continue;
+            };
+            if array.is_unique() || array.dim() != (n, 3) || !array.is_standard_layout() {
+                continue;
+            }
+            // Copies the block. The old one stays alive until this returns,
+            // because the other handle still holds it.
+            let base = array.as_mut_ptr();
+            for (i, tail) in self.column_tails.iter_mut().enumerate() {
+                if let HeapTail::Column { vel, force: frc } = tail {
+                    let slot = if force { frc } else { vel };
+                    if !slot.is_null() {
+                        *slot = unsafe { base.add(i * 3) };
+                    }
+                }
+            }
+        }
+    }
+
+    /// Point the atoms marked in `bound` at their rows of the velocity and
+    /// force columns. Call after [`Self::materialise_section_slots`].
+    ///
+    /// An atom keeps its own tail when it holds another section, or a
+    /// velocity or force whose column is not a float64 `(n, 3)` row-major
+    /// block. Binding makes the column unique first, so the slots address
+    /// a block no other handle writes.
+    pub(crate) fn bind_section_slots(&mut self, bound: &[bool]) {
+        let n = self.atom_data.len();
+        if n == 0 || bound.len() != n || !bound.contains(&true) {
+            return;
+        }
+        debug_assert!(self.column_tails.is_empty());
+        if !self.column_tails.is_empty() {
+            return;
+        }
+        fn row_base(column: &mut crate::storage_dtype::Optional2, n: usize) -> Option<*mut f64> {
+            if column.nrows() != n || column.ncols() != 3 {
+                return None;
+            }
+            column.f64_allocation_ptr()
+        }
+        let vel = row_base(&mut self.velocities, n);
+        let force = row_base(&mut self.forces, n);
+        if vel.is_none() && force.is_none() {
+            return;
+        }
+        clear_uniform_symbol_drop(&self.atom_data);
+        self.column_tails = vec![
+            HeapTail::Column {
+                vel: std::ptr::null_mut(),
+                force: std::ptr::null_mut(),
+            };
+            n
+        ];
+        let tails = self.column_tails.as_mut_ptr();
+        for (i, atom) in self.atom_data.iter_mut().enumerate() {
+            if !bound[i] || !atom.holds_only_motion() {
+                continue;
+            }
+            let has_vel = atom.has_velocity();
+            let has_force = atom.has_forces();
+            if (!has_vel && !has_force)
+                || (has_vel && vel.is_none())
+                || (has_force && force.is_none())
+            {
+                continue;
+            }
+            let at = |base: Option<*mut f64>, present: bool| match base {
+                Some(base) if present => unsafe { base.add(i * 3) },
+                _ => std::ptr::null_mut(),
+            };
+            let slot = unsafe { tails.add(i) };
+            unsafe {
+                *slot = HeapTail::Column {
+                    vel: at(vel, has_vel),
+                    force: at(force, has_force),
+                };
+            }
+            atom.bind_external_tail(slot);
+        }
+    }
+
+    /// Copy every atom's velocity and force into its own tail and drop the
+    /// slot arena. Returns which atoms held a slot, for
+    /// [`Self::bind_section_slots`].
+    pub(crate) fn materialise_section_slots(&mut self) -> Vec<bool> {
+        let bound = self.section_slot_mask();
+        if bound.is_empty() {
+            return bound;
+        }
+        clear_uniform_symbol_drop(&self.atom_data);
+        let n = self.atom_data.len();
+        for i in 0..n {
+            let atom = &self.atom_data[i];
+            let velocity = slot_value(atom.velocity_slot(), &self.velocities, n, i)
+                .unwrap_or_else(|| atom.velocity());
+            let force =
+                slot_value(atom.force_slot(), &self.forces, n, i).unwrap_or_else(|| atom.force());
+            self.atom_data[i].detach_external_tail();
             if velocity.is_some() {
-                atom.set_velocity(velocity);
+                self.atom_data[i].set_velocity(velocity);
             }
             if force.is_some() {
-                atom.set_force(force);
+                self.atom_data[i].set_force(force);
             }
         }
         self.column_tails.clear();

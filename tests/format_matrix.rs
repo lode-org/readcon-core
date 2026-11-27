@@ -281,10 +281,11 @@ fn assert_c_frame(label: &str, expected: &ConFrame, c_frame: *mut CFrame) {
 }
 
 #[cfg(feature = "capi")]
-fn assert_c_atom(label: &str, atom: &readcon_core::types::AtomDatum, mass: f64, c_atom: &CAtom) {
-    assert_eq!(bits(c_atom.x), bits(atom.x()), "{label} x");
-    assert_eq!(bits(c_atom.y), bits(atom.y()), "{label} y");
-    assert_eq!(bits(c_atom.z), bits(atom.z()), "{label} z");
+fn assert_c_atom(label: &str, frame: &ConFrame, index: usize, mass: f64, c_atom: &CAtom) {
+    let atom = &frame.atom_data[index];
+    assert_eq!(bits(c_atom.x), bits(frame.x_at(index)), "{label} x");
+    assert_eq!(bits(c_atom.y), bits(frame.y_at(index)), "{label} y");
+    assert_eq!(bits(c_atom.z), bits(frame.z_at(index)), "{label} z");
     assert_eq!(bits(c_atom.mass), bits(mass), "{label} mass");
     assert_eq!(c_atom.atom_id, atom.atom_id, "{label} id");
     assert_eq!(

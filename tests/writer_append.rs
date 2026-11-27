@@ -20,7 +20,8 @@ use std::path::Path;
 #[cfg(feature = "capi")]
 use std::process::Command;
 
-include!("common/metatensor_link.rs");
+#[cfg(feature = "capi")]
+include!("metatensor_link.rs");
 
 #[cfg(feature = "capi")]
 #[path = "common/plain_library.rs"]

@@ -41,7 +41,7 @@ task.
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Count frames (skip walk)                                            | ``iterators::count_frames``                    | ``readcon.count_frames``                                                    | n/a                                                                | ``count_frames``                                                 | ``rkr_count_frames``                                              | ``count_frames``                           |
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
-    | Coordinates on a loaded frame                                       | SoA on ``ConFrame``                            | ``frame.xyz`` (SoA copy); ``coords_array()`` walks ``.atoms``               | via frame fields                                                   | ``frame%xyz_ptr`` (zero-copy)                                    | ``rkr_frame_xyz_f64`` (zero-copy)                                 | ``xyz_f64()`` (zero-copy)                  |
+    | Coordinates on a loaded frame                                       | SoA on ``ConFrame``                            | ``frame.xyz`` (zero-copy on parsed frames); ``coords_array()`` ndarray      | via frame fields                                                   | ``frame%xyz_ptr`` (zero-copy)                                    | ``rkr_frame_xyz_f64`` (zero-copy)                                 | ``xyz_f64()`` (zero-copy)                  |
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Coordinate column                                                   | ``read_positions_with_threads``                | ``read_positions`` / ``read_coords``                                        | n/a                                                                | ``read_positions``                                               | ``rkr_read_positions`` / ``rkr_free_position_block``              | ``read_positions``                         |
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
@@ -251,7 +251,7 @@ Usage
         print(frame.cell)           # [f64, f64, f64]
         print(frame.angles)         # [f64, f64, f64]
         print(frame.has_velocities)
-        for atom in frame.atoms:
+        for atom in frame:           # live AtomView objects
             print(atom.symbol, atom.x, atom.y, atom.z, atom.mass)
             if atom.has_velocity:
                 print(atom.vx, atom.vy, atom.vz)
@@ -305,16 +305,14 @@ Types
     ``insert()`` and ``extend()`` methods mutate the owning frame and preserve CON
     type-group order; an ``Atom`` already taken from ``frame.atoms`` that
     was not replaced or deleted stays part of the frame. A direct frame
-    slice is an independent ``ConFrame``.
+    slice is an independent ``ConFrame``. ``left + right`` returns a new
     frame with those atoms followed by ``right`` (a ``ConFrame`` or an
     iterable of atoms) in that same type-group order, without building
-    ``.atoms``.
     the operands' ``.atoms``.
+
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and
     optional headers and metadata (v0.4.0+).  Properties: cell, angles,
-    atoms (live sequence of views), has\_velocities, has\_forces, has\_energies
-    (v0.10.0+), prebox\_header, postbox\_header, spec\_version (v0.6.0+),
     ``cell_matrix`` (3×3, rows are lattice vectors, the same matrix as
     ``FrameHeader::cell_matrix``), ``pbc_effective`` (a list of three booleans, one per axis; a
     missing ``pbc`` key is fully periodic),
@@ -322,7 +320,7 @@ Types
     prebox\_header, postbox\_header, spec\_version (v0.6.0+),
     metadata (v0.6.0+, live dict of native JSON-compatible values),
     energy, frame\_index, time, timestep, neb\_bead, neb\_band,
-    source\_text and raw (the ``iter_con`` substring, or ``None``).
+    ``source_text`` and its alias ``raw``.
     Methods: to\_ase(), from\_ase() (v0.4.0+), set\_metadata\_json(),
     set\_scalar\_metadata(), set\_string\_metadata(), set\_energy(),
     set\_frame\_index(), set\_time(), set\_timestep(), set\_neb\_bead(),
@@ -330,28 +328,6 @@ Types
     build\_atom\_id\_index() (v0.10.0+), coords\_array() (v0.10.0+),
     velocities\_array() (v0.10.0+), forces\_array() (v0.10.0+),
     energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+),
-    ``__iter__``, ``__reversed__``, integer and slice get, set, and delete,
-    ``__contains__``, ``__eq__``, ``append``, ``insert``, and ``extend``.
-    ``len(frame)`` is the atom count, and ``bool(frame)`` follows it.
-
-``frame[i]`` and ``frame.atoms[i]`` read and write one store, so an
-in-place component write shows up in ``xyz``, ``vel``, ``frc``, and the
-``*_array()`` methods. Those array methods return a fresh copy.
-``read_con`` still exposes ``xyz`` as a view of the shared coordinate
-slab, so writing that view updates the store. A constructed frame's
-``xyz`` is a copy, and writing the copy does not. ``append``,
-``insert``, ``extend``, and item or slice replacement rebuild the frame
-in CON type-group order. A symbol that is already present joins that
-group. A view index is a position in that order. Two atoms of one
-symbol with different masses still construct, stay in insertion order,
-and fail at write with ``inconsistent masses``. ``==`` compares cell,
-angles, symbols, positions, velocities, forces, masses, and fixed flags.
-It ignores file text, metadata, atom ids, and other sections.
-    For a frame from a read, ``vel``, ``frc``, ``mass_column`` and, until
-    ``.atoms`` is used, the ``\*_array()`` methods other than ``coords_array()``
-    are read-only views of the parsed columns: no copy, and ``.copy()`` gives
-    a writeable array. ``symbols`` (a ``FrameSymbols``) gives every atom's
-    symbol as interned runs, without building ``atoms``.
     atomic\_numbers(), fixed\_mask\_array().
     ``atoms_materialized`` is false until ``.atoms`` is built.
     ``atoms_fill_count`` counts that build. The array getters above do
@@ -391,9 +367,6 @@ It ignores file text, metadata, atom ids, and other sections.
     Return a Python iterator over frames, with ``forward()``, ``skip(n)`` and ``nth(i)``.
 
     The iterator API avoids indexing into ``read_con(path)`` for first-frame and loop-based workflows.
-    Each frame's ``source_text`` (also ``raw``) is the exact substring of the file, including separator whitespace that preceded the frame.
-    Concatenating ``source_text`` reproduces the file. ``read_con`` and a constructed frame leave it as ``None``.
-    An atom edit, a sequence edit, or a metadata setter clears it. ``frame.metadata[key] = value`` does not, because that writes the live dict.
     By default the whole file is read, and decompressed, into memory first.
     ``mmap=True`` maps an uncompressed file instead.
     ``stream=True`` decompresses and parses the file as it is read, so memory stays near one frame plus 1 MiB (mebibyte).

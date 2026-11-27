@@ -437,16 +437,16 @@ pub fn tables_from_extxyz_bytes_reporting(
         .collect();
     if let Some(nfloat) = fast_nfloat {
         return fill_species_pos_parallel(
-            n_frames,
-            n_atoms,
-            nfloat,
-            workers,
-            SpeciesPosInput {
-                lines: &lines,
-                starts: &starts,
-                cell,
-                columns,
+            XyzShape {
+                frames: n_frames,
+                atoms: n_atoms,
+                nfloat,
             },
+            workers,
+            &lines,
+            &starts,
+            cell,
+            columns,
             batches,
         );
     }
@@ -468,7 +468,8 @@ pub fn tables_from_extxyz_bytes_reporting(
     let spec_ref = &specs;
     let line_ref = &lines;
     let wide_atoms = n_frames == 1 && n_atoms >= 4096 && workers >= 2;
-    let worker_species = std::thread::scope(|scope| -> Result<Vec<SpeciesParts>, String> {
+    type WorkerSpecies = (Vec<String>, Vec<u32>);
+    let worker_species = std::thread::scope(|scope| -> Result<Vec<WorkerSpecies>, ConvertError> {
         let mut handles = Vec::new();
         for worker in 0..workers {
             let (frame_from, frame_to, atom_from, atom_to) = if wide_atoms {
@@ -755,9 +756,7 @@ enum SpeciesChunk {
     Mixed { pool: Vec<String>, ids: Vec<u32> },
 }
 
-type SpeciesParts = (Vec<String>, Vec<u32>);
-
-fn merge_species_chunks(chunks: Vec<SpeciesParts>) -> SpeciesParts {
+fn merge_species_chunks(chunks: Vec<(Vec<String>, Vec<u32>)>) -> (Vec<String>, Vec<u32>) {
     let mut pool = Vec::new();
     let mut ids = Vec::new();
     for (local, local_ids) in chunks {
@@ -781,25 +780,20 @@ struct XyzShape {
 
 /// Species and positions (and an optional mass) with no per-atom string
 /// until a frame actually mixes symbols.
-struct SpeciesPosInput<'a> {
-    lines: &'a [&'a [u8]],
-    starts: &'a [usize],
-    cell: Vec<f64>,
-    columns: Vec<XyzColumn>,
-}
-
 fn fill_species_pos_parallel(
     shape: XyzShape,
     workers: usize,
-    input: SpeciesPosInput<'_>,
+    lines: &[&[u8]],
+    starts: &[usize],
+    mut cell: Vec<f64>,
+    columns: Vec<XyzColumn>,
     batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
-) -> Result<XyzTables, String> {
-    let SpeciesPosInput {
-        lines,
-        starts,
-        mut cell,
-        columns,
-    } = input;
+) -> Result<XyzTables, ConvertError> {
+    let XyzShape {
+        frames: n_frames,
+        atoms: n_atoms,
+        nfloat,
+    } = shape;
     let cell_ptr = cell.as_mut_ptr() as usize;
     let pos_ptr = columns
         .iter()
@@ -946,7 +940,7 @@ fn fill_species_pos_parallel(
                         }
                     }
                 }
-                let frames = ids.len().checked_div(n_atoms).unwrap_or(0);
+                let frames = if n_atoms == 0 { 0 } else { ids.len() / n_atoms };
                 let chunk = if pool.len() == 1 {
                     SpeciesChunk::Uniform {
                         symbol: pool.pop().unwrap_or_default(),
@@ -1348,7 +1342,11 @@ fn fill_stream_frames(
                     ids: local_ids.clone(),
                 }
             };
-            let frames = local_ids.len().checked_div(n_atoms).unwrap_or(0);
+            let frames = if n_atoms == 0 {
+                0
+            } else {
+                local_ids.len() / n_atoms
+            };
             emit_species(batches, worker as u16, frames, &chunk);
         }
     }
@@ -1844,15 +1842,15 @@ fn tables_stream(bytes: &[u8]) -> Option<XyzTables> {
             if !push_stream_atom(
                 line,
                 &specs,
-                StreamAtom {
+                StreamCols {
                     pool: &mut pool,
                     ids: &mut ids,
                     positions: &mut positions,
                     masses: &mut masses,
-                    mass_slot,
                     extras: &mut extras,
-                    extra_slot: &extra_slot,
                 },
+                mass_slot,
+                &extra_slot,
             ) {
                 return None;
             }
@@ -1940,26 +1938,28 @@ fn stream_layout(specs: &[ColumnSpec]) -> bool {
         .all(|spec| spec.kind == b'R' || spec.kind == b'I')
 }
 
-struct StreamAtom<'a> {
+struct StreamCols<'a> {
     pool: &'a mut Vec<String>,
     ids: &'a mut Vec<u32>,
     positions: &'a mut Vec<f64>,
     masses: &'a mut Vec<f64>,
-    mass_slot: Option<usize>,
     extras: &'a mut [Vec<f64>],
-    extra_slot: &'a [Option<usize>],
 }
 
-fn push_stream_atom(line: &[u8], specs: &[ColumnSpec], atom: StreamAtom<'_>) -> bool {
-    let StreamAtom {
+fn push_stream_atom(
+    line: &[u8],
+    specs: &[ColumnSpec],
+    cols: StreamCols<'_>,
+    mass_slot: Option<usize>,
+    extra_slot: &[Option<usize>],
+) -> bool {
+    let StreamCols {
         pool,
         ids,
         positions,
         masses,
-        mass_slot,
         extras,
-        extra_slot,
-    } = atom;
+    } = cols;
     let mut index = 0usize;
     while index < line.len() && (line[index] == b' ' || line[index] == b'\t') {
         index += 1;
@@ -2827,11 +2827,12 @@ pub fn tables_to_extxyz_bytes(tables: &XyzTables) -> Result<Vec<u8>, ConvertErro
         species_text = Some(vec![symbol.clone(); tables.n_frames * tables.n_atoms]);
     }
     let mut owned = tables.columns.clone();
-    if let Some(text) = species_text
-        && let Some(column) = owned.iter_mut().find(|column| column.name == "species")
-        && column.text.is_empty()
-    {
-        column.text = text;
+    if let Some(text) = species_text {
+        if let Some(column) = owned.iter_mut().find(|column| column.name == "species") {
+            if column.text.is_empty() {
+                column.text = text;
+            }
+        }
     }
     for column in &mut owned {
         if column.name == "pos" && column.real.is_empty() {
