@@ -124,7 +124,7 @@ jobs:
           .venv/bin/python -m pip install maturin pytest numpy ase chemfiles 'MDAnalysis==2.11.0' 'gemmi==0.7.5' 'h5py==3.16.0' 'snakemake==8.30.0'
           .venv/bin/python -m pip install -e ase-readcon
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends emacs-nox
+          sudo apt-get install -y --no-install-recommends emacs-nox zstd gfortran
 
       - name: maturin develop
         env:
@@ -191,7 +191,7 @@ jobs:
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           .venv/bin/python -m pip install -U pip
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends emacs-nox zlib1g-dev libjpeg-dev libhdf5-dev libopenblas-dev pkg-config
+          sudo apt-get install -y --no-install-recommends emacs-nox zstd gfortran zlib1g-dev libjpeg-dev libhdf5-dev libopenblas-dev pkg-config
           .venv/bin/python -m pip install maturin pytest numpy ase chemfiles 'MDAnalysis==2.11.0' 'h5py==3.16.0'
           .venv/bin/python -m pip install -e ase-readcon
           # A current rpds-py wheel installs on 3.13t. The version pip would
