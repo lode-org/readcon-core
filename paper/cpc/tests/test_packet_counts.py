@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -18,15 +19,25 @@ def _load():
     return module
 
 
+def _tables(script: Path) -> None:
+    """Rewrite one fragment from its committed record, as ``regen_paper.py`` does."""
+    done = subprocess.run(
+        [sys.executable, str(script), "--tables"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
 def test_packet_counts_match_the_manuscript() -> None:
     cm = _load()
     generated = cm.GENERATED
     generated.mkdir(parents=True, exist_ok=True)
-    velocity = generated / "velocity_case.tex"
-    if not velocity.is_file():
-        velocity.write_text(
-            "\\newcommand{\\eFivePrefactorRatioFree}{36.8}\n", encoding="utf-8"
-        )
+    # The trace check compares a present velocity_case.tex with
+    # velocity_case.py --tables. The e5 ratio is defined by e5_prefactor.py.
+    _tables(CPC / "evidence" / "e5_prefactor.py")
+    _tables(CPC / "scripts" / "velocity_case.py")
     corpus = generated / "corpus_crosscheck_macros.tex"
     if not corpus.is_file() and "corpusFiles" not in cm.macros():
         corpus.write_text("\\newcommand{\\corpusFiles}{165}\n", encoding="utf-8")
