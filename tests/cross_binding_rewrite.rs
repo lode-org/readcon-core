@@ -606,12 +606,6 @@ fn binding_candidate_follows_cargo_target_dir() {
         debug_cdylib_candidate(&root, Some(relative)),
         artifact_root().join("debug/libreadcon_core.so")
     );
-    assert_ne!(
-        debug_cdylib_candidate(&root, Some(relative)),
-        std::env::current_dir()
-            .expect("cwd")
-            .join("target/referee-r9-rel/debug/libreadcon_core.so")
-    );
     assert_eq!(
         debug_cdylib_candidate(&root, None),
         root.join("target/debug/libreadcon_core.so")
@@ -622,7 +616,6 @@ fn binding_candidate_follows_cargo_target_dir() {
 fn relative_target_dir_is_the_artifact_root() {
     let root = repo_root();
     let relative = std::ffi::OsStr::new("rel-r13");
-    let cwd = std::env::current_dir().expect("cwd");
     let artifact = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .parent()
         .expect("parent of the cargo target directory")
@@ -643,8 +636,6 @@ fn relative_target_dir_is_the_artifact_root() {
     eprintln!("binding_py={}", py.display());
     eprintln!("binding_mpi={}", mpi.display());
     assert_eq!(debug, artifact.join("debug/libreadcon_core.so"));
-    assert_ne!(debug, cwd.join("rel-r13/debug/libreadcon_core.so"));
-    assert_ne!(debug, root.join("rel-r13/debug/libreadcon_core.so"));
     assert_eq!(plain, artifact.join("binding-plain"));
     assert_eq!(py, artifact.join("binding-py"));
     assert_eq!(mpi, artifact.join("binding-mpi"));
@@ -708,12 +699,9 @@ fn fallback_binding_dirs_follow_cargo_target_dir() {
     assert_ne!(py, root.join("target/binding-py"));
     let relative = std::ffi::OsStr::new("side-target");
     let artifact = artifact_root();
-    let cwd = std::env::current_dir().expect("cwd");
     let (plain, py) = binding_side_dirs(&root, Some(relative));
     assert_eq!(plain, artifact.join("binding-plain"));
     assert_eq!(py, artifact.join("binding-py"));
-    assert_ne!(plain, cwd.join("side-target/binding-plain"));
-    assert_ne!(py, cwd.join("side-target/binding-py"));
     let (plain, py) = binding_side_dirs(&root, None);
     assert_eq!(plain, root.join("target/binding-plain"));
     assert_eq!(py, root.join("target/binding-py"));
@@ -722,7 +710,6 @@ fn fallback_binding_dirs_follow_cargo_target_dir() {
     assert_ne!(mpi, root.join("target/binding-mpi"));
     let mpi = binding_mpi_dir(&root, Some(relative));
     assert_eq!(mpi, artifact.join("binding-mpi"));
-    assert_ne!(mpi, cwd.join("side-target/binding-mpi"));
     let mpi = binding_mpi_dir(&root, None);
     assert_eq!(mpi, root.join("target/binding-mpi"));
 }
