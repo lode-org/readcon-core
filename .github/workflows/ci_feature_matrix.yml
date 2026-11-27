@@ -107,3 +107,20 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Compile with ccache, gcc, and clang
         run: bash scripts/check_meson_cc.sh
+
+  # cmake-rs drops -DCMAKE_C/CXX_COMPILER when a toolchain file is set.
+  # The host file must not apply, and the target CC/CXX must.
+  cross-cmake-compilers:
+    name: cross cmake uses the target compilers
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - name: gcc and g++
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc g++
+      - name: Configure chemfiles for aarch64
+        run: bash scripts/check_cross_cmake.sh

@@ -4,6 +4,16 @@
 # "cannot find -lstdc++". Add that directory before the compiler test.
 # Cross builds do not use the host library. cmake-rs skips its own
 # CMAKE_SYSTEM_NAME when this file is set, so a cross build restores it.
+# It also skips -DCMAKE_C/CXX_COMPILER, so a cross build copies CC/CXX.
+
+if(DEFINED ENV{CMAKE_TOOLCHAIN_FILE})
+  get_filename_component(_readcon_user "$ENV{CMAKE_TOOLCHAIN_FILE}" ABSOLUTE)
+  get_filename_component(_readcon_self "${CMAKE_CURRENT_LIST_FILE}" ABSOLUTE)
+  if(NOT _readcon_user STREQUAL _readcon_self)
+    include("${_readcon_user}")
+    return()
+  endif()
+endif()
 
 if(DEFINED ENV{TARGET} AND DEFINED ENV{HOST} AND NOT "$ENV{TARGET}" STREQUAL "$ENV{HOST}")
   set(_readcon_cross ON)
@@ -96,6 +106,27 @@ if(_readcon_cross AND NOT CMAKE_SYSTEM_NAME)
     set(CMAKE_SYSTEM_NAME "${_name}")
     set(CMAKE_SYSTEM_PROCESSOR "${_proc}")
   endif()
+endif()
+
+if(_readcon_cross)
+  # Same lookup order as cmake-rs / the cc crate: dashed triple, then
+  # underscores, then TARGET_CC / TARGET_CXX, then the plain variable.
+  string(REPLACE "-" "_" _target_u "$ENV{TARGET}")
+  foreach(_base IN ITEMS CC CXX)
+    set(_picked "")
+    foreach(_name IN ITEMS "${_base}_$ENV{TARGET}" "${_base}_${_target_u}" "TARGET_${_base}" "${_base}")
+      if(_picked STREQUAL "" AND DEFINED ENV{${_name}} AND NOT "$ENV{${_name}}" STREQUAL "")
+        set(_picked "$ENV{${_name}}")
+      endif()
+    endforeach()
+    if(NOT _picked STREQUAL "")
+      if(_base STREQUAL "CC" AND NOT CMAKE_C_COMPILER)
+        set(CMAKE_C_COMPILER "${_picked}")
+      elseif(_base STREQUAL "CXX" AND NOT CMAKE_CXX_COMPILER)
+        set(CMAKE_CXX_COMPILER "${_picked}")
+      endif()
+    endif()
+  endforeach()
 endif()
 
 if(NOT _readcon_cross AND CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")

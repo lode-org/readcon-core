@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -18,6 +19,12 @@ def _load():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def test_host_toolchain_file_is_not_global() -> None:
+    text = (ROOT / ".cargo" / "config.toml").read_text(encoding="utf-8")
+    assert "HOST_CMAKE_TOOLCHAIN_FILE" in text
+    assert re.search(r"(?m)^CMAKE_TOOLCHAIN_FILE\s*=", text) is None
 
 
 def test_ccache_plus_cc_sets_nothing(tmp_path: Path) -> None:
@@ -53,6 +60,20 @@ def test_extra_args_become_a_wrapper(tmp_path: Path) -> None:
     assert "-m32" in text
     assert "ccache" not in text
     assert wrapper.stat().st_mode & 0o111
+
+
+def test_msvc_cl_is_not_the_linker(tmp_path: Path) -> None:
+    module = _load()
+    triple = "x86_64-pc-windows-msvc"
+    assigned = module.cargo_cc_env(
+        [r"C:\BuildTools\VC\Tools\MSVC\bin\cl.exe"],
+        triple,
+        triple,
+        tmp_path / "readcon-cc",
+    )
+    assert assigned["CC"].endswith("cl.exe")
+    assert module.cargo_linker_key(triple) not in assigned
+    assert not (tmp_path / "readcon-cc").exists()
 
 
 def test_linker_key_is_the_cargo_target(tmp_path: Path) -> None:

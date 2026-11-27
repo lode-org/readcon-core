@@ -4,8 +4,11 @@
 # that pull the optional `chemfiles` feature.
 #
 # scripts/libstdcxx.cmake runs before project(), so clang-as-c++ can
-# link -lstdc++ during chemfiles-sys's compiler test. An explicit
-# CMAKE_TOOLCHAIN_FILE in the environment is left alone.
+# link -lstdc++ during chemfiles-sys's compiler test. cmake-rs skips
+# -DCMAKE_C_COMPILER and -DCMAKE_CXX_COMPILER when a toolchain file is
+# set, so this is the host variable only. A cross build keeps the
+# target CC/CXX. An explicit CMAKE_TOOLCHAIN_FILE still wins: the
+# toolchain file includes it and returns.
 [env]
 CMAKE_POLICY_VERSION_MINIMUM = "3.5"
-CMAKE_TOOLCHAIN_FILE = { value = "scripts/libstdcxx.cmake", relative = true }
+HOST_CMAKE_TOOLCHAIN_FILE = { value = "scripts/libstdcxx.cmake", relative = true }

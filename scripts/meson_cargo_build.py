@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 
 _CACHE_WRAPPERS = {"ccache", "sccache", "distcc"}
+# rustc's MSVC linker is link.exe. cl.exe is only the compiler.
+_MSVC_CL = {"cl", "clang-cl"}
 
 _SHARED_ALIASES = (
     "readcon_core.dll",
@@ -52,7 +54,7 @@ def _copy_artifact(
 
 
 def _tool_name(part: str) -> str:
-    name = Path(part).name
+    name = Path(part.replace("\\", "/")).name
     if name.lower().endswith(".exe"):
         name = name[:-4]
     return name.lower()
@@ -78,11 +80,13 @@ def cargo_cc_env(
     A single ``cc`` is cargo's default, including ``ccache cc``. Extra
     arguments (``gcc -m32``) become a wrapper both CC and the linker exec.
     The linker variable is the cargo target, not always the rustc host.
+    ``cl.exe`` stays the compiler only; MSVC links with ``link.exe``.
     """
     real = compiler_without_cache(command)
     if not real or (len(real) == 1 and _tool_name(real[0]) == "cc"):
         return {}
-    if len(real) == 1:
+    msvc = _tool_name(real[0]) in _MSVC_CL
+    if msvc or len(real) == 1:
         program = real[0]
     else:
         quoted = " ".join(shlex.quote(part) for part in real)
@@ -90,7 +94,9 @@ def cargo_cc_env(
         wrapper.write_text("#!/bin/sh\nexec " + quoted + ' "$@"\n', encoding="utf-8")
         wrapper.chmod(0o755)
         program = str(wrapper)
-    assigned = {cargo_linker_key(triple): program}
+    assigned: dict[str, str] = {}
+    if not msvc:
+        assigned[cargo_linker_key(triple)] = program
     if triple == host:
         assigned["CC"] = program
     else:
