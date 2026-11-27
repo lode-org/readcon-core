@@ -10975,22 +10975,13 @@ mod extension_link_regression {
             "cargo test binary does not need libpython:\n{harness}"
         );
 
-        let profile = exe
-            .parent()
-            .and_then(Path::parent)
-            .expect("target profile dir");
-        let pyo3_out = newest_build_output(profile, "pyo3-ffi-");
+        let profile = profile_dir(&exe);
+        let pyo3_out = newest_build_output(&profile, "pyo3-ffi-");
         assert!(
             pyo3_out.contains("cargo:rustc-link-lib="),
             "pyo3 did not emit a libpython link line"
         );
-        // This compilation's build-script stdout. `OUT_DIR` is `.../out`;
-        // Cargo stores the script output beside it for both the
-        // `<crate>-<hash>` and `<crate>/<hash>` layouts.
-        let ours_path = Path::new(env!("OUT_DIR"))
-            .parent()
-            .expect("build script directory")
-            .join("output");
+        let ours_path = build_script_stdout(Path::new(env!("OUT_DIR")));
         let ours = std::fs::read_to_string(&ours_path)
             .unwrap_or_else(|err| panic!("read {}: {err}", ours_path.display()));
         let python_links = python_link_directives(&ours);
@@ -11125,18 +11116,19 @@ cargo:rustc-link-lib=python312
             let name = entry.file_name();
             let name = name.to_string_lossy();
             if name.starts_with(prefix) {
-                consider_output(&mut best, entry.path().join("output"));
+                consider_script_output(&mut best, &entry.path());
                 continue;
             }
-            // Cargo 1.100 names the directory `<crate>/<hash>` rather than
-            // `<crate>-<hash>`. `prefix` keeps the historical trailing hyphen.
+            // Cargo 1.100 names the directory `<crate>/<hash>` and writes
+            // stdout at `run/stdout`. Cargo 1.88 uses `<crate>-<hash>/output`.
+            // `prefix` keeps the historical trailing hyphen.
             if name == crate_name {
                 let nested = std::fs::read_dir(entry.path())
                     .unwrap_or_else(|err| panic!("read {}: {err}", entry.path().display()));
                 for child in nested {
                     let child = child
                         .unwrap_or_else(|err| panic!("read {}: {err}", entry.path().display()));
-                    consider_output(&mut best, child.path().join("output"));
+                    consider_script_output(&mut best, &child.path());
                 }
             }
         }
@@ -11154,6 +11146,46 @@ cargo:rustc-link-lib=python312
         let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
         if best.as_ref().is_none_or(|(when, _)| modified >= *when) {
             *best = Some((modified, output));
+        }
+    }
+
+    /// `<unit>/output` on Cargo 1.88, `<unit>/run/stdout` on Cargo 1.100.
+    fn consider_script_output(best: &mut Option<(SystemTime, PathBuf)>, unit: &Path) {
+        consider_output(best, unit.join("output"));
+        consider_output(best, unit.join("run").join("stdout"));
+    }
+
+    /// Cargo 1.88 runs the test binary from `<profile>/deps`. Cargo 1.100
+    /// runs it from `<profile>/build/<package>/<hash>/out`, whose
+    /// grandparent has no `build` directory.
+    fn profile_dir(exe: &Path) -> PathBuf {
+        if let Some(profile) = exe.parent().and_then(Path::parent)
+            && profile.join("build").is_dir()
+        {
+            return profile.to_path_buf();
+        }
+        let mut cursor = exe.parent();
+        while let Some(dir) = cursor {
+            if dir.file_name().is_some_and(|name| name == "build")
+                && let Some(profile) = dir.parent()
+            {
+                return profile.to_path_buf();
+            }
+            cursor = dir.parent();
+        }
+        panic!("target profile dir from {}", exe.display());
+    }
+
+    /// Build-script stdout for `OUT_DIR` (`<unit>/out`).
+    ///
+    /// Read `<unit>/output`, falling back to `<unit>/run/stdout`.
+    fn build_script_stdout(out_dir: &Path) -> PathBuf {
+        let unit = out_dir.parent().expect("build script directory");
+        let shared = unit.join("output");
+        if shared.is_file() {
+            shared
+        } else {
+            unit.join("run").join("stdout")
         }
     }
 
@@ -11192,5 +11224,120 @@ cargo:rustc-link-lib=python312
         let lib = target.join("debug/libreadcon_core.so");
         assert!(lib.is_file(), "missing {}", lib.display());
         lib
+    }
+
+    struct RemoveOnDrop(PathBuf);
+
+    impl Drop for RemoveOnDrop {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn layout_scratch(label: &str) -> (PathBuf, RemoveOnDrop) {
+        let nanos = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
+            "target/layout-{label}-{}-{nanos}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root)
+            .unwrap_or_else(|err| panic!("create {}: {err}", root.display()));
+        let guard = RemoveOnDrop(root.clone());
+        (root, guard)
+    }
+
+    #[test]
+    fn cargo_layout_stdout_reads_output_then_run_stdout() {
+        let (root, _guard) = layout_scratch("stdout");
+        let shared_unit = root.join("shared/build/readcon-core-0123456789abcdef");
+        std::fs::create_dir_all(shared_unit.join("out"))
+            .unwrap_or_else(|err| panic!("create shared out: {err}"));
+        std::fs::write(shared_unit.join("output"), "shared-stdout\n")
+            .unwrap_or_else(|err| panic!("write shared output: {err}"));
+        assert_eq!(
+            std::fs::read_to_string(build_script_stdout(&shared_unit.join("out")))
+                .unwrap_or_else(|err| panic!("read shared stdout: {err}")),
+            "shared-stdout\n"
+        );
+
+        let unit = root.join("unit/build/readcon-core/0123456789abcdef");
+        std::fs::create_dir_all(unit.join("out"))
+            .unwrap_or_else(|err| panic!("create unit out: {err}"));
+        std::fs::create_dir_all(unit.join("run"))
+            .unwrap_or_else(|err| panic!("create unit run: {err}"));
+        std::fs::write(unit.join("run/stdout"), "unit-stdout\n")
+            .unwrap_or_else(|err| panic!("write unit stdout: {err}"));
+        assert_eq!(
+            std::fs::read_to_string(build_script_stdout(&unit.join("out")))
+                .unwrap_or_else(|err| panic!("read unit stdout: {err}")),
+            "unit-stdout\n"
+        );
+    }
+
+    #[test]
+    fn cargo_layout_test_binary_under_out_uses_the_profile() {
+        let (root, _guard) = layout_scratch("profile");
+        let shared = root.join("shared/debug");
+        let shared_exe = shared.join("deps/readcon_core-test");
+        std::fs::create_dir_all(shared_exe.parent().expect("deps"))
+            .unwrap_or_else(|err| panic!("create deps: {err}"));
+        std::fs::create_dir_all(shared.join("build"))
+            .unwrap_or_else(|err| panic!("create shared build: {err}"));
+        std::fs::write(&shared_exe, b"").unwrap_or_else(|err| panic!("write shared exe: {err}"));
+        assert_eq!(profile_dir(&shared_exe), shared);
+
+        let unit_profile = root.join("unit/debug");
+        let unit_exe =
+            unit_profile.join("build/readcon-core/0123456789abcdef/out/readcon_core-test");
+        std::fs::create_dir_all(unit_exe.parent().expect("out"))
+            .unwrap_or_else(|err| panic!("create unit exe dir: {err}"));
+        std::fs::write(&unit_exe, b"").unwrap_or_else(|err| panic!("write unit exe: {err}"));
+        let missing = unit_exe
+            .parent()
+            .and_then(Path::parent)
+            .expect("unit")
+            .join("build");
+        assert!(
+            !missing.exists(),
+            "grandparent build dir should be absent: {}",
+            missing.display()
+        );
+        assert_eq!(profile_dir(&unit_exe), unit_profile);
+    }
+
+    #[test]
+    fn cargo_layout_pyo3_reads_output_and_run_stdout() {
+        let (root, _guard) = layout_scratch("pyo3");
+        let shared = root.join("shared/debug");
+        let shared_unit = shared.join("build/pyo3-ffi-fedcba9876543210");
+        std::fs::create_dir_all(&shared_unit)
+            .unwrap_or_else(|err| panic!("create shared pyo3: {err}"));
+        std::fs::write(
+            shared_unit.join("output"),
+            "cargo:rustc-link-lib=dylib=python3.12\n",
+        )
+        .unwrap_or_else(|err| panic!("write shared pyo3: {err}"));
+        assert!(
+            newest_build_output(&shared, "pyo3-ffi-").contains("cargo:rustc-link-lib="),
+            "shared layout pyo3 stdout was not read"
+        );
+
+        let unit = root.join("unit/debug");
+        let pyo3 = unit.join("build/pyo3-ffi/fedcba9876543210");
+        std::fs::create_dir_all(pyo3.join("run"))
+            .unwrap_or_else(|err| panic!("create unit pyo3: {err}"));
+        std::fs::write(
+            pyo3.join("run/stdout"),
+            "cargo:rustc-link-lib=dylib=python3.12\n",
+        )
+        .unwrap_or_else(|err| panic!("write unit pyo3: {err}"));
+        let text = newest_build_output(&unit, "pyo3-ffi-");
+        assert!(
+            text.contains("cargo:rustc-link-lib="),
+            "build-unit pyo3 stdout was not read:\n{text}"
+        );
     }
 }
