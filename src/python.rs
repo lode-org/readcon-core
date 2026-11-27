@@ -11781,11 +11781,6 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
             extension_cdylib_lib(&root, Some(relative)),
             artifact.join("python-extension-link/debug/libreadcon_core.so")
         );
-        let cwd = std::env::current_dir().expect("cwd");
-        assert_ne!(
-            extension_cdylib_lib(&root, Some(relative)),
-            cwd.join("rel-target/python-extension-link/debug/libreadcon_core.so")
-        );
         assert_eq!(
             extension_cdylib_lib(&root, None),
             root.join("target/python-extension-link/debug/libreadcon_core.so")
@@ -11799,19 +11794,15 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
             .unwrap_or_else(|| panic!("artifact root from {}", exe.display()));
         let root = Path::new("/opt/readcon-manifest");
         let relative = std::ffi::OsStr::new("rel-target");
-        let cwd = std::env::current_dir().expect("cwd");
         let got = extension_cdylib_lib(root, Some(relative));
+        eprintln!("exe={}", exe.display());
         eprintln!("artifact_root={}", artifact.display());
         eprintln!("extension_cdylib={}", got.display());
         assert_eq!(
             got,
             artifact.join("python-extension-link/debug/libreadcon_core.so"),
-            "relative target dir followed the cwd {}",
-            cwd.display()
-        );
-        assert_ne!(
-            got,
-            cwd.join("rel-target/python-extension-link/debug/libreadcon_core.so")
+            "relative target dir did not follow {}",
+            exe.display()
         );
     }
 
