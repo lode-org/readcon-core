@@ -11033,9 +11033,15 @@ mod extension_link_regression {
             .or_else(|| line.strip_prefix("cargo:"))
     }
 
+    /// A `rustc-link-lib` line whose library is Python (`python3*`,
+    /// `libpython`, or another name `names_python_library` accepts).
+    /// chemfiles and metatensor link lines do not count.
     fn has_rustc_link_lib_directive(output: &str) -> bool {
         output.lines().any(|line| {
-            cargo_directive_body(line).is_some_and(|body| body.starts_with("rustc-link-lib="))
+            let Some(body) = cargo_directive_body(line) else {
+                return false;
+            };
+            body.starts_with("rustc-link-lib=") && is_python_link_directive(line)
         })
     }
 
@@ -11186,6 +11192,18 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
         assert!(has_rustc_link_lib_directive(new));
         assert!(!has_rustc_link_lib_directive(
             "cargo::warning=see cargo:rustc-link-lib=python3.12\n"
+        ));
+        assert!(!has_rustc_link_lib_directive(
+            "cargo:rustc-link-lib=dylib=metatensor\n"
+        ));
+        assert!(!has_rustc_link_lib_directive(
+            "cargo::rustc-link-lib=static=readcon_chemfiles_atom_view\n"
+        ));
+        assert!(has_rustc_link_lib_directive(
+            "cargo:rustc-link-lib=dylib=python3.12\n"
+        ));
+        assert!(has_rustc_link_lib_directive(
+            "cargo::rustc-link-lib=python312\n"
         ));
     }
 
