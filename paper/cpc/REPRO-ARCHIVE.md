@@ -2,7 +2,7 @@
 
 The paper rests on two archives, both in its supplementary material.
 
-- `readcon-core.bundle`, a git bundle of readcon-core that holds the measured commit `src/commit.tex` names, with its whole history; `git clone readcon-core.bundle` checks it out without a network.
+- `readcon-core.bundle`, a git bundle of readcon-core that holds the commit `src/commit.tex` names, with its whole history; `git clone readcon-core.bundle` checks it out without a network.
   That commit is readcon-core 0.17.3 and is not a release tag. Tag v0.17.3 names a different commit. The measurement logs name tree `7df8390b6ee7cfd73f0b849b02313a365121d4a2`, which is the tree of this commit.
   It holds the library and its bindings, the specification `docs/orgmode/spec.org` of that commit, the conformance corpus `resources/conformance/`, and `paper/cpc`.
   Besides that commit, the bundle holds the branch `main`, the branch `paper/cpc-v7.16` of the previous submission, and the release tags. The logs do not name a second commit with tree `7df8390b6ee7cfd73f0b849b02313a365121d4a2`.
@@ -27,8 +27,8 @@ The script takes the client from `EONCLIENT`, then from `PATH`, then from `paper
 
 ## Release
 
-`src/commit.tex` holds one value, `\readconcommit`, the measured commit. That commit is readcon-core 0.17.3 and is not a release tag.
-`scripts/gen_release.py` writes `src/release.tex` from that commit's Cargo.toml. `\readconversion` and `\rcMeasuredVersion` are 0.17.3. The role is measured commit. The tag sentence says this commit is not a release tag.
+`src/commit.tex` holds one value, `\readconcommit`, the commit. That commit is readcon-core 0.17.3 and is not a release tag.
+`scripts/gen_release.py` writes `src/release.tex` from that commit's Cargo.toml. `\readconversion` and `\rcMeasuredVersion` are 0.17.3. The tag sentence says this commit is not a release tag.
 `\rcMeasuredSpecBlob` is the `docs/orgmode/spec.org` of that commit.
 Every record names the library it measured by that digest and the commit of the checkout that ran it.
 One record also depends on the commit of `src/commit.tex`: `data/test_run.json`, the run of the example program in a clone of that commit, prints the commit in its commands, and `scripts/test_run.py --tables` stops when the record names another.

@@ -240,11 +240,19 @@ fn compressed_path_writers_round_trip_a_frame() {
     }
 }
 
-fn tool_runs(name: &str) -> bool {
-    Command::new(name)
+fn tool_runs(name: impl AsRef<std::ffi::OsStr>) -> bool {
+    Command::new(name.as_ref())
         .arg("--version")
         .output()
         .is_ok_and(|out| out.status.success())
+}
+
+/// Compiler for the libpython fixture. `CC` selects it; otherwise `cc`.
+fn fixture_compiler() -> std::ffi::OsString {
+    match std::env::var_os("CC") {
+        Some(cc) if !cc.is_empty() => cc,
+        _ => std::ffi::OsString::from("cc"),
+    }
 }
 
 fn exports_symbol(lib: &Path, symbol: &str) -> bool {
@@ -290,6 +298,117 @@ fn usable(path: &Path, python_extension: bool) -> bool {
         && (python_extension || exports_symbol(path, "rkr_library_version"))
 }
 
+fn extension_without_libpython(path: &Path) -> bool {
+    usable(path, true) && !cdylib_links_libpython(path)
+}
+
+/// A cdylib built without `PYO3_BUILD_EXTENSION_MODULE` needs libpython.
+/// `readelf` failure counts as a mismatch so the caller rebuilds.
+fn cdylib_links_libpython(path: &Path) -> bool {
+    let Ok(out) = Command::new("readelf").args(["-d"]).arg(path).output() else {
+        return true;
+    };
+    if !out.status.success() {
+        return true;
+    }
+    let dynamic = String::from_utf8_lossy(&out.stdout).to_ascii_lowercase();
+    dynamic.contains("libpython") || dynamic.contains("python.framework")
+}
+
+/// `NEEDED` sonames from `readelf -d`. Independent of `cdylib_links_libpython`.
+fn needed_shared_objects(path: &Path) -> Vec<String> {
+    let output = Command::new("readelf")
+        .args(["-d"])
+        .arg(path)
+        .output()
+        .unwrap_or_else(|err| panic!("readelf {}: {err}", path.display()));
+    assert!(
+        output.status.success(),
+        "readelf -d {} failed\n{}",
+        path.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut needed = Vec::new();
+    for line in text.lines() {
+        if !line.contains("(NEEDED)") {
+            continue;
+        }
+        let Some(start) = line.find('[') else {
+            continue;
+        };
+        let Some(rel_end) = line[start + 1..].find(']') else {
+            continue;
+        };
+        needed.push(line[start + 1..start + 1 + rel_end].to_string());
+    }
+    needed
+}
+
+fn needed_is_libpython(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    (lower.starts_with("libpython3") && lower.contains(".so")) || lower.contains("python.framework")
+}
+
+fn cpython_shared_link_args() -> Vec<String> {
+    let script = "\
+import sysconfig
+for key in ('LIBPL', 'LIBDIR', 'LDVERSION'):
+    print(sysconfig.get_config_var(key) or '')
+";
+    let output = Command::new("python3")
+        .arg("-c")
+        .arg(script)
+        .output()
+        .unwrap_or_else(|err| panic!("python3 sysconfig: {err}"));
+    assert!(
+        output.status.success(),
+        "python3 sysconfig failed\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut lines = text.lines();
+    let libpl = lines.next().unwrap_or("").trim();
+    let libdir = lines.next().unwrap_or("").trim();
+    let version = lines.next().unwrap_or("").trim();
+    assert!(!version.is_empty(), "python LDVERSION is empty");
+    let mut args = Vec::new();
+    if !libpl.is_empty() {
+        args.push(format!("-L{libpl}"));
+    }
+    if !libdir.is_empty() && libdir != libpl {
+        args.push(format!("-L{libdir}"));
+    }
+    // Ubuntu gcc defaults to --as-needed and drops an unreferenced library.
+    args.push("-Wl,--no-as-needed".to_string());
+    args.push(format!("-lpython{version}"));
+    args
+}
+
+fn build_fixture_cdylib(dir: &Path, name: &str, link_python: bool) -> PathBuf {
+    let source = dir.join(format!("{name}.c"));
+    std::fs::write(&source, "void readcon_fixture(void) {}\n")
+        .unwrap_or_else(|err| panic!("write {}: {err}", source.display()));
+    let shared = dir.join(format!("lib{name}.so"));
+    let cc = fixture_compiler();
+    let mut cmd = Command::new(&cc);
+    cmd.args(["-shared", "-fPIC", "-o"])
+        .arg(&shared)
+        .arg(&source);
+    if link_python {
+        cmd.args(cpython_shared_link_args());
+    }
+    let status = cmd
+        .status()
+        .unwrap_or_else(|err| panic!("{} {}: {err}", cc.to_string_lossy(), shared.display()));
+    assert!(
+        status.success(),
+        "{} fixture {name} failed",
+        cc.to_string_lossy()
+    );
+    shared
+}
+
 fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(repo_root())
@@ -297,6 +416,9 @@ fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
         .arg(target_dir);
     if !features.is_empty() {
         cmd.arg("--features").arg(features.join(","));
+    }
+    if features.contains(&"python") {
+        cmd.env("PYO3_BUILD_EXTENSION_MODULE", "1");
     }
     let status = cmd
         .status()
@@ -307,16 +429,95 @@ fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
     lib
 }
 
+/// Directory that contains `<profile>` for this test binary.
+///
+/// `target/<profile>/deps/<bin>` yields `target`.
+/// `target/<triple>/<profile>/deps/<bin>` yields `target/<triple>`.
+/// `target/<profile>/build/<pkg>/<hash>/out/<bin>` yields `target`.
+fn artifact_root_from_exe(exe: &Path) -> Option<PathBuf> {
+    let mut up = exe.ancestors();
+    let _bin = up.next()?;
+    let parent = up.next()?;
+    if parent.file_name().is_some_and(|name| name == "deps") {
+        let _profile = up.next()?;
+        return up.next().map(Path::to_path_buf);
+    }
+    if parent.file_name().is_some_and(|name| name == "out") {
+        let _hash = up.next()?;
+        let _pkg = up.next()?;
+        let build = up.next()?;
+        if build.file_name().is_some_and(|name| name == "build") {
+            let _profile = up.next()?;
+            return up.next().map(Path::to_path_buf);
+        }
+    }
+    None
+}
+
+fn artifact_root() -> PathBuf {
+    if let Some(tmp) = option_env!("CARGO_TARGET_TMPDIR") {
+        return Path::new(tmp)
+            .parent()
+            .expect("parent of the cargo target directory")
+            .to_path_buf();
+    }
+    let exe = std::env::current_exe().unwrap_or_else(|err| panic!("current exe: {err}"));
+    artifact_root_from_exe(&exe).unwrap_or_else(|| panic!("artifact root from {}", exe.display()))
+}
+
 /// Plain cdylib for C, Fortran, and Julia, plus the Python extension.
 ///
-/// `cargo test` does not emit the cdylib. A Python-enabled build leaves
-/// libpython unresolved, and Julia refuses to load that file. Side target
-/// directories keep these builds off the lock `cargo test` already holds.
+/// `cargo test` does not emit the cdylib. The Python extension is built
+/// with `PYO3_BUILD_EXTENSION_MODULE` set, so libpython stays unresolved
+/// and Julia refuses to load that file. Side target directories keep
+/// these builds off the lock `cargo test` already holds.
+/// Same base as `extension_cdylib`. An absolute `CARGO_TARGET_DIR`
+/// is used as given. A relative value is the artifact root cargo
+/// already chose (the parent of the profile that holds this test
+/// binary), not a path joined to `root` or the cwd. An unset value
+/// stays `<manifest>/target`.
+fn resolve_cargo_target_base(value: Option<&std::ffi::OsStr>, manifest: &Path) -> PathBuf {
+    match value {
+        Some(value) => {
+            let path = Path::new(value);
+            if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                artifact_root()
+            }
+        }
+        None => manifest.join("target"),
+    }
+}
+
+fn target_base_from(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+    resolve_cargo_target_base(cargo_target_dir, root)
+}
+
+fn debug_cdylib_candidate(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+    target_base_from(root, cargo_target_dir).join("debug/libreadcon_core.so")
+}
+
+/// Plain and Python side builds use the same base as the debug cdylib.
+fn binding_side_dirs(
+    root: &Path,
+    cargo_target_dir: Option<&std::ffi::OsStr>,
+) -> (PathBuf, PathBuf) {
+    let base = target_base_from(root, cargo_target_dir);
+    (base.join("binding-plain"), base.join("binding-py"))
+}
+
+fn binding_mpi_dir(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+    target_base_from(root, cargo_target_dir).join("binding-mpi")
+}
+
 fn binding_libraries() -> (PathBuf, PathBuf) {
+    static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _lock = BUILD.lock().unwrap_or_else(|err| err.into_inner());
     let root = repo_root();
-    let debug = root.join("target/debug/libreadcon_core.so");
-    let plain_dir = root.join("target/binding-plain");
-    let py_dir = root.join("target/binding-py");
+    let cargo_target_dir = std::env::var_os("CARGO_TARGET_DIR");
+    let debug = debug_cdylib_candidate(&root, cargo_target_dir.as_deref());
+    let (plain_dir, py_dir) = binding_side_dirs(&root, cargo_target_dir.as_deref());
     let plain_side = plain_dir.join("debug/libreadcon_core.so");
     let py_side = py_dir.join("debug/libreadcon_core.so");
     let plain = if usable(&debug, false) {
@@ -326,9 +527,12 @@ fn binding_libraries() -> (PathBuf, PathBuf) {
     } else {
         cargo_lib(&plain_dir, &["capi"])
     };
-    let python = if usable(&debug, true) {
+    // `target/debug` may be a `cargo build --features python` cdylib that
+    // was not built with `PYO3_BUILD_EXTENSION_MODULE`. That file exports
+    // `PyInit_readcon` and also links libpython. Rebuild instead of reusing it.
+    let python = if extension_without_libpython(&debug) {
         debug
-    } else if usable(&py_side, true) {
+    } else if extension_without_libpython(&py_side) {
         py_side
     } else {
         cargo_lib(&py_dir, &["python"])
@@ -345,9 +549,12 @@ fn mpi_library() -> Option<PathBuf> {
         }
     }
     let root = repo_root();
+    let cargo_target_dir = std::env::var_os("CARGO_TARGET_DIR");
+    let base = cargo_target_dir.as_deref();
+    let dir = binding_mpi_dir(&root, base);
     let candidates = [
-        root.join("target/binding-mpi/debug/libreadcon_core.so"),
-        root.join("target/debug/libreadcon_core.so"),
+        dir.join("debug/libreadcon_core.so"),
+        debug_cdylib_candidate(&root, base),
     ];
     for candidate in &candidates {
         if candidate.is_file()
@@ -357,7 +564,6 @@ fn mpi_library() -> Option<PathBuf> {
             return Some(candidate.clone());
         }
     }
-    let dir = root.join("target/binding-mpi");
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&root)
         .args(["build", "--lib", "--features", "capi,mpi", "--target-dir"])
@@ -375,15 +581,212 @@ fn mpi_library() -> Option<PathBuf> {
     Some(lib)
 }
 
+/// Plain and Python cdylibs. Julia and gfortran are only needed for the
+/// corpus comparison, so this returns the libraries when they are absent.
+fn binding_libraries_without_julia() -> Option<(PathBuf, PathBuf)> {
+    for tool in ["cc", "python3", "nm", "readelf"] {
+        if !tool_runs(tool) {
+            eprintln!("skip binding library check: {tool} is not installed");
+            return None;
+        }
+    }
+    Some(binding_libraries())
+}
+
+#[test]
+fn binding_candidate_follows_cargo_target_dir() {
+    let root = repo_root();
+    let absolute = root.join("target/referee-r9-abs");
+    assert_eq!(
+        debug_cdylib_candidate(&root, Some(absolute.as_os_str())),
+        absolute.join("debug/libreadcon_core.so")
+    );
+    let relative = std::ffi::OsStr::new("target/referee-r9-rel");
+    assert_eq!(
+        debug_cdylib_candidate(&root, Some(relative)),
+        artifact_root().join("debug/libreadcon_core.so")
+    );
+    assert_eq!(
+        debug_cdylib_candidate(&root, None),
+        root.join("target/debug/libreadcon_core.so")
+    );
+}
+
+#[test]
+fn relative_target_dir_is_the_artifact_root() {
+    let root = repo_root();
+    let relative = std::ffi::OsStr::new("rel-r13");
+    let artifact = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .parent()
+        .expect("parent of the cargo target directory")
+        .to_path_buf();
+    let exe = std::env::current_exe().expect("current exe");
+    assert_eq!(
+        artifact_root_from_exe(&exe).as_deref(),
+        Some(artifact.as_path()),
+        "test binary and cargo target tmp disagree: {}",
+        exe.display()
+    );
+    let debug = debug_cdylib_candidate(&root, Some(relative));
+    let (plain, py) = binding_side_dirs(&root, Some(relative));
+    let mpi = binding_mpi_dir(&root, Some(relative));
+    eprintln!("artifact_root={}", artifact.display());
+    eprintln!("debug_cdylib={}", debug.display());
+    eprintln!("binding_plain={}", plain.display());
+    eprintln!("binding_py={}", py.display());
+    eprintln!("binding_mpi={}", mpi.display());
+    assert_eq!(debug, artifact.join("debug/libreadcon_core.so"));
+    assert_eq!(plain, artifact.join("binding-plain"));
+    assert_eq!(py, artifact.join("binding-py"));
+    assert_eq!(mpi, artifact.join("binding-mpi"));
+}
+
+#[test]
+fn artifact_root_from_exe_handles_a_target_triple() {
+    let host = Path::new("/opt/work/target/debug/deps/cross_binding_rewrite-hash");
+    assert_eq!(
+        artifact_root_from_exe(host).as_deref(),
+        Some(Path::new("/opt/work/target"))
+    );
+    let triple = Path::new(
+        "/opt/work/target/x86_64-unknown-linux-gnu/release/deps/cross_binding_rewrite-hash",
+    );
+    assert_eq!(
+        artifact_root_from_exe(triple).as_deref(),
+        Some(Path::new("/opt/work/target/x86_64-unknown-linux-gnu"))
+    );
+    let unit = Path::new(
+        "/opt/work/target/aarch64-apple-darwin/debug/build/readcon-core/0123456789abcdef/out/readcon_core-test",
+    );
+    assert_eq!(
+        artifact_root_from_exe(unit).as_deref(),
+        Some(Path::new("/opt/work/target/aarch64-apple-darwin"))
+    );
+    let manifest = Path::new("/opt/readcon-manifest");
+    let absolute = Path::new("/opt/abs-target");
+    assert_eq!(
+        resolve_cargo_target_base(Some(absolute.as_os_str()), manifest),
+        absolute
+    );
+    assert_eq!(
+        resolve_cargo_target_base(None, manifest),
+        manifest.join("target")
+    );
+    let relative = std::ffi::OsStr::new("rel-target3");
+    assert_eq!(
+        resolve_cargo_target_base(Some(relative), manifest),
+        artifact_root()
+    );
+    assert_ne!(
+        resolve_cargo_target_base(Some(relative), manifest),
+        manifest.join(relative)
+    );
+}
+
+#[test]
+fn fallback_binding_dirs_follow_cargo_target_dir() {
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let root = scratch.path().join("root");
+    let absolute = scratch.path().join("cargo-target");
+    std::fs::create_dir_all(root.join("target")).expect("create root target");
+    std::fs::create_dir_all(&absolute).expect("create absolute target");
+    let (plain, py) = binding_side_dirs(&root, Some(absolute.as_os_str()));
+    std::fs::create_dir_all(&plain).expect("create plain dir");
+    std::fs::create_dir_all(&py).expect("create python dir");
+    assert_eq!(plain, absolute.join("binding-plain"));
+    assert_eq!(py, absolute.join("binding-py"));
+    assert_ne!(plain, root.join("target/binding-plain"));
+    assert_ne!(py, root.join("target/binding-py"));
+    let relative = std::ffi::OsStr::new("side-target");
+    let artifact = artifact_root();
+    let (plain, py) = binding_side_dirs(&root, Some(relative));
+    assert_eq!(plain, artifact.join("binding-plain"));
+    assert_eq!(py, artifact.join("binding-py"));
+    let (plain, py) = binding_side_dirs(&root, None);
+    assert_eq!(plain, root.join("target/binding-plain"));
+    assert_eq!(py, root.join("target/binding-py"));
+    let mpi = binding_mpi_dir(&root, Some(absolute.as_os_str()));
+    assert_eq!(mpi, absolute.join("binding-mpi"));
+    assert_ne!(mpi, root.join("target/binding-mpi"));
+    let mpi = binding_mpi_dir(&root, Some(relative));
+    assert_eq!(mpi, artifact.join("binding-mpi"));
+    let mpi = binding_mpi_dir(&root, None);
+    assert_eq!(mpi, root.join("target/binding-mpi"));
+}
+
+#[test]
+fn binding_libraries_are_checked_without_julia() {
+    let Some((plain, python)) = binding_libraries_without_julia() else {
+        return;
+    };
+    assert!(
+        usable(&plain, false),
+        "plain cdylib is not usable: {}",
+        plain.display()
+    );
+    assert!(
+        usable(&python, true),
+        "python cdylib is not a python extension: {}",
+        python.display()
+    );
+    let needed = needed_shared_objects(&python);
+    assert!(
+        needed.iter().all(|name| !needed_is_libpython(name)),
+        "python cdylib NEEDED links libpython: {needed:?} ({})",
+        python.display()
+    );
+}
+
+#[test]
+fn cdylib_libpython_detector_matches_needed_entries() {
+    let cc = fixture_compiler();
+    if !tool_runs(&cc) {
+        eprintln!(
+            "skip libpython detector oracle: {} is not installed",
+            cc.to_string_lossy()
+        );
+        return;
+    }
+    for tool in ["python3", "readelf"] {
+        if !tool_runs(tool) {
+            eprintln!("skip libpython detector oracle: {tool} is not installed");
+            return;
+        }
+    }
+    let scratch = tempfile::tempdir().expect("tempdir");
+    let with_python = build_fixture_cdylib(scratch.path(), "with_python", true);
+    let without_python = build_fixture_cdylib(scratch.path(), "without_python", false);
+    let with_needed = needed_shared_objects(&with_python);
+    let without_needed = needed_shared_objects(&without_python);
+    assert!(
+        with_needed.iter().any(|name| needed_is_libpython(name)),
+        "oracle: fixture should need libpython3: {with_needed:?}"
+    );
+    assert!(
+        without_needed.iter().all(|name| !needed_is_libpython(name)),
+        "oracle: plain fixture should not need libpython: {without_needed:?}"
+    );
+    assert!(
+        cdylib_links_libpython(&with_python),
+        "detector missed libpython in {with_needed:?}"
+    );
+    assert!(
+        !cdylib_links_libpython(&without_python),
+        "detector reported libpython in {without_needed:?}"
+    );
+}
+
 #[test]
 fn accepted_corpus_rewrites_are_byte_identical() {
-    for tool in ["cc", "gfortran", "julia", "python3", "nm"] {
+    let Some((plain, python)) = binding_libraries_without_julia() else {
+        return;
+    };
+    for tool in ["gfortran", "julia"] {
         if !tool_runs(tool) {
             eprintln!("skip cross-binding rewrite: {tool} is not installed");
             return;
         }
     }
-    let (plain, python) = binding_libraries();
     let mut lib_path = plain.parent().unwrap_or(Path::new(".")).to_path_buf();
     if let Some(py_parent) = python.parent()
         && py_parent != lib_path.as_path()

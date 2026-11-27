@@ -9,7 +9,7 @@ disagreement is a file of basis explicit that does not match; a file of
 another basis that does not match is a manifest entry the reader no longer
 follows. Both counts must be 0.
 
-    python paper/cpc/scripts/corpus31_results.py            # writes data/corpus31-results.json
+    python paper/cpc/scripts/corpus31_results.py            # writes data/referee/r1t/corpus31-results.json
     python paper/cpc/scripts/corpus31_results.py --check    # compares with that file
     python paper/cpc/scripts/corpus31_results.py --tables   # rewrites the TeX from that file only
 
@@ -34,7 +34,7 @@ import provenance
 
 ROOT = Path(__file__).resolve().parents[1]
 C31 = ROOT / "data" / "corpus31"
-OUT = ROOT / "data" / "corpus31-results.json"
+OUT = ROOT / "data" / "referee" / "r1t" / "corpus31-results.json"
 MACROS = ROOT / "src" / "figures" / "generated" / "corpus31_macros.tex"
 TABLE = ROOT / "src" / "figures" / "generated" / "corpus31_table.tex"
 SPECIAL = {
@@ -141,11 +141,14 @@ def results(binary: Path, threads: tuple[str, ...]) -> dict:
 
 def macros(record: dict) -> str:
     s = record["summary"]
+    # Legal and illegal are what the manifest says. Summary accepted and
+    # rejected count what the reader did.
+    legal = sum(f["expected"]["outcome"] == "accept" for f in record["files"])
     values = {
         "cthreeoneFiles": s["files"],
         "cthreeoneMatch": s["match"],
-        "cthreeoneAccepted": s["accepted"],
-        "cthreeoneRejected": s["rejected"],
+        "cthreeoneAccepted": legal,
+        "cthreeoneRejected": len(record["files"]) - legal,
         "cthreeoneExplicit": s["by_basis"].get("explicit", {}).get("files", 0),
         "cthreeoneNotExplicit": s["files"]
         - s["by_basis"].get("explicit", {}).get("files", 0),
@@ -154,7 +157,7 @@ def macros(record: dict) -> str:
         "cthreeoneThreadSettings": len(s["thread_settings"]),
     }
     return (
-        "% Written by paper/cpc/scripts/corpus31_results.py from data/corpus31-results.json.\n"
+        "% Written by paper/cpc/scripts/corpus31_results.py from data/referee/r1t/corpus31-results.json.\n"
         + "".join(
             f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
         )
@@ -188,7 +191,7 @@ def table(record: dict) -> str:
     }
     head = [r"\toprule", r"File & Outcome; basis & Clauses & Reading\\", r"\midrule"]
     lines = [
-        "% Written by paper/cpc/scripts/corpus31_results.py from data/corpus31-results.json and "
+        "% Written by paper/cpc/scripts/corpus31_results.py from data/referee/r1t/corpus31-results.json and "
         "data/corpus31/manifest.toml.",
         r"\begin{longtable}{@{}p{0.20\linewidth}p{0.27\linewidth}p{0.14\linewidth}p{0.29\linewidth}@{}}",
         r"\caption{Entries of the CON 3.1 corpus whose outcome no clause decides by name, each with the reading that "

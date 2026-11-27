@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,6 +55,9 @@ CONTEXT_ORDER = (
     "mdanalysis",
     "conbin",
 )
+
+
+HEADER = "% Written by paper/cpc/scripts/host_from_log.py from paper/cpc/logs/reader-exchange.log."
 
 
 def rows(text: str) -> dict[str, dict[str, str]]:
@@ -168,7 +172,45 @@ def self_check() -> int:
         pass
     else:
         raise SystemExit("divided a row with no work field")
+    pinned = "\n".join(
+        [
+            "nproc 8",
+            "threads_per_arm 1",
+            "summary arm=readcon_tip median_s=1.0",
+            "summary arm=readcon_v0173 median_s=2.0",
+            "summary arm=readcon_base median_s=3.0",
+            "summary arm=ase_eon median_s=4.0",
+            "summary arm=eon_py median_s=5.0",
+            "summary arm=readcon_db median_s=6.0",
+        ]
+    )
+    counted = arm_threads(pinned)
+    if any(counted[name] != "1" for name in counted):
+        raise SystemExit(f"thread count {counted}")
+    if comparators(pinned):
+        raise SystemExit("emitted a ratio require_same rejects")
+    if (
+        arm_threads(pinned.replace("threads_per_arm 1\n", ""))["readcon_tip"]
+        != "unrecorded"
+    ):
+        raise SystemExit("a log with no thread setting reported a count")
     return 0
+
+
+def nproc(text: str) -> int:
+    """The logical processors of the host. This is not the thread count of an arm."""
+    for line in text.splitlines():
+        if line.startswith("nproc "):
+            return int(line.split()[1])
+    raise SystemExit("reader-exchange.log has no nproc line")
+
+
+def threads_per_arm(text: str) -> str | None:
+    """The count ``bench_readers.py`` wrote after setting every arm's thread variables."""
+    for line in text.splitlines():
+        if line.startswith("threads_per_arm "):
+            return line.split()[1]
+    return None
 
 
 def arm_s(found: dict[str, dict[str, str]], name: str) -> float:
@@ -177,6 +219,84 @@ def arm_s(found: dict[str, dict[str, str]], name: str) -> float:
 
 def arm_mib(found: dict[str, dict[str, str]], name: str) -> float:
     return float(found[name]["mib_median"])
+
+
+# Each ratio of the reader exchange: the arm whose median is divided by the median of the tip.
+COMPARED = {
+    "rcTipOverRelease": "readcon_v0173",
+    "rcMainOverTip": "readcon_base",
+    "rcAseOverTipPool": "ase_eon",
+    "rcEonOverTipPool": "eon_py",
+    "rcTipOverDb": "readcon_db",
+}
+
+
+def arm_threads(text: str) -> dict[str, str]:
+    """The thread count each compared arm was run with.
+
+    ``bench_readers.py`` sets ``RAYON_NUM_THREADS`` and the other thread
+    variables to ``THREADS`` and records that count as ``threads_per_arm``
+    and as ``threads`` on each summary. ``nproc`` is only the size of the
+    host. A row that records neither is unrecorded.
+    """
+    found = rows(text)
+    header = threads_per_arm(text)
+    counted = {}
+    for name in (
+        "readcon_tip",
+        "readcon_v0173",
+        "readcon_base",
+        "ase_eon",
+        "eon_py",
+        "readcon_db",
+    ):
+        counted[name] = found.get(name, {}).get("threads") or header or "unrecorded"
+    return counted
+
+
+@dataclass(frozen=True)
+class Comparator:
+    macro: str
+    arm: str
+    arm_threads: str
+    tip_threads: str
+    value: str
+
+    @property
+    def equal_threads(self) -> bool:
+        return self.arm_threads == self.tip_threads != "unrecorded"
+
+
+def comparators(text: str) -> list[Comparator]:
+    """Ratios whose rows are the same work, thread count, and input.
+
+    ``require_same`` rejects a row that omits or differs in those fields.
+    A rejected row contributes no ratio.
+    """
+    found = rows(text)
+    threads = arm_threads(text)
+    tip = found.get("readcon_tip")
+    if tip is None:
+        return []
+    accepted = []
+    for macro, arm in COMPARED.items():
+        row = found.get(arm)
+        if row is None:
+            continue
+        try:
+            ratio = require_same(row, tip)
+        except UnequalWork:
+            continue
+        accepted.append(
+            Comparator(
+                macro,
+                arm,
+                threads[arm],
+                threads["readcon_tip"],
+                f"{ratio:.3g}",
+            )
+        )
+    return accepted
 
 
 def main() -> int:
@@ -193,12 +313,54 @@ def main() -> int:
     eon = arm_s(found, "eon_py")
     db = arm_s(found, "readcon_db")
     GEN.mkdir(parents=True, exist_ok=True)
-    # Medians of the host log only. A quotient is omitted: the log rows do not
-    # name matching work, threads and input, and the harness refuses that division.
+    threads = arm_threads(text)
+    tip_n = threads["readcon_tip"]
+    ase_n = threads["ase_eon"]
+    eon_n = threads["eon_py"]
+    db_n = threads["readcon_db"]
+    compared = comparators(text)
+    have = {c.macro for c in compared}
+
+    def relation(arm_n: str) -> str:
+        if tip_n == "unrecorded" or arm_n == "unrecorded":
+            return "a thread count the record of the reader exchange does not give"
+        if tip_n != arm_n:
+            return "unequal thread counts"
+        return "equal thread counts"
+
+    db_threads = (
+        f"the readcon-core tip on {tip_n} threads and readcon-db on a thread count "
+        "that the record of the reader exchange does not give"
+        if db_n == "unrecorded"
+        else f"the readcon-core tip on {tip_n} threads and readcon-db on {db_n} threads, {relation(db_n)}"
+    )
     macros = "\n".join(
         [
-            "% Written by paper/cpc/scripts/host_from_log.py.",
+            HEADER,
+            *(
+                f"% threads {macro} {tip_n} {threads[arm]}"
+                for macro, arm in COMPARED.items()
+            ),
+            f"% threads rcTipOverAse {tip_n} {ase_n}",
+            f"% threads rcTipOverEon {tip_n} {eon_n}",
+            *(f"\\newcommand{{\\{c.macro}}}{{{c.value}}}" for c in compared),
+            *(
+                line
+                for line in (
+                    r"\newcommand{\rcTipOverAse}{\rcAseOverTipPool}"
+                    if "rcAseOverTipPool" in have
+                    else "",
+                    r"\newcommand{\rcTipOverEon}{\rcEonOverTipPool}"
+                    if "rcEonOverTipPool" in have
+                    else "",
+                )
+                if line
+            ),
+            f"\\newcommand{{\\rcAseOverTipPoolThreads}}{{the readcon-core tip on {tip_n} threads and ASE on {ase_n} threads, {relation(ase_n)}}}",
+            f"\\newcommand{{\\rcEonOverTipPoolThreads}}{{the readcon-core tip on {tip_n} threads and eOn on {eon_n} threads, {relation(eon_n)}}}",
+            f"\\newcommand{{\\rcTipOverDbThreads}}{{{db_threads}}}",
             f"\\newcommand{{\\rcHostCommit}}{{{rev_short(text)}}}",
+            f"\\newcommand{{\\rcHostCpus}}{{{nproc(text)}}}",
             f"\\newcommand{{\\rcTipMedian}}{{{tip:.4g}}}",
             f"\\newcommand{{\\rcReleaseMedian}}{{{base:.4g}}}",
             f"\\newcommand{{\\rcBaseMedian}}{{{main_s:.4g}}}",
@@ -218,9 +380,9 @@ def main() -> int:
         ]
     )
     (GEN / "host_macros.tex").write_text(macros, encoding="utf-8")
-    header = "% Written by paper/cpc/scripts/host_from_log.py.\n"
     (GEN / "host_table.tex").write_text(
-        header
+        HEADER
+        + "\n"
         + table(
             found,
             CON_ORDER,
@@ -242,7 +404,8 @@ def main() -> int:
         encoding="utf-8",
     )
     (GEN / "format_context.tex").write_text(
-        header
+        HEADER
+        + "\n"
         + table(
             found,
             CONTEXT_ORDER,

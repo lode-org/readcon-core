@@ -109,7 +109,7 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
     )
 
     _write_json(
-        data / "corpus31-results.json",
+        data / "referee" / "r1t" / "corpus31-results.json",
         {
             "summary": {
                 "files": 10,
@@ -136,17 +136,37 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
     )
     _write_json(data / "every_path.json", {"results": {"totals": {"inputs": 5}}})
     _write_json(
-        spec_dir / "mutant_differential.json",
+        data / "referee" / "r1t" / "mutant_differential.json",
         {"totals": {"cases": 12, "same": 12, "unexplained": 0}},
     )
     _write_json(
-        data / "corpus_crosscheck.json",
+        data / "referee" / "r1h" / "corpus_crosscheck.json",
         {
             "groups": {
                 "all": {
+                    "files": 4,
+                    "accepted_by_both": 1,
+                    "field_identical": 1,
                     "readers": {
-                        "readcon": {"disagreements": 0, "not_followed": 0, "crashes": 0}
-                    }
+                        "readcon": {
+                            "matches": 2,
+                            "disagreements": 1,
+                            "not_followed": 1,
+                            "crashes": 0,
+                        },
+                        "readcon_iter": {
+                            "matches": 2,
+                            "disagreements": 1,
+                            "not_followed": 1,
+                            "crashes": 0,
+                        },
+                        "indep": {
+                            "matches": 4,
+                            "disagreements": 0,
+                            "not_followed": 0,
+                            "crashes": 0,
+                        },
+                    },
                 }
             }
         },
@@ -171,6 +191,16 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
                 rf"\newcommand{{\clauseCovered}}{{{macro_covered}}}",
                 r"\newcommand{\mutantCases}{12}",
                 r"\newcommand{\mutantSame}{12}",
+                r"\newcommand{\corpusFiles}{4}",
+                r"\newcommand{\corpusReadconAgree}{2}",
+                r"\newcommand{\corpusReadconDisagree}{1}",
+                r"\newcommand{\corpusReadconNotFollowed}{1}",
+                r"\newcommand{\corpusIterAgree}{2}",
+                r"\newcommand{\corpusIterDisagree}{1}",
+                r"\newcommand{\corpusIterNotFollowed}{1}",
+                r"\newcommand{\corpusIndepAgree}{4}",
+                r"\newcommand{\corpusBoth}{1}",
+                r"\newcommand{\corpusFieldIdentical}{1}",
                 "",
             ]
         ),
@@ -344,6 +374,19 @@ def test_repo_final_clause_coverage_chain_is_linear() -> None:
     assert names.index(f"clause_coverage-{version}-capi-r1.json") == (
         names.index(f"clause_coverage-{version}-spec-major-10.json") + 1
     )
+    assert names.index(f"clause_coverage-{version}-capi-r2.json") == (
+        names.index(f"clause_coverage-{version}-capi-r1.json") + 1
+    )
+    assert names.index(f"clause_coverage-{version}-capi-r3.json") == (
+        names.index(f"clause_coverage-{version}-capi-r2.json") + 1
+    )
+    assert names.index(f"clause_coverage-{version}-capi-r4.json") == (
+        names.index(f"clause_coverage-{version}-capi-r3.json") + 1
+    )
+    assert names.index(f"clause_coverage-{version}-referee-r1.json") == (
+        names.index(f"clause_coverage-{version}-capi-r4.json") + 1
+    )
+    assert names[-1] == f"clause_coverage-{version}-referee-r1.json"
     # The older -r2 recount supersedes the legacy record beside spec-major and
     # has no series name, so it is a side record and never final.
     assert (spec_dir / f"clause_coverage-{version}-r2.json").is_file()

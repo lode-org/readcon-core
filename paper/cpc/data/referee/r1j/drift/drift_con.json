@@ -1,0 +1,70 @@
+{
+ "provenance": {
+  "build": {
+   "readcon_version": "0.24.0",
+   "readcon_module": "paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
+   "readcon_module_sha256": "e0f183590cfc47bf7998958572b435408c2d425aee329d5034b82fbd90b3ef60",
+   "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+   "newer_sources": [
+    "Cargo.lock",
+    "Cargo.toml",
+    "pyproject.toml",
+    "src/chemfiles_import_imp.rs",
+    "src/distrib_write.rs",
+    "src/frame_index.rs",
+    "src/lib.rs",
+    "src/python.rs",
+    "src/rpc/mod.rs",
+    "src/types.rs"
+   ],
+   "library_digest": "257edd02c1e814e25e2485c2d410cf28dcd7bdc9220f53f14a7ea31441f25b2b",
+   "source_files": 53,
+   "source_tag": null,
+   "source_commit": "c663b75dfa6fb877d4ddc3f0be59d540d5711756"
+  },
+  "host": {
+   "kernel": "6.12.113+",
+   "uname_m": "x86_64",
+   "nproc": 8,
+   "family": "6",
+   "model": "207",
+   "cpu_model": "Intel Xeon Processor",
+   "mhz": 2400.0,
+   "mem_kb": 49342816
+  },
+  "peers": {
+   "ase": "3.29.0",
+   "chemfiles": "0.10.4",
+   "MDAnalysis": "2.11.0",
+   "h5py": "3.16.0",
+   "numpy": "2.5.4",
+   "scipy": "1.18.1",
+   "ovito": "3.17.2",
+   "openbabel": "3.2.1",
+   "python": "3.12.16"
+  }
+ },
+ "c_abi": {
+  "binary": "target/release/libreadcon_core.so",
+  "binary_sha256": "e0f183590cfc47bf7998958572b435408c2d425aee329d5034b82fbd90b3ef60",
+  "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+  "newer_sources": [
+   "Cargo.lock",
+   "Cargo.toml",
+   "pyproject.toml",
+   "src/chemfiles_import_imp.rs",
+   "src/distrib_write.rs",
+   "src/frame_index.rs",
+   "src/lib.rs",
+   "src/python.rs",
+   "src/rpc/mod.rs",
+   "src/types.rs"
+  ],
+  "library_digest": "257edd02c1e814e25e2485c2d410cf28dcd7bdc9220f53f14a7ea31441f25b2b",
+  "source_files": 53,
+  "source_tag": null,
+  "source_commit": "c663b75dfa6fb877d4ddc3f0be59d540d5711756"
+ },
+ "files": 22,
+ "disagreements": 0
+}

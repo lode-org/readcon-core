@@ -676,9 +676,10 @@ def write_tex(summary: dict) -> None:
             rf"\newcommand{{\eFivePrefactor{tag}}}{{{pref}}}",
         ]
         if item["prefactor_over_held"] is not None and name != "correct":
-            lines.append(
-                rf"\newcommand{{\eFivePrefactorRatio{tag}}}{{{sig(item['prefactor_over_held'], 3)}}}"
-            )
+            lines += [
+                f"% threads eFivePrefactorRatio{tag} untimed",
+                rf"\newcommand{{\eFivePrefactorRatio{tag}}}{{{sig(item['prefactor_over_held'], 3)}}}",
+            ]
         axes = " ".join(item["adatom_free_axes"]) or "none"
         cell = (
             "undefined"

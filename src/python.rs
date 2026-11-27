@@ -8431,8 +8431,8 @@ fn byte_cursor_error(path: &str) -> Option<PyErr> {
     let mut iter = crate::iterators::ConFrameIterator::from_bytes(source.as_slice());
     while let Some(item) = iter.next() {
         let Err(error) = item else { continue };
-        let located =
-            crate::error::LocatedParseError::new(error, iter.lines.line_no(), iter.frame_index());
+        let line = iter.error_line(&error);
+        let located = crate::error::LocatedParseError::new(error, line, iter.frame_index());
         return Some(located_to_py(located));
     }
     None
@@ -8550,6 +8550,7 @@ fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
 #[cfg(test)]
 mod batch_location_tests {
     use super::{CountFail, box_to_count_fail};
+    use pyo3::types::PyAnyMethods;
 
     fn later_frame_path() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempfile::tempdir().unwrap();
@@ -8703,6 +8704,44 @@ mod batch_location_tests {
             Err(err) => err,
             Ok(_) => panic!("expected a parse error"),
         }
+    }
+
+    /// A velocities block that omits units.time is a metadata error. The
+    /// byte cursor reports that line, which is not the line the cursor has
+    /// reached when the block opens.
+    #[test]
+    fn byte_cursor_reports_the_error_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing-time.con");
+        let meta = r#"{"con_spec_version":4,"units":{"length":"angstrom","energy":"eV","mass":"amu"},"sections":["velocities"]}"#;
+        let body = format!(
+            "t\n{meta}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 1\n\nH\nVelocities of Component 1\n0.1 0 0 0 1\n"
+        );
+        std::fs::write(&path, &body).unwrap();
+        let mut iter = crate::iterators::ConFrameIterator::from_bytes(body.as_bytes());
+        let error = loop {
+            match iter.next() {
+                Some(Err(error)) => break error,
+                Some(Ok(_)) => {}
+                None => panic!("the file produced no parse error"),
+            }
+        };
+        let expected = iter.error_line(&error);
+        let cursor = iter.lines.line_no();
+        assert_ne!(
+            expected, cursor,
+            "the error line and the cursor line differ"
+        );
+        pyo3::Python::initialize();
+        let err = super::byte_cursor_error(path.to_str().unwrap()).expect("byte cursor error");
+        let reported = pyo3::Python::attach(|py| {
+            err.value(py)
+                .getattr("line")
+                .unwrap()
+                .extract::<u32>()
+                .unwrap()
+        });
+        assert_eq!(reported, expected);
     }
 }
 
@@ -10908,5 +10947,903 @@ mod push_vec3_tests {
         let mut out = Vec::new();
         push_vec3(&wide, &frame, &mut out, |atom| atom.velocity());
         assert_eq!(out, expected);
+    }
+}
+
+/// Cargo test must link libpython through pyo3. The wheel must not.
+///
+/// maturin >= 1.9.4 sets `PYO3_BUILD_EXTENSION_MODULE` for the wheel.
+/// That variable is what keeps libpython out of the extension.
+#[cfg(all(test, target_os = "linux"))]
+mod extension_link_regression {
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use std::time::SystemTime;
+
+    use pyo3::Python;
+
+    #[test]
+    fn cargo_test_links_libpython_and_extension_module_does_not() {
+        Python::initialize();
+        Python::attach(|py| {
+            assert!(py.version().starts_with('3'));
+        });
+        let exe = std::env::current_exe().expect("current exe");
+        let harness = dynamic_section(&exe);
+        assert!(
+            harness.contains("libpython"),
+            "cargo test binary does not need libpython:\n{harness}"
+        );
+
+        let profile = profile_dir(&exe);
+        let pyo3_out = newest_build_output(&profile, "pyo3-ffi-");
+        assert!(
+            has_rustc_link_lib_directive(&pyo3_out),
+            "pyo3 did not emit a libpython link line:\n{pyo3_out}"
+        );
+        let ours_path = build_script_stdout(Path::new(env!("OUT_DIR")));
+        let ours = std::fs::read_to_string(&ours_path)
+            .unwrap_or_else(|err| panic!("read {}: {err}", ours_path.display()));
+        let python_links = python_link_directives(&ours);
+        assert!(
+            python_links.is_empty(),
+            "readcon build script emits python link directives:\n{}",
+            python_links.join("\n")
+        );
+
+        let extension = dynamic_section(&extension_cdylib());
+        let lower = extension.to_ascii_lowercase();
+        assert!(
+            !lower.contains("libpython") && !lower.contains("python.framework"),
+            "extension module links libpython:\n{extension}"
+        );
+    }
+
+    fn dynamic_section(path: &Path) -> String {
+        let output = Command::new("readelf")
+            .args(["-d"])
+            .arg(path)
+            .output()
+            .unwrap_or_else(|err| panic!("readelf {}: {err}", path.display()));
+        assert!(
+            output.status.success(),
+            "readelf -d {} failed\n{}",
+            path.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    }
+
+    /// Python `rustc-link-lib` lines and `-l` / `-l:` link-args.
+    /// Search directories are not python directives. chemfiles and
+    /// metatensor lines stay, even when their path contains `python3`
+    /// or `libpython`. Both the `cargo::` and `cargo:` prefixes count.
+    fn python_link_directives(output: &str) -> Vec<&str> {
+        output
+            .lines()
+            .filter(|line| is_python_link_directive(line))
+            .collect()
+    }
+
+    /// Cargo accepts `cargo::` and `cargo:`. Strip `cargo::` first:
+    /// `cargo::rustc-link-lib` starts with `cargo:`, and the leftover
+    /// colon would hide the key.
+    fn cargo_directive_body(line: &str) -> Option<&str> {
+        line.strip_prefix("cargo::")
+            .or_else(|| line.strip_prefix("cargo:"))
+    }
+
+    /// A `rustc-link-lib` line whose link name is Python.
+    /// chemfiles and metatensor link lines do not count.
+    fn has_rustc_link_lib_directive(output: &str) -> bool {
+        output.lines().any(|line| {
+            let Some(body) = cargo_directive_body(line) else {
+                return false;
+            };
+            body.starts_with("rustc-link-lib=") && is_python_link_directive(line)
+        })
+    }
+
+    fn is_python_link_directive(line: &str) -> bool {
+        let Some(body) = cargo_directive_body(line.trim()) else {
+            return false;
+        };
+        let Some((key, value)) = body.split_once('=') else {
+            return false;
+        };
+        let key = key.trim();
+        if key == "rustc-link-lib" {
+            return rustc_link_lib_is_python(value);
+        }
+        // A search directory is never a python directive.
+        if key == "rustc-link-search" || key.starts_with("rustc-link-search-") {
+            return false;
+        }
+        if key == "rustc-link-arg"
+            || key.starts_with("rustc-link-arg-")
+            || key == "rustc-cdylib-link-arg"
+            || key.starts_with("rustc-cdylib-link-arg-")
+        {
+            return link_arg_names_python(value);
+        }
+        false
+    }
+
+    /// `[KIND[:MODIFIERS]=]NAME[:RENAME]`.
+    ///
+    /// The link name is `RENAME` when present and `NAME` otherwise.
+    fn link_lib_name(spec: &str) -> &str {
+        let spec = spec.trim();
+        let named = spec
+            .split_once('=')
+            .map(|(_, name)| name.trim())
+            .unwrap_or(spec);
+        named
+            .split_once(':')
+            .map(|(_, link)| link.trim())
+            .unwrap_or(named)
+    }
+
+    fn rustc_link_lib_is_python(spec: &str) -> bool {
+        let spec = spec.trim();
+        let kind = spec.split_once('=').map(|(kind, _)| kind.trim());
+        let name = link_lib_name(spec);
+        if names_python_library(name) {
+            return true;
+        }
+        kind.is_some_and(|kind| is_framework_kind(kind) && name.eq_ignore_ascii_case("python"))
+    }
+
+    fn is_framework_kind(kind: &str) -> bool {
+        kind.split(':')
+            .next()
+            .unwrap_or(kind)
+            .trim()
+            .eq_ignore_ascii_case("framework")
+    }
+
+    /// `python3`, `python3.X`, `python3.X` plus `d`/`m`/`t`, the Windows
+    /// `python3XY` spelling, or a verbatim `libpython3.X.so[.N]` / `.a` name.
+    fn names_python_library(name: &str) -> bool {
+        let lower = name.trim().to_ascii_lowercase();
+        is_python3_short_name(&lower) || is_libpython_filename(&lower)
+    }
+
+    fn is_python3_short_name(lower: &str) -> bool {
+        let Some(rest) = lower.strip_prefix("python3") else {
+            return false;
+        };
+        if rest.is_empty() {
+            return true;
+        }
+        let rest = rest.strip_suffix("_d").unwrap_or(rest);
+        if rest.is_empty() {
+            return true;
+        }
+        let rest = rest.strip_prefix('.').unwrap_or(rest);
+        let (digits, abi) = split_leading_digits(rest);
+        !digits.is_empty() && abi_flags_ok(abi)
+    }
+
+    fn is_libpython_filename(lower: &str) -> bool {
+        let Some(rest) = lower.strip_prefix("libpython3.") else {
+            return false;
+        };
+        if let Some(version) = rest.strip_suffix(".a") {
+            return python_version_abi(version);
+        }
+        let Some((version, so)) = rest.split_once(".so") else {
+            return false;
+        };
+        if !python_version_abi(version) {
+            return false;
+        }
+        if so.is_empty() {
+            return true;
+        }
+        let Some(numbers) = so.strip_prefix('.') else {
+            return false;
+        };
+        !numbers.is_empty()
+            && numbers
+                .split('.')
+                .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+    }
+
+    fn python_version_abi(text: &str) -> bool {
+        let (digits, abi) = split_leading_digits(text);
+        !digits.is_empty() && abi_flags_ok(abi)
+    }
+
+    fn split_leading_digits(text: &str) -> (&str, &str) {
+        let end = text
+            .bytes()
+            .position(|byte| !byte.is_ascii_digit())
+            .unwrap_or(text.len());
+        text.split_at(end)
+    }
+
+    fn abi_flags_ok(abi: &str) -> bool {
+        let mut seen = 0u8;
+        for flag in abi.chars() {
+            let bit = match flag {
+                'd' => 1u8,
+                'm' => 2,
+                't' => 4,
+                _ => return false,
+            };
+            if seen & bit != 0 {
+                return false;
+            }
+            seen |= bit;
+        }
+        true
+    }
+
+    /// The `-l` / `-l:` argument, including a name split off by whitespace.
+    fn link_arg_names_python(value: &str) -> bool {
+        let tokens: Vec<&str> = value.split_whitespace().collect();
+        for (index, token) in tokens.iter().enumerate() {
+            let Some(name) = link_arg_name(token, tokens.get(index + 1).copied()) else {
+                continue;
+            };
+            if names_python_library(name) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn link_arg_name<'a>(token: &'a str, next: Option<&'a str>) -> Option<&'a str> {
+        if let Some(rest) = token.strip_prefix("-l:") {
+            if rest.is_empty() { next } else { Some(rest) }
+        } else if token == "-l" {
+            next
+        } else if let Some(rest) = token.strip_prefix("-l") {
+            if rest.is_empty() || rest.starts_with('-') {
+                None
+            } else {
+                Some(rest)
+            }
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn chemfiles_and_metatensor_link_lines_are_not_python_directives() {
+        // Always under a python3.12/libpython directory, whatever the temp root is.
+        let scratch = std::env::temp_dir().join("python3.12").join("libpython");
+        let metatensor = scratch.join("metatensor").join("lib");
+        let chemfiles = scratch.join("chemfiles").join("out");
+        let output = format!(
+            "\
+cargo:rustc-link-search=native={}
+cargo:rustc-link-lib=dylib=metatensor
+cargo:rustc-link-lib=static=readcon_chemfiles_atom_view
+cargo:rustc-link-search=native={}
+cargo:rustc-link-arg=-Wl,-rpath,{}
+cargo:rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
+cargo:rustc-link-lib=dylib=python3.12
+cargo:rustc-link-search=native=/usr/lib/python3.12/config-3.12-x86_64-linux-gnu
+cargo:rustc-link-arg-tests=-lpython3.12
+cargo:rustc-link-arg-benches=-L/usr/lib/python3.12
+cargo:rustc-link-lib=python312
+",
+            metatensor.display(),
+            chemfiles.display(),
+            metatensor.display(),
+        );
+        assert_eq!(
+            python_link_directives(&output),
+            vec![
+                "cargo:rustc-link-lib=dylib=python3.12",
+                "cargo:rustc-link-arg-tests=-lpython3.12",
+                "cargo:rustc-link-lib=python312",
+            ]
+        );
+    }
+
+    #[test]
+    fn search_paths_and_link_args_under_python3_are_not_python_directives() {
+        let metatensor = "/opt/venv/lib/python3.12/site-packages/metatensor/lib";
+        let chemfiles = "/opt/venv/lib/python3.12/site-packages/libpython/chemfiles/out";
+        let output = format!(
+            "\
+cargo:rustc-link-search=native={metatensor}
+cargo:rustc-link-lib=dylib=metatensor
+cargo:rustc-link-search=native={chemfiles}
+cargo:rustc-link-lib=static=readcon_chemfiles_atom_view
+cargo:rustc-link-arg=-Wl,-rpath,{metatensor}
+cargo:rustc-link-arg=-L{chemfiles}
+cargo:rustc-link-arg=-lmetatensor
+cargo:rustc-link-arg=-lreadcon_chemfiles_atom_view
+cargo:rustc-cdylib-link-arg=-Wl,--exclude-libs,{chemfiles}/libchemfiles.a
+cargo::rustc-link-search=native={metatensor}
+cargo:rustc-link-arg-tests=-L{metatensor}
+",
+        );
+        let found = python_link_directives(&output);
+        assert!(
+            found.is_empty(),
+            "metatensor and chemfiles paths were classified as python:\n{}",
+            found.join("\n")
+        );
+    }
+
+    #[test]
+    fn accepted_python_link_forms() {
+        let accepted = [
+            "cargo:rustc-link-lib=python3",
+            "cargo:rustc-link-lib=dylib=python3.12",
+            "cargo:rustc-link-lib=static=python3.12",
+            "cargo:rustc-link-lib=python3.12d",
+            "cargo:rustc-link-lib=python3.12m",
+            "cargo:rustc-link-lib=python3.12t",
+            "cargo:rustc-link-lib=framework=Python",
+            "cargo:rustc-link-lib=dylib:+verbatim=libpython3.12.so.1",
+            "cargo::rustc-link-arg=-l:libpython3.12.so.1",
+            "cargo:rustc-link-arg=-l:libpython3.12.so",
+            "cargo:rustc-link-arg=-l:libpython3.12.a",
+            "cargo:rustc-link-arg=-l:libpython3.12.so.1.0",
+            "cargo:rustc-link-arg=-lpython3.12",
+            "cargo:rustc-link-arg=-l python3.12",
+            "cargo:rustc-link-lib= dylib=python3.12",
+            "cargo:rustc-link-lib=dylib=crypt:python3.12",
+            "cargo:rustc-link-lib=python312",
+        ];
+        for line in accepted {
+            assert!(is_python_link_directive(line), "{line}");
+        }
+        let rejected = [
+            "cargo:rustc-link-search=native=/opt/venv/lib/python3.12/site-packages/libpython/metatensor/lib",
+            "cargo:rustc-link-arg=-L/opt/venv/lib/python3.12/site-packages/libpython/chemfiles/out",
+            "cargo:rustc-link-arg=-Wl,-rpath,/opt/venv/lib/python3.12/libpython",
+            "cargo:rustc-link-lib=dylib=metatensor",
+            "cargo:rustc-link-lib=static=readcon_chemfiles_atom_view",
+            "cargo:rustc-link-lib=python3.12:crypt",
+            "cargo:rustc-link-lib=dylib=notpython3.12",
+        ];
+        for line in rejected {
+            assert!(!is_python_link_directive(line), "{line}");
+        }
+    }
+
+    #[test]
+    fn renamed_link_lib_checks_both_orders() {
+        let output = "\
+cargo:rustc-link-lib=dylib=crypt:python3.12
+cargo:rustc-link-lib=crypt:python3.12
+cargo:rustc-link-lib=python3.12:crypt
+cargo:rustc-link-lib=dylib=python3.12:crypt
+cargo:rustc-link-lib=dylib=metatensor
+";
+        assert_eq!(
+            python_link_directives(output),
+            vec![
+                "cargo:rustc-link-lib=dylib=crypt:python3.12",
+                "cargo:rustc-link-lib=crypt:python3.12",
+            ]
+        );
+    }
+
+    #[test]
+    fn link_directives_see_both_cargo_prefixes() {
+        let old = "\
+cargo:rustc-link-lib=dylib=python3.12
+cargo:rustc-link-search=native=/usr/lib/python3.12
+cargo:rustc-link-arg=-lpython3.12
+cargo:rustc-link-lib=dylib=metatensor
+cargo:rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
+";
+        assert_eq!(
+            python_link_directives(old),
+            vec![
+                "cargo:rustc-link-lib=dylib=python3.12",
+                "cargo:rustc-link-arg=-lpython3.12",
+            ]
+        );
+        let new = "\
+cargo::rustc-link-lib=dylib=python3.12
+cargo::rustc-link-search=native=/usr/lib/python3.12
+cargo::rustc-link-arg=-lpython3.12
+cargo::rustc-link-lib=dylib=metatensor
+cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
+";
+        assert_eq!(
+            python_link_directives(new),
+            vec![
+                "cargo::rustc-link-lib=dylib=python3.12",
+                "cargo::rustc-link-arg=-lpython3.12",
+            ]
+        );
+        assert!(has_rustc_link_lib_directive(old));
+        assert!(has_rustc_link_lib_directive(new));
+        assert!(!has_rustc_link_lib_directive(
+            "cargo::warning=see cargo:rustc-link-lib=python3.12\n"
+        ));
+        assert!(!has_rustc_link_lib_directive(
+            "cargo:rustc-link-lib=dylib=metatensor\n"
+        ));
+        assert!(!has_rustc_link_lib_directive(
+            "cargo::rustc-link-lib=static=readcon_chemfiles_atom_view\n"
+        ));
+        assert!(has_rustc_link_lib_directive(
+            "cargo:rustc-link-lib=dylib=python3.12\n"
+        ));
+        assert!(has_rustc_link_lib_directive(
+            "cargo::rustc-link-lib=python312\n"
+        ));
+    }
+
+    fn newest_build_output(profile: &Path, prefix: &str) -> String {
+        let build = profile.join("build");
+        let mut best: Option<(SystemTime, PathBuf)> = None;
+        let entries = std::fs::read_dir(&build)
+            .unwrap_or_else(|err| panic!("read {}: {err}", build.display()));
+        let crate_name = prefix.trim_end_matches('-');
+        for entry in entries {
+            let entry = entry.unwrap_or_else(|err| panic!("read {}: {err}", build.display()));
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(prefix) {
+                consider_script_output(&mut best, &entry.path());
+                continue;
+            }
+            // Cargo 1.100 names the directory `<crate>/<hash>` and writes
+            // stdout at `run/stdout`. Cargo 1.88 uses `<crate>-<hash>/output`.
+            // `prefix` keeps the historical trailing hyphen.
+            if name == crate_name {
+                let nested = std::fs::read_dir(entry.path())
+                    .unwrap_or_else(|err| panic!("read {}: {err}", entry.path().display()));
+                for child in nested {
+                    let child = child
+                        .unwrap_or_else(|err| panic!("read {}: {err}", entry.path().display()));
+                    consider_script_output(&mut best, &child.path());
+                }
+            }
+        }
+        let Some((_, path)) = best else {
+            panic!("no {prefix} build output under {}", build.display());
+        };
+        std::fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("read {}: {err}", path.display()))
+    }
+
+    fn consider_output(best: &mut Option<(SystemTime, PathBuf)>, output: PathBuf) {
+        let Ok(meta) = output.metadata() else {
+            return;
+        };
+        let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+        let replace = match best.as_ref() {
+            None => true,
+            Some((when, path)) => {
+                modified > *when || (modified == *when && output.as_path() > path.as_path())
+            }
+        };
+        if replace {
+            *best = Some((modified, output));
+        }
+    }
+
+    /// `<unit>/output` on Cargo 1.88, `<unit>/run/stdout` on Cargo 1.100.
+    fn consider_script_output(best: &mut Option<(SystemTime, PathBuf)>, unit: &Path) {
+        consider_output(best, unit.join("output"));
+        consider_output(best, unit.join("run").join("stdout"));
+    }
+
+    /// Cargo 1.88 runs the test binary from `<profile>/deps`. Cargo 1.100
+    /// runs it from `<profile>/build/<package>/<hash>/out`, whose
+    /// grandparent has no `build` directory.
+    fn profile_dir(exe: &Path) -> PathBuf {
+        if let Some(profile) = exe.parent().and_then(Path::parent)
+            && profile.join("build").is_dir()
+        {
+            return profile.to_path_buf();
+        }
+        let mut cursor = exe.parent();
+        while let Some(dir) = cursor {
+            if dir.file_name().is_some_and(|name| name == "build")
+                && let Some(profile) = dir.parent()
+            {
+                return profile.to_path_buf();
+            }
+            cursor = dir.parent();
+        }
+        panic!("target profile dir from {}", exe.display());
+    }
+
+    /// Build-script stdout for `OUT_DIR` (`<unit>/out`).
+    ///
+    /// Read `<unit>/output`, falling back to `<unit>/run/stdout`.
+    fn build_script_stdout(out_dir: &Path) -> PathBuf {
+        let unit = out_dir.parent().expect("build script directory");
+        let shared = unit.join("output");
+        if shared.is_file() {
+            shared
+        } else {
+            unit.join("run").join("stdout")
+        }
+    }
+
+    /// Directory that contains `<profile>` for this test binary.
+    ///
+    /// `target/<profile>/deps/<bin>` yields `target`.
+    /// `target/<triple>/<profile>/deps/<bin>` yields `target/<triple>`.
+    /// `target/<profile>/build/<pkg>/<hash>/out/<bin>` yields `target`.
+    fn artifact_root_from_exe(exe: &Path) -> Option<PathBuf> {
+        let mut up = exe.ancestors();
+        let _bin = up.next()?;
+        let parent = up.next()?;
+        if parent.file_name().is_some_and(|name| name == "deps") {
+            let _profile = up.next()?;
+            return up.next().map(Path::to_path_buf);
+        }
+        if parent.file_name().is_some_and(|name| name == "out") {
+            let _hash = up.next()?;
+            let _pkg = up.next()?;
+            let build = up.next()?;
+            if build.file_name().is_some_and(|name| name == "build") {
+                let _profile = up.next()?;
+                return up.next().map(Path::to_path_buf);
+            }
+        }
+        None
+    }
+
+    fn artifact_root() -> PathBuf {
+        if let Some(tmp) = option_env!("CARGO_TARGET_TMPDIR") {
+            return Path::new(tmp)
+                .parent()
+                .expect("parent of the cargo target directory")
+                .to_path_buf();
+        }
+        let exe = std::env::current_exe().unwrap_or_else(|err| panic!("current exe: {err}"));
+        artifact_root_from_exe(&exe)
+            .unwrap_or_else(|| panic!("artifact root from {}", exe.display()))
+    }
+
+    /// Absolute `CARGO_TARGET_DIR` is kept. A relative value was already
+    /// resolved by cargo, so use the artifact root of this test binary.
+    /// An unset value stays `<manifest>/target`.
+    fn resolve_cargo_target_base(value: Option<&std::ffi::OsStr>, manifest: &Path) -> PathBuf {
+        match value {
+            Some(value) => {
+                let path = Path::new(value);
+                if path.is_absolute() {
+                    path.to_path_buf()
+                } else {
+                    artifact_root()
+                }
+            }
+            None => manifest.join("target"),
+        }
+    }
+
+    fn cargo_target_base(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+        resolve_cargo_target_base(cargo_target_dir, root)
+    }
+
+    /// The extension lives under `python-extension-link`, not the shared
+    /// debug cdylib, which can still need libpython.
+    fn extension_cdylib_lib(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+        cargo_target_base(root, cargo_target_dir)
+            .join("python-extension-link")
+            .join("debug")
+            .join("libreadcon_core.so")
+    }
+
+    fn extension_cdylib() -> PathBuf {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let lib = extension_cdylib_lib(&root, std::env::var_os("CARGO_TARGET_DIR").as_deref());
+        let target = lib
+            .parent()
+            .and_then(Path::parent)
+            .expect("python-extension-link directory")
+            .to_path_buf();
+        let status = Command::new("cargo")
+            .args([
+                "rustc",
+                "--locked",
+                "--offline",
+                "--lib",
+                "--crate-type",
+                "cdylib",
+                "--features",
+                "python",
+                "--target-dir",
+            ])
+            .arg(&target)
+            .arg("--manifest-path")
+            .arg(root.join("Cargo.toml"))
+            .env("PYO3_BUILD_EXTENSION_MODULE", "1")
+            .status()
+            .expect("cargo rustc extension module");
+        assert!(status.success(), "extension module build failed");
+        assert!(lib.is_file(), "missing {}", lib.display());
+        lib
+    }
+
+    struct RemoveOnDrop(PathBuf);
+
+    impl Drop for RemoveOnDrop {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn layout_scratch(label: &str) -> (PathBuf, RemoveOnDrop) {
+        let nanos = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
+            "target/layout-{label}-{}-{nanos}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root)
+            .unwrap_or_else(|err| panic!("create {}: {err}", root.display()));
+        let guard = RemoveOnDrop(root.clone());
+        (root, guard)
+    }
+
+    #[test]
+    fn cargo_layout_stdout_reads_output_then_run_stdout() {
+        let (root, _guard) = layout_scratch("stdout");
+        let shared_unit = root.join("shared/build/readcon-core-0123456789abcdef");
+        std::fs::create_dir_all(shared_unit.join("out"))
+            .unwrap_or_else(|err| panic!("create shared out: {err}"));
+        std::fs::write(shared_unit.join("output"), "shared-stdout\n")
+            .unwrap_or_else(|err| panic!("write shared output: {err}"));
+        assert_eq!(
+            std::fs::read_to_string(build_script_stdout(&shared_unit.join("out")))
+                .unwrap_or_else(|err| panic!("read shared stdout: {err}")),
+            "shared-stdout\n"
+        );
+
+        let unit = root.join("unit/build/readcon-core/0123456789abcdef");
+        std::fs::create_dir_all(unit.join("out"))
+            .unwrap_or_else(|err| panic!("create unit out: {err}"));
+        std::fs::create_dir_all(unit.join("run"))
+            .unwrap_or_else(|err| panic!("create unit run: {err}"));
+        std::fs::write(unit.join("run/stdout"), "unit-stdout\n")
+            .unwrap_or_else(|err| panic!("write unit stdout: {err}"));
+        assert_eq!(
+            std::fs::read_to_string(build_script_stdout(&unit.join("out")))
+                .unwrap_or_else(|err| panic!("read unit stdout: {err}")),
+            "unit-stdout\n"
+        );
+    }
+
+    #[test]
+    fn cargo_layout_test_binary_under_out_uses_the_profile() {
+        let (root, _guard) = layout_scratch("profile");
+        let shared = root.join("shared/debug");
+        let shared_exe = shared.join("deps/readcon_core-test");
+        std::fs::create_dir_all(shared_exe.parent().expect("deps"))
+            .unwrap_or_else(|err| panic!("create deps: {err}"));
+        std::fs::create_dir_all(shared.join("build"))
+            .unwrap_or_else(|err| panic!("create shared build: {err}"));
+        std::fs::write(&shared_exe, b"").unwrap_or_else(|err| panic!("write shared exe: {err}"));
+        assert_eq!(profile_dir(&shared_exe), shared);
+
+        let unit_profile = root.join("unit/debug");
+        let unit_exe =
+            unit_profile.join("build/readcon-core/0123456789abcdef/out/readcon_core-test");
+        std::fs::create_dir_all(unit_exe.parent().expect("out"))
+            .unwrap_or_else(|err| panic!("create unit exe dir: {err}"));
+        std::fs::write(&unit_exe, b"").unwrap_or_else(|err| panic!("write unit exe: {err}"));
+        let missing = unit_exe
+            .parent()
+            .and_then(Path::parent)
+            .expect("unit")
+            .join("build");
+        assert!(
+            !missing.exists(),
+            "grandparent build dir should be absent: {}",
+            missing.display()
+        );
+        assert_eq!(profile_dir(&unit_exe), unit_profile);
+    }
+
+    #[test]
+    fn cargo_layout_pyo3_reads_output_and_run_stdout() {
+        let (root, _guard) = layout_scratch("pyo3");
+        let shared = root.join("shared/debug");
+        let shared_unit = shared.join("build/pyo3-ffi-fedcba9876543210");
+        std::fs::create_dir_all(&shared_unit)
+            .unwrap_or_else(|err| panic!("create shared pyo3: {err}"));
+        std::fs::write(
+            shared_unit.join("output"),
+            "cargo:rustc-link-lib=dylib=python3.12\n",
+        )
+        .unwrap_or_else(|err| panic!("write shared pyo3: {err}"));
+        assert!(
+            newest_build_output(&shared, "pyo3-ffi-").contains("cargo:rustc-link-lib="),
+            "shared layout pyo3 stdout was not read"
+        );
+
+        let unit = root.join("unit/debug");
+        let pyo3 = unit.join("build/pyo3-ffi/fedcba9876543210");
+        std::fs::create_dir_all(pyo3.join("run"))
+            .unwrap_or_else(|err| panic!("create unit pyo3: {err}"));
+        std::fs::write(
+            pyo3.join("run/stdout"),
+            "cargo:rustc-link-lib=dylib=python3.12\n",
+        )
+        .unwrap_or_else(|err| panic!("write unit pyo3: {err}"));
+        let text = newest_build_output(&unit, "pyo3-ffi-");
+        assert!(
+            text.contains("cargo:rustc-link-lib="),
+            "build-unit pyo3 stdout was not read:\n{text}"
+        );
+
+        let older = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        let newer = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_100);
+        let pair = root.join("pair/debug");
+        // The newer file is the lexicographically smaller path.
+        write_mtime(
+            &pair.join("build/pyo3-ffi/zzz/run/stdout"),
+            "older-stdout\n",
+            older,
+        );
+        write_mtime(
+            &pair.join("build/pyo3-ffi/aaa/run/stdout"),
+            "newer-stdout\n",
+            newer,
+        );
+        assert_eq!(
+            newest_build_output(&pair, "pyo3-ffi-"),
+            "newer-stdout\n",
+            "older pyo3 stdout was kept"
+        );
+        let legacy = root.join("legacy/debug");
+        write_mtime(
+            &legacy.join("build/pyo3-ffi-zzz/output"),
+            "older-output\n",
+            older,
+        );
+        write_mtime(
+            &legacy.join("build/pyo3-ffi-aaa/output"),
+            "newer-output\n",
+            newer,
+        );
+        assert_eq!(
+            newest_build_output(&legacy, "pyo3-ffi-"),
+            "newer-output\n",
+            "older pyo3 output was kept"
+        );
+        let tie = root.join("tie/debug");
+        let tied = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_050);
+        write_mtime(
+            &tie.join("build/pyo3-ffi/aaa/run/stdout"),
+            "tie-aaa\n",
+            tied,
+        );
+        write_mtime(
+            &tie.join("build/pyo3-ffi/zzz/run/stdout"),
+            "tie-zzz\n",
+            tied,
+        );
+        assert_eq!(
+            newest_build_output(&tie, "pyo3-ffi-"),
+            "tie-zzz\n",
+            "equal mtimes should keep the later path"
+        );
+    }
+
+    fn write_mtime(path: &Path, body: &str, when: SystemTime) {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .unwrap_or_else(|err| panic!("create {}: {err}", parent.display()));
+        }
+        std::fs::write(path, body).unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap_or_else(|err| panic!("open {}: {err}", path.display()))
+            .set_modified(when)
+            .unwrap_or_else(|err| panic!("mtime {}: {err}", path.display()));
+    }
+
+    #[test]
+    fn extension_cdylib_path_avoids_the_stale_shared_library() {
+        let scratch = std::env::temp_dir().join(format!(
+            "readcon-ext-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let _guard = RemoveOnDrop(scratch.clone());
+        let root = scratch.join("root");
+        let base = scratch.join("cargo-target");
+        let stale = base.join("debug/libreadcon_core.so");
+        std::fs::create_dir_all(stale.parent().expect("stale parent"))
+            .unwrap_or_else(|err| panic!("create stale dir: {err}"));
+        std::fs::write(&stale, b"needs libpython")
+            .unwrap_or_else(|err| panic!("write stale lib: {err}"));
+        let chosen = extension_cdylib_lib(&root, Some(base.as_os_str()));
+        std::fs::create_dir_all(chosen.parent().expect("extension parent"))
+            .unwrap_or_else(|err| panic!("create extension dir: {err}"));
+        std::fs::write(&chosen, b"extension")
+            .unwrap_or_else(|err| panic!("write extension lib: {err}"));
+        assert_eq!(
+            chosen,
+            base.join("python-extension-link/debug/libreadcon_core.so")
+        );
+        assert_ne!(chosen, stale);
+        assert!(stale.is_file(), "stale shared cdylib should stay put");
+        let relative = std::ffi::OsStr::new("rel-target");
+        let artifact = artifact_root();
+        assert_eq!(
+            extension_cdylib_lib(&root, Some(relative)),
+            artifact.join("python-extension-link/debug/libreadcon_core.so")
+        );
+        assert_eq!(
+            extension_cdylib_lib(&root, None),
+            root.join("target/python-extension-link/debug/libreadcon_core.so")
+        );
+    }
+
+    #[test]
+    fn relative_target_dir_follows_the_test_binary() {
+        let exe = std::env::current_exe().expect("current exe");
+        let artifact = artifact_root_from_exe(&exe)
+            .unwrap_or_else(|| panic!("artifact root from {}", exe.display()));
+        let root = Path::new("/opt/readcon-manifest");
+        let relative = std::ffi::OsStr::new("rel-target");
+        let got = extension_cdylib_lib(root, Some(relative));
+        eprintln!("exe={}", exe.display());
+        eprintln!("artifact_root={}", artifact.display());
+        eprintln!("extension_cdylib={}", got.display());
+        assert_eq!(
+            got,
+            artifact.join("python-extension-link/debug/libreadcon_core.so"),
+            "relative target dir did not follow {}",
+            exe.display()
+        );
+    }
+
+    #[test]
+    fn artifact_root_from_exe_handles_a_target_triple() {
+        let host = Path::new("/opt/work/target/debug/deps/readcon_core-test");
+        assert_eq!(
+            artifact_root_from_exe(host).as_deref(),
+            Some(Path::new("/opt/work/target"))
+        );
+        let triple =
+            Path::new("/opt/work/target/x86_64-unknown-linux-gnu/release/deps/readcon_core-test");
+        assert_eq!(
+            artifact_root_from_exe(triple).as_deref(),
+            Some(Path::new("/opt/work/target/x86_64-unknown-linux-gnu"))
+        );
+        let unit = Path::new(
+            "/opt/work/target/aarch64-apple-darwin/debug/build/readcon-core/0123456789abcdef/out/readcon_core-test",
+        );
+        assert_eq!(
+            artifact_root_from_exe(unit).as_deref(),
+            Some(Path::new("/opt/work/target/aarch64-apple-darwin"))
+        );
+        let manifest = Path::new("/opt/readcon-manifest");
+        let absolute = Path::new("/opt/abs-target");
+        assert_eq!(
+            resolve_cargo_target_base(Some(absolute.as_os_str()), manifest),
+            absolute
+        );
+        assert_eq!(
+            resolve_cargo_target_base(None, manifest),
+            manifest.join("target")
+        );
+        let relative = std::ffi::OsStr::new("rel-target3");
+        assert_eq!(
+            resolve_cargo_target_base(Some(relative), manifest),
+            artifact_root()
+        );
+        assert_ne!(
+            resolve_cargo_target_base(Some(relative), manifest),
+            manifest.join(relative)
+        );
     }
 }

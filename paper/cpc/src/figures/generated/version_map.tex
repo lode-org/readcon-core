@@ -13,11 +13,11 @@ Record & Result \\
 \endfoot
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.17.4, library \texttt{3b4d00ae2427}; Python module readcon, SHA-256 \texttt{7a74a7329002}; rustc 1.88.0, Python 3.12.16; family 6 model 207, 2400 MHz, 8 threads} \\
-Corpus cross-check & Abstract, Section~\ref{sec:conformance}, Section~\ref{sec:conclusions}, Table~\ref{tab:corpus-crosscheck} \\
+Corpus cross-check & Abstract, Section~\ref{sec:conclusions}, Table~\ref{tab:corpus-crosscheck} \\
 Evidence E5, prefactor & Abstract, Section~\ref{sec:prefactor}, Table~\ref{tab:prefactor-routes}, Section~\ref{sec:conclusions} \\
 Failure campaign, CON openers & Section~\ref{sec:h2h}, Section~\ref{sec:supp-failure}, Table~\ref{tab:compare}, Section~\ref{sec:supp-neighbors}, Section~\ref{sec:supp-versions} \\
 Failure campaign, band arrays of each format & Figure~\ref{fig:structures}, Section~\ref{sec:cases}, Figure~\ref{fig:supp-velocity}, Figure~\ref{fig:asemask}, Figure~\ref{fig:supp-neb} \\
-Failure campaign, extended XYZ drift & Section~\ref{sec:conformance}, Table~\ref{tab:drift}, Section~\ref{sec:supp-failure}, Section~\ref{sec:supp-versions} \\
+Failure campaign, extended XYZ drift & Table~\ref{tab:drift}, Section~\ref{sec:supp-failure}, Section~\ref{sec:supp-versions} \\
 Failure campaign, failure matrix & Section~\ref{sec:cases} \\
 Failure campaign, restart bands & Table~\ref{tab:restartfmt}, Section~\ref{sec:supp-restart} \\
 Failure campaign, restart formats & Section~\ref{sec:cases}, Table~\ref{tab:params}, Section~\ref{sec:supp-restart}, Table~\ref{tab:restartfmt}, Section~\ref{sec:supp-readcon-db} \\
@@ -27,7 +27,6 @@ Failure campaign, restart formats on the Nehalem kernel set & Table~\ref{tab:res
 Failure campaign, restart formats on the Skylake-X kernel set & Table~\ref{tab:restartfmt}, Section~\ref{sec:supp-restart} \\
 File sizes & Table~\ref{tab:sizes} \\
 Restart wall times & Table~\ref{tab:restartfmt}, Section~\ref{sec:supp-restart} \\
-Specification campaign, mutant differential & Section~\ref{sec:conformance}, Section~\ref{sec:supp-corpus31} \\
 Survey frame & Section~\ref{sec:supp-failure} \\
 Timing campaign r0174 & Section~\ref{sec:supp-timing}, Table~\ref{tab:ordering}, Figure~\ref{fig:fairness}, Figure~\ref{fig:layers}, Figure~\ref{fig:roofline} \\
 Velocity case & Section~\ref{sec:introduction}, Section~\ref{sec:worked}, Section~\ref{sec:spec-normative}, Section~\ref{sec:supp-failure}, Section~\ref{sec:supp-velocity}, Figure~\ref{fig:supp-velocity} \\
@@ -47,6 +46,10 @@ Survey frame, CON text & Listing~\ref{lst:frame} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.17.3, library \texttt{b501ba6b6ca8}; family 6 model 207, 2400 MHz, 8 threads; measures the published readcon-core 0.17.3} \\
 Limiter r15 read ladder & Figure~\ref{fig:mpi-weak} \\
+\midrule
+\multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.24.0, library \texttt{257edd02c1e8}; Python module readcon, SHA-256 \texttt{e0f183590cfc}; rustc 1.88.0, Python 3.12.16; family 6 model 207, 2400 MHz, 8 threads} \\
+Corpus cross-check, r1h & Section~\ref{sec:conformance}, Table~\ref{tab:corpus-crosscheck} \\
+OVITO drift, r1j & Section~\ref{sec:conformance}, Section~\ref{sec:supp-failure} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.17.4, library \texttt{3b4d00ae2427}; Python module readcon, SHA-256 \texttt{7a74a7329002}; rustc 1.88.0, Python 3.12.16; family 6 model 207, 2400 MHz, 8 threads; eOn 3.6.0 (\texttt{np2py314h465d2a2\_0}), which embeds readcon-core 0.16.0} \\
 Evidence E1, L-BFGS control & Section~\ref{sec:format} \\
@@ -68,14 +71,17 @@ Corpus read paths & Section~\ref{sec:conformance}, Section~\ref{sec:supp-corpus3
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.17.4, library \texttt{3b4d00ae2427}; Python module readcon, SHA-256 \texttt{7a74a7329002}; rustc 1.88.0, Python 3.12.16; family 6 model 207, 2400 MHz, 8 threads; benchmark program readcon-bench, SHA-256 \texttt{c9c31aa59099}} \\
 HCN loss measurement & Section~\ref{sec:supp-velocity}, Table~\ref{tab:hcn} \\
 \midrule
-\multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.17.4, library \texttt{3b4d00ae2427}; example program corpus31\_report, SHA-256 \texttt{57ef25a7b7a6}; rustc 1.88.0; family 6 model 207, 2400 MHz, 8 threads} \\
-CON 3.1 corpus results & Section~\ref{sec:conformance}, Section~\ref{sec:supp-corpus31}, Table~\ref{tab:corpus31-open} \\
-\midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.17.4, library \texttt{3b4d00ae2427}; rustc 1.88.0; family 6 model 207, 2400 MHz, 8 threads} \\
 Every-path count & Section~\ref{sec:supp-corpus31} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.23.3, library \texttt{ddd357a5c3f0}; Python module readcon, SHA-256 \texttt{6e5f1c2bcc2f}; rustc 1.88.0, Python 3.12.3; family 6 model 207, 2400 MHz, 8 threads; measures the published readcon-core 0.17.0, 0.17.1, 0.17.2, 0.17.3} \\
 Specification campaign, version drift & Section~\ref{sec:conformance}, Section~\ref{sec:supp-versions}, Section~\ref{sec:supp-repro} \\
+\midrule
+\multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.24.0, library \texttt{7ea0ca4523de}; Python module readcon, SHA-256 \texttt{08c3e715af62}; rustc 1.88.0, Python 3.12.16; family 6 model 207, 2400 MHz, 8 threads} \\
+Mutant differential, r1t & Section~\ref{sec:conformance}, Section~\ref{sec:supp-corpus31} \\
+\midrule
+\multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.24.0, library \texttt{7ea0ca4523de}; Python module readcon, SHA-256 \texttt{4e290af4e935}; rustc 1.88.0; family 6 model 207, 2400 MHz, 8 threads} \\
+CON 3.1 corpus results, r1t & Section~\ref{sec:conformance}, Section~\ref{sec:supp-corpus31}, Table~\ref{tab:corpus31-open} \\
 \midrule
 \multicolumn{2}{@{}p{0.98\textwidth}@{}}{readcon-core 0.24.0, library \texttt{96bd63cbcfaa}; Python module readcon, SHA-256 \texttt{f447290b6f7d}; rustc 1.88.0, Python 3.12.16; family 6 model 207, 2400 MHz, 8 threads} \\
 Specification campaign, corpus recount & Section~\ref{sec:conformance}, Table~\ref{tab:corpus} \\
