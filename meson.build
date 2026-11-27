@@ -41,15 +41,80 @@ if _rv_bits.length() < 2 or not _rv_bits[1].version_compare('>= 1.88.0')
     error('readcon-core requires rustc >= 1.88.0')
 endif
 
+# Ninja rejects a newline in a rule, so the compiler argv is a build-dir
+# file. The cargo script strips a ccache prefix and, only when the
+# remaining command is not plain cc, passes that full command as CC and
+# as the linker for the cargo target (CARGO_BUILD_TARGET, else the host).
+_cc_list = _mbproot / 'readcon-meson-cc.txt'
+_write_cc = [
+    _py,
+    '-c',
+    'import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(chr(10).join(sys.argv[2:]) + chr(10))',
+    _cc_list,
+]
+foreach _cc_part : cc.cmd_array()
+    _write_cc += [_cc_part]
+endforeach
+run_command(_write_cc, check: true)
+_cargo_env = {'READCON_MESON_CC_FILE': _cc_list}
+_meson_c_args = get_option('c_args')
+if _meson_c_args.length() > 0
+    _cargo_env += {'CFLAGS': ' '.join(_meson_c_args)}
+endif
+_meson_link_args = get_option('c_link_args')
+if _meson_link_args.length() > 0
+    # Ninja rejects a newline in a rule, same as the compiler argv.
+    _link_list = _mbproot / 'readcon-meson-link-args.txt'
+    _write_link = [
+        _py,
+        '-c',
+        'import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(chr(10).join(sys.argv[2:]) + chr(10))',
+        _link_list,
+    ]
+    foreach _link_part : _meson_link_args
+        _write_link += [_link_part]
+    endforeach
+    run_command(_write_link, check: true)
+    _cargo_env += {'READCON_MESON_LINK_ARGS_FILE': _link_list}
+endif
+
 _rust_sys_deps = []
+_needs_cxx = false
+foreach _part : get_option('cargo_features').split(',')
+    _name = _part.strip()
+    if _name == 'zstd' or _name == 'chemfiles' or _name.startswith('chemfiles')
+        _needs_cxx = true
+    endif
+endforeach
+_cxx_libdir = ''
+if _needs_cxx and host_machine.system() == 'linux'
+    _stdcxx_probe = run_command('g++', '-print-file-name=libstdc++.so', check: false)
+    if _stdcxx_probe.returncode() == 0
+        _stdcxx_file = _stdcxx_probe.stdout().strip()
+        if _stdcxx_file != '' and _stdcxx_file != 'libstdc++.so'
+            _cxx_libdir = fs.parent(_stdcxx_file)
+        endif
+    endif
+endif
 if host_machine.system() == 'linux'
     _rust_sys_deps += [
         dependency('threads'),
         cc.find_library('dl', required: true),
         cc.find_library('m', required: true),
     ]
+    if _needs_cxx
+        _stdcxx_dirs = _cxx_libdir != '' ? [_cxx_libdir] : []
+        _rust_sys_deps += cc.find_library('stdc++', dirs: _stdcxx_dirs, required: true)
+    endif
 elif host_machine.system() == 'darwin'
     _rust_sys_deps += [dependency('threads')]
+    if _needs_cxx
+        _rust_sys_deps += cc.find_library('c++', required: true)
+    endif
+elif host_machine.system() == 'android'
+    if _needs_cxx
+        _rust_sys_deps += cc.find_library('c++', required: true)
+    endif
 elif host_machine.system() == 'windows'
     _rust_sys_deps += [
         cc.find_library('ws2_32', required: true),
@@ -84,7 +149,7 @@ _src_rs = run_command(
 readcon_cargo = custom_target(
     'readcon-cargo',
     input: files('Cargo.toml', 'src/lib.rs'),
-    depend_files: files('Cargo.lock', 'build.rs') + files(_src_rs),
+    depend_files: files('Cargo.lock', 'build.rs', 'support/chemfiles_link.rs') + files(_src_rs),
     output: [_cargo_shared, _cargo_static],
     command: [
         _py,
@@ -99,6 +164,7 @@ readcon_cargo = custom_target(
         '@OUTPUT1@',
         get_option('cargo_features'),
     ],
+    env: _cargo_env,
     build_by_default: true,
     install: true,
     install_dir: [get_option('libdir'), get_option('libdir')],

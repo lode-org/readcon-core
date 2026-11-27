@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 #[cfg(feature = "metatensor")]
 extern crate metatensor_sys;
@@ -15,6 +16,10 @@ extern crate metatensor_sys;
 #[cfg(feature = "metatensor")]
 #[path = "support/metatensor_install.rs"]
 mod metatensor_paths;
+
+#[cfg(feature = "chemfiles")]
+#[path = "support/chemfiles_link.rs"]
+mod chemfiles_link;
 
 fn check_package_version_file() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -103,6 +108,73 @@ fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
+fn cxx_runtime() -> Option<(&'static str, Option<PathBuf>)> {
+    // zstd-sys is C. A chemfiles build is C++. The archive still has to name
+    // the C++ runtime or the link drops it. Linux uses libstdc++; macOS and
+    // iOS use libc++. MSVC pulls its own. clang does not search GCC's
+    // libstdc++ directory, so the link also needs that path.
+    let needs = env::var_os("CARGO_FEATURE_ZSTD").is_some()
+        || env::var_os("CARGO_FEATURE_CHEMFILES").is_some();
+    if !needs {
+        return None;
+    }
+    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let env_name = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    match (os.as_str(), env_name.as_str()) {
+        // The host g++ library directory is wrong for a cross link.
+        ("linux", _) => Some((
+            "stdc++",
+            if compiling_for_host() {
+                linux_libstdcxx_dir()
+            } else {
+                None
+            },
+        )),
+        // The NDK uses libc++, same as the Apple targets. meson.build
+        // only searches libstdc++ when the system is linux.
+        ("android", _) => Some(("c++", None)),
+        ("macos" | "ios", _) => Some(("c++", None)),
+        ("windows", "gnu") => Some(("stdc++", None)),
+        _ => None,
+    }
+}
+
+fn compiling_for_host() -> bool {
+    match (env::var("TARGET"), env::var("HOST")) {
+        (Ok(target), Ok(host)) => target == host,
+        _ => true,
+    }
+}
+
+fn linux_libstdcxx_dir() -> Option<PathBuf> {
+    let output = Command::new("g++")
+        .args(["-print-file-name=libstdc++.so"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let path = String::from_utf8(output.stdout).ok()?;
+    let path = path.trim();
+    if path.is_empty() || path == "libstdc++.so" {
+        return None;
+    }
+    Path::new(path).parent().map(Path::to_path_buf)
+}
+
+fn link_cxx_runtime() {
+    let Some((lib, search)) = cxx_runtime() else {
+        return;
+    };
+    println!("cargo:rerun-if-changed=build.rs");
+    if let Some(dir) = search
+        && dir.is_dir()
+    {
+        println!("cargo:rustc-link-search=native={}", dir.display());
+    }
+    println!("cargo:rustc-link-lib=dylib={lib}");
+}
+
 fn emit_build_identity() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let commit = git_rev("HEAD");
@@ -117,6 +189,7 @@ fn emit_build_identity() {
 
 fn main() {
     check_package_version_file();
+    link_cxx_runtime();
     emit_build_identity();
 
     // Cap'n Proto schema compilation (behind rpc feature)
@@ -158,11 +231,22 @@ fn main() {
 
 #[cfg(feature = "chemfiles")]
 fn compile_chemfiles_atom_view() {
-    let headers = chemfiles_include_dir();
-    let generated = chemfiles_generated_include();
+    let (headers, generated) = chemfiles_header_dirs();
     println!("cargo:rerun-if-changed=src/chemfiles_atom_view.cpp");
+    println!("cargo:rerun-if-changed=support/chemfiles_link.rs");
     println!("cargo:rerun-if-changed={}", headers.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        generated.join("chemfiles/exports.h").display()
+    );
     let mut build = cc::Build::new();
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") && compiling_for_host() {
+        // cc passes --target to clang. That driver does not search GCC's
+        // libstdc++ headers, so the scan fails on `#include <string>`.
+        // Host g++ searches its own headers. A cross build keeps cc's
+        // compiler instead of this host g++.
+        build.compiler("g++");
+    }
     build
         .cpp(true)
         .file("src/chemfiles_atom_view.cpp")
@@ -172,7 +256,308 @@ fn compile_chemfiles_atom_view() {
         .flag_if_supported("-fvisibility=hidden")
         .flag_if_supported("-fvisibility-inlines-hidden")
         .warnings(false);
+    // The prebuilt GCC 4.8 archive is the COW string (Atom is 80 bytes).
+    // A from-source build is this compiler's cxx11 string (Atom is 128
+    // bytes). Indexing with the wrong layout throws or reads off the atom.
+    // The macro is a no-op for libc++ and MSVC.
+    let abi = linked_chemfiles_string_abi();
+    // cc appends CXXFLAGS after Build::define, so a later -D wins.
+    reject_cxxflags_abi_override(abi);
+    match abi {
+        chemfiles_link::AbiChoice::Cow => {
+            build.define("_GLIBCXX_USE_CXX11_ABI", "0");
+            println!("cargo:rustc-env=READCON_CHEMFILES_STRING_ABI=cow");
+        }
+        chemfiles_link::AbiChoice::Cxx11 => {
+            println!("cargo:rustc-env=READCON_CHEMFILES_STRING_ABI=cxx11");
+        }
+        chemfiles_link::AbiChoice::Foreign => {
+            println!("cargo:rustc-env=READCON_CHEMFILES_STRING_ABI=foreign");
+        }
+        chemfiles_link::AbiChoice::Fatal => unreachable!("fatal ABI selection panics first"),
+    }
     build.compile("readcon_chemfiles_atom_view");
+}
+
+#[cfg(feature = "chemfiles")]
+fn chemfiles_header_dirs() -> (PathBuf, PathBuf) {
+    for key in [
+        "DEP_CHEMFILES_INCLUDE",
+        "DEP_CHEMFILES_ROOT",
+        "DEP_CHEMFILES_LIBDIR",
+        "DEP_CHEMFILES_LIB_DIR",
+    ] {
+        println!("cargo:rerun-if-env-changed={key}");
+    }
+    if let Some(include) = metadata_chemfiles_include() {
+        return (include.clone(), include);
+    }
+    (chemfiles_include_dir(), chemfiles_generated_include())
+}
+
+/// Installed headers for the chemfiles Cargo will link.
+///
+/// `DEP_CHEMFILES_ROOT` is the `cargo:root` of the chemfiles-sys build that
+/// ran. `DEP_CHEMFILES_LIBDIR` and `DEP_CHEMFILES_INCLUDE` come from a
+/// `links = "chemfiles"` override. Any one of them suppresses a scan of
+/// leftover `chemfiles-sys` output directories.
+#[cfg(feature = "chemfiles")]
+fn metadata_chemfiles_include() -> Option<PathBuf> {
+    let include = env::var_os("DEP_CHEMFILES_INCLUDE").map(PathBuf::from);
+    let root = env::var_os("DEP_CHEMFILES_ROOT").map(PathBuf::from);
+    let libdir = env::var_os("DEP_CHEMFILES_LIBDIR")
+        .or_else(|| env::var_os("DEP_CHEMFILES_LIB_DIR"))
+        .map(PathBuf::from);
+    let located = chemfiles_link::include_from_metadata(
+        include.as_deref(),
+        root.as_deref(),
+        libdir.as_deref(),
+    );
+    if include.is_some() || root.is_some() || libdir.is_some() {
+        let include = located.unwrap_or_else(|| {
+            panic!(
+                "chemfiles metadata did not provide include/chemfiles/exports.h (include={include:?}, root={root:?}, libdir={libdir:?})"
+            )
+        });
+        return Some(include);
+    }
+    None
+}
+
+#[cfg(feature = "chemfiles")]
+fn linked_chemfiles_string_abi() -> chemfiles_link::AbiChoice {
+    let stdlib = cpp_stdlib();
+    if matches!(
+        stdlib,
+        chemfiles_link::CppStdlib::Libcxx | chemfiles_link::CppStdlib::Msvc
+    ) {
+        return chemfiles_link::AbiChoice::Foreign;
+    }
+    let library = linked_chemfiles_library();
+    println!("cargo:rerun-if-changed={}", library.display());
+    let (status, symbols) = nm_symbols(&library);
+    if symbols == chemfiles_link::StringAbi::Conflict {
+        panic!(
+            "nm of {} contains both __cxx11 and ERKSs; refusing to pick a string ABI",
+            library.display()
+        );
+    }
+    match chemfiles_link::choose_string_abi(stdlib, status, symbols) {
+        chemfiles_link::AbiChoice::Fatal => panic!(
+            "refusing to guess the libstdc++ string ABI of {}",
+            library.display()
+        ),
+        choice => choice,
+    }
+}
+
+#[cfg(feature = "chemfiles")]
+fn reject_cxxflags_abi_override(choice: chemfiles_link::AbiChoice) {
+    let wanted = match choice {
+        chemfiles_link::AbiChoice::Cow => "0",
+        chemfiles_link::AbiChoice::Cxx11 => "1",
+        chemfiles_link::AbiChoice::Foreign | chemfiles_link::AbiChoice::Fatal => return,
+    };
+    let target = env::var("TARGET").unwrap_or_default();
+    let host = env::var("HOST").unwrap_or_default();
+    let mut groups = Vec::new();
+    for key in chemfiles_link::cxxflags_env_keys(&target, &host) {
+        println!("cargo:rerun-if-env-changed={key}");
+        if let Ok(value) = env::var(&key) {
+            groups.push(value);
+        }
+    }
+    let flags = chemfiles_link::split_cxxflags(&groups);
+    let Some(got) = chemfiles_link::last_cxx11_abi_define(flags.iter().map(String::as_str)) else {
+        return;
+    };
+    if got != wanted {
+        panic!(
+            "CXXFLAGS sets -D_GLIBCXX_USE_CXX11_ABI={got}, but the linked libchemfiles needs {wanted}. cc appends CXXFLAGS after the probed define, so drop the macro from CXXFLAGS"
+        );
+    }
+}
+
+#[cfg(feature = "chemfiles")]
+fn linked_chemfiles_library() -> PathBuf {
+    let include = env::var_os("DEP_CHEMFILES_INCLUDE").map(PathBuf::from);
+    let root = env::var_os("DEP_CHEMFILES_ROOT").map(PathBuf::from);
+    let libdir = env::var_os("DEP_CHEMFILES_LIBDIR")
+        .or_else(|| env::var_os("DEP_CHEMFILES_LIB_DIR"))
+        .map(PathBuf::from);
+    let dirs =
+        chemfiles_link::library_search_dirs(libdir.as_deref(), root.as_deref(), include.as_deref());
+    let kind = configured_link_kind();
+    if let Some(path) = chemfiles_link::linked_library(&dirs, kind) {
+        return path;
+    }
+    panic!("the chemfiles library Cargo links was not found (kind={kind:?}, dirs={dirs:?})")
+}
+
+#[cfg(feature = "chemfiles")]
+fn configured_link_kind() -> chemfiles_link::LinkKind {
+    let target = env::var("TARGET").unwrap_or_default();
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    for config in cargo_config_paths(&manifest_dir) {
+        println!("cargo:rerun-if-changed={}", config.display());
+        let Ok(text) = fs::read_to_string(&config) else {
+            continue;
+        };
+        if let Some(kind) = chemfiles_link::link_kind_from_config(&text, &target) {
+            return kind;
+        }
+    }
+    // chemfiles-sys declares #[link(name = "chemfiles", kind = "static")].
+    chemfiles_link::LinkKind::Static
+}
+
+#[cfg(feature = "chemfiles")]
+fn cargo_config_paths(manifest_dir: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let mut dir = Some(manifest_dir);
+    while let Some(current) = dir {
+        paths.push(current.join(".cargo/config.toml"));
+        paths.push(current.join(".cargo/config"));
+        dir = current.parent();
+    }
+    if let Some(home) = env::var_os("CARGO_HOME") {
+        let home = PathBuf::from(home);
+        paths.push(home.join("config.toml"));
+        paths.push(home.join("config"));
+    }
+    paths
+}
+
+#[cfg(feature = "chemfiles")]
+fn nm_symbols(library: &Path) -> (chemfiles_link::NmStatus, chemfiles_link::StringAbi) {
+    let program = nm_program();
+    let output = match Command::new(&program).arg("--").arg(library).output() {
+        Ok(output) => output,
+        Err(err) => {
+            println!(
+                "cargo:warning=nm ({}) failed to start: {err}",
+                program.display()
+            );
+            return (
+                chemfiles_link::NmStatus::SpawnFailed,
+                chemfiles_link::StringAbi::Unknown,
+            );
+        }
+    };
+    if !output.status.success() {
+        println!(
+            "cargo:warning=nm ({}) exited {} for {}",
+            program.display(),
+            output.status,
+            library.display()
+        );
+        return (
+            chemfiles_link::NmStatus::NonZero,
+            chemfiles_link::StringAbi::Unknown,
+        );
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let symbols = chemfiles_link::classify_symbol_text(&text);
+    if symbols == chemfiles_link::StringAbi::Unknown {
+        println!(
+            "cargo:warning=nm ({}) found no COW or __cxx11 symbols in {}",
+            program.display(),
+            library.display()
+        );
+    }
+    (chemfiles_link::NmStatus::Ok, symbols)
+}
+
+/// `NM_<target>`, `TARGET_NM`/`HOST_NM`, and `NM`, then the cross `nm`.
+#[cfg(feature = "chemfiles")]
+fn nm_program() -> PathBuf {
+    let target = env::var("TARGET").unwrap_or_default();
+    let host = env::var("HOST").unwrap_or_else(|_| target.clone());
+    let keys = chemfiles_link::nm_env_keys(&target, &host);
+    for key in &keys {
+        println!("cargo:rerun-if-env-changed={key}");
+    }
+    let values: Vec<(String, String)> = keys
+        .iter()
+        .filter_map(|key| env::var(key).ok().map(|value| (key.clone(), value)))
+        .collect();
+    if let Some(chosen) = chemfiles_link::first_nm_override(&keys, |key| {
+        values
+            .iter()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value.as_str())
+    }) {
+        return PathBuf::from(chosen);
+    }
+    if !target.is_empty() && target != host {
+        return PathBuf::from(format!("{target}-nm"));
+    }
+    if let Some(beside) = nm_beside_compiler() {
+        return beside;
+    }
+    PathBuf::from("nm")
+}
+
+#[cfg(feature = "chemfiles")]
+fn nm_beside_compiler() -> Option<PathBuf> {
+    println!("cargo:rerun-if-env-changed=CXX");
+    println!("cargo:rerun-if-env-changed=CC");
+    let compiler = env::var_os("CXX").or_else(|| env::var_os("CC"))?;
+    let parent = PathBuf::from(compiler).parent()?.to_path_buf();
+    for name in ["llvm-nm", "nm"] {
+        let path = parent.join(name);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    None
+}
+
+#[cfg(feature = "chemfiles")]
+fn cpp_stdlib() -> chemfiles_link::CppStdlib {
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_env == "msvc" {
+        return chemfiles_link::CppStdlib::Msvc;
+    }
+    // An empty translation unit has no stdlib macros. Include a header,
+    // and on a native Linux host use g++, the same compiler as the scan.
+    // cc's clang adds --target and then cannot see <cstddef>.
+    let mut cmd = if target_os == "linux" && compiling_for_host() {
+        Command::new("g++")
+    } else {
+        let compiler = cc::Build::new().cpp(true).get_compiler();
+        if compiler.is_like_msvc() {
+            return chemfiles_link::CppStdlib::Msvc;
+        }
+        compiler.to_command()
+    };
+    cmd.arg("-dM")
+        .arg("-E")
+        .arg("-x")
+        .arg("c++")
+        .arg("-include")
+        .arg("cstddef")
+        .arg("-")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    if let Ok(output) = cmd.output()
+        && output.status.success()
+    {
+        let text = String::from_utf8_lossy(&output.stdout);
+        if text.contains("_LIBCPP_VERSION") {
+            return chemfiles_link::CppStdlib::Libcxx;
+        }
+        if text.contains("__GLIBCXX__") {
+            return chemfiles_link::CppStdlib::Libstdcxx;
+        }
+    }
+    if target_os == "macos" || target_os == "ios" || target_env == "msvc" {
+        chemfiles_link::CppStdlib::Libcxx
+    } else {
+        chemfiles_link::CppStdlib::Libstdcxx
+    }
 }
 
 /// `chemfiles-sys` writes `exports.h` under its build-script output.

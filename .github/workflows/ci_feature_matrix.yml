@@ -71,3 +71,56 @@ jobs:
       - name: Parallel library tests
         if: matrix.features == 'capi,parallel'
         run: cargo test --lib --features parallel
+
+  # /usr/bin/c++ on a stock Ubuntu runner is g++, which finds libstdc++.
+  # Point c++ at clang and build chemfiles with a clean environment so
+  # the toolchain file is what makes project() link.
+  clang-cxx-chemfiles:
+    name: chemfiles link (clang as c++)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Point c++ at clang and keep g++ for libstdc++
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang g++
+          sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
+          sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 100
+          c++ --version
+      - name: Plain cargo chemfiles build
+        run: env -u CXX -u CC -u LIBRARY_PATH -u RUSTFLAGS -u CMAKE_TOOLCHAIN_FILE cargo build --locked --features chemfiles
+
+  # ccache on PATH makes meson prefix the compiler. That prefix is not a
+  # linker; the job also builds with CC=gcc and CC=clang.
+  meson-ccache:
+    name: meson cargo link (ccache, gcc, clang)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: ccache, gcc, clang, meson
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ccache gcc clang
+          python -m pip install 'meson>=1.3' ninja
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Compile with ccache, gcc, and clang
+        run: bash scripts/check_meson_cc.sh
+
+  # cmake-rs drops -DCMAKE_C/CXX_COMPILER when a toolchain file is set.
+  # The host file must not apply, and the target CC/CXX must.
+  cross-cmake-compilers:
+    name: cross cmake uses the target compilers
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - name: gcc and g++
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc g++
+      - name: Configure chemfiles for aarch64
+        run: bash scripts/check_cross_cmake.sh
