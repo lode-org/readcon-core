@@ -471,10 +471,11 @@ fn artifact_root() -> PathBuf {
 /// with `PYO3_BUILD_EXTENSION_MODULE` set, so libpython stays unresolved
 /// and Julia refuses to load that file. Side target directories keep
 /// these builds off the lock `cargo test` already holds.
-/// Same base as `extension_cdylib`: `CARGO_TARGET_DIR` when it is set,
-/// otherwise `<manifest>/target`. A relative value is joined to `root`.
-/// `CARGO_TARGET_DIR`, relative to the invoking cwd. An unset value
-/// stays `<manifest>/target`. Absolute values are unchanged.
+/// Same base as `extension_cdylib`. An absolute `CARGO_TARGET_DIR`
+/// is used as given. A relative value is the artifact root cargo
+/// already chose (the parent of the profile that holds this test
+/// binary), not a path joined to `root` or the cwd. An unset value
+/// stays `<manifest>/target`.
 fn resolve_cargo_target_base(value: Option<&std::ffi::OsStr>, manifest: &Path) -> PathBuf {
     match value {
         Some(value) => {
