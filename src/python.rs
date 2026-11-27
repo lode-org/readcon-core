@@ -10978,8 +10978,8 @@ mod extension_link_regression {
         let profile = profile_dir(&exe);
         let pyo3_out = newest_build_output(&profile, "pyo3-ffi-");
         assert!(
-            pyo3_out.contains("cargo:rustc-link-lib="),
-            "pyo3 did not emit a libpython link line"
+            has_rustc_link_lib_directive(&pyo3_out),
+            "pyo3 did not emit a libpython link line:\n{pyo3_out}"
         );
         let ours_path = build_script_stdout(Path::new(env!("OUT_DIR")));
         let ours = std::fs::read_to_string(&ours_path)
@@ -11017,6 +11017,7 @@ mod extension_link_regression {
     /// `libpython` / `python3` link-lib lines, and the search or link-arg
     /// lines that name those libraries. chemfiles and metatensor
     /// `cargo:rustc-link-lib` and `cargo:rustc-link-search` lines stay.
+    /// Both the `cargo::` and `cargo:` prefixes count.
     fn python_link_directives(output: &str) -> Vec<&str> {
         output
             .lines()
@@ -11024,8 +11025,22 @@ mod extension_link_regression {
             .collect()
     }
 
+    /// Cargo accepts `cargo::` and `cargo:`. Strip `cargo::` first:
+    /// `cargo::rustc-link-lib` starts with `cargo:`, and the leftover
+    /// colon would hide the key.
+    fn cargo_directive_body(line: &str) -> Option<&str> {
+        line.strip_prefix("cargo::")
+            .or_else(|| line.strip_prefix("cargo:"))
+    }
+
+    fn has_rustc_link_lib_directive(output: &str) -> bool {
+        output.lines().any(|line| {
+            cargo_directive_body(line).is_some_and(|body| body.starts_with("rustc-link-lib="))
+        })
+    }
+
     fn is_python_link_directive(line: &str) -> bool {
-        let Some(body) = line.strip_prefix("cargo:") else {
+        let Some(body) = cargo_directive_body(line) else {
             return false;
         };
         let Some((key, value)) = body.split_once('=') else {
@@ -11125,6 +11140,45 @@ cargo:rustc-link-lib=dylib=metatensor
                 "cargo:rustc-link-lib=crypt:python3.12",
             ]
         );
+    }
+
+    #[test]
+    fn link_directives_see_both_cargo_prefixes() {
+        let old = "\
+cargo:rustc-link-lib=dylib=python3.12
+cargo:rustc-link-search=native=/usr/lib/python3.12
+cargo:rustc-link-arg=-lpython3.12
+cargo:rustc-link-lib=dylib=metatensor
+cargo:rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
+";
+        assert_eq!(
+            python_link_directives(old),
+            vec![
+                "cargo:rustc-link-lib=dylib=python3.12",
+                "cargo:rustc-link-search=native=/usr/lib/python3.12",
+                "cargo:rustc-link-arg=-lpython3.12",
+            ]
+        );
+        let new = "\
+cargo::rustc-link-lib=dylib=python3.12
+cargo::rustc-link-search=native=/usr/lib/python3.12
+cargo::rustc-link-arg=-lpython3.12
+cargo::rustc-link-lib=dylib=metatensor
+cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
+";
+        assert_eq!(
+            python_link_directives(new),
+            vec![
+                "cargo::rustc-link-lib=dylib=python3.12",
+                "cargo::rustc-link-search=native=/usr/lib/python3.12",
+                "cargo::rustc-link-arg=-lpython3.12",
+            ]
+        );
+        assert!(has_rustc_link_lib_directive(old));
+        assert!(has_rustc_link_lib_directive(new));
+        assert!(!has_rustc_link_lib_directive(
+            "cargo::warning=see cargo:rustc-link-lib=python3.12\n"
+        ));
     }
 
     fn newest_build_output(profile: &Path, prefix: &str) -> String {
