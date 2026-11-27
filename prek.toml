@@ -74,4 +74,5 @@ repo = "https://github.com/codespell-project/codespell"
 rev = "v2.4.1"
 # `ser` is the serde serializer module (`serde::ser`) and a local name for a
 # serializer or a serialized string. It is not a misspelling of "set".
-hooks = [{ id = "codespell", args = ["--skip=*.lock,*.svg,*.con,*.convel,*.json,*.html,*.bib,*.f90,docs/build,docs/_build,docs/source/crates", "-L", "crate,crates,nd,te,TE,ans,ro,RO,wit,inout,dum,fiter,implementors,implementor,NAMD,RcAll,ontop,anc,ser"] }]
+# `thirdparty` is the eOn client include directory name.
+hooks = [{ id = "codespell", args = ["--skip=*.lock,*.svg,*.con,*.convel,*.json,*.html,*.bib,*.f90,docs/build,docs/_build,docs/source/crates", "-L", "crate,crates,nd,te,TE,ans,ro,RO,wit,inout,dum,fiter,implementors,implementor,NAMD,RcAll,ontop,anc,ser,thirdparty"] }]
