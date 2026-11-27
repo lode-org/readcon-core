@@ -186,7 +186,7 @@ impl<R: Read> ConFrameReader<R> {
 /// A section probe after a peeked blank reads two lines.
 /// It stops early when the first of them is whitespace.
 /// `text` ends in a newline, so every piece is a whole line.
-fn settled(text: &[u8], pos: usize) -> bool {
+pub(crate) fn settled(text: &[u8], pos: usize) -> bool {
     let mut lines = text[pos.min(text.len())..].split_inclusive(|&b| b == b'\n');
     lines.any(|line| !line.iter().all(u8::is_ascii_whitespace)) && lines.next().is_some()
 }

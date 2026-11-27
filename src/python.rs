@@ -5107,6 +5107,266 @@ fn read_positions(
     Ok(PyArray3::from_owned_array(py, array).unbind())
 }
 
+/// Rectangular CON columns, painted into slabs.
+///
+/// `positions` and every section the file carries match `read_con` on a
+/// file whose frames share one atom count and one section shape. Masses
+/// are narrowed the way the reader stores them. `symbols` is a list of
+/// per-frame lists. `n_threads` below 2 stays on this thread. An empty
+/// file raises `ValueError`.
+#[pyfunction]
+#[pyo3(signature = (path, n_threads=None))]
+fn read_column_slabs(py: Python<'_>, path: &str, n_threads: Option<usize>) -> PyResult<Py<PyDict>> {
+    let path_owned = path.to_owned();
+    let threads = n_threads.unwrap_or(1);
+    let packed = py
+        .detach(move || column_slabs_from_path(Path::new(&path_owned), threads))
+        .map_err(PyValueError::new_err)?;
+    let dict = PyDict::new(py);
+    dict.set_item("n_frames", packed.n_frames)?;
+    dict.set_item("n_atoms", packed.n_atoms)?;
+    dict.set_item(
+        "positions",
+        owned_f64_3(py, packed.positions, packed.n_frames, packed.n_atoms, 3)?,
+    )?;
+    dict.set_item(
+        "velocities",
+        match packed.velocities {
+            Some(values) => owned_f64_3(py, values, packed.n_frames, packed.n_atoms, 3)?.into_any(),
+            None => py.None(),
+        },
+    )?;
+    dict.set_item(
+        "forces",
+        match packed.forces {
+            Some(values) => owned_f64_3(py, values, packed.n_frames, packed.n_atoms, 3)?.into_any(),
+            None => py.None(),
+        },
+    )?;
+    let put1 = |name: &str, values: Option<Vec<f64>>| -> PyResult<()> {
+        dict.set_item(
+            name,
+            match values {
+                Some(values) => {
+                    owned_f64_2(py, values, packed.n_frames, packed.n_atoms)?.into_any()
+                }
+                None => py.None(),
+            },
+        )
+    };
+    let put3 = |name: &str, values: Option<Vec<f64>>| -> PyResult<()> {
+        dict.set_item(
+            name,
+            match values {
+                Some(values) => {
+                    owned_f64_3(py, values, packed.n_frames, packed.n_atoms, 3)?.into_any()
+                }
+                None => py.None(),
+            },
+        )
+    };
+    put1("energies", packed.energies)?;
+    put1("charges", packed.charges)?;
+    put1("spins", packed.spins)?;
+    put3("magmoms", packed.magmoms)?;
+    put3("displacements", packed.displacements)?;
+    put3("spreads", packed.spreads)?;
+    dict.set_item(
+        "masses",
+        owned_f64_2(py, packed.masses, packed.n_frames, packed.n_atoms)?,
+    )?;
+    dict.set_item(
+        "fixed",
+        owned_f64_3(py, packed.fixed, packed.n_frames, packed.n_atoms, 3)?,
+    )?;
+    dict.set_item("cell", owned_f64_2(py, packed.cell, packed.n_frames, 6)?)?;
+    let ids = Array2::from_shape_vec((packed.n_frames, packed.n_atoms), packed.ids)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    dict.set_item("atom_ids", ids.into_pyarray(py))?;
+    let numbers = Array2::from_shape_vec((packed.n_frames, packed.n_atoms), packed.atomic_numbers)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    dict.set_item("atomic_numbers", numbers.into_pyarray(py))?;
+    let symbols = PyList::empty(py);
+    let mut offset = 0usize;
+    for _ in 0..packed.n_frames {
+        let row = PyList::empty(py);
+        for symbol in &packed.symbols[offset..offset + packed.n_atoms] {
+            row.append(symbol)?;
+        }
+        offset += packed.n_atoms;
+        symbols.append(row)?;
+    }
+    dict.set_item("symbols", symbols)?;
+    Ok(dict.unbind())
+}
+
+struct ColumnSlabPack {
+    n_frames: usize,
+    n_atoms: usize,
+    positions: Vec<f64>,
+    velocities: Option<Vec<f64>>,
+    forces: Option<Vec<f64>>,
+    energies: Option<Vec<f64>>,
+    charges: Option<Vec<f64>>,
+    spins: Option<Vec<f64>>,
+    magmoms: Option<Vec<f64>>,
+    displacements: Option<Vec<f64>>,
+    spreads: Option<Vec<f64>>,
+    masses: Vec<f64>,
+    fixed: Vec<f64>,
+    cell: Vec<f64>,
+    ids: Vec<u64>,
+    atomic_numbers: Vec<u64>,
+    symbols: Vec<String>,
+}
+
+/// The value `mass` has after the reader's storage-dtype narrowing.
+fn mass_as_stored(mass: f64, kind: crate::storage_dtype::ElementKind) -> f64 {
+    let mut one = crate::storage_dtype::FloatArray1::zeros(kind, 1);
+    one.set_f64(0, mass);
+    one.get_f64(0)
+}
+
+fn column_slabs_from_path(path: &Path, threads: usize) -> Result<ColumnSlabPack, String> {
+    let mut src = crate::compression::open_decoded(path)
+        .map_err(|_| format!("column layout failed for {}", path.display()))?;
+    let mut bytes = Vec::new();
+    std::io::Read::read_to_end(&mut src, &mut bytes)
+        .map_err(|_| format!("column layout failed for {}", path.display()))?;
+    if bytes.is_empty() {
+        return Err(format!("column slabs: {} has no frames", path.display()));
+    }
+    let layout = crate::column_read::layout_bytes(&bytes)
+        .map_err(|_| format!("column layout failed for {}", path.display()))?;
+    if layout.n_frames == 0 || layout.n_atoms == 0 {
+        return Err(format!("column slabs: {} has no frames", path.display()));
+    }
+    let n3 = layout
+        .n_frames
+        .saturating_mul(layout.n_atoms)
+        .saturating_mul(3);
+    let n1 = layout.n_frames.saturating_mul(layout.n_atoms);
+    let mut positions = vec![0.0; n3];
+    let mut velocities = layout.sections.velocities.then(|| vec![0.0; n3]);
+    let mut forces = layout.sections.forces.then(|| vec![0.0; n3]);
+    let mut energies = layout.sections.energies.then(|| vec![0.0; n1]);
+    let mut charges = layout.sections.charges.then(|| vec![0.0; n1]);
+    let mut spins = layout.sections.spins.then(|| vec![0.0; n1]);
+    let mut magmoms = layout.sections.magmoms.then(|| vec![0.0; n3]);
+    let mut displacements = layout.sections.displacements.then(|| vec![0.0; n3]);
+    let mut spreads = layout.sections.spreads.then(|| vec![0.0; n3]);
+    let slabs = crate::column_read::Slabs {
+        positions: &mut positions,
+        velocities: velocities.as_deref_mut(),
+        forces: forces.as_deref_mut(),
+        energies: energies.as_deref_mut(),
+        charges: charges.as_deref_mut(),
+        spins: spins.as_deref_mut(),
+        magmoms: magmoms.as_deref_mut(),
+        displacements: displacements.as_deref_mut(),
+        spreads: spreads.as_deref_mut(),
+    };
+    let columns = if threads >= 2 {
+        crate::column_read::fill_bytes_threaded(
+            &bytes,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            threads,
+            &layout.frame_offsets,
+            layout.frames_end,
+            slabs,
+        )
+    } else {
+        crate::column_read::fill_bytes(
+            &bytes,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            slabs,
+        )
+    }
+    .map_err(|_| format!("column fill failed for {}", path.display()))?;
+    let mut masses = Vec::with_capacity(layout.n_frames * layout.n_atoms);
+    let mut cell = Vec::with_capacity(layout.n_frames * 6);
+    let mut fixed = Vec::with_capacity(layout.n_frames * layout.n_atoms * 3);
+    let mut ids = Vec::with_capacity(layout.n_frames * layout.n_atoms);
+    let mut atomic_numbers = Vec::with_capacity(layout.n_frames * layout.n_atoms);
+    let mut symbols = Vec::with_capacity(layout.n_frames * layout.n_atoms);
+    for frame in 0..layout.n_frames {
+        let header = &columns.headers[columns.header_index[frame] as usize];
+        let mass_kind = header.metadata.dtypes().masses;
+        let mut frame_masses = Vec::with_capacity(layout.n_atoms);
+        if header.natms_per_type.len() != header.masses_per_type.len() {
+            return Err(format!("column fill failed for {}", path.display()));
+        }
+        for (&count, &mass) in header
+            .natms_per_type
+            .iter()
+            .zip(header.masses_per_type.iter())
+        {
+            frame_masses.extend(std::iter::repeat_n(mass_as_stored(mass, mass_kind), count));
+        }
+        if frame_masses.len() != layout.n_atoms {
+            return Err(format!("column fill failed for {}", path.display()));
+        }
+        masses.extend(frame_masses);
+        cell.extend_from_slice(&header.boxl);
+        cell.extend_from_slice(&header.angles);
+        for atom in 0..layout.n_atoms {
+            for bit in columns.flag_at(frame, atom) {
+                fixed.push(if bit { 1.0 } else { 0.0 });
+            }
+            let symbol = columns.symbol_at(frame, atom);
+            ids.push(columns.id_at(frame, atom));
+            atomic_numbers.push(crate::helpers::symbol_to_atomic_number(symbol));
+            symbols.push(symbol.to_string());
+        }
+    }
+    Ok(ColumnSlabPack {
+        n_frames: layout.n_frames,
+        n_atoms: layout.n_atoms,
+        positions,
+        velocities,
+        forces,
+        energies,
+        charges,
+        spins,
+        magmoms,
+        displacements,
+        spreads,
+        masses,
+        fixed,
+        cell,
+        ids,
+        atomic_numbers,
+        symbols,
+    })
+}
+
+fn owned_f64_3(
+    py: Python<'_>,
+    values: Vec<f64>,
+    d0: usize,
+    d1: usize,
+    d2: usize,
+) -> PyResult<Py<PyArray3<f64>>> {
+    let array = Array3::from_shape_vec((d0, d1, d2), values)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    Ok(PyArray3::from_owned_array(py, array).unbind())
+}
+
+fn owned_f64_2(
+    py: Python<'_>,
+    values: Vec<f64>,
+    d0: usize,
+    d1: usize,
+) -> PyResult<Py<PyArray2<f64>>> {
+    let array = Array2::from_shape_vec((d0, d1), values)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    Ok(PyArray2::from_owned_array(py, array).unbind())
+}
+
 fn frames_from_parsed(py: Python<'_>, mut frames: Vec<ConFrame>) -> PyResult<Vec<PyConFrame>> {
     let store = Py::new(py, PositionStore::take_from(&mut frames))?;
     frames
@@ -8782,6 +9042,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_con_phases, m)?)?;
     m.add_function(wrap_pyfunction!(scan_probe, m)?)?;
     m.add_function(wrap_pyfunction!(read_positions, m)?)?;
+    m.add_function(wrap_pyfunction!(read_column_slabs, m)?)?;
     m.add_function(wrap_pyfunction!(read_coords, m)?)?;
     m.add_function(wrap_pyfunction!(write_coords, m)?)?;
     m.add_function(wrap_pyfunction!(write_columns, m)?)?;

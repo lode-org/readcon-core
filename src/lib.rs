@@ -52,6 +52,8 @@ mod allocator_link_tests {
 
 pub mod array;
 #[doc(hidden)]
+pub mod column_read;
+#[doc(hidden)]
 pub mod columns;
 pub mod compression;
 pub mod conbin;
