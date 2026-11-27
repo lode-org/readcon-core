@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -38,9 +39,17 @@ def test_packet_counts_match_the_manuscript() -> None:
     # velocity_case.py --tables. The e5 ratio is defined by e5_prefactor.py.
     _tables(CPC / "evidence" / "e5_prefactor.py")
     _tables(CPC / "scripts" / "velocity_case.py")
-    corpus = generated / "corpus_crosscheck_macros.tex"
+    corpus = generated / "corpus_macros.tex"
     if not corpus.is_file() and "corpusFiles" not in cm.macros():
-        corpus.write_text("\\newcommand{\\corpusFiles}{165}\n", encoding="utf-8")
+        record = json.loads(
+            (CPC / "data" / "referee" / "r1h" / "corpus_crosscheck.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        files = record["groups"]["all"]["files"]
+        corpus.write_text(
+            f"\\newcommand{{\\corpusFiles}}{{{files}}}\n", encoding="utf-8"
+        )
     problems = cm.packet_count_problems(
         cm.MAIN.read_text(), (CPC / "packet" / "CPC-FORM.md").read_text()
     )
