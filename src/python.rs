@@ -11795,18 +11795,8 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
     #[test]
     fn relative_target_dir_follows_the_test_binary() {
         let exe = std::env::current_exe().expect("current exe");
-        let deps = exe.parent().expect("deps dir");
-        assert_eq!(
-            deps.file_name().and_then(|name| name.to_str()),
-            Some("deps"),
-            "unit test binary is not under deps: {}",
-            exe.display()
-        );
-        let artifact = deps
-            .parent()
-            .and_then(Path::parent)
-            .expect("artifact root")
-            .to_path_buf();
+        let artifact = artifact_root_from_exe(&exe)
+            .unwrap_or_else(|| panic!("artifact root from {}", exe.display()));
         let root = Path::new("/opt/readcon-manifest");
         let relative = std::ffi::OsStr::new("rel-target");
         let cwd = std::env::current_dir().expect("cwd");
