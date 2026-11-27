@@ -111,6 +111,10 @@ elif host_machine.system() == 'darwin'
     if _needs_cxx
         _rust_sys_deps += cc.find_library('c++', required: true)
     endif
+elif host_machine.system() == 'android'
+    if _needs_cxx
+        _rust_sys_deps += cc.find_library('c++', required: true)
+    endif
 elif host_machine.system() == 'windows'
     _rust_sys_deps += [
         cc.find_library('ws2_32', required: true),

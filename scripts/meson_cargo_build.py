@@ -139,11 +139,14 @@ def _rustc_host(env: dict[str, str]) -> str:
     raise RuntimeError("rustc did not report its host target")
 
 
-def _cxx_link_args(text: str) -> list[str]:
+def _cxx_link_args(text: str, target: str = "") -> list[str]:
     """Name the C++ runtime when the cargo features pull in C++ objects."""
     names = {part.strip() for part in text.split(",") if part.strip()}
     if "zstd" not in names and not any(name.startswith("chemfiles") for name in names):
         return []
+    # The NDK uses libc++, including when the meson host is Linux.
+    if "android" in target.split("-"):
+        return ["-Clink-arg=-lc++"]
     if sys.platform.startswith("linux"):
         return ["-Clink-arg=-lstdc++"]
     if sys.platform == "darwin":
@@ -229,7 +232,7 @@ def main(argv: list[str]) -> int:
             )
         print(f"cargo cc: {program}", file=sys.stderr)
     rustc_extra: list[str] = []
-    cxx_link = _cxx_link_args(features)
+    cxx_link = _cxx_link_args(features, env.get("CARGO_BUILD_TARGET", ""))
     if cxx_link:
         libdir = _linux_libstdcxx_dir()
         if libdir:

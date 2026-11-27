@@ -62,6 +62,13 @@ def test_extra_args_become_a_wrapper(tmp_path: Path) -> None:
     assert wrapper.stat().st_mode & 0o111
 
 
+def test_android_links_the_ndk_runtime() -> None:
+    module = _load()
+    assert module._cxx_link_args("zstd", "aarch64-linux-android") == [
+        "-Clink-arg=-lc++"
+    ]
+
+
 def test_static_keeps_link_args_that_are_not_l() -> None:
     module = _load()
     args = [

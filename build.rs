@@ -122,7 +122,7 @@ fn cxx_runtime() -> Option<(&'static str, Option<PathBuf>)> {
     let env_name = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     match (os.as_str(), env_name.as_str()) {
         // The host g++ library directory is wrong for a cross link.
-        ("linux" | "android", _) => Some((
+        ("linux", _) => Some((
             "stdc++",
             if compiling_for_host() {
                 linux_libstdcxx_dir()
@@ -130,6 +130,9 @@ fn cxx_runtime() -> Option<(&'static str, Option<PathBuf>)> {
                 None
             },
         )),
+        // The NDK uses libc++, same as the Apple targets. meson.build
+        // only searches libstdc++ when the system is linux.
+        ("android", _) => Some(("c++", None)),
         ("macos" | "ios", _) => Some(("c++", None)),
         ("windows", "gnu") => Some(("stdc++", None)),
         _ => None,
