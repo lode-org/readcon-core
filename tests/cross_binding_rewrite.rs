@@ -334,6 +334,8 @@ fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
 /// and Julia refuses to load that file. Side target directories keep
 /// these builds off the lock `cargo test` already holds.
 fn binding_libraries() -> (PathBuf, PathBuf) {
+    static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _lock = BUILD.lock().unwrap_or_else(|err| err.into_inner());
     let root = repo_root();
     let debug = root.join("target/debug/libreadcon_core.so");
     let plain_dir = root.join("target/binding-plain");
@@ -399,15 +401,46 @@ fn mpi_library() -> Option<PathBuf> {
     Some(lib)
 }
 
+/// Plain and Python cdylibs. Julia and gfortran are only needed for the
+/// corpus comparison, so this returns the libraries when they are absent.
+fn binding_libraries_without_julia() -> Option<(PathBuf, PathBuf)> {
+    for tool in ["cc", "python3", "nm", "readelf"] {
+        if !tool_runs(tool) {
+            eprintln!("skip binding library check: {tool} is not installed");
+            return None;
+        }
+    }
+    Some(binding_libraries())
+}
+
+#[test]
+fn binding_libraries_are_checked_without_julia() {
+    let libraries = binding_libraries_without_julia();
+    let (plain, python) =
+        libraries.expect("binding libraries skipped when julia or gfortran is missing");
+    assert!(
+        usable(&plain, false),
+        "plain cdylib is not usable: {}",
+        plain.display()
+    );
+    assert!(
+        extension_without_libpython(&python),
+        "python cdylib links libpython: {}",
+        python.display()
+    );
+}
+
 #[test]
 fn accepted_corpus_rewrites_are_byte_identical() {
-    for tool in ["cc", "gfortran", "julia", "python3", "nm"] {
+    let Some((plain, python)) = binding_libraries_without_julia() else {
+        return;
+    };
+    for tool in ["gfortran", "julia"] {
         if !tool_runs(tool) {
             eprintln!("skip cross-binding rewrite: {tool} is not installed");
             return;
         }
     }
-    let (plain, python) = binding_libraries();
     let mut lib_path = plain.parent().unwrap_or(Path::new(".")).to_path_buf();
     if let Some(py_parent) = python.parent()
         && py_parent != lib_path.as_path()
