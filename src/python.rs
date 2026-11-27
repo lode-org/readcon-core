@@ -11099,21 +11099,29 @@ mod extension_link_regression {
 
     #[test]
     fn chemfiles_and_metatensor_link_lines_are_not_python_directives() {
-        let output = "\
-cargo:rustc-link-search=native=/tmp/metatensor/lib
+        let scratch = std::env::temp_dir();
+        let metatensor = scratch.join("metatensor").join("lib");
+        let chemfiles = scratch.join("chemfiles").join("out");
+        let output = format!(
+            "\
+cargo:rustc-link-search=native={}
 cargo:rustc-link-lib=dylib=metatensor
 cargo:rustc-link-lib=static=readcon_chemfiles_atom_view
-cargo:rustc-link-search=native=/tmp/chemfiles/out
-cargo:rustc-link-arg=-Wl,-rpath,/tmp/metatensor/lib
+cargo:rustc-link-search=native={}
+cargo:rustc-link-arg=-Wl,-rpath,{}
 cargo:rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
 cargo:rustc-link-lib=dylib=python3.12
 cargo:rustc-link-search=native=/usr/lib/python3.12/config-3.12-x86_64-linux-gnu
 cargo:rustc-link-arg-tests=-lpython3.12
 cargo:rustc-link-arg-benches=-L/usr/lib/python3.12
 cargo:rustc-link-lib=python312
-";
+",
+            metatensor.display(),
+            chemfiles.display(),
+            metatensor.display(),
+        );
         assert_eq!(
-            python_link_directives(output),
+            python_link_directives(&output),
             vec![
                 "cargo:rustc-link-lib=dylib=python3.12",
                 "cargo:rustc-link-search=native=/usr/lib/python3.12/config-3.12-x86_64-linux-gnu",
