@@ -336,6 +336,7 @@ def test_repo_final_clause_coverage_chain_is_linear() -> None:
     assert finals
     tip = finals[-1]
     assert clause_coverage.FINAL_RECORD == tip
+    assert tip.name == f"clause_coverage-{version}-fpcr-r3.json"
     names = [p.name for p in finals]
     assert all(clause_coverage.record_series(p) for p in finals)
     assert names.count(tip.name) == 1

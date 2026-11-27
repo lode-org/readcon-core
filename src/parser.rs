@@ -1560,7 +1560,7 @@ pub(crate) fn parse_vector_row_at(
 }
 
 /// Scalar section row: one finite float, a flag, and an id. Exact width 3.
-fn parse_scalar_section_row(
+pub(crate) fn parse_scalar_section_row(
     line: &str,
     spec_version: u32,
 ) -> Result<(f64, [bool; 3], u64), ParseError> {
