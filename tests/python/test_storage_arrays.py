@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import readcon
 
 ROOT = Path(__file__).resolve().parents[2]
 CORPUS = ROOT / "resources" / "test"
@@ -741,8 +742,6 @@ def test_atom_sequence_pop_semantics() -> None:
 
 
 def _race_hooks_built() -> bool:
-    import readcon
-
     return all(
         hasattr(readcon, name)
         for name in (
