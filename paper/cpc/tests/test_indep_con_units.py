@@ -131,6 +131,76 @@ def test_legacy_major4_velocities_need_a_time_unit() -> None:
         indep_reader.KNOWN_MAJORS = known
 
 
+def test_major4_ps_velocities_read_back_ps() -> None:
+    """A major-4 velocities frame keeps the declared unit, here ps.
+
+    Returning fs for every major of 4 or more still leaves applied_unit free
+    to report ps. The reader itself must store ps.
+    """
+    indep_reader = _reader()
+    known = _admit_major4(indep_reader)
+    text = FRAME.replace(
+        '{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"fs"},"sections":["velocities"]}',
+        '{"con_spec_version":4,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"ps"},"sections":["velocities"]}',
+        1,
+    )
+    try:
+        frame = indep_reader.read_text(text)[0]
+    finally:
+        indep_reader.KNOWN_MAJORS = known
+    assert frame["velocities"] is not None
+    assert frame["declared_time"] == "ps"
+    assert frame["time_unit"] == "ps"
+
+
+def test_forces_with_velocities_need_a_time_unit() -> None:
+    """Velocities beside another section still require units.time.
+
+    ``sections == ["velocities"]`` accepts a frame that also names forces.
+    """
+    indep_reader = _reader()
+    known = _admit_major4(indep_reader)
+    text = NO_TIME.replace(
+        '"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu"},"sections":["velocities"]',
+        '"con_spec_version":4,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV","mass":"amu"},"sections":["forces","velocities"]',
+        1,
+    )
+    try:
+        try:
+            indep_reader.read_text(text)
+        except indep_reader.Rejection as exc:
+            assert exc.cls == "InvalidUnits"
+            assert exc.clause == "CON-units.11"
+        else:
+            raise AssertionError(
+                "forces and velocities without units.time were accepted"
+            )
+    finally:
+        indep_reader.KNOWN_MAJORS = known
+
+
+def test_major4_fs_velocities_set_no_time_override() -> None:
+    """Major 4 stores a declared fs and does not record a time override.
+
+    Widening the override bound to ``major <= 4`` sets one on this frame.
+    """
+    indep_reader = _reader()
+    known = _admit_major4(indep_reader)
+    text = FRAME.replace(
+        '"con_spec_version":3,"con_spec_minor":1',
+        '"con_spec_version":4,"con_spec_minor":0',
+        1,
+    )
+    try:
+        frame = indep_reader.read_text(text)[0]
+    finally:
+        indep_reader.KNOWN_MAJORS = known
+    assert frame["major"] == 4
+    assert frame["velocities"] is not None
+    assert frame["time_unit"] == "fs"
+    assert frame["time_override"] is None
+
+
 def test_a_coordinate_label_is_checked_when_validate_is_off() -> None:
     indep_reader = _reader()
     bad = FRAME.replace("Coordinates of Component 1", "Coordinates of CompXnent 1", 1)
