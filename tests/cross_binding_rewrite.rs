@@ -422,17 +422,29 @@ fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
 /// these builds off the lock `cargo test` already holds.
 /// Same base as `extension_cdylib`: `CARGO_TARGET_DIR` when it is set,
 /// otherwise `<manifest>/target`. A relative value is joined to `root`.
-fn target_base_from(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
-    cargo_target_dir
-        .map(PathBuf::from)
-        .map(|path| {
+/// `CARGO_TARGET_DIR`, relative to the invoking cwd. An unset value
+/// stays `<manifest>/target`. Absolute values are unchanged.
+fn resolve_cargo_target_base(
+    value: Option<&std::ffi::OsStr>,
+    cwd: &Path,
+    manifest: &Path,
+) -> PathBuf {
+    match value {
+        Some(value) => {
+            let path = Path::new(value);
             if path.is_absolute() {
-                path
+                path.to_path_buf()
             } else {
-                root.join(path)
+                cwd.join(path)
             }
-        })
-        .unwrap_or_else(|| root.join("target"))
+        }
+        None => manifest.join("target"),
+    }
+}
+
+fn target_base_from(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+    let cwd = std::env::current_dir().unwrap_or_else(|err| panic!("current dir: {err}"));
+    resolve_cargo_target_base(cargo_target_dir, &cwd, root)
 }
 
 fn debug_cdylib_candidate(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
@@ -543,13 +555,38 @@ fn binding_candidate_follows_cargo_target_dir() {
         absolute.join("debug/libreadcon_core.so")
     );
     let relative = std::ffi::OsStr::new("target/referee-r9-rel");
+    let cwd = std::env::current_dir().expect("cwd");
     assert_eq!(
         debug_cdylib_candidate(&root, Some(relative)),
-        root.join("target/referee-r9-rel/debug/libreadcon_core.so")
+        cwd.join("target/referee-r9-rel/debug/libreadcon_core.so")
     );
     assert_eq!(
         debug_cdylib_candidate(&root, None),
         root.join("target/debug/libreadcon_core.so")
+    );
+}
+
+#[test]
+fn relative_cargo_target_dir_resolves_against_the_cwd() {
+    let manifest = Path::new("/opt/readcon-manifest");
+    let cwd = Path::new("/opt/invoke-cwd");
+    let value = std::ffi::OsStr::new("rel-target3");
+    assert_eq!(
+        resolve_cargo_target_base(Some(value), cwd, manifest),
+        cwd.join(value)
+    );
+    assert_ne!(
+        resolve_cargo_target_base(Some(value), cwd, manifest),
+        manifest.join(value)
+    );
+    let absolute = Path::new("/opt/abs-target");
+    assert_eq!(
+        resolve_cargo_target_base(Some(absolute.as_os_str()), cwd, manifest),
+        absolute
+    );
+    assert_eq!(
+        resolve_cargo_target_base(None, cwd, manifest),
+        manifest.join("target")
     );
 }
 
@@ -568,9 +605,10 @@ fn fallback_binding_dirs_follow_cargo_target_dir() {
     assert_ne!(plain, root.join("target/binding-plain"));
     assert_ne!(py, root.join("target/binding-py"));
     let relative = std::ffi::OsStr::new("side-target");
+    let cwd = std::env::current_dir().expect("cwd");
     let (plain, py) = binding_side_dirs(&root, Some(relative));
-    assert_eq!(plain, root.join("side-target/binding-plain"));
-    assert_eq!(py, root.join("side-target/binding-py"));
+    assert_eq!(plain, cwd.join("side-target/binding-plain"));
+    assert_eq!(py, cwd.join("side-target/binding-py"));
     let (plain, py) = binding_side_dirs(&root, None);
     assert_eq!(plain, root.join("target/binding-plain"));
     assert_eq!(py, root.join("target/binding-py"));
@@ -578,7 +616,7 @@ fn fallback_binding_dirs_follow_cargo_target_dir() {
     assert_eq!(mpi, absolute.join("binding-mpi"));
     assert_ne!(mpi, root.join("target/binding-mpi"));
     let mpi = binding_mpi_dir(&root, Some(relative));
-    assert_eq!(mpi, root.join("side-target/binding-mpi"));
+    assert_eq!(mpi, cwd.join("side-target/binding-mpi"));
     let mpi = binding_mpi_dir(&root, None);
     assert_eq!(mpi, root.join("target/binding-mpi"));
 }
