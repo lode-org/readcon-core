@@ -38,10 +38,10 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Install Emacs
+      - name: Install Emacs and pandoc
         run: |
           sudo apt-get update
-          sudo apt-get install --yes emacs-nox
+          sudo apt-get install --yes emacs-nox pandoc
 
       - uses: prefix-dev/setup-pixi@v0.9.4
         with:
@@ -57,8 +57,13 @@ jobs:
           rm -f tectonic.tar.gz tectonic
           tectonic --version
 
+      - name: Build readcon and the C ABI
+        run: |
+          pixi run --locked --manifest-path paper/cpc/pixi.toml cpc-readcon
+          pixi run --locked --manifest-path paper/cpc/pixi.toml cpc-clib
+
       - name: Run the figure and record producer tests
-        run: pixi run --locked --manifest-path paper/cpc/pixi.toml pytest tests/python/test_figure_producers.py tests/python/test_record_producers.py
+        run: pixi run --locked --manifest-path paper/cpc/pixi.toml pytest tests/python/test_figure_producers.py tests/python/test_record_producers.py paper/cpc/tests
 
       - name: Check paper trace regeneration
         run: pixi run --locked --manifest-path paper/cpc/pixi.toml pytest tests/python/test_trace_check_clean_clone.py
