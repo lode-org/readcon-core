@@ -21,11 +21,15 @@ def _load():
 
 
 def test_the_crosscheck_sentence_names_the_recorded_build() -> None:
+    """The caption uses the build name derived from the record.
+
+    A commit on no origin branch is named by its library digest.
+    """
     module = _load()
     record = json.loads(RECORD.read_text(encoding="utf-8"))
     text = module.tex(record)
-    commit = record["provenance"]["build"]["source_commit"]
-    assert rf"readcon-core commit \texttt{{{commit[:12]}}}" in text
+    build = module.build_under_test(record)
+    assert f"The build under test, {build}," in text
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     assert f"readcon-core {version} puts no line" not in text
     assert "data/referee/r1h/corpus_crosscheck.json" in text
