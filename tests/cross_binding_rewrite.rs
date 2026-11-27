@@ -448,6 +448,10 @@ fn binding_side_dirs(
     (base.join("binding-plain"), base.join("binding-py"))
 }
 
+fn binding_mpi_dir(root: &Path, cargo_target_dir: Option<&std::ffi::OsStr>) -> PathBuf {
+    target_base_from(root, cargo_target_dir).join("binding-mpi")
+}
+
 fn binding_libraries() -> (PathBuf, PathBuf) {
     static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _lock = BUILD.lock().unwrap_or_else(|err| err.into_inner());
@@ -486,9 +490,12 @@ fn mpi_library() -> Option<PathBuf> {
         }
     }
     let root = repo_root();
+    let cargo_target_dir = std::env::var_os("CARGO_TARGET_DIR");
+    let base = cargo_target_dir.as_deref();
+    let dir = binding_mpi_dir(&root, base);
     let candidates = [
-        root.join("target/binding-mpi/debug/libreadcon_core.so"),
-        root.join("target/debug/libreadcon_core.so"),
+        dir.join("debug/libreadcon_core.so"),
+        debug_cdylib_candidate(&root, base),
     ];
     for candidate in &candidates {
         if candidate.is_file()
@@ -498,7 +505,6 @@ fn mpi_library() -> Option<PathBuf> {
             return Some(candidate.clone());
         }
     }
-    let dir = root.join("target/binding-mpi");
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&root)
         .args(["build", "--lib", "--features", "capi,mpi", "--target-dir"])
@@ -568,6 +574,13 @@ fn fallback_binding_dirs_follow_cargo_target_dir() {
     let (plain, py) = binding_side_dirs(&root, None);
     assert_eq!(plain, root.join("target/binding-plain"));
     assert_eq!(py, root.join("target/binding-py"));
+    let mpi = binding_mpi_dir(&root, Some(absolute.as_os_str()));
+    assert_eq!(mpi, absolute.join("binding-mpi"));
+    assert_ne!(mpi, root.join("target/binding-mpi"));
+    let mpi = binding_mpi_dir(&root, Some(relative));
+    assert_eq!(mpi, root.join("side-target/binding-mpi"));
+    let mpi = binding_mpi_dir(&root, None);
+    assert_eq!(mpi, root.join("target/binding-mpi"));
 }
 
 #[test]
