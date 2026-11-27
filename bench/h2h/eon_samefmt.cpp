@@ -4,7 +4,7 @@
 // the client path. Writes load the first frame outside the clock, then time
 // matter2con, matter2convel, or matter2xyz. There is no xyz reader.
 //
-// stdout: wall_s <seconds>
+// stdout: ns <nanoseconds of the read or write only>
 // A read also writes a dump the harness compares to the file.
 
 #include "eon/ConFileIO.h"
@@ -113,6 +113,9 @@ int read_file(const std::string &path, const std::string &dump_path) {
         }
     }
     const auto t1 = std::chrono::steady_clock::now();
+    const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
+    std::cout << "ns " << ns << "\n";
+    std::cout.flush();
     std::ofstream dump(dump_path, std::ios::binary);
     if (!dump) {
         std::cerr << "dump open failed\n";
@@ -131,8 +134,6 @@ int read_file(const std::string &path, const std::string &dump_path) {
         }
         dump_matter(dump, matter, velocities);
     }
-    const double wall = std::chrono::duration<double>(t1 - t0).count();
-    std::cout << "wall_s " << wall << "\n";
     return dump ? 0 : 1;
 }
 
@@ -166,8 +167,9 @@ int write_file(const std::string &op, const std::string &input, const std::strin
         std::cerr << "write failed\n";
         return 1;
     }
-    const double wall = std::chrono::duration<double>(t1 - t0).count();
-    std::cout << "wall_s " << wall << "\n";
+    const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
+    std::cout << "ns " << ns << "\n";
+    std::cout.flush();
     return 0;
 }
 

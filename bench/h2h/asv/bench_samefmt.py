@@ -42,7 +42,7 @@ def _arm_class(arm: str):
             if tool == "eon-cpp" and op == "read":
                 got = samefmt._load_eon_dump(raw)
             elif op == "write":
-                got = samefmt.read_file_with_readcon(fmt, raw)
+                got = samefmt.read_written_file(fmt, raw)
             else:
                 got = samefmt._materialize(tool, fmt, raw)
             return float(got["n_atoms"])

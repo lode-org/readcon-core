@@ -58,6 +58,12 @@ TOL_MDTRAJ = 1e-5
 TOL_CELL = 1e-9
 TOL_MASS = 1e-9
 TOL_VELOCITY = 1e-12
+# One seed for the multi-frame perturbation. Every row records it.
+FRAME_SEED = 20261127
+CONVEL_NOTE = (
+    "known-lossy: eon-cpp convel is known-lossy and correct is false. "
+    "Stock getVelocities zeros fixed-axis components."
+)
 
 BENCH = Path(__file__).resolve().parent
 WORK = BENCH / "work" / "samefmt"
@@ -266,28 +272,77 @@ def geometry() -> dict[str, np.ndarray]:
 _MF: dict | None = None
 
 
-def mf_geometry() -> dict[str, np.ndarray]:
-    """100000 frames. Odd frames shift x by 0.125 so a repeated frame fails."""
-    global _MF
-    if _MF is not None:
-        return _MF
-    base = _geometry(MF_ATOMS)
-    frames = np.arange(MF_FRAMES, dtype=np.float64)[:, None]
-    positions = np.broadcast_to(base["positions"], (MF_FRAMES, MF_ATOMS, 3)).copy()
-    positions[:, :, 0] += (frames % 2) * 0.125
-    ids = np.broadcast_to(base["ids"], (MF_FRAMES, MF_ATOMS)).copy()
-    fixed = np.broadcast_to(base["fixed"], (MF_FRAMES, MF_ATOMS)).copy()
-    masses = np.broadcast_to(base["masses"], (MF_FRAMES, MF_ATOMS)).copy()
-    velocities = np.broadcast_to(base["velocities"], (MF_FRAMES, MF_ATOMS, 3)).copy()
-    cell = np.broadcast_to(base["cell"], (MF_FRAMES, 6)).copy()
-    _MF = {
+def _q6(values: np.ndarray) -> np.ndarray:
+    """Six-decimal text the writers emit, parsed back into the stored frame."""
+    return np.char.mod("%.6f", np.asarray(values, dtype=np.float64)).astype(np.float64)
+
+
+def _distinct_frames(
+    base: dict,
+    n_frames: int,
+    masses: np.ndarray | None = None,
+    species: np.ndarray | None = None,
+) -> dict:
+    """Seeded per-frame shift of positions, velocities, and the cell."""
+    n_atoms = int(base["positions"].shape[0])
+    positions = np.empty((n_frames, n_atoms, 3), dtype=np.float64)
+    velocities = np.empty((n_frames, n_atoms, 3), dtype=np.float64)
+    cell = np.empty((n_frames, 6), dtype=np.float64)
+    ids = np.empty((n_frames, n_atoms), dtype=np.int64)
+    fixed = np.empty((n_frames, n_atoms), dtype=np.int64)
+    mass_row = base["masses"] if masses is None else masses
+    mass_out = np.empty((n_frames, n_atoms), dtype=np.float64)
+    species_out = None
+    if species is not None:
+        species_out = np.empty((n_frames, n_atoms), dtype=object)
+    for frame in range(n_frames):
+        positions[frame] = base["positions"]
+        velocities[frame] = base["velocities"]
+        cell[frame, :3] = base["cell"][:3]
+        cell[frame, 3:] = base["cell"][3:]
+        ids[frame] = base["ids"]
+        fixed[frame] = base["fixed"]
+        mass_out[frame] = mass_row
+        if species_out is not None:
+            species_out[frame] = species
+    rng = np.random.Generator(np.random.PCG64(FRAME_SEED))
+    positions = positions + rng.uniform(-0.02, 0.02, size=positions.shape)
+    velocities = velocities + rng.uniform(-0.02, 0.02, size=velocities.shape)
+    span_noise = rng.uniform(-0.02, 0.02, size=n_frames)
+    step = (np.arange(n_frames, dtype=np.float64) + 1.0) / 1_000_000.0
+    positions = _q6(positions)
+    velocities = _q6(velocities)
+    positions[:, 0, 0] = _q6(float(base["positions"][0, 0]) + step)
+    velocities[:, 0, 0] = _q6(float(base["velocities"][0, 0]) + step)
+    span = _q6(_q6(float(base["cell"][0]) + span_noise) + step)
+    cell[:, 0] = span
+    cell[:, 1] = span
+    cell[:, 2] = span
+    cell[:, 3:] = 90.0
+    out = {
         "positions": positions,
         "ids": ids,
         "cell": cell,
-        "masses": masses,
+        "masses": mass_out,
         "fixed": fixed,
         "velocities": velocities,
+        "frame_seed": FRAME_SEED,
     }
+    if species_out is not None:
+        out["species"] = species_out
+    return out
+
+
+def mf_geometry() -> dict:
+    """Each frame is its own perturbation of the base geometry."""
+    global _MF
+    if (
+        _MF is not None
+        and _MF["positions"].shape == (MF_FRAMES, MF_ATOMS, 3)
+        and _MF["frame_seed"] == FRAME_SEED
+    ):
+        return _MF
+    _MF = _distinct_frames(_geometry(MF_ATOMS), MF_FRAMES)
     return _MF
 
 
@@ -314,9 +369,13 @@ def alloy_geometry() -> dict:
 
 
 def cc_geometry() -> dict:
-    """10000 frames of 96 O/H atoms. Odd frames shift x by 0.125."""
+    """Each O/H frame is its own perturbation of the base geometry."""
     global _CC
-    if _CC is not None:
+    if (
+        _CC is not None
+        and _CC["positions"].shape == (CC_FRAMES, CC_ATOMS, 3)
+        and _CC["frame_seed"] == FRAME_SEED
+    ):
         return _CC
     base = _geometry(CC_ATOMS)
     n = CC_ATOMS
@@ -326,18 +385,7 @@ def cc_geometry() -> dict:
         symbol, mass = WATER[index % 3]
         species[index] = symbol
         masses[index] = mass
-    frames = np.arange(CC_FRAMES, dtype=np.float64)[:, None]
-    positions = np.broadcast_to(base["positions"], (CC_FRAMES, n, 3)).copy()
-    positions[:, :, 0] += (frames % 2) * 0.125
-    _CC = {
-        "positions": positions,
-        "ids": np.broadcast_to(base["ids"], (CC_FRAMES, n)).copy(),
-        "cell": np.broadcast_to(base["cell"], (CC_FRAMES, 6)).copy(),
-        "masses": np.broadcast_to(masses, (CC_FRAMES, n)).copy(),
-        "fixed": np.broadcast_to(base["fixed"], (CC_FRAMES, n)).copy(),
-        "velocities": np.broadcast_to(base["velocities"], (CC_FRAMES, n, 3)).copy(),
-        "species": np.broadcast_to(species, (CC_FRAMES, n)).copy(),
-    }
+    _CC = _distinct_frames(base, CC_FRAMES, masses=masses, species=species)
     return _CC
 
 
@@ -468,11 +516,13 @@ def _write_comment_extxyz(path: Path, geom: dict) -> None:
     with path.open("w", encoding="utf-8") as handle:
         chunk: list[str] = []
         for frame in range(n_frames):
-            span = float(cell[frame, 0])
+            ax = float(cell[frame, 0])
+            ay = float(cell[frame, 1])
+            az = float(cell[frame, 2])
             energy = -100.0 + frame * 0.125
             chunk.append(f"{n_atoms}\n")
             chunk.append(
-                f'Lattice="{span:.1f} 0 0 0 {span:.1f} 0 0 0 {span:.1f}" '
+                f'Lattice="{ax:.6f} 0.0 0.0 0.0 {ay:.6f} 0.0 0.0 0.0 {az:.6f}" '
                 "Properties=species:S:1:pos:R:3:masses:R:1:vel:R:3:id:R:1:fixed:R:1 "
                 f'pbc="T T T" energy={energy:.3f} step={frame}\n'
             )
@@ -480,7 +530,7 @@ def _write_comment_extxyz(path: Path, geom: dict) -> None:
                 x, y, z = positions[frame, i]
                 vx, vy, vz = vels[frame, i]
                 chunk.append(
-                    f"{species[frame, i]} {x:.6f} {y:.1f} {z:.1f} {float(masses[frame, i]):.3f} "
+                    f"{species[frame, i]} {x:.6f} {y:.6f} {z:.6f} {float(masses[frame, i]):.3f} "
                     f"{vx:.6f} {vy:.6f} {vz:.6f} {int(ids[frame, i])} {int(flags[frame, i])}\n"
                 )
             if len(chunk) >= 100_000:
@@ -511,7 +561,6 @@ def _write_pdb(path: Path, geom: dict) -> None:
 
 def _write_many(path: Path, kind: str) -> None:
     geom = mf_geometry()
-    span = float(geom["cell"][0, 0])
     n_atoms = MF_ATOMS
     positions = geom["positions"]
     ids = geom["ids"]
@@ -529,10 +578,13 @@ def _write_many(path: Path, kind: str) -> None:
     with path.open("w", encoding="utf-8") as handle:
         chunk: list[str] = []
         for frame in range(MF_FRAMES):
+            ax = float(geom["cell"][frame, 0])
+            ay = float(geom["cell"][frame, 1])
+            az = float(geom["cell"][frame, 2])
             if kind == "extxyz":
                 chunk.append(f"{n_atoms}\n")
                 chunk.append(
-                    f'Lattice="{span:.1f} 0 0 0 {span:.1f} 0 0 0 {span:.1f}" '
+                    f'Lattice="{ax:.6f} 0.0 0.0 0.0 {ay:.6f} 0.0 0.0 0.0 {az:.6f}" '
                     "Properties=species:S:1:pos:R:3:masses:R:1:vel:R:3:id:R:1:fixed:R:1 "
                     'pbc="T T T"\n'
                 )
@@ -540,7 +592,7 @@ def _write_many(path: Path, kind: str) -> None:
                 meta = vel_meta if kind == "convel" else con_meta
                 chunk.append("samefmt\n")
                 chunk.append(meta + "\n")
-                chunk.append(f"{span:.1f} {span:.1f} {span:.1f}\n")
+                chunk.append(f"{ax:.6f} {ay:.6f} {az:.6f}\n")
                 chunk.append("90.0 90.0 90.0\n\n\n")
                 chunk.append(f"1\n{n_atoms}\n63.546\nCu\nCoordinates of Component 1\n")
             for i in range(n_atoms):
@@ -548,12 +600,12 @@ def _write_many(path: Path, kind: str) -> None:
                 if kind == "extxyz":
                     vx, vy, vz = vels[frame, i]
                     chunk.append(
-                        f"Cu {x:.6f} {y:.1f} {z:.1f} 63.546 "
+                        f"Cu {x:.6f} {y:.6f} {z:.6f} 63.546 "
                         f"{vx:.6f} {vy:.6f} {vz:.6f} {int(ids[frame, i])} {int(flags[frame, i])}\n"
                     )
                 else:
                     chunk.append(
-                        f"{x:.6f} {y:.1f} {z:.1f} {int(flags[frame, i])} {int(ids[frame, i])}\n"
+                        f"{x:.6f} {y:.6f} {z:.6f} {int(flags[frame, i])} {int(ids[frame, i])}\n"
                     )
             if kind == "convel":
                 chunk.append("\nCu\nVelocities of Component 1\n")
@@ -588,7 +640,7 @@ def prepare() -> None:
         stamp.write_text(mark, encoding="utf-8")
     mf_stamp = WORK / "mf-stamp"
     mf_needed = [_paths(fmt, True) for fmt in ("con", "convel", "extxyz")]
-    mf_mark = f"{MF_FRAMES} {MF_ATOMS}\n"
+    mf_mark = f"{MF_FRAMES} {MF_ATOMS} {FRAME_SEED}\n"
     if not (
         mf_stamp.is_file()
         and mf_stamp.read_text(encoding="utf-8") == mf_mark
@@ -607,10 +659,19 @@ def prepare() -> None:
     if not (alloy.is_file() and alloy.stat().st_size > 0):
         print(f"prepare alloy {N_ATOMS}", flush=True)
         _write_extxyz(alloy, alloy_geometry())
+    cc_stamp = WORK / "cc-stamp"
+    cc_mark = f"{CC_FRAMES} {CC_ATOMS} {FRAME_SEED}\n"
     comment = _paths("extxyz", variant="cc")
-    if not (comment.is_file() and comment.stat().st_size > 0):
+    if not (
+        cc_stamp.is_file()
+        and cc_stamp.read_text(encoding="utf-8") == cc_mark
+        and comment.is_file()
+        and comment.stat().st_size > 0
+    ):
         print(f"prepare comment frames {CC_FRAMES}", flush=True)
         _write_comment_extxyz(comment, cc_geometry())
+        cc_stamp.parent.mkdir(parents=True, exist_ok=True)
+        cc_stamp.write_text(cc_mark, encoding="utf-8")
     _copy_extxyz_bytes()
 
 
@@ -919,6 +980,14 @@ def read_file_with_readcon(fmt: str, path: Path) -> dict:
     if fmt == "pdb":
         return _pdb_from_readcon(path)
     raise ValueError(fmt)
+
+
+def read_written_file(fmt: str, path: Path) -> dict:
+    """Reader _check uses for a file a writer just produced."""
+    file_fmt = "extxyz" if fmt == "cextxyz" else fmt
+    if file_fmt == "xyz":
+        return _read_xyz(Path(path))
+    return read_file_with_readcon(file_fmt, Path(path))
 
 
 def extxyz_bytes_xyz(src: Path | None = None) -> Path:
@@ -2006,8 +2075,16 @@ def _eon_cpp_job(fmt: str, op: str, multi: bool) -> tuple[str, Path, Path]:
     return f"write-{fmt}", source, WORK / "outs" / f"eon-cpp-write-{fmt}-{int(multi)}{suffix}"
 
 
-def _eon_cpp_once(fmt: str, op: str, multi: bool) -> Path:
-    """Run one eon-cpp call. The harness clock is outside this function."""
+def _eon_ns(stdout: str) -> float:
+    for line in stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0] == "ns":
+            return int(parts[1]) / 1_000_000_000
+    raise RuntimeError("eon-cpp printed no ns sample")
+
+
+def _eon_cpp_call(fmt: str, op: str, multi: bool) -> tuple[Path, float]:
+    """Run one eon-cpp call. The sample is the printed ns, not the process wall."""
     binary = _ensure_eon_binary()
     operation, source, dest = _eon_cpp_job(fmt, op, multi)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -2035,6 +2112,11 @@ def _eon_cpp_once(fmt: str, op: str, multi: bool) -> Path:
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip()
         raise RuntimeError(detail[-800:] or "eon-cpp failed")
+    return dest, _eon_ns(completed.stdout)
+
+
+def _eon_cpp_once(fmt: str, op: str, multi: bool) -> Path:
+    dest, _elapsed = _eon_cpp_call(fmt, op, multi)
     return dest
 
 
@@ -2143,11 +2225,11 @@ def _mark_convel(tool: str, fmt: str, verdict: dict) -> dict:
     """Name the stock velocity dump without changing the comparison."""
     if tool == "eon-cpp" and fmt == "convel":
         verdict["convel_fidelity"] = "known-lossy"
-        note = "known-lossy: stock getVelocities drops fixed-axis components"
+        verdict["notes"] = CONVEL_NOTE
         reason = str(verdict.get("reason") or "")
         fields = verdict.get("fields") or {}
-        if fields.get("velocities") not in (None, "ok", "not_in_format") and note not in reason:
-            verdict["reason"] = f"{reason}; {note}" if reason else note
+        if fields.get("velocities") not in (None, "ok", "not_in_format") and CONVEL_NOTE not in reason:
+            verdict["reason"] = f"{reason}; {CONVEL_NOTE}" if reason else CONVEL_NOTE
     else:
         verdict.setdefault("convel_fidelity", "")
     return verdict
@@ -2182,14 +2264,7 @@ def _check(arm: str, result) -> dict:
     out = result if op == "write" else _out_path(arm, fmt)
     if tool == "eon-cpp" and fmt == "extxyz":
         return _mark_convel(tool, fmt, _eon_extxyz_verdict(Path(out), geom))
-    if fmt == "cextxyz":
-        file_fmt = "extxyz"
-    else:
-        file_fmt = fmt
-    if file_fmt == "xyz":
-        file_got = _read_xyz(Path(out))
-    else:
-        file_got = read_file_with_readcon(file_fmt, Path(out))
+    file_got = read_written_file(fmt, Path(out))
     file_judge = judge(fmt, file_got, geom)
     if op == "write":
         file_judge["source"] = "file"
@@ -2289,8 +2364,10 @@ def _annotate_row(arm: str, row: dict) -> None:
     row["format"] = fmt
     row["operation"] = op
     row["multi"] = multi
+    row["frame_seed"] = FRAME_SEED
     if tool == "eon-cpp" and fmt == "convel":
         row["convel_fidelity"] = "known-lossy"
+        row["notes"] = CONVEL_NOTE
     else:
         row.setdefault("convel_fidelity", "")
     if not str(row.get("readcon_sha") or "").strip():
@@ -2363,6 +2440,10 @@ def _finish_row(arm: str, row: dict, samples: list[float]) -> None:
     lines.append(f"reordered {_bit(row.get('reordered'))}")
     lines.append(f"correct {_bit(row.get('correct'))}")
     lines.append(f"reason {row.get('reason')}")
+    if row.get("notes"):
+        lines.append(f"notes {row['notes']}")
+    if row.get("frame_seed") is not None:
+        lines.append(f"frame_seed {row['frame_seed']}")
     if row.get("convel_fidelity"):
         lines.append(f"convel_fidelity {row['convel_fidelity']}")
     if row.get("readcon_sha"):
@@ -2395,13 +2476,21 @@ def run(arm: str) -> dict:
         if tool == "mdtraj" and fmt == "xyz":
             _mdtraj_topology()
         print(f"warmup {arm}", flush=True)
-        once(arm)
-        last = None
-        for index in range(REPEATS):
-            started = time.perf_counter()
-            last = once(arm)
-            samples.append(time.perf_counter() - started)
-            print(f"sample {arm} {index} {samples[-1]:.6f}", flush=True)
+        if tool == "eon-cpp":
+            once(arm)
+            last = None
+            for index in range(REPEATS):
+                last, elapsed = _eon_cpp_call(fmt, op, _multi)
+                samples.append(elapsed)
+                print(f"sample {arm} {index} {samples[-1]:.6f}", flush=True)
+        else:
+            once(arm)
+            last = None
+            for index in range(REPEATS):
+                started = time.perf_counter()
+                last = once(arm)
+                samples.append(time.perf_counter() - started)
+                print(f"sample {arm} {index} {samples[-1]:.6f}", flush=True)
         check = _check(arm, last)
         row = support.stats_block(samples)
         row.update(check)
@@ -2438,7 +2527,8 @@ TABLE_NOTE = (
     "# mdtraj positions and cell are compared after converting nanometres to "
     "angstroms, at tolerance 1e-5. Other rows use 1e-12 for positions. "
     "MDAnalysis cannot open a .extxyz path. Its extxyz row reads "
-    "atoms-1000000x1.extxyz-bytes.xyz, a byte copy of the 1e6-atom extxyz file.\n"
+    "atoms-1000000x1.extxyz-bytes.xyz, a byte copy of the 1e6-atom extxyz file. "
+    f"{CONVEL_NOTE}\n"
 )
 
 
@@ -2464,7 +2554,7 @@ def _write_csv(rows: list[dict], destination: Path) -> None:
     header = (
         "arm,variant,tool,format,operation,n_atoms,n_frames,n,median_s,iqr_s,q25_s,q75_s,"
         "correct,reordered,id_map_ok,positions,ids,cell,masses,fixed,velocities,"
-        "convel_fidelity,readcon_sha,reason\n"
+        "convel_fidelity,readcon_sha,frame_seed,reason\n"
     )
     lines = [TABLE_NOTE, header]
     for row in rows:
@@ -2496,6 +2586,7 @@ def _write_csv(rows: list[dict], destination: Path) -> None:
                     _csv_cell(fields.get("velocities", "")),
                     _csv_cell(row.get("convel_fidelity")),
                     sha,
+                    _csv_cell(row.get("frame_seed", FRAME_SEED)),
                     _csv_cell(row.get("reason")),
                 ]
             )
