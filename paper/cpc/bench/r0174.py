@@ -24,10 +24,15 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
 sys.path.insert(0, str(HERE))
+import gen_release  # noqa: E402
 import portable  # noqa: E402
 import provenance  # noqa: E402
 
-BASE = "d0b7d3c7a5a7e7d7a6a963d515e9524c575c09fd"
+# The stored r0174 records name this base and commits_after_base 100.
+# No ancestor of develop has that commit's library tree, so those records
+# are not re-pointed and the measured count stays. A new measurement still
+# counts commits from the git object.
+BASE = gen_release.BASE
 RESULTS = Path(os.environ.get("BENCH_RESULTS", HERE / "results" / "r0174"))
 
 

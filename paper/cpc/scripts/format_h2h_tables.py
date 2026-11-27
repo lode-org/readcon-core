@@ -115,7 +115,17 @@ MILLION_CON_GZ_MAX_BYTES = 32_000_000
 MILLION_FRAME_SHA256 = (
     "9f9197bd1ce591f6af407b59f7763608566b552d36e1580e94c4024088073dc7"
 )
+# Reachable replay of e938ccf4fae892302ffe0b3a72a0361233b05970.
+# develop-on-main-shamap.json maps that commit here. The replay's tree is
+# not the measured tree.
 MILLION_CAMPAIGN_COMMIT = "e17abe9d065ddd74be71618014f048ac29ece534"
+# Measured tree of the campaign. No ancestor of develop has it. Against the
+# replay commit the library paths that differ are build.rs, src/columns.rs,
+# src/compression.rs, src/conbin.rs, src/extxyz_scan.rs, src/frame_index.rs,
+# src/index_proj.rs, src/iterators.rs, src/parser.rs, src/python.rs,
+# src/python_seq.rs, src/types.rs and src/writer.rs. Every other library path
+# is the same blob. The pin stays this recorded sha. The tables compare it
+# with the records and do not require the git object.
 MILLION_CAMPAIGN_TREE = "fcf411b82a544a4a5692f752e7f52cf209d09b1a"
 
 

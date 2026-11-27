@@ -20,6 +20,8 @@ is the commit's spec.org blob.
 ``\\readconrcidxpr``) are commits of main before d0b7d3c7; their pull request
 numbers are read from the commit subjects, and that of d0b7d3c7, whose subject
 names none, is ``BASE_PR``.
+``published()`` is tag v0.17.3. That is what ``git describe`` of ``BASE``
+returns. A clone that does not hold ``BASE`` still reads the tag.
 
     python paper/cpc/scripts/gen_release.py           # write src/release.tex
     python paper/cpc/scripts/gen_release.py --check   # exit 1 unless src/release.tex is current
@@ -43,6 +45,17 @@ OUT = ROOT / "src" / "release.tex"
 COMMIT_MACRO = re.compile(r"^\\newcommand\{\\readconcommit\}\{([0-9a-f]{40})\}$", re.M)
 BASE = "d0b7d3c7a5a7e7d7a6a963d515e9524c575c09fd"
 BASE_PR = "80"
+# Newest release tag before BASE, and the commit git describe of BASE names.
+# BASE is not an ancestor of develop. No ancestor of develop has its library
+# tree, so BASE is not re-pointed at this commit. The library paths that
+# differ from the tag are Cargo.lock, Cargo.toml, build.rs,
+# include/readcon-core-version.h, include/readcon-core.h,
+# include/readcon-core.hpp, pyproject.toml, src/compression.rs,
+# src/frame_index.rs, src/hostlabel.rs, src/iterators.rs, src/lib.rs and
+# src/parser.rs. published() reads the tag. When BASE is present, describe
+# must still return it.
+PUBLISHED_TAG = "v0.17.3"
+PUBLISHED_COMMIT = "12ca800bc2212c565941e04094cba6b4d99a62e0"
 PBC = "458001db49c8b0f3f3a0c47c2388bad4bf75f68c"
 RCIDX = "593f8375303f7fff27a5fc0d823cfefc808289b2"
 
@@ -65,11 +78,23 @@ def pull_request(subject: str) -> str:
 
 
 def published() -> tuple[str, str]:
-    """The version and commit of the newest release tag of main before BASE."""
-    tag = git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*", BASE)
-    commit = tag and git("rev-parse", f"refs/tags/{tag}^{{commit}}")
-    if not commit:
-        raise SystemExit(f"no release tag is an ancestor of {BASE[:12]}")
+    """The version and commit of the newest release tag of main before BASE.
+
+    The tag commit is on develop. BASE need not be. The records keep its
+    name, and the numbers this writes are the tag's.
+    """
+    tag = PUBLISHED_TAG
+    commit = git("rev-parse", f"refs/tags/{tag}^{{commit}}")
+    if commit != PUBLISHED_COMMIT:
+        raise SystemExit(
+            f"tag {tag} is {commit or 'absent'}, not {PUBLISHED_COMMIT[:12]}"
+        )
+    if git("cat-file", "-e", f"{BASE}^{{commit}}") is not None:
+        described = git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*", BASE)
+        if described != tag:
+            raise SystemExit(
+                f"{BASE[:12]} describes {described or 'nothing'}, not {tag}"
+            )
     return tag.removeprefix("v"), commit
 
 

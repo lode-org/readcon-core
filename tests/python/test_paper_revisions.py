@@ -7,8 +7,10 @@ A job that fetches the full history and the tags runs them.
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -76,7 +78,11 @@ def test_named_commits_and_tags_exist() -> None:
     missing: list[str] = []
     for name in COMMIT_NAMES:
         value = macros[name]
-        if _git("rev-parse", "--verify", f"{value}^{{commit}}").returncode != 0:
+        if _git(
+            "rev-parse", "--verify", f"{value}^{{commit}}"
+        ).returncode != 0 and not (
+            name == "readconbase" and _release_tag_explains(value)
+        ):
             missing.append(f"{name} {value}")
     full = HEX.findall((CPC / "rg_main.tex").read_text(encoding="utf-8"))
     full += HEX.findall((CPC / "commit.tex").read_text(encoding="utf-8"))
@@ -136,6 +142,82 @@ def _is_named_spec_blob(lines: list[str], value: str) -> bool:
         return False
     kind = _git("cat-file", "-t", value)
     return kind.returncode == 0 and kind.stdout.strip() == "blob"
+
+
+@lru_cache(maxsize=1)
+def _script(name: str):
+    path = ROOT / "paper" / "cpc" / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"paper_revisions_{name}", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _release_tag_explains(value: str) -> bool:
+    """A prefix of the recorded base, resolved by the release tag it describes."""
+    module = _script("gen_release")
+    if len(value) < 7 or not module.BASE.startswith(value):
+        return False
+    version, commit = module.published()
+    return version == module.PUBLISHED_TAG.removeprefix("v") and _is_commit_or_tree(
+        commit
+    )
+
+
+def _campaign_tree_is_recorded(value: str) -> bool:
+    """The million-campaign tree sha stored beside its reachable replay commit.
+
+    The replay commit does not have this tree. The records keep the sha, and
+    the tables compare that string. The git object is not required.
+    """
+    if len(value) != 40:
+        return False
+    module = _script("format_h2h_tables")
+    if value != module.MILLION_CAMPAIGN_TREE:
+        return False
+    if not _is_commit_or_tree(module.MILLION_CAMPAIGN_COMMIT):
+        return False
+    needle = f'"tree": "{value}"'
+    root = ROOT / "bench" / "h2h" / "formats" / "v0.23.3"
+    return any(
+        needle in path.read_text(encoding="utf-8")
+        for path in root.rglob("provenance.json")
+    )
+
+
+@lru_cache(maxsize=1)
+def _replay_replacements() -> dict[str, str | None]:
+    """Old develop commits the shamap sends to a commit this branch holds."""
+    shamap = ROOT / "paper" / "cpc" / "data" / "history" / "develop-on-main-shamap.json"
+    data = json.loads(shamap.read_text(encoding="utf-8"))
+    repl: dict[str, str | None] = {}
+    for key in ("patch_id", "subject_date"):
+        for old, new in data[key].items():
+            repl[old] = new
+    for group in ("dropped_merges", "dropped_unreplayed"):
+        for item in data[group]:
+            repl.setdefault(item["old"], item.get("replacement"))
+    return repl
+
+
+def _replay_explains(value: str) -> bool:
+    """An old shamap commit whose replacement is present, or which was dropped."""
+    repl = _replay_replacements()
+    if value not in repl:
+        return False
+    new = repl[value]
+    if new is None:
+        return True
+    return _is_commit_or_tree(new)
+
+
+def _named_without_object(value: str) -> bool:
+    return (
+        _release_tag_explains(value)
+        or _campaign_tree_is_recorded(value)
+        or _replay_explains(value)
+    )
 
 
 # These records name the build that was measured, not this release.
@@ -312,6 +394,57 @@ def _sha_context(line: str, digest: str) -> bool:
     return "commit" in low or "revision" in low or f"`{digest}`" in line
 
 
+def test_published_release_does_not_need_the_base_commit(monkeypatch) -> None:
+    """The 0.17.3 tag stands in for BASE when that commit object is absent.
+
+    No ancestor of develop has BASE's library tree. The same-subject commit
+    b54397e6d9f33d4edeccbd392336d25232b61c60 matches every library path
+    (src, include, build.rs, Cargo.toml, Cargo.lock, pyproject.toml) and the
+    four paths BASE itself changed (.github/workflows/build_test.yml,
+    Cargo.toml, changelog.d/+page-aligned-buffer.feature.md,
+    tests/page_aligned_buffer.rs). It is only on fix/correctness-v8, so the
+    records stay on BASE. Against tag v0.17.3 the library paths that differ
+    are Cargo.lock, Cargo.toml, build.rs, include/readcon-core-version.h,
+    include/readcon-core.h, include/readcon-core.hpp, pyproject.toml,
+    src/compression.rs, src/frame_index.rs, src/hostlabel.rs,
+    src/iterators.rs, src/lib.rs and src/parser.rs.
+    """
+    module = _script("gen_release")
+    real = module.git
+
+    def hidden(*args: str) -> str | None:
+        if args[:2] == ("cat-file", "-e") and module.BASE in args[2]:
+            return None
+        if "describe" in args and module.BASE in args:
+            raise AssertionError("describe must not run when the base is absent")
+        return real(*args)
+
+    monkeypatch.setattr(module, "git", hidden)
+    assert module.published() == ("0.17.3", module.PUBLISHED_COMMIT)
+
+
+def test_recorded_campaign_tree_is_not_the_replay_tree() -> None:
+    """The million-campaign tree stays the recorded sha.
+
+    e938ccf4fae892302ffe0b3a72a0361233b05970 has tree
+    fcf411b82a544a4a5692f752e7f52cf209d09b1a. The shamap replays it as
+    e17abe9d065ddd74be71618014f048ac29ece534, whose tree is
+    6732b7609927e8f06b1aff9ce4186ce4bb49adb6. The library paths that differ
+    are build.rs, src/columns.rs, src/compression.rs, src/conbin.rs,
+    src/extxyz_scan.rs, src/frame_index.rs, src/index_proj.rs,
+    src/iterators.rs, src/parser.rs, src/python.rs, src/python_seq.rs,
+    src/types.rs and src/writer.rs. Every other library path is the same
+    blob. The records are not re-pointed.
+    """
+    module = _script("format_h2h_tables")
+    assert _replay_explains("e938ccf4fae892302ffe0b3a72a0361233b05970")
+    assert _campaign_tree_is_recorded(module.MILLION_CAMPAIGN_TREE)
+    assert _is_commit_or_tree(module.MILLION_CAMPAIGN_COMMIT)
+    replay = _git("rev-parse", f"{module.MILLION_CAMPAIGN_COMMIT}^{{tree}}")
+    assert replay.returncode == 0
+    assert replay.stdout.strip() != module.MILLION_CAMPAIGN_TREE
+
+
 def test_unpublished_identity_is_absent() -> None:
     for path, text in _paper_sources():
         assert "0.17.4" not in text, path
@@ -363,6 +496,8 @@ def test_paper_sources_name_real_tags_and_commits() -> None:
             if _is_named_spec_blob(lines, value):
                 continue
             if _external_pin(lines, value):
+                continue
+            if _named_without_object(value):
                 continue
             missing.append(f"{rel}: {value}")
     assert not missing, missing
