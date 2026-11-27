@@ -72,6 +72,33 @@ def cargo_linker_key(triple: str) -> str:
     return "CARGO_TARGET_" + triple.upper().replace("-", "_") + "_LINKER"
 
 
+def read_meson_link_args(path: str) -> list[str]:
+    """Each meson ``c_link_args`` entry, as a rustc ``-Clink-arg``."""
+    if not path:
+        return []
+    file = Path(path)
+    if not file.is_file():
+        return []
+    return [
+        "-Clink-arg=" + part
+        for part in file.read_text(encoding="utf-8").split("\n")
+        if part
+    ]
+
+
+def link_args_for_static(args: list[str]) -> list[str]:
+    """Link flags for the static archive.
+
+    A shared soname does not belong on the static archive. Every other
+    link arg does, including ``-L`` and ``-Wl`` flags that are not ``-l``.
+    """
+    shared_only = (
+        "-Clink-arg=-Wl,-soname,",
+        "-Clink-arg=-Wl,-install_name,",
+    )
+    return [arg for arg in args if not arg.startswith(shared_only)]
+
+
 def cargo_cc_env(
     command: list[str], triple: str, host: str, wrapper: Path
 ) -> dict[str, str]:
@@ -215,13 +242,14 @@ def main(argv: list[str]) -> int:
     elif sys.platform == "darwin":
         rustc_extra.append(f"-Clink-arg=-Wl,-install_name,@rpath/{shared_name}")
     rustc_extra.extend(cxx_link)
+    rustc_extra.extend(read_meson_link_args(env.pop("READCON_MESON_LINK_ARGS_FILE", "")))
     # One crate-type per rustc invocation. MSVC cdylib+staticlib in one
     # call can omit readcon_core.lib while still writing the DLL.
     # The cdylib opts into mimalloc; that feature also gives its C objects
     # local-dynamic TLS so a later dlopen needs no static TLS surplus. The
     # staticlib uses the system allocator: a C host can link it beside
     # another Rust staticlib without crossing allocator boundaries.
-    static_extra = [arg for arg in rustc_extra if arg.startswith("-Clink-arg=-l")]
+    static_extra = link_args_for_static(rustc_extra)
     for crate_type, extra in (("cdylib", rustc_extra), ("staticlib", static_extra)):
         crate_features = features.strip()
         if crate_type == "cdylib":

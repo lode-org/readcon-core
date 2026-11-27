@@ -62,6 +62,33 @@ def test_extra_args_become_a_wrapper(tmp_path: Path) -> None:
     assert wrapper.stat().st_mode & 0o111
 
 
+def test_static_keeps_link_args_that_are_not_l() -> None:
+    module = _load()
+    args = [
+        "-Clink-arg=-Wl,-soname,libreadcon_core.so",
+        "-Clink-arg=-lstdc++",
+        "-Clink-arg=-L/opt/lib",
+        "-Clink-arg=-pthread",
+    ]
+    kept = module.link_args_for_static(args)
+    assert kept == [
+        "-Clink-arg=-lstdc++",
+        "-Clink-arg=-L/opt/lib",
+        "-Clink-arg=-pthread",
+    ]
+
+
+def test_meson_link_arg_file_becomes_rustc_flags(tmp_path: Path) -> None:
+    module = _load()
+    path = tmp_path / "link.txt"
+    path.write_text("-L/opt/lib\n-pthread\n", encoding="utf-8")
+    assert module.read_meson_link_args(str(path)) == [
+        "-Clink-arg=-L/opt/lib",
+        "-Clink-arg=-pthread",
+    ]
+    assert module.read_meson_link_args("") == []
+
+
 def test_msvc_cl_is_not_the_linker(tmp_path: Path) -> None:
     module = _load()
     triple = "x86_64-pc-windows-msvc"

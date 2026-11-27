@@ -61,6 +61,22 @@ _meson_c_args = get_option('c_args')
 if _meson_c_args.length() > 0
     _cargo_env += {'CFLAGS': ' '.join(_meson_c_args)}
 endif
+_meson_link_args = get_option('c_link_args')
+if _meson_link_args.length() > 0
+    # Ninja rejects a newline in a rule, same as the compiler argv.
+    _link_list = _mbproot / 'readcon-meson-link-args.txt'
+    _write_link = [
+        _py,
+        '-c',
+        'import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(chr(10).join(sys.argv[2:]) + chr(10))',
+        _link_list,
+    ]
+    foreach _link_part : _meson_link_args
+        _write_link += [_link_part]
+    endforeach
+    run_command(_write_link, check: true)
+    _cargo_env += {'READCON_MESON_LINK_ARGS_FILE': _link_list}
+endif
 
 _rust_sys_deps = []
 _needs_cxx = false
