@@ -104,6 +104,11 @@ frame=none,
 aboveskip=0.6em,
 belowskip=0.4em
 }
+% pdfTeX listings feeds each byte to inputenc. The angstrom in a .con file is
+% two UTF-8 bytes, so literate replaces it before that read. XeTeX reads it whole.
+\ifPDFTeX
+\lstset{literate={å}{{\aa}}1 {Å}{{\AA}}1}
+\fi
 \date{\today}
 \title{readcon-core: a versioned geometry checkpoint for resumed saddle searches}
 \hypersetup{
