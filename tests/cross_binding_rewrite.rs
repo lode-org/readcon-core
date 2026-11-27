@@ -240,11 +240,19 @@ fn compressed_path_writers_round_trip_a_frame() {
     }
 }
 
-fn tool_runs(name: &str) -> bool {
-    Command::new(name)
+fn tool_runs(name: impl AsRef<std::ffi::OsStr>) -> bool {
+    Command::new(name.as_ref())
         .arg("--version")
         .output()
         .is_ok_and(|out| out.status.success())
+}
+
+/// Compiler for the libpython fixture. `CC` selects it; otherwise `cc`.
+fn fixture_compiler() -> std::ffi::OsString {
+    match std::env::var_os("CC") {
+        Some(cc) if !cc.is_empty() => cc,
+        _ => std::ffi::OsString::from("cc"),
+    }
 }
 
 fn exports_symbol(lib: &Path, symbol: &str) -> bool {
@@ -371,6 +379,8 @@ for key in ('LIBPL', 'LIBDIR', 'LDVERSION'):
     if !libdir.is_empty() && libdir != libpl {
         args.push(format!("-L{libdir}"));
     }
+    // Ubuntu gcc defaults to --as-needed and drops an unreferenced library.
+    args.push("-Wl,--no-as-needed".to_string());
     args.push(format!("-lpython{version}"));
     args
 }
@@ -380,7 +390,8 @@ fn build_fixture_cdylib(dir: &Path, name: &str, link_python: bool) -> PathBuf {
     std::fs::write(&source, "void readcon_fixture(void) {}\n")
         .unwrap_or_else(|err| panic!("write {}: {err}", source.display()));
     let shared = dir.join(format!("lib{name}.so"));
-    let mut cmd = Command::new("cc");
+    let cc = fixture_compiler();
+    let mut cmd = Command::new(&cc);
     cmd.args(["-shared", "-fPIC", "-o"])
         .arg(&shared)
         .arg(&source);
@@ -389,8 +400,12 @@ fn build_fixture_cdylib(dir: &Path, name: &str, link_python: bool) -> PathBuf {
     }
     let status = cmd
         .status()
-        .unwrap_or_else(|err| panic!("cc {}: {err}", shared.display()));
-    assert!(status.success(), "cc fixture {name} failed");
+        .unwrap_or_else(|err| panic!("{} {}: {err}", cc.to_string_lossy(), shared.display()));
+    assert!(
+        status.success(),
+        "{} fixture {name} failed",
+        cc.to_string_lossy()
+    );
     shared
 }
 
@@ -736,7 +751,15 @@ fn binding_libraries_are_checked_without_julia() {
 
 #[test]
 fn cdylib_libpython_detector_matches_needed_entries() {
-    for tool in ["cc", "python3", "readelf"] {
+    let cc = fixture_compiler();
+    if !tool_runs(&cc) {
+        eprintln!(
+            "skip libpython detector oracle: {} is not installed",
+            cc.to_string_lossy()
+        );
+        return;
+    }
+    for tool in ["python3", "readelf"] {
         if !tool_runs(tool) {
             eprintln!("skip libpython detector oracle: {tool} is not installed");
             return;
