@@ -37,7 +37,8 @@ import provenance
 ROOT = Path(__file__).resolve().parents[1]
 C31 = ROOT / "data" / "corpus31"
 MANIFEST = C31 / "manifest.toml"
-OUT = ROOT / "data" / "referee" / "r19" / "corpus31-results.json"
+RECORD_REL = "data/referee/r19/corpus31-results.json"
+OUT = ROOT / RECORD_REL
 MACROS = ROOT / "src" / "figures" / "generated" / "corpus31_macros.tex"
 TABLE = ROOT / "src" / "figures" / "generated" / "corpus31_table.tex"
 SPECIAL = {

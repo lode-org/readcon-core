@@ -1228,8 +1228,10 @@ def check_conformance() -> str:
     records, and the corpus31, corpus-path and cross-check fragments are what their records give. The clause
     record is what the specification, the corpora, the probes and the tests give, and a rerun of the mutant
     differential gives its record, with no case left unexplained."""
+    import corpus31_results
+
     bad = []
-    corpus31_record = "data/referee/r19/corpus31-results.json"
+    corpus31_record = corpus31_results.RECORD_REL
     c31 = json.loads((ROOT / corpus31_record).read_text())["summary"]
     for key in ("disagreements", "manifest_not_followed", "threads_disagree"):
         if c31[key]:

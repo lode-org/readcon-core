@@ -108,8 +108,12 @@ def _fixture_tree(tmp_path: Path, *, macro_clauses: int, macro_covered: int):
         },
     )
 
+    if str(SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS))
+    import corpus31_results
+
     _write_json(
-        data / "referee" / "r1t" / "corpus31-results.json",
+        cpc / corpus31_results.RECORD_REL,
         {
             "summary": {
                 "files": 10,
