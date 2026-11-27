@@ -11415,7 +11415,13 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
             return;
         };
         let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-        if best.as_ref().is_none_or(|(when, _)| modified >= *when) {
+        let replace = match best.as_ref() {
+            None => true,
+            Some((when, path)) => {
+                modified > *when || (modified == *when && output.as_path() > path.as_path())
+            }
+        };
+        if replace {
             *best = Some((modified, output));
         }
     }
@@ -11626,6 +11632,73 @@ cargo::rustc-cdylib-link-arg=-Wl,--exclude-libs=ALL
             text.contains("cargo:rustc-link-lib="),
             "build-unit pyo3 stdout was not read:\n{text}"
         );
+
+        let older = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        let newer = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_100);
+        let pair = root.join("pair/debug");
+        // The newer file is the lexicographically smaller path.
+        write_mtime(
+            &pair.join("build/pyo3-ffi/zzz/run/stdout"),
+            "older-stdout\n",
+            older,
+        );
+        write_mtime(
+            &pair.join("build/pyo3-ffi/aaa/run/stdout"),
+            "newer-stdout\n",
+            newer,
+        );
+        assert_eq!(
+            newest_build_output(&pair, "pyo3-ffi-"),
+            "newer-stdout\n",
+            "older pyo3 stdout was kept"
+        );
+        let legacy = root.join("legacy/debug");
+        write_mtime(
+            &legacy.join("build/pyo3-ffi-zzz/output"),
+            "older-output\n",
+            older,
+        );
+        write_mtime(
+            &legacy.join("build/pyo3-ffi-aaa/output"),
+            "newer-output\n",
+            newer,
+        );
+        assert_eq!(
+            newest_build_output(&legacy, "pyo3-ffi-"),
+            "newer-output\n",
+            "older pyo3 output was kept"
+        );
+        let tie = root.join("tie/debug");
+        let tied = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_050);
+        write_mtime(
+            &tie.join("build/pyo3-ffi/aaa/run/stdout"),
+            "tie-aaa\n",
+            tied,
+        );
+        write_mtime(
+            &tie.join("build/pyo3-ffi/zzz/run/stdout"),
+            "tie-zzz\n",
+            tied,
+        );
+        assert_eq!(
+            newest_build_output(&tie, "pyo3-ffi-"),
+            "tie-zzz\n",
+            "equal mtimes should keep the later path"
+        );
+    }
+
+    fn write_mtime(path: &Path, body: &str, when: SystemTime) {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .unwrap_or_else(|err| panic!("create {}: {err}", parent.display()));
+        }
+        std::fs::write(path, body).unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap_or_else(|err| panic!("open {}: {err}", path.display()))
+            .set_modified(when)
+            .unwrap_or_else(|err| panic!("mtime {}: {err}", path.display()));
     }
 
     #[test]
