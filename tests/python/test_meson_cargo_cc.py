@@ -88,12 +88,14 @@ def test_android_does_not_take_the_host_libstdcxx_dir() -> None:
         is None
     )
     assert (
-        module._host_libstdcxx_library_path("aarch64-linux-android", host, "")
-        is None
+        module._host_libstdcxx_library_path("aarch64-linux-android", host, "") is None
     )
-    assert module._host_libstdcxx_library_path(
-        "x86_64-unknown-linux-gnu", host, "/opt/lib"
-    ) == f"{host}:/opt/lib"
+    assert (
+        module._host_libstdcxx_library_path(
+            "x86_64-unknown-linux-gnu", host, "/opt/lib"
+        )
+        == f"{host}:/opt/lib"
+    )
 
 
 def test_static_keeps_link_args_that_are_not_l() -> None:
@@ -168,9 +170,7 @@ def test_cross_check_heredoc_does_not_interpolate_the_scratch_path(
 
 def test_linker_key_is_the_cargo_target(tmp_path: Path) -> None:
     module = _load()
-    assigned = module.cargo_cc_env(
-        ["clang"], TARGET, HOST, tmp_path / "readcon-cc"
-    )
+    assigned = module.cargo_cc_env(["clang"], TARGET, HOST, tmp_path / "readcon-cc")
     assert "CC" not in assigned
     assert assigned[f"CC_{TARGET}"] == "clang"
     assert assigned[module.cargo_linker_key(TARGET)] == "clang"

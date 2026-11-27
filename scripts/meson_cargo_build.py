@@ -246,9 +246,7 @@ def main(argv: list[str]) -> int:
     if meson_cc:
         host = _rustc_host(env)
         triple = env.get("CARGO_BUILD_TARGET", "").strip() or host
-        assigned = cargo_cc_env(
-            meson_cc, triple, host, Path(target_dir) / "readcon-cc"
-        )
+        assigned = cargo_cc_env(meson_cc, triple, host, Path(target_dir) / "readcon-cc")
         env.update(assigned)
         program = assigned.get("CC", "")
         if not program:
@@ -273,7 +271,9 @@ def main(argv: list[str]) -> int:
     elif sys.platform == "darwin":
         rustc_extra.append(f"-Clink-arg=-Wl,-install_name,@rpath/{shared_name}")
     rustc_extra.extend(cxx_link)
-    rustc_extra.extend(read_meson_link_args(env.pop("READCON_MESON_LINK_ARGS_FILE", "")))
+    rustc_extra.extend(
+        read_meson_link_args(env.pop("READCON_MESON_LINK_ARGS_FILE", ""))
+    )
     # One crate-type per rustc invocation. MSVC cdylib+staticlib in one
     # call can omit readcon_core.lib while still writing the DLL.
     # The cdylib opts into mimalloc; that feature also gives its C objects
