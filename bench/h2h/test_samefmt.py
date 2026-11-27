@@ -19,7 +19,13 @@ FORBIDDEN_SHA = "68dfb7c307e0923044d4a9f41159b7a2ed2dd605"
 
 @pytest.fixture(autouse=True)
 def _reset_caches():
-    saved = (samefmt._GEOM, samefmt._MF, samefmt._ALLOY, samefmt._CC, dict(samefmt._CACHE))
+    saved = (
+        samefmt._GEOM,
+        samefmt._MF,
+        samefmt._ALLOY,
+        samefmt._CC,
+        dict(samefmt._CACHE),
+    )
     samefmt._GEOM = None
     samefmt._MF = None
     samefmt._ALLOY = None
@@ -258,10 +264,7 @@ def test_setup_passes_variant_and_does_not_source_eon(monkeypatch):
 def test_eon_cpp_sample_excludes_the_replay(tmp_path, monkeypatch):
     binary = tmp_path / "eon_samefmt"
     binary.write_text(
-        "#!/bin/sh\n"
-        "printf 'ns 2500000\\n'\n"
-        "sleep 0.2\n"
-        "printf 'x' > \"$3\"\n",
+        "#!/bin/sh\nprintf 'ns 2500000\\n'\nsleep 0.2\nprintf 'x' > \"$3\"\n",
         encoding="utf-8",
     )
     binary.chmod(0o755)
@@ -291,7 +294,9 @@ def test_eon_cpp_sample_excludes_the_replay(tmp_path, monkeypatch):
 
 
 def test_eon_cpp_prints_ns_before_the_replay():
-    text = (Path(__file__).resolve().parent / "eon_samefmt.cpp").read_text(encoding="utf-8")
+    text = (Path(__file__).resolve().parent / "eon_samefmt.cpp").read_text(
+        encoding="utf-8"
+    )
     printed = text.find('<< "ns "')
     replay = text.find("con2matter replay")
     assert printed >= 0
@@ -304,7 +309,12 @@ def test_multiframe_ase_con_reads_fixatoms():
     from ase.constraints import FixAtoms
 
     def image():
-        atoms = Atoms("Cu2", positions=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], cell=[2.0, 2.0, 2.0], pbc=True)
+        atoms = Atoms(
+            "Cu2",
+            positions=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+            cell=[2.0, 2.0, 2.0],
+            pbc=True,
+        )
         atoms.set_constraint(FixAtoms(indices=[1]))
         return atoms
 
@@ -353,10 +363,14 @@ def test_written_frames_are_distinct(tmp_path, monkeypatch):
     samefmt._CC = None
     samefmt.prepare()
     for fmt in ("con", "convel"):
-        _assert_unique(_con_frames(samefmt._paths(fmt, True).read_text(encoding="utf-8")))
+        _assert_unique(
+            _con_frames(samefmt._paths(fmt, True).read_text(encoding="utf-8"))
+        )
     for variant in ("mf", "cc"):
         _assert_unique(
-            _extxyz_payloads(samefmt._paths("extxyz", variant=variant).read_text(encoding="utf-8"))
+            _extxyz_payloads(
+                samefmt._paths("extxyz", variant=variant).read_text(encoding="utf-8")
+            )
         )
     for builder, count in ((samefmt.mf_geometry, 4), (samefmt.cc_geometry, 4)):
         geom = builder()
